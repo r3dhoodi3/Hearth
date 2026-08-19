@@ -18,7 +18,7 @@ import { track } from "@/lib/analytics";
 // story layer (SCENES, VO_TEXT, the ENTER choreography, and the JSX pages).
 //
 // The shape (same discipline as the homeowner cut):
-// - 30 seconds, 80 beats at 160 BPM (375ms per beat), half-time phonk-style
+// - 28.5 seconds, 76 beats at 160 BPM (375ms per beat), half-time phonk-style
 //   drums; every cut lands on the beat grid.
 // - FULL pro app pages (Hearth for Pros nav and all) inside a browser device,
 //   with a virtual camera that punches into click targets so a normal-sized
@@ -26,8 +26,10 @@ import { track } from "@/lib/analytics";
 // - One continuous session: cold open on the live leads board (no title
 //   card), then browse -> apply and pay the lead fee (wallet ticks down,
 //   shown honestly) -> chat with the homeowner -> "You got the job" (the
-//   drop, at ~81% of runtime, on the same beat grid as the homeowner win)
-//   -> end card with the pro value prop and the fee-credit guarantee.
+//   drop, at ~86% of runtime, on the same beat grid as the homeowner win).
+//   The booking IS the ending, per the founder: nothing is narrated after
+//   the win line, and the end card (the conversion surface and replay
+//   control) arrives as a short silent tag under the music's ring-out.
 // - Tutorial-style motion, per the founder's direction: the cursor visibly
 //   travels to and clicks the real controls (the apply flow, the Messages
 //   tab in the nav) and every zoom is anchored to either the click target
@@ -46,31 +48,36 @@ import { track } from "@/lib/analytics";
 //   /public/demo-vo/pro mp3s were generated with the SAME msedge-tts neural
 //   voice as the homeowner cut (en-US-AvaNeural, rate -8%), one clip per scene
 //   keyed to VO_TEXT. The synth track sits under it; captionVo/capState both
-//   paint the bottom subtitles and keep the voice in sync through seeks.
+//   paint the bottom subtitles and keep the voice in sync through seeks. The
+//   old end-card closer clip (end.mp3) still exists in VO_DIR but is no
+//   longer scheduled: the win line is the last thing said.
 
 const BEAT_MS = 375; // 160 BPM
 const BEAT_S = BEAT_MS / 1000;
-const TOTAL_BEATS = 80;
+// 76, not the homeowner cut's 80: the booking ends the story, so the end
+// card is a short silent tag. The arrangement's FINAL hit (beat 72) still
+// fires and its ring tail has decayed to nothing by the last beat.
+const TOTAL_BEATS = 76;
 const TOTAL_MS = TOTAL_BEATS * BEAT_MS;
 
 // Pro story: a contractor opens their leads board, sees a nearby masked job
 // with the fee shown up front, applies (paying the lead fee from the wallet,
 // tick-down shown honestly, AI-drafted note along the way), chats with the
 // homeowner, gets chosen, and lands on the value-prop end card.
-// 80 beats = 30 seconds; the "You got the job" payoff lands on beat 65 (~81%),
-// the SAME beat as the homeowner win, so the copied arrangement (WIN=65) hits
-// the drop exactly under the badge (won starts at 62, badge on scene beat 3).
-// The end scene carries the extra beats the old cut gave to won: its VO clip
-// is the longest (5.42s), and the subtitles must track it to the last word
-// before the replay overlay arrives, so the closer needs the runway.
+// 76 beats = 28.5 seconds; the "You got the job" payoff lands on beat 65
+// (~86%), the SAME beat as the homeowner win, so the copied arrangement
+// (WIN=65) hits the drop exactly under the badge (won starts at 62, badge on
+// scene beat 3). The story ends when the job is booked: the won scene holds
+// just long enough for its line to finish, then the end card is a short
+// silent tag with the FINAL hit (beat 72) ringing out underneath it.
 type SceneDef = { id: string; beats: number; step: string | null };
 const SCENES: SceneDef[] = [
   { id: "hook", beats: 13, step: null },
   { id: "leads", beats: 16, step: "1/4" },
   { id: "apply", beats: 15, step: "2/4" },
   { id: "chat", beats: 18, step: "3/4" },
-  { id: "won", beats: 8, step: "4/4" },
-  { id: "end", beats: 10, step: null },
+  { id: "won", beats: 9, step: "4/4" },
+  { id: "end", beats: 5, step: null },
 ];
 
 // Which page each scene shows (scenes can share a page for continuity). The
@@ -998,14 +1005,20 @@ export default function ProDemoPlayer() {
       hook: "This is Hearth. Real jobs, from homeowners near you.",
       // leads: the board, with the honest up-front fee.
       leads: "New jobs post here, with the lead fee shown up front.",
-      // apply: the wallet fee moment (and the AI-drafted note).
-      apply: "Apply in one tap. The fee comes from your wallet.",
+      // apply: the one-tap apply moment. The founder cut the wallet clause
+      // (no wallet mention in VO or captions); the wallet tick-down stays
+      // on screen, unnarrated. This line is SCHEDULED FROM enterLeads (a
+      // breath after the leads line ends) to close the dead air that sat
+      // between the two lines; the clip finishes before the apply cut.
+      apply: "Apply in one tap.",
       // chat: talking to the homeowner directly.
       chat: "Message the homeowner and line up the visit.",
-      // won: the payoff drop.
-      won: "You got the job.",
-      // end: value prop plus the fee-credit guarantee.
-      end: "Win work in your trade. Not chosen? Your fee comes back as credit.",
+      // won: the payoff drop, and the last line of the video (the on-screen
+      // badge still reads "You got the job"; the voice closes with this
+      // instead, per the founder). The founder cut the end-card closer (the
+      // booking is the ending), so there is no "end" key here anymore and
+      // end.mp3 sits unscheduled on disk.
+      won: "Easy as that.",
     } as const;
     type VoKey = keyof typeof VO_TEXT;
     const voAudios: Partial<Record<VoKey, HTMLAudioElement>> = {};
@@ -1489,13 +1502,7 @@ export default function ProDemoPlayer() {
         span.className = cx(styles.capWord, i === hiIndex && styles.capHi);
         span.textContent = w;
         layer.appendChild(span);
-        // During playback the pops ride the virtual clock (pause/rate
-        // aware); in the finishTour end window that clock is stopped while
-        // the closer VO's tail still drives new chunks (see finishTour), so
-        // those fall back to wall-clock timeouts. timers are cleared by any
-        // replay/seek, same as the overlay timer.
-        if (playing) after(i * stepMs, () => span.classList.add(styles.pop));
-        else timers.push(setTimeout(() => span.classList.add(styles.pop), i * stepMs));
+        after(i * stepMs, () => span.classList.add(styles.pop));
       });
     }
 
@@ -1508,10 +1515,9 @@ export default function ProDemoPlayer() {
     const VO_EST_MS: Record<VoKey, number> = {
       hook: 4540,
       leads: 3700,
-      apply: 3910,
+      apply: 1800,
       chat: 3260,
       won: 1780,
-      end: 5420,
     };
 
     // Captions ARE the narration: the spoken line renders in short chunks
@@ -1692,17 +1698,26 @@ export default function ProDemoPlayer() {
 
     function enterLeads() {
       // Same page, no cut: the board is already on screen, so the shot eases
-      // wide off the hook's job-card push and the cursor walks the viewer to
-      // the fee line. The one zoom in this scene pops onto the fee chip the
-      // hand is resting on; nothing free-floating.
+      // wide off the hook's job-card push and holds there. The cursor still
+      // walks the viewer to the fee line, but WITHOUT a zoom: per the
+      // founder's rule, a zoom is only allowed where an action happens (a
+      // click, the hand arriving, an on-screen change), never just to
+      // underline a narration line. The wide hold lets the whole board read.
       // VO: "New jobs post here, with the lead fee shown up front."
       playVo("leads");
       cameraWide(400);
-      // "...with the lead fee shown up front": hand to the fee chip first,
-      // then the pop lands on it as the words do.
+      // "...with the lead fee shown up front": the hand rests on the fee
+      // chip while the words land; the frame stays put.
       glideTo("[data-x='fee']", 2.5 * BEAT_MS);
-      atBeat(5, () => popZoom("[data-x='fee']", 1.3));
-      atBeat(12, () => cameraWide(400));
+      // The apply line starts HERE, a breath after this scene's line ends
+      // (leads VO ends ~3696ms in; scene beat 11 = 4125ms, a ~430ms gap),
+      // instead of waiting for the apply cut at scene beat 16. This closes
+      // the dead air the founder flagged at 8-11s. Safe by construction:
+      // nothing in a scene cut stops the VO element (only the NEXT playVo
+      // pauses the current clip), and the 1800ms clip in fact finishes
+      // 75ms before the apply scene even starts. Captions ride along
+      // automatically: captionVo runs inside playVo.
+      atBeat(11, () => playVo("apply"));
     }
 
     function enterApply() {
@@ -1716,10 +1731,12 @@ export default function ProDemoPlayer() {
       // ticks down by exactly the fee, then pops onto the wallet itself: the
       // honest fee moment. Finally the unread badge lights the Messages tab
       // and the cursor clicks it, which is what carries us into the chat.
-      // VO: "Apply in one tap. The fee comes from your wallet."
+      // VO: "Apply in one tap." (already spoken: enterLeads schedules it at
+      // its scene beat 11 to kill the dead air, and the clip ends just
+      // before this cut, so this scene opens with the hand mid-travel and
+      // no narration of its own.)
       // No showPage: the board is already the active page (same shot since
       // the hook), and re-showing it would fire an unanchored punch zoom.
-      playVo("apply");
       const note = q("[data-x='applyNote']");
       if (note) note.textContent = "";
       q("[data-x='applyForm']")?.classList.remove(styles.show);
@@ -1755,8 +1772,8 @@ export default function ProDemoPlayer() {
       // Pull wide so the wallet card is in frame for the charge.
       atBeat(7.5, () => cameraWide(400));
       // Confirm and pay: the fee leaves the wallet (80 -> 30), a toast
-      // confirms, and the card flips to its applied state. The click lands
-      // right as the VO says "wallet".
+      // confirms, and the card flips to its applied state. The tick-down
+      // carries this moment visually; the VO no longer narrates it.
       clickOn("[data-x='confirmBtn']", 8.2 * BEAT_MS, {
         onHit: () => {
           q("[data-x='applyForm']")?.classList.remove(styles.show);
@@ -1780,13 +1797,15 @@ export default function ProDemoPlayer() {
 
     function enterChat() {
       // The Messages thread with the homeowner. Their opening message arrives,
-      // the pro types a reply and sends it, and the homeowner confirms the
-      // visit, the choice that becomes the win in the next scene.
+      // the pro types a reply and sends it, and after a real-conversation
+      // beat (pause, then a typing indicator on the homeowner's side) the
+      // homeowner confirms the visit, the choice that becomes the win.
       // VO: "Message the homeowner and line up the visit."
       showPage("chatPage", { whoosh: true });
       const b1 = q("[data-x='b1']");
       const b2 = q("[data-x='b2']");
       const b3 = q("[data-x='b3']");
+      const typing = q("[data-x='typing']");
       const won = q("[data-x='won']");
       const replyText = "I can stop by Thursday morning.";
       const typedReply = q("[data-x='typedReply']");
@@ -1794,6 +1813,7 @@ export default function ProDemoPlayer() {
       b1?.classList.remove(styles.show);
       b2?.classList.remove(styles.show);
       b3?.classList.remove(styles.show);
+      typing?.classList.remove(styles.show);
       won?.classList.remove(styles.show);
       // The homeowner's message arrives after the page opens.
       atBeat(1, () => {
@@ -1801,8 +1821,11 @@ export default function ProDemoPlayer() {
         playVo("chat");
       });
       cameraSnapTo("[data-x='thread']", 1.12);
-      // Type a reply and send it; the camera holds on the thread.
-      clickOn("[data-x='chatInput']", 3 * BEAT_MS, {
+      // Type a reply and send it; the camera holds on the thread. The
+      // homeowner's answer is chained off the send itself (not a fixed
+      // beat), because the keystroke delays are randomized: send, a breath,
+      // dots, reply, in that order on every run.
+      clickOn("[data-x='chatInput']", 2.5 * BEAT_MS, {
         onHit: () => {
           q("[data-x='chatInput']")?.classList.add(styles.focus);
           typeInto("[data-x='typedReply']", replyText, 80, () => {
@@ -1815,18 +1838,22 @@ export default function ProDemoPlayer() {
                     b2.textContent = replyText;
                     b2.classList.add(styles.show);
                   }
+                  // A beat of nothing, then the homeowner starts typing...
+                  after(1.2 * BEAT_MS, () => typing?.classList.add(styles.show));
+                  // ...and the confirmation lands: the pick that becomes
+                  // the win.
+                  after(2.8 * BEAT_MS, () => {
+                    typing?.classList.remove(styles.show);
+                    if (b3) {
+                      b3.textContent = "Perfect, you're hired. See you Thursday!";
+                      b3.classList.add(styles.show);
+                    }
+                  });
                 },
               });
             });
           });
         },
-      });
-      // The homeowner confirms: this is the pick that becomes the win.
-      atBeat(14, () => {
-        if (b3) {
-          b3.textContent = "Perfect, you're hired. See you Thursday!";
-          b3.classList.add(styles.show);
-        }
       });
     }
 
@@ -1836,7 +1863,8 @@ export default function ProDemoPlayer() {
       // (impact + coin arp). The camera dives onto the badge itself, so the
       // payoff zoom is anchored on the change; the old full-screen hero word
       // is gone with the rest of the overlay text cards.
-      // VO: "You got the job."
+      // VO: "Easy as that." (the badge itself reads "You got the job"; the
+      // voice closes on this line instead, per the founder.)
       const won = q("[data-x='won']");
       won?.classList.remove(styles.show);
       cameraSnapTo("[data-x='thread']", 1.12);
@@ -1846,23 +1874,24 @@ export default function ProDemoPlayer() {
         impactVisual();
         setCaption([]);
       });
+      // "Easy as that." is the LAST line of the video (the founder cut
+      // everything after the booking): it starts right behind the impact and
+      // finishes inside this scene, so the end card can arrive silent.
       atBeat(3.4, () => playVo("won"));
-      atBeat(7, () => cameraWide(600));
+      atBeat(7.5, () => cameraWide(600));
     }
 
     function enterEnd() {
-      // Value-prop end card: the pro promise plus the fee-credit guarantee.
-      // The closer is the longest clip (5.42s), which is why this scene owns
-      // 10 beats and starts the line almost immediately: the last words (and
-      // their subtitles) finish inside the end-card breathing room that
-      // finishTour leaves before the replay overlay.
-      // VO: "Win work in your trade. Not chosen? Your fee comes back as credit."
+      // Value-prop end card: the pro promise plus the fee-credit guarantee,
+      // read off the card itself. No narration here, by design: the story
+      // ended when the job was booked, so this is a short silent tag. The
+      // arrangement's FINAL hit lands on global beat 72 (one beat after this
+      // cut) and rings out under the card into the replay overlay.
       showPage("endPage", { whoosh: true });
-      atBeat(0.6, () => playVo("end"));
       const es = q("[data-x='endStat']");
       if (es) es.textContent = "0";
       // A small win-tally count-up gives the card a beat of motion.
-      after(700, () => countUp("[data-x='endStat']", 1, 500, 0));
+      after(400, () => countUp("[data-x='endStat']", 1, 500, 0));
     }
 
     const ENTER: Record<string, () => void> = {
@@ -1909,6 +1938,21 @@ export default function ProDemoPlayer() {
       if (!paused && !clockHold) {
         vnow = Math.min(vnow + delta, effTotalMs);
         fireDueEvents();
+        // The final scene-boundary event drifts a few ms past effTotalMs:
+        // fireDueEvents nudges vnow up to each fired event's own instant, so
+        // every scene cut bases its next `after` a frame late and the drift
+        // accumulates. On an unbroken playthrough vnow clamps at effTotalMs
+        // before that last event is ever due, so runScene(len)/finishTour
+        // never run, the replay overlay never shows, and the demo hangs on
+        // the silent end card with both rAF loops spinning. Close it out the
+        // moment the clock reaches the end, matching seekTo's own end guard.
+        // Guarded by `playing` so the rare exact-boundary event that already
+        // fired finishTour itself can't double-fire it; only tick reaches
+        // this, never the seek sweep (which runs fireDueEvents from vnow=0).
+        if (playing && vnow >= effTotalMs) {
+          finishTour();
+          return;
+        }
       }
       // While the user drags the seek bar, the preview owns these writes.
       if (!scrubbing) {
@@ -1925,24 +1969,15 @@ export default function ProDemoPlayer() {
     function finishTour() {
       playing = false;
       stopMusic();
+      if (cursorRaf) cancelAnimationFrame(cursorRaf);
+      cursorRaf = null;
       if (fillEl) fillEl.style.width = "100%";
       if (counterEl) counterEl.textContent = `${fmt(TOTAL_MS)} / ${fmt(TOTAL_MS)}`;
-      // Let the end card (real CTA link, final score) breathe before the
-      // replay overlay covers it: the last 2 seconds sell the signup.
-      // cursorLoop stays alive through that window (unlike the homeowner
-      // cut): the closer VO's tail outlives the 30s timeline by design, and
-      // the loop is what advances the subtitle chunks off the live audio
-      // position, so the words track the voice to the last syllable and
-      // clear when the clip ends. The rAF dies with the same timeout that
-      // shows the overlay; a replay or seek before then clears this timer
-      // and reuses the still-running loop.
-      timers.push(
-        setTimeout(() => {
-          if (cursorRaf) cancelAnimationFrame(cursorRaf);
-          cursorRaf = null;
-          setFinished(true);
-        }, 2600)
-      );
+      // Let the end card (real CTA link, replay control) breathe before the
+      // replay overlay covers it: the last 2 seconds sell the signup. No VO
+      // outlives the timeline anymore (the win line ends ~2s before the
+      // last beat), so nothing here needs to keep running.
+      timers.push(setTimeout(() => setFinished(true), 2600));
     }
 
     function resetState() {
@@ -1966,7 +2001,7 @@ export default function ProDemoPlayer() {
       q("[data-x='chatInput']")?.classList.remove(styles.focus);
       const typedReply = q("[data-x='typedReply']");
       if (typedReply) typedReply.textContent = "";
-      ["b1", "b2", "b3"].forEach((k) => {
+      ["b1", "b2", "b3", "typing"].forEach((k) => {
         const el = q(`[data-x='${k}']`);
         if (el) el.classList.remove(styles.show);
       });
@@ -2402,7 +2437,7 @@ export default function ProDemoPlayer() {
       ref={boxRef}
       className={styles.box}
       role="group"
-      aria-label="Hearth for Pros demo, about 30 seconds, with sound"
+      aria-label="Hearth for Pros demo, about half a minute, with sound"
       aria-describedby="pro-demo-desc"
     >
       <p id="pro-demo-desc" className="sr-only">
@@ -2562,6 +2597,14 @@ export default function ProDemoPlayer() {
                           Hi, thanks for applying! When could you come take a look?
                         </span>
                         <span className={cx(styles.bubble, styles.me)} data-x="b2"></span>
+                        {/* Homeowner typing indicator: shown for a beat after
+                            the pro's reply lands, before the confirmation, so
+                            the exchange reads send, pause, reply. */}
+                        <span className={cx(styles.bubble, styles.them, styles.typing)} data-x="typing" aria-hidden="true">
+                          <span className={styles.typingDot}></span>
+                          <span className={styles.typingDot}></span>
+                          <span className={styles.typingDot}></span>
+                        </span>
                         <span className={cx(styles.bubble, styles.them)} data-x="b3"></span>
                         <span className={styles.wonBadge} data-x="won">You got the job ✓</span>
                         <div className="mt-1 flex items-center gap-2">
@@ -2699,14 +2742,14 @@ export default function ProDemoPlayer() {
       </div>
 
       {!started && (
-        <button type="button" className={styles.posterOverlay} onClick={handlePlay} aria-label="Play the Hearth for Pros demo, about 30 seconds, with sound">
+        <button type="button" className={styles.posterOverlay} onClick={handlePlay} aria-label="Play the Hearth for Pros demo, about half a minute, with sound">
           <span className={styles.posterBg} aria-hidden="true"></span>
           <span className={styles.playCircle} aria-hidden="true">
             <svg viewBox="0 0 20 20" fill="currentColor"><path d="M6 4.5v11l9-5.5-9-5.5z" /></svg>
           </span>
           <span className={styles.posterLabel}>From open lead to job won</span>
-          <span className={styles.posterSub}>Watch a pro use Hearth, 30 seconds</span>
-          <span className={styles.durationBadge}>0:30</span>
+          <span className={styles.posterSub}>Watch a pro use Hearth, 28 seconds</span>
+          <span className={styles.durationBadge}>0:28</span>
         </button>
       )}
 

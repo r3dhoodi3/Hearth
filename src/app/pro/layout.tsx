@@ -52,10 +52,14 @@ export default async function ProLayout({
 }) {
   // Keep homeowners off the contractor side (and prevent them from accidentally
   // creating a company at /pro/onboarding). Contractors without a company yet
-  // still pass, so they can finish onboarding.
-  if ((await getRole()) === "homeowner") redirect("/dashboard");
-
-  const contractor = await getCurrentContractor();
+  // still pass, so they can finish onboarding. The role check and the company
+  // lookup don't depend on each other, so they go out together: the redirect
+  // only reads the role, and a homeowner never renders the shell anyway.
+  const [role, contractor] = await Promise.all([
+    getRole(),
+    getCurrentContractor(),
+  ]);
+  if (role === "homeowner") redirect("/dashboard");
 
   // No company yet → the user is still onboarding. Show a bare top bar with no
   // app links, so they can't navigate into pages that assume a set-up company

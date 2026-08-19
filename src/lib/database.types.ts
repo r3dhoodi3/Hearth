@@ -676,6 +676,12 @@ export interface Database {
           message: string;
           status: string;
           created_at: string;
+          // Silent account match on public /contact messages (migration 0115).
+          // UNVERIFIED triage hint: anyone can type someone else's email or
+          // phone, so this never proves who sent the message. user_id stays
+          // null on those rows - that null is what marks them anonymous.
+          matched_user_id: string | null;
+          matched_via: "email" | "phone" | "both" | null;
         };
         Insert: {
           id?: string;
@@ -686,6 +692,8 @@ export interface Database {
           message: string;
           status?: string;
           created_at?: string;
+          matched_user_id?: string | null;
+          matched_via?: string | null;
         };
         Update: Partial<
           Database["public"]["Tables"]["support_messages"]["Insert"]
@@ -1270,6 +1278,16 @@ export interface Database {
           city: string | null;
           ownership_verified: boolean;
           photo_urls: string[] | null;
+        }[];
+      };
+      // Migration 0115, service_role only. At most one row; no row means no
+      // match. The result is an unverified triage hint, never proof of who
+      // sent a contact message.
+      match_support_contact: {
+        Args: { p_email: string | null; p_phone: string | null };
+        Returns: {
+          user_id: string;
+          matched_via: "email" | "phone" | "both";
         }[];
       };
       redeem_household_invite_token: {

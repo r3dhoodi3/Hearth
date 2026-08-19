@@ -63,6 +63,20 @@ export async function chooseRoleAction(formData: FormData) {
     throw new Error("Could not save your choice. Please try again.");
   }
 
+  // The role now lives in auth.users, but the current session cookie still
+  // holds the pre-stamp JWT with no role. Cookie-based getRole() (the /pro,
+  // /pro/onboarding and /onboarding guards read the cookie, not the live auth
+  // server) would see null and bounce this user straight back through the
+  // picker -> /pro -> /get-started -> picker loop. Refresh so the cookie
+  // carries a JWT with role before we redirect them into onboarding.
+  const { error: refreshError } = await supabase.auth.refreshSession();
+  if (refreshError) {
+    console.error(
+      "chooseRoleAction: failed to refresh session after role stamp",
+      refreshError
+    );
+  }
+
   // Best-effort audit-trail write, same void pattern the signup pages use.
   if (role === "contractor") {
     void recordTermsAcceptance(user.id, "pro_terms");

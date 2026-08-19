@@ -18,6 +18,7 @@ export default function ValueForm({
   startOpen: boolean;
 }) {
   const [open, setOpen] = useState(startOpen);
+  const [error, setError] = useState<string | null>(null);
   const hasData = purchasePrice != null && purchaseYear != null;
 
   if (!open) {
@@ -33,9 +34,15 @@ export default function ValueForm({
       action={async (fd) => {
         // Only collapse when the server confirms the save stuck. A rejected
         // or soft-failed save still resolves, and closing on that would show
-        // the old numbers as if the new ones were saved.
+        // the old numbers as if the new ones were saved. The reason comes back
+        // as an ActionResult and shows inline (the flash cookie is unread on
+        // this stay-on-page save).
         const result = await saveHomeValueAction(fd);
-        if (!result?.ok) return;
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setError(null);
         if (!hasData) return;
         setOpen(false);
       }}
@@ -94,12 +101,21 @@ export default function ValueForm({
         </div>
       </div>
 
+      {error && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+
       <div className="flex gap-3">
         {hasData && (
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setError(null);
+              setOpen(false);
+            }}
           >
             Cancel
           </button>

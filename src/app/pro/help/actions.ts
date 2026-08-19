@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
+import { cappedField, FIELD_MAX } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
 
 // Save a pro's support message so the team can read and reply. Contact details
@@ -47,7 +48,9 @@ export async function sendProSupportMessageAction(formData: FormData) {
     return;
   }
 
-  const message = ((formData.get("message") as string) || "").trim();
+  // Capped server-side, same ceiling as the homeowner help form and the public
+  // contact form, which write to this same table.
+  const message = cappedField(formData, "message", FIELD_MAX.message);
   if (!message) {
     setFlash("Please write a short message first.", "error");
     return;

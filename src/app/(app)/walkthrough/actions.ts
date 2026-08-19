@@ -6,9 +6,16 @@ import { homeHealthScore } from "@/lib/health";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import type { HomeSystem, Issue } from "@/lib/database.types";
 
-function s(formData: FormData, key: string): string | null {
+// Trim, cap, and normalize empty to null. The cap matters because the values
+// arrive from a vision read the client can edit before confirming, and a
+// server action takes whatever FormData it is handed: without it, an arbitrary
+// paste lands in material_or_model / model_number / the notes column. Numeric
+// fields get their own range check below rather than a length one.
+const MAX_FIELD = 120;
+
+function s(formData: FormData, key: string, max = MAX_FIELD): string | null {
   const v = formData.get(key);
-  const t = typeof v === "string" ? v.trim() : "";
+  const t = typeof v === "string" ? v.trim().slice(0, max) : "";
   return t.length ? t : null;
 }
 
@@ -67,12 +74,14 @@ export async function confirmSystemAction(
   const model = s(formData, "model");
   const serial = s(formData, "serial");
   // Server actions are callable with arbitrary FormData, so the client's
-  // input types are not a guard. Same 1900-2100 clamp the vision route uses;
-  // Number.isFinite also screens out NaN, which would otherwise slip through
-  // the ?? fallback below (NaN is not nullish) and null out a good value.
+  // input types are not a guard. Same 1700-2100 range the profile edit and
+  // vision route use (properties.year_built accepts back to 1700, so a real
+  // 1885 home's install year is kept, not ignored); Number.isFinite also
+  // screens out NaN, which would otherwise slip through the ?? fallback below
+  // (NaN is not nullish) and null out a good value.
   const yearNum = Number(s(formData, "install_year"));
   const install_year =
-    Number.isFinite(yearNum) && yearNum >= 1900 && yearNum <= 2100
+    Number.isFinite(yearNum) && yearNum >= 1700 && yearNum <= 2100
       ? Math.trunc(yearNum)
       : null;
   const conditionNum = Number(s(formData, "condition_rating"));

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { setActiveHomeAction } from "@/lib/homeActions";
 import RemoveHomeButton from "@/components/RemoveHomeButton";
 import SubmitButton from "@/components/SubmitButton";
-import type { PropertyWithShared } from "@/lib/property";
+import type { HomeSummary } from "@/lib/property";
 
 // Dropdown of the user's homes: switch, remove, or add. Closes on outside
 // click or Escape (no need to click the toggle again).
@@ -13,7 +13,7 @@ export default function HomeSwitcher({
   homes,
   activeId,
 }: {
-  homes: PropertyWithShared[];
+  homes: HomeSummary[];
   activeId: string;
 }) {
   const [open, setOpen] = useState(false);

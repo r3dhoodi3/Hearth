@@ -1,10 +1,11 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import { ClipboardList, ReceiptText, Mail, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { hasProPlan } from "@/lib/subscription";
+import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { PRO_DEPOSIT_BOOST_PTS, COLD_START_FREE_ALERTS } from "@/lib/constants";
+import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
 import ProToolsClient from "./ProToolsClient";
 
 // AI back office (Hearth Pro membership perk): three writing tools that turn a
@@ -38,6 +39,12 @@ export default async function ProToolsPage() {
   const member = await hasProPlan();
 
   if (!member) {
+    // The free trial is for first-time members only, and the pro-side
+    // subscriptions row survives a cancellation, so a lapsed member gets the
+    // plain "See Hearth Pro" button instead of a trial they cannot have.
+    // Request-cached: hasProPlan() above already read the same rows.
+    const trialEligible = !(await getProSubscription());
+
     return (
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="text-center">
@@ -60,13 +67,30 @@ export default async function ProToolsPage() {
             Pro membership tool
           </p>
           <p className="mt-1 text-sm text-hearth-700 dark:text-hearth-300">
-            The AI back office is part of the Hearth Pro membership. Join to
-            unlock all three tools, along with instant alerts and deposit
-            bonuses.
+            The AI back office is part of the Hearth Pro membership.{" "}
+            {/* The real membership unlock here is the three tools. Two things
+                must stay honest: instant alerts are free for every pro while
+                COLD_START_FREE_ALERTS is on, so we don't sell them as a
+                membership unlock (mirrors /pros and /pro/business); and the
+                deposit match is the one perk that does NOT start during the
+                free trial, so the trial line never promises it early. */}
+            {trialEligible
+              ? `Start your free trial to unlock all three tools.${
+                  COLD_START_FREE_ALERTS
+                    ? " Instant job alerts are already free for every pro while Hearth is new."
+                    : " You also get instant job alerts."
+                } Your +${PRO_DEPOSIT_BOOST_PTS}% deposit match starts when the trial converts.`
+              : `Join to unlock all three tools.${
+                  COLD_START_FREE_ALERTS
+                    ? " Instant job alerts are already free for every pro while Hearth is new."
+                    : " You also get instant job alerts."
+                } Members earn +${PRO_DEPOSIT_BOOST_PTS}% on every deposit.`}
           </p>
-          <Link href="/pro/plus" className="btn-primary mt-3 inline-block">
-            See Hearth Pro
-          </Link>
+          <ProUpgradeCta
+            trialEligible={trialEligible}
+            className="btn-primary mt-3 inline-block"
+            sublineClassName="mt-2 text-xs text-hearth-700 dark:text-hearth-300"
+          />
         </div>
 
         <section className="grid gap-4 sm:grid-cols-1">

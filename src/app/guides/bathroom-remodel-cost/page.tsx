@@ -175,7 +175,7 @@ export default function BathroomRemodelCostGuide() {
               href="/contractors?category=remodeling"
               className="font-medium text-bark-700 hover:underline dark:text-stone-300"
             >
-              Get quotes from Orange County remodeling pros →
+              Get quotes from local remodeling pros →
             </Link>
           </p>
         </section>

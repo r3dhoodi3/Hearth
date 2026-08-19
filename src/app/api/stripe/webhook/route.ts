@@ -212,9 +212,16 @@ async function creditDepositSession(
         .eq("user_id", proRow.user_id)
         .like("plan", "pro_%")
         .maybeSingle();
+      // "active" only, NOT "trialing": same perk-before-payment reasoning as
+      // the $10 membership credit gate in the checkout branch below. The boost
+      // is real money (up to +5% of a $2,000 deposit) and a trial has not paid
+      // for it yet, so a trialer who deposits and cancels on day two can't walk
+      // off with the match. Deposits made during the trial simply earn the
+      // normal tier bonus; nothing is granted retroactively when the trial
+      // converts, so what a pro is shown at deposit time is always what lands.
       const activePro =
         proSub?.plan?.startsWith("pro_") &&
-        (proSub.status === "active" || proSub.status === "trialing") &&
+        proSub.status === "active" &&
         (!proSub.current_period_end ||
           new Date(proSub.current_period_end) > new Date());
       if (activePro) boostPts = PRO_DEPOSIT_BOOST_PTS;
@@ -708,11 +715,29 @@ export async function POST(req: NextRequest) {
       // upserted above. Granting here too, keyed on the SAME invoice id, means
       // the credit lands whichever event arrives first: the RPC's idempotency
       // guard makes the loser a no-op.
+      //
+      // NOT during a free trial. A trial start still finalizes an invoice, for
+      // $0, and latest_invoice points at it - so granting off it would hand
+      // every trialer $10 of spendable lead credit before a cent had been
+      // charged, farmable by starting a trial and cancelling on day two. The
+      // credit is a perk of a PAID cycle: it lands when the trial converts and
+      // the first real invoice is paid (the invoice.payment_succeeded branch
+      // below, which now requires money to have actually moved).
       try {
         const plan = meta.plan ?? (interval ? `pro_${interval}` : null);
         const latest = (subscription as any).latest_invoice;
         const invoiceId = typeof latest === "string" ? latest : latest?.id ?? null;
-        if (typeof plan === "string" && plan.startsWith("pro_") && invoiceId) {
+        // Positive check, not `!== "trialing"`: a negative gate lets through
+        // every OTHER not-yet-paid status too (incomplete, past_due), and only
+        // "active" actually means money moved. Nothing is lost by being strict
+        // here, because the invoice.payment_succeeded branch below grants the
+        // same credit off the same invoice id once the payment really lands.
+        if (
+          typeof plan === "string" &&
+          plan.startsWith("pro_") &&
+          invoiceId &&
+          subscription.status === "active"
+        ) {
           const yearly = plan === "pro_yearly";
           // Keyed off the plan, never the amount paid: the $9.99 intro first
           // month still earns the full $10 on purpose.
@@ -734,16 +759,19 @@ export async function POST(req: NextRequest) {
       }
 
       // Retainable acknowledgment of the auto-renewal terms. The step-up
-      // signal is the discount actually on the subscription, never the plan
-      // name, so a coupon that failed to apply can't produce an
-      // acknowledgment promising an intro price that was never charged.
+      // signal is read off the SUBSCRIPTION Stripe actually created, never the
+      // plan name or our own checkout intent, so an offer that failed to
+      // attach can't produce an acknowledgment promising terms that were never
+      // billed. Two shapes count: a Stripe trial ("trialing", what every new
+      // Pro signup gets today) and a discount (the retired intro coupon, still
+      // read for any legacy subscription that carries one).
       await sendRenewalAcknowledgment(
         admin,
         meta.user_id,
         interval === "yearly" || meta.plan === "pro_yearly"
           ? "pro_yearly"
           : "pro_monthly",
-        hasIntroDiscount(subscription),
+        subscription.status === "trialing" || hasIntroDiscount(subscription),
         subscription.id
       );
 
@@ -1080,8 +1108,17 @@ export async function POST(req: NextRequest) {
     // over zero): a monthly-to-yearly upgrade bills the $120 on an update
     // invoice and must earn its credit. Idempotency by invoice id already
     // prevents double grants on retries and duplicate deliveries.
+    //
+    // subscription_create carries the same amount_paid gate for the free
+    // trial's sake: starting a trial finalizes a $0 subscription_create
+    // invoice, and crediting off it would pay the $10 perk out before the
+    // member had paid anything. Every genuine paid create invoice is well over
+    // zero, so the gate only ever removes the trial's placeholder. The real
+    // first cycle then arrives as subscription_cycle at trial end and earns
+    // the credit normally.
     const isGrantableReason =
-      invoice.billing_reason === "subscription_create" ||
+      (invoice.billing_reason === "subscription_create" &&
+        (invoice.amount_paid ?? 0) > 0) ||
       invoice.billing_reason === "subscription_cycle" ||
       (invoice.billing_reason === "subscription_update" &&
         (invoice.amount_paid ?? 0) > 0);

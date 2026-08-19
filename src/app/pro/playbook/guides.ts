@@ -66,7 +66,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
       {
         title: "A quiet homeowner costs you nothing",
         body: [
-          "If they never respond at all, ghost protection returns your fee automatically after 7 days. The only thing a dead lead costs you is the wait, so don't let one silence sour you on the next application.",
+          "If they never respond at all, ghost protection puts your fee back in your wallet as credit automatically after 7 days. The only thing a dead lead costs you is the wait, so don't let one silence sour you on the next application.",
         ],
       },
     ],
@@ -153,30 +153,43 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
     id: "ghost-protection",
     icon: "Shield",
     title: "How ghost protection works",
-    summary: "If the homeowner never responds, your fee comes back on its own.",
+    summary:
+      "If the homeowner never responds, your fee comes back as wallet credit on its own.",
     sections: [
       {
         title: "The 7-day promise",
         body: [
-          "Apply to a job and the homeowner has 7 days to respond. If they never do, your fee is refunded to your wallet automatically. No form, no support ticket, no asking.",
+          "Apply to a job and the homeowner has 7 days to respond. If they never do, your fee goes back into your wallet as credit automatically. No form, no support ticket, no asking.",
+        ],
+      },
+      {
+        title: "Not chosen? That fee comes back too",
+        body: [
+          "If the homeowner picks another pro, your apply fee comes back as wallet credit automatically the moment they pick, good for 60 days. You never lose money on a job you didn't get.",
+        ],
+      },
+      {
+        title: "Credit, not cash",
+        body: [
+          "The fee comes back as wallet credit you spend on your next application. It is never cash back to your card or your bank, on this or any of the other fee-back rules.",
         ],
       },
       {
         title: "You get back exactly what you paid",
         body: [
-          "The refund is the exact amount you were charged. If you applied on an aging deal at 30% off, the discounted fee is what comes back.",
+          "The credit is the exact amount you were charged. If you applied on an aging deal at 30% off, the discounted fee is what comes back.",
         ],
       },
       {
         title: "If they pick you later anyway",
         body: [
-          "Sometimes a homeowner goes quiet, gets refunded, then comes back and chooses you. When that happens the same fee is charged again, since the lead turned real after all. You only ever pay for a shot that actually existed.",
+          "Sometimes a homeowner goes quiet, your fee comes back, then they return and choose you. When that happens the same fee is charged again, since the lead turned real after all. You only ever pay for a shot that actually existed.",
         ],
       },
       {
         title: "What it changes for you",
         body: [
-          "The worst case on any application is a week of waiting, not lost money. That means the honest play is also the profitable one: apply to the jobs that fit, and let the quiet ones refund themselves.",
+          "The worst case on any application is a week of waiting, not lost money. That means the honest play is also the profitable one: apply to the jobs that fit, and let the quiet ones pay themselves back in credit.",
         ],
       },
     ],
@@ -226,9 +239,9 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
         ],
       },
       {
-        title: "Refunds reopen spots",
+        title: "Credited applications reopen spots",
         body: [
-          "When ghost protection refunds an application, that spot opens back up. A job showing as full today can have room next week, so a full card isn't always gone for good.",
+          "When ghost protection credits an application back, that spot opens back up. A job showing as full today can have room next week, so a full card isn't always gone for good.",
         ],
       },
     ],

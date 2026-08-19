@@ -1,3 +1,6 @@
+// Build-time guard: this module reads SUPABASE_SERVICE_ROLE_KEY, so importing
+// it from a Client Component must fail the build, not ship the key.
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 

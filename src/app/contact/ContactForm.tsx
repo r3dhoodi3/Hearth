@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import SubmitButton from "@/components/SubmitButton";
 import { sendContactMessageAction } from "./actions";
 
@@ -9,8 +10,20 @@ import { sendContactMessageAction } from "./actions";
 // limiting, lives server-side in ./actions.ts where it can't be bypassed by
 // skipping the client.
 export default function ContactForm({ topic }: { topic: string | null }) {
+  // A validation error stays on this page, so it comes back as an ActionResult
+  // rendered inline here rather than through the flash cookie (which the root
+  // layout only reads on a fresh GET, i.e. after a redirect). On the success
+  // path the action redirects, so control never returns and `res` is undefined.
+  const [error, setError] = useState<string | null>(null);
   return (
-    <form action={sendContactMessageAction} className="card">
+    <form
+      action={async (fd) => {
+        setError(null);
+        const res = await sendContactMessageAction(fd);
+        if (res && !res.ok) setError(res.error);
+      }}
+      className="card"
+    >
       {topic && (
         <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
           Regarding:{" "}
@@ -76,6 +89,12 @@ export default function ContactForm({ topic }: { topic: string | null }) {
           placeholder="What can we help with?"
         />
       </div>
+
+      {error && (
+        <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
 
       <div className="mt-4">
         <SubmitButton>Send message</SubmitButton>

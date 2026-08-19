@@ -10,6 +10,11 @@ import SubmitButton from "@/components/SubmitButton";
 // insurer shouldn't include an empty "add an entry" button.
 export default function MaintenanceHistoryForm() {
   const [open, setOpen] = useState(false);
+  // A validation error (missing fields, a duplicate, or a failed save) keeps
+  // the owner here with what they typed intact, shown inline. Previously the
+  // form reset and closed no matter what, so an error both vanished and wiped
+  // the entry.
+  const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   if (!open) {
@@ -28,7 +33,12 @@ export default function MaintenanceHistoryForm() {
     <form
       ref={formRef}
       action={async (fd) => {
-        await addMaintenanceHistoryAction(fd);
+        const res = await addMaintenanceHistoryAction(fd);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setError(null);
         formRef.current?.reset();
         setOpen(false);
       }}
@@ -73,11 +83,19 @@ export default function MaintenanceHistoryForm() {
           />
         </div>
       </div>
+      {error && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
       <div className="flex gap-2">
         <button
           type="button"
           className="btn-secondary"
-          onClick={() => setOpen(false)}
+          onClick={() => {
+            setError(null);
+            setOpen(false);
+          }}
         >
           Cancel
         </button>

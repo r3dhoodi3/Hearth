@@ -24,6 +24,7 @@ import { sendNotification } from "@/lib/notify";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { redactContact } from "@/lib/redact";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
+import { isAllowedValue } from "@/lib/formFields";
 import type { Json } from "@/lib/database.types";
 
 // Server-side counterpart to src/lib/analytics.ts's track(): that helper
@@ -290,6 +291,17 @@ export async function postJobAction(formData: FormData) {
       await supabase.storage.from("home-photos").remove(paths);
     }
   };
+
+  // Only a real category may set the payout tier: a forged value would fall
+  // back to the cheapest "other" fee in leadFeeFor, and would reach no pro at
+  // all (open_jobs_for_me matches on exact equality with a pro's own
+  // categories). Same check updateJobAction and directRequestAction make, in
+  // the setFlash + redirect style this action uses.
+  if (!isAllowedValue(JOB_CATEGORIES, category)) {
+    await cleanupOrphanPhotos();
+    setFlash("Please pick a valid job category.", "error");
+    redirect("/contractors");
+  }
 
   // Pros pay to apply, so a posting has to give them something to go on:
   // require a real description (at least 20 characters) before it goes live.
@@ -808,9 +820,14 @@ export async function closeJobAction(formData: FormData) {
                 .in("id", userIds)
             : { data: [] as { id: string; email: string | null; phone: string | null; sms_consent: boolean | null }[] };
           const userById = new Map((users ?? []).map((u) => [u.id, u]));
+          // The money line is the ghost-protection rule, unchanged by this
+          // close: nobody was chosen, so the fee comes back as wallet credit
+          // on the usual 7-day schedule.
+          const creditLine =
+            " If you paid to apply, that fee comes back to your wallet as credit on the usual 7-day schedule.";
           const body = reason
-            ? `They closed it without choosing anyone: ${reason}.`
-            : "They closed it without choosing anyone.";
+            ? `They closed it without choosing anyone: ${reason}.${creditLine}`
+            : `They closed it without choosing anyone.${creditLine}`;
           // sendNotification always writes the in-app row unconditionally;
           // email/SMS stay dormant until their provider env vars are set.
           await Promise.all(
@@ -1161,7 +1178,20 @@ export async function requestProAction(
   // The target pro must exist, be claimed (a real user to notify and charge),
   // and serve this category (null/empty categories means "takes anything",
   // matching how open_jobs_for_me treats them).
-  const { data: pro } = await supabase
+  //
+  // ADMIN client for this ONE read, on purpose. The "contractors read" policy
+  // (migration 0067) only returns a row to a homeowner who is ALREADY related
+  // to that pro - they have a lead assigned to them, or an application from
+  // them. A direct request is by definition the opposite case: the homeowner
+  // just found this pro on the board or a shared /p/<id> link and has no
+  // relationship yet, so the user-scoped read came back empty every time and
+  // every first request to a new pro failed with "isn't available right now".
+  // The select list is deliberately the public-safe subset - id, user_id,
+  // name, categories, serves_orange_county - the same facts the public pro
+  // page and the job board already show, and none of them are rendered back to
+  // the caller beyond the pro's own name in the messages below.
+  const proAdmin = createAdminClient();
+  const { data: pro } = await proAdmin
     .from("contractors")
     .select("id, user_id, name, categories, serves_orange_county")
     .eq("id", contractorId)
@@ -1490,6 +1520,13 @@ export async function rehireProAction(
 
   if (!contractorId || !category) {
     return err("Couldn't send that request just now. Please try again.");
+  }
+
+  // Only a real category may set the payout tier, same check updateJobAction
+  // and directRequestAction make. A rehire is free for the pro, but the
+  // category still decides labels, icons, and how the job is matched.
+  if (!isAllowedValue(JOB_CATEGORIES, category)) {
+    return err("Please pick a valid job category.");
   }
 
   // Mirror postJobAction: the pro needs a real description to go on, even on a

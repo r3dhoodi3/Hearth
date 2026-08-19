@@ -40,6 +40,14 @@ export default async function GetStarted({
   if (user) {
     const role = await getRole();
     if (role) redirect(next ?? (role === "contractor" ? "/pro" : "/dashboard"));
+    // Signed in, but no role yet: this is the same fork /welcome/role asks,
+    // except the tiles below link to the two SIGN-UP pages, which would show
+    // someone a create-an-account form for the account they are already
+    // signed into. That is the dead end a Google user hits when /pro sends a
+    // role-less account here. /welcome/role asks the same question, stamps the
+    // role, records the right terms acceptance, and routes into the matching
+    // complete-your-profile step, so send them there instead.
+    redirect(`/welcome/role${nextQuery}`);
   }
 
   return (

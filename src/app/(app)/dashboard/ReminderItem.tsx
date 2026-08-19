@@ -114,6 +114,9 @@ export default function ReminderItem({
       if (!res.ok) {
         setRemoved(false);
         checklist?.register(id, done);
+        // A stay-on-page failure never shows via the flash cookie, so surface
+        // the returned reason here.
+        toast.error(res.error);
         return;
       }
     } catch {
@@ -145,6 +148,9 @@ export default function ReminderItem({
       if (!res.ok) {
         setDone(!next);
         setJustCompleted(false);
+        // A stay-on-page failure never shows via the flash cookie, so surface
+        // the returned reason here.
+        toast.error(res.error);
         return;
       }
       checklist?.report(id, next);

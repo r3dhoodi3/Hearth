@@ -235,9 +235,10 @@ export default function ApplyJobButton({
       )}
       <p className="text-xs text-stone-500 dark:text-stone-400">
         Applying charges the {fee} lead fee from your wallet. If the homeowner
-        never responds and no one is picked, ghost protection returns it after{" "}
-        {GHOST_PROTECTION_DAYS} days. Not chosen? Your fee comes back as wallet
-        credit, good for 60 days.
+        never responds and no one is picked, ghost protection puts it back in
+        your wallet as credit after {GHOST_PROTECTION_DAYS} days. Not chosen?
+        Your fee comes back as wallet credit too, good for 60 days. Returns are
+        always credit toward future leads, never cash back to your card.
       </p>
       <div className="flex gap-2">
         <button

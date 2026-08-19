@@ -56,7 +56,14 @@ export async function sendDraftToLeadAction(
   }
 
   const leadId = String(formData.get("lead_id") || "");
-  const body = String(formData.get("body") || "").trim();
+  // Capped at the same ceiling recordToolEditAction stores drafts under, which
+  // is already sized to the largest draft /api/pro-tools can produce. The
+  // client only ever sends a generated draft, but a server action takes
+  // whatever FormData it is handed, and this text goes straight into a chat
+  // thread a homeowner reads.
+  const body = String(formData.get("body") || "")
+    .trim()
+    .slice(0, MAX_STORED_TEXT);
   if (!leadId || !body) {
     return { ok: false, error: "There's nothing to send yet." };
   }

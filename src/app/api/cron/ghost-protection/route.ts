@@ -162,16 +162,16 @@ async function runCron(req: NextRequest) {
       const totalCents = refunds.reduce((sum, r) => sum + r.feeCents, 0);
       const title =
         refunds.length === 1
-          ? "Ghost protection: your fee came back"
-          : "Ghost protection: your fees came back";
+          ? "Ghost protection: your fee came back as credit"
+          : "Ghost protection: your fees came back as credit";
       const body =
         refunds.length === 1
           ? `The homeowner never responded, so your ${feeLabel(
               refunds[0].feeCents
-            )} apply fee was returned to your wallet.`
-          : `Your apply fee was returned on ${refunds.length} jobs today: the homeowners never responded, so ${feeLabel(
+            )} apply fee is back in your wallet as credit for your next application.`
+          : `Your apply fee came back on ${refunds.length} jobs today: the homeowners never responded, so ${feeLabel(
               totalCents
-            )} total went back to your wallet.`;
+            )} total is back in your wallet as credit.`;
 
       const contact = contactByUser.get(userId);
       await sendNotification(supabase, {
@@ -288,10 +288,10 @@ async function runCron(req: NextRequest) {
         await sendNotification(supabase, {
           userId: r.userId,
           kind: "ghost_refund",
-          title: "Ghost protection: your fee came back",
+          title: "Ghost protection: your fee came back as credit",
           body: `The homeowner never responded to a direct request, so your ${feeLabel(
             r.feeCents
-          )} lead fee was returned to your wallet.`,
+          )} lead fee is back in your wallet as credit for your next lead.`,
           url: "/pro",
           email: contact?.email ?? null,
           phone: contact?.phone ?? null,

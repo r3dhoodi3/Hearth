@@ -44,15 +44,26 @@ const TABS = [
 export default function ProfileTabs({
   contractor,
   member,
+  trialEligible,
   projects,
   checkrEnabled,
   email,
+  hasPassword,
+  providerName,
 }: {
   contractor: Contractor;
   member: boolean;
+  // Whether the upgrade prompts below may lead with the free trial. Resolved
+  // on the server (see page.tsx): only a pro who has never held a membership
+  // gets one, and this component has no way to check that itself.
+  trialEligible: boolean;
   projects: ProProject[];
   // The auth email the pro signs in with, for the security tab's email card.
   email: string | null;
+  // Passed straight through to AccountSecurityPanel: false when this account
+  // signed up with Google and has never set a password.
+  hasPassword: boolean;
+  providerName: string;
   // Checkr background checks (0057): only passed true when CHECKR_API_KEY is
   // set server-side (isCheckrConfigured() in page.tsx). Fully dormant
   // otherwise - BackgroundCheckCard never renders.
@@ -98,16 +109,23 @@ export default function ProfileTabs({
           {checkrEnabled && <BackgroundCheckCard contractor={contractor} />}
         </div>
       ) : tab === "page" ? (
-        <PublicPageCard contractor={contractor} member={member} />
+        <PublicPageCard
+          contractor={contractor}
+          member={member}
+          trialEligible={trialEligible}
+        />
       ) : tab === "projects" ? (
         <ProjectsCard
           contractorId={contractor.id}
           member={member}
+          trialEligible={trialEligible}
           projects={projects}
         />
       ) : (
         <AccountSecurityPanel
           email={email}
+          hasPassword={hasPassword}
+          providerName={providerName}
           updateEmailAction={updateEmailAction}
           updatePasswordAction={updatePasswordAction}
           signOutOthersAction={signOutOthersAction}

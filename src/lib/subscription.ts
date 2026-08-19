@@ -30,22 +30,45 @@ export function isLiveProPlanRow(row: {
   return true;
 }
 
-// All of the current user's subscription rows (at most one per side). Written
-// only by the Stripe webhook via the service role, so this is a read-only
-// view for the app. Cached per request; both side-specific getters below
-// share the single query. The side is derived from the plan prefix in code
-// so these work the same whether or not migration 0036 has run yet.
+// All of the current user's subscription rows (at most one per side), together
+// with whether the read itself FAILED. Written only by the Stripe webhook via
+// the service role, so this is a read-only view for the app. Cached per
+// request; the side-specific getters below share the single query. The side is
+// derived from the plan prefix in code so these work the same whether or not
+// migration 0036 has run yet.
+//
+// The `errored` flag exists so callers can tell "this user has no row" apart
+// from "we couldn't read the table". A swallowed read error used to collapse
+// both into an empty list, which made a transient or RLS failure read as
+// "no Pro subscription" and hand a repeat free trial to a pro who already
+// burned one (see isProTrialEligible below). The lenient getters keep treating
+// an error as "no row" (an outage should not flip a member's perks on), but the
+// trial grant is money and fails CLOSED off this flag instead.
+const getSubscriptionRowsResult = cache(
+  async (): Promise<{ rows: Subscription[]; errored: boolean }> => {
+    const user = await getUser();
+    if (!user) return { rows: [], errored: false };
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error(
+        "getSubscriptionRows read failed:",
+        error.message ?? error
+      );
+      return { rows: [], errored: true };
+    }
+
+    return { rows: (data ?? []) as Subscription[], errored: false };
+  }
+);
+
 const getSubscriptionRows = cache(async (): Promise<Subscription[]> => {
-  const user = await getUser();
-  if (!user) return [];
-
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("subscriptions")
-    .select("*")
-    .eq("user_id", user.id);
-
-  return (data ?? []) as Subscription[];
+  return (await getSubscriptionRowsResult()).rows;
 });
 
 // The current user's homeowner Hearth Plus subscription row (billing status,
@@ -65,6 +88,20 @@ export const getProSubscription = cache(
     return rows.find((row) => isProPlanName(row.plan)) ?? null;
   }
 );
+
+// Whether the current user may start a first-time Hearth Pro free trial. The
+// Pro-side row survives a cancellation (it lands on "canceled", it is not
+// deleted), so any existing Pro row means NOT eligible. Critically, this fails
+// CLOSED: a read that ERRORED also returns false, so a transient or RLS read
+// failure can never let a pro who already used their trial farm another one.
+// getProSubscription() alone can't carry this, because its null return can't
+// tell "no row" apart from "read failed". The normal no-row-means-eligible path
+// is preserved: no Pro row and no read error returns true.
+export async function isProTrialEligible(): Promise<boolean> {
+  const { rows, errored } = await getSubscriptionRowsResult();
+  if (errored) return false;
+  return !rows.some((row) => isProPlanName(row.plan));
+}
 
 // Pending billing changes, read live from Stripe (one call) so the UI can't
 // drift out of sync. Generic over whichever side's row is passed in:

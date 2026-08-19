@@ -16,6 +16,12 @@ export default function IssueForm({
   systems: HomeSystem[];
 }) {
   const [open, setOpen] = useState(false);
+  // A validation/save error keeps the owner on this page with their typed
+  // report intact, so it comes back as an ActionResult rendered inline here
+  // rather than through the flash cookie (unread on a stay-on-page action). On
+  // success the action redirects, so control never returns and `res` is
+  // undefined.
+  const [error, setError] = useState<string | null>(null);
 
   if (!open) {
     return (
@@ -26,7 +32,14 @@ export default function IssueForm({
   }
 
   return (
-    <form action={reportIssueAction} className="card space-y-4">
+    <form
+      action={async (fd) => {
+        setError(null);
+        const res = await reportIssueAction(fd);
+        if (res && !res.ok) setError(res.error);
+      }}
+      className="card space-y-4"
+    >
       <h3 className="font-semibold text-stone-900 dark:text-stone-100">Report an issue</h3>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -79,6 +92,12 @@ export default function IssueForm({
 
       <PhotoUpload propertyId={propertyId} />
       <PhotoTips />
+
+      {error && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
 
       <div className="flex gap-3">
         <button type="button" className="btn-secondary" onClick={() => setOpen(false)}>

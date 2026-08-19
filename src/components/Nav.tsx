@@ -59,7 +59,19 @@ export default function Nav({
             Hearth
           </Link>
           <span className="hidden text-stone-300 sm:inline dark:text-stone-500">·</span>
-          <HomeSwitcher homes={homes} activeId={activeId} />
+          {/* Project to just the fields the client switcher renders. The full
+              property rows carry sensitive columns (mortgage_balance,
+              purchase_price, assessed_value, insurance_premium, owner names,
+              parcel_id, the owner's user_id) that must not be serialized into
+              this "use client" component's RSC payload. */}
+          <HomeSwitcher
+            homes={homes.map((h) => ({
+              id: h.id,
+              address_line1: h.address_line1,
+              isShared: h.isShared,
+            }))}
+            activeId={activeId}
+          />
         </div>
         <div className="flex items-center gap-1">
           {/* Primary destinations. Desktop/tablet (sm and up) keep this exact

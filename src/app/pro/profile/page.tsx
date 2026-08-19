@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { hasProPlan } from "@/lib/subscription";
+import { getPasswordStatus, providerLabel } from "@/lib/auth";
+import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { isCheckrConfigured } from "@/lib/checkr";
 import ProfileTabs from "./ProfileTabs";
 import type { ProProject, ProProjectPhoto } from "./ProjectsCard";
@@ -14,6 +15,13 @@ export default async function ProProfilePage() {
   // be edited, plus the project limits. It never touches leads, ratings, or
   // reviews.
   const member = await hasProPlan();
+
+  // Whether the upgrade prompts on the Projects and Public Page tabs may lead
+  // with the free trial. Only a pro with no pro-side subscriptions row will
+  // actually get one (the row survives a cancellation), so this is resolved on
+  // the server and passed down: the tab cards are client components and must
+  // not guess. Free to ask for, hasProPlan() read the same cached rows.
+  const trialEligible = !member && !(await getProSubscription());
 
   // The pro's project portfolio (0045) with photos, for the Projects tab.
   // Cast: the 0045 tables aren't in the generated types (database.types.ts is
@@ -53,14 +61,22 @@ export default async function ProProfilePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Whether they have a password at all. A pro who signed up with Google has
+  // none, so the security tab offers the set-a-password flow instead of a form
+  // asking for a current password that doesn't exist. Read on every load.
+  const { hasPassword, provider } = await getPasswordStatus();
+
   return (
     <div className="mx-auto max-w-4xl">
       <ProfileTabs
         contractor={contractor}
         member={member}
+        trialEligible={trialEligible}
         projects={projects}
         checkrEnabled={checkrEnabled}
         email={user?.email ?? null}
+        hasPassword={hasPassword}
+        providerName={providerLabel(provider)}
       />
     </div>
   );

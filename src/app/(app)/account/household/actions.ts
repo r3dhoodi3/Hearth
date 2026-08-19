@@ -31,13 +31,16 @@ export async function inviteMemberAction(formData: FormData) {
   if (!user) redirect("/signin");
 
   const propertyId = (formData.get("property_id") as string) || "";
+  // NOT sliced to a ceiling like other free-text fields: this address is mailed
+  // an invite, and a truncated address still has an "@" and would reach a
+  // stranger, so an over-length value is REJECTED below rather than trimmed.
   const email = ((formData.get("email") as string) || "").trim().toLowerCase();
 
   if (!propertyId) {
     setFlash("Choose a home to invite someone to.", "error");
     redirect(HOUSEHOLD_PATH);
   }
-  if (!EMAIL_RE.test(email)) {
+  if (!EMAIL_RE.test(email) || email.length > 254) {
     setFlash("Enter a valid email address.", "error");
     redirect(HOUSEHOLD_PATH);
   }
@@ -58,6 +61,30 @@ export async function inviteMemberAction(formData: FormData) {
   if ((count ?? 0) >= MAX_MEMBERS_PER_HOME) {
     setFlash(
       `This home already has the maximum of ${MAX_MEMBERS_PER_HOME} members.`,
+      "error"
+    );
+    redirect(HOUSEHOLD_PATH);
+  }
+
+  // An invite sends mail to an address the caller typed, so an unlimited invite
+  // loop is a way to send mail to strangers with Hearth's name on it. The
+  // per-home member cap above doesn't stop that on its own: a rejected or
+  // deleted invite frees the slot again. Charged HERE, immediately before the
+  // insert and only after every cheap check (property, email shape, not-self,
+  // cap) has passed, so a mistyped or self-addressed invite never burns a slot.
+  // Same fixed-window limiter (migration 0068) and same fail-open posture as
+  // the rest of the spam-class buckets - only an explicit `allowed === false`
+  // blocks - so a limiter outage never stops a real homeowner from adding their
+  // partner.
+  const rlAdmin = createAdminClient();
+  const { data: allowed } = await rlAdmin.rpc("rate_limit_hit", {
+    p_bucket: `invite:${user.id}`,
+    p_limit: 10,
+    p_window_seconds: 86400,
+  });
+  if (allowed === false) {
+    setFlash(
+      "You've sent a lot of invites today. Please try again tomorrow.",
       "error"
     );
     redirect(HOUSEHOLD_PATH);

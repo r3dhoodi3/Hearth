@@ -11,6 +11,7 @@ import CategoryIcon from "@/components/CategoryIcon";
 import { imgSrc } from "@/lib/storage";
 import { StoredPhotoGrid } from "@/components/FilePreview";
 import SubmitButton from "@/components/SubmitButton";
+import { useToast } from "@/components/ToastProvider";
 import {
   updateIssueAction,
   checkResolveIssueAction,
@@ -35,6 +36,8 @@ export default function IssueRow({
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showPhotos, setShowPhotos] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const toast = useToast();
   // The checkbox follows the issue's real status (initialResolved), with an
   // optimistic override only while a toggle is in flight. Using the prop as the
   // source of truth - instead of a one-time useState init - means a row that
@@ -48,10 +51,15 @@ export default function IssueRow({
     setOptimistic(next); // flip the checkbox immediately
     setBusy(true);
     try {
-      if (next) {
-        await checkResolveIssueAction(issue.id);
-      } else {
-        await reopenIssueAction(issue.id);
+      const res = next
+        ? await checkResolveIssueAction(issue.id)
+        : await reopenIssueAction(issue.id);
+      if (!res.ok) {
+        // A stay-on-page failure never shows via flash, so surface it here and
+        // revert the optimistic flip.
+        setOptimistic(null);
+        toast.error(res.error);
+        return;
       }
       // Revalidation re-renders with the new status; drop the override so we
       // follow the server truth again.
@@ -68,7 +76,12 @@ export default function IssueRow({
       <li className="card">
         <form
           action={async (fd) => {
-            await updateIssueAction(fd);
+            const res = await updateIssueAction(fd);
+            if (!res.ok) {
+              setEditError(res.error);
+              return;
+            }
+            setEditError(null);
             setEditing(false);
           }}
           className="space-y-3"
@@ -113,11 +126,20 @@ export default function IssueRow({
               defaultValue={issue.description ?? ""}
             />
           </div>
+          {editError && (
+            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+              {editError}
+            </p>
+          )}
+
           <div className="flex gap-2">
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => setEditing(false)}
+              onClick={() => {
+                setEditError(null);
+                setEditing(false);
+              }}
             >
               Cancel
             </button>

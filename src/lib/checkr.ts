@@ -1,3 +1,6 @@
+// Build-time guard: this module reads CHECKR_API_KEY, so importing it from a
+// Client Component must fail the build, not ship the key.
+import "server-only";
 import { createHmac, timingSafeEqual } from "crypto";
 
 // Server-only. Opt-in background checks via Checkr (0057), paid by Hearth -

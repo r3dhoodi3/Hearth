@@ -20,18 +20,32 @@ function CheckoutButton({ label }: { label: string }) {
   );
 }
 
+const YEARLY_PER_MONTH = (PRO_PLAN.yearly / 12).toFixed(2);
+const YEARLY_SAVING = Math.round(PRO_PLAN.monthly * 12 - PRO_PLAN.yearly);
+
 const PLANS = {
-  monthly: { label: "Monthly", price: "$9.99 first mo" },
-  yearly: { label: "Yearly", price: "$19.99/mo" },
+  monthly: { label: "Monthly", price: `$${PRO_PLAN.monthly}/mo` },
+  yearly: { label: "Yearly", price: `$${YEARLY_PER_MONTH}/mo` },
 } as const;
 
-// Monthly / yearly toggle for the Pro pricing card. Monthly starts with a
-// $9.99 intro month (a one-time coupon at checkout), then $29.99/mo; yearly
-// is $249, shown against the honest anchor of 12 months at the monthly rate
-// (never an invented list price). Charged amounts live in the checkout
-// action; PRO_PLAN keeps display and billing in sync.
-export default function ProPlanToggle() {
+// Monthly / yearly toggle for the Pro pricing card. Both cadences start on the
+// same free trial, so the trial is the headline and the price is what it steps
+// up to; yearly is $239.88 shown against the honest anchor of 12 months at the
+// monthly rate (never an invented list price). Charged amounts live in the
+// checkout action; PRO_PLAN keeps display and billing in sync.
+//
+// `trialEligible` mirrors the exact signal startProCheckoutAction uses to grant
+// the trial (no existing Pro-side subscription row), so a returning member who
+// churned and came back is never shown trial copy for a trial they will not
+// get. It applies the same way to both cadences.
+export default function ProPlanToggle({
+  trialEligible = true,
+}: {
+  trialEligible?: boolean;
+}) {
   const [plan, setPlan] = useState<"monthly" | "yearly">("monthly");
+  const price = plan === "yearly" ? PRO_PLAN.yearly : PRO_PLAN.monthly;
+  const unit = plan === "yearly" ? "/year" : "/month";
 
   return (
     <div id="pricing" className="card-hero space-y-4 text-center">
@@ -58,78 +72,67 @@ export default function ProPlanToggle() {
             </span>
             {key === "yearly" && (
               <span className="absolute -top-3 right-0 rounded-full bg-hearth-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                Save $120
+                Save ${YEARLY_SAVING}
               </span>
             )}
           </button>
         ))}
       </div>
 
-      {plan === "monthly" ? (
-        <div className="space-y-0.5">
-          {/* The intro deal IS the headline: full price struck through, the
-              $9.99 first month front and center, so the discount is
-              impossible to miss. Both numbers are real: $29.99 is what month
-              two actually costs. */}
+      {/* The trial IS the headline, and the price is the follow-through line
+          directly under it, never the lead. Both numbers are real: nothing is
+          charged for the first PRO_PLAN.trialDays days, and the price below is
+          what the card is charged when the trial converts. */}
+      <div className="space-y-0.5">
+        {trialEligible && (
           <p className="text-sm font-medium text-hearth-700 dark:text-hearth-300">
-            First month deal
+            Free for {PRO_PLAN.trialDays} days
           </p>
-          <p className="text-4xl font-semibold text-stone-900 dark:text-stone-100">
-            <span className="mr-2 align-middle text-2xl font-normal text-stone-500 line-through dark:text-stone-400">
-              ${PRO_PLAN.monthly}
-            </span>
-            ${PRO_PLAN.introFirstMonth}
-            <span className="text-base font-normal text-stone-500 dark:text-stone-400">
-              {" "}
-              your first month
-            </span>
-          </p>
+        )}
+        <p className="text-4xl font-semibold text-stone-900 dark:text-stone-100">
+          ${price}
+          <span className="text-base font-normal text-stone-500 dark:text-stone-400">
+            {unit}
+          </span>
+        </p>
+        {plan === "yearly" && (
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            then ${PRO_PLAN.monthly}/mo. Cancel anytime.
+            about ${YEARLY_PER_MONTH}/month, save ${YEARLY_SAVING} vs paying
+            monthly
           </p>
-        </div>
-      ) : (
-        <div className="space-y-0.5">
-          {/* Honest anchor: the struck-through number is the plan's real
-              monthly price. Yearly genuinely works out to $19.99/mo, never
-              an invented list price. */}
-          <p className="text-sm font-medium text-hearth-700 dark:text-hearth-300">Yearly deal</p>
-          <p className="text-4xl font-semibold text-stone-900 dark:text-stone-100">
-            <span className="mr-2 align-middle text-2xl font-normal text-stone-500 line-through dark:text-stone-400">
-              ${PRO_PLAN.monthly}
-            </span>
-            ${(PRO_PLAN.yearly / 12).toFixed(2)}
-            <span className="text-base font-normal text-stone-500 dark:text-stone-400">/mo</span>
-          </p>
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            billed yearly at ${PRO_PLAN.yearly}. Save $
-            {Math.round(PRO_PLAN.monthly * 12 - PRO_PLAN.yearly)} vs paying
-            monthly.
-          </p>
-        </div>
-      )}
+        )}
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          {trialEligible
+            ? `Then $${price}${unit}. Auto-renews until you cancel.`
+            : `$${price}${unit}. Auto-renews until you cancel.`}
+        </p>
+      </div>
 
       {/* The recurring terms sit INSIDE the checkout form, immediately above
           the button that starts the charge, so the disclosure and the act of
-          consent are in visual proximity (see AutoRenewalTerms). This toggle
-          always offers the intro month on monthly, matching the coupon
-          startProCheckoutAction applies; yearly carries no intro discount. */}
+          consent are in visual proximity (see AutoRenewalTerms). Both cadences
+          carry the same trial, so introEligible mirrors trialEligible directly
+          instead of being plan-specific. */}
       <form action={startProCheckoutAction} className="space-y-3">
         <input type="hidden" name="plan" value={plan} />
         <AutoRenewalTerms
           plan={plan === "monthly" ? "pro_monthly" : "pro_yearly"}
-          introEligible={plan === "monthly"}
+          introEligible={trialEligible}
         />
         <CheckoutButton
           label={
-            plan === "monthly"
-              ? `Start for $${PRO_PLAN.introFirstMonth}`
-              : "Get a year of Pro"
+            trialEligible
+              ? `Try Pro free for ${PRO_PLAN.trialDays} days`
+              : "Start my Pro membership"
           }
         />
+        {/* Restates the auto-renewal and the cancellation right at the point of
+            consent. The button label is the affirmative act; this line makes
+            clear what is being agreed to. */}
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          By continuing you agree to the automatic renewal terms above. Cancel
-          anytime. Your lead access never changes either way.
+          {trialEligible
+            ? `We take your card now and charge nothing today. Then $${price}${unit}, automatically, until you cancel. Cancel anytime before the trial ends and you won't be charged. Your lead access never changes either way.`
+            : `By continuing you agree to the automatic renewal terms above. Cancel anytime. Your lead access never changes either way.`}
         </p>
       </form>
     </div>

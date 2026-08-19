@@ -767,7 +767,7 @@ export default async function ContractorsPage({
                     <div className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
                       You closed this job without choosing a pro.
                       {apps.length > 0
-                        ? " Applicants who already paid to apply were notified, and their fee is refunded automatically if you haven't picked anyone within a week of applying."
+                        ? " Applicants who already paid to apply were notified, and their fee comes back to them as Hearth credit automatically if you haven't picked anyone within a week of applying."
                         : ""}
                     </div>
                   ) : apps.length === 0 ? (

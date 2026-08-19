@@ -10,17 +10,24 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getSubscription,
   getProSubscription,
+  isProTrialEligible,
   hasClaimedPromo,
 } from "@/lib/subscription";
 import { PRO_PLAN } from "@/lib/constants";
 import { billingTermsText } from "@/lib/billingTerms";
+import { subscriptionCheckoutData } from "@/lib/checkoutSubscriptionData";
 import { setFlash } from "@/lib/flash";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 // One-time $20-off coupon that makes a first monthly bill $9.99 instead of
-// $29.99. Prefers the pre-configured coupon id from the env; otherwise looks
+// $29.99. DORMANT while the free trial is on (see PRO_PLAN.introFirstMonth and
+// the trial block in startProCheckoutAction): a duration:"once" coupon is
+// consumed by the $0 invoice a trial start finalizes, so pairing the two would
+// quietly bill full price after promising the intro price. Kept intact so the
+// offer can be switched back on deliberately rather than rebuilt.
+// Prefers the pre-configured coupon id from the env; otherwise looks
 // up (and on first use, creates) a well-known fallback coupon so the intro
 // offer works before anything is set up in Stripe. Returns null on any
 // failure so checkout degrades to plain full price rather than blocking a
@@ -141,6 +148,23 @@ export async function startProCheckoutAction(formData: FormData) {
     }
   }
 
+  // Every brand-new Pro subscriber gets a free trial (PRO_PLAN.trialDays), on
+  // either cadence, and there is no trial-less way to buy: the trial is the
+  // only purchase path, so a pro who is ready to pay today still starts on it.
+  // The card is collected at checkout (payment_method_collection below), the
+  // subscription converts to paid on its own when the trial ends, and
+  // cancelling before then costs nothing.
+  //
+  // Scoped to the Pro-side subscriptions row for the same reason
+  // startPlusCheckoutAction scopes its trial: that row survives cancellation
+  // (it lands on status "canceled", it is not deleted), so a subscriber who
+  // churns and comes back pays from day one instead of farming a fresh free
+  // trial on every resubscribe. Uses isProTrialEligible rather than `!existing`
+  // so it fails CLOSED: if the subscriptions read errored (transient/RLS),
+  // `existing` would be null and `!existing` would wrongly grant a repeat
+  // trial. isProTrialEligible returns false on an errored read.
+  const freeTrial = await isProTrialEligible();
+
   // Brand-new Pro subscribers on the monthly plan get an intro month: $9.99
   // for the first month via a one-time coupon, then full price. Yearly is
   // already discounted, so no intro offer there. A coupon hiccup quietly
@@ -180,9 +204,19 @@ export async function startProCheckoutAction(formData: FormData) {
   // still holds if a canceled row is ever pruned. Neither is what actually
   // enforces one-per-user anymore - claim_promo's primary key is - but
   // keeping both avoids regressing anyone the 0071 backfill missed.
+  //
+  // `!freeTrial` is the new first gate, and today it is never satisfied: the
+  // trial and the intro coupon are mutually exclusive. Stripe treats a
+  // duration:"once" coupon as used once the first invoice FINALIZES, and a
+  // trial start finalizes a $0 invoice, so attaching both would burn the $20
+  // off on nothing and bill full price at trial end - more than the buyer was
+  // shown, which is exactly what ROSCA and the California Automatic Renewal
+  // Law forbid. Everything below stays in place (and stays correct) for the
+  // day the trial is switched off; it is not dead-lettered.
   let discounts: Array<{ coupon: string }> | undefined;
   let claimedIntro = false;
   if (
+    !freeTrial &&
     plan === "pro_monthly" &&
     !existing &&
     !(await hasClaimedPromo("pro_intro_monthly"))
@@ -220,47 +254,97 @@ export async function startProCheckoutAction(formData: FormData) {
   // Consent record, mirroring startPlusCheckoutAction: the exact disclosure
   // text the buyer saw, stored on the Stripe session so California's
   // record-keeping requirement (Bus. & Prof. Code 17602(b)(2)) is satisfied
-  // without a new table. Keyed off `discounts` rather than `introOffer`, so a
-  // coupon that quietly failed to apply is never papered over with step-up
-  // copy the invoice won't match. Metadata values cap at 500 characters.
-  const consentTerms = billingTermsText(plan, Boolean(discounts)).slice(0, 500);
+  // without a new table. Metadata values cap at 500 characters.
+  //
+  // The signal is `freeTrial` OR `discounts`, the two step-up offers, which are
+  // mutually exclusive by construction above. The trial can't silently fail the
+  // way the coupon can (Stripe errors the whole session rather than dropping
+  // trial_period_days), so it is trusted directly; the coupon is still read off
+  // `discounts` rather than intent, so one that quietly failed to apply is
+  // never papered over with step-up copy the invoice won't match.
+  const consentTerms = billingTermsText(
+    plan,
+    freeTrial || Boolean(discounts)
+  ).slice(0, 500);
+
+  // Idempotency key, mirroring startPlusCheckoutAction: stable per user + plan
+  // + a 5-minute time bucket, so a double-submit (two tabs, a double-click)
+  // replays the SAME Stripe session instead of minting two, but a genuine
+  // later retry (new bucket) still creates a fresh one.
+  //
+  // This matters more on the Pro side than the wording above suggests. The
+  // double-checkout guard higher up can only run when we already know a Stripe
+  // customer id, so a brand-new pro - who has none yet - is exactly the case it
+  // cannot cover. Two completed sessions would mint two subscriptions, and the
+  // webhook's upsert-by-(user_id, side) keeps only one row: the other becomes
+  // an orphan that still bills at trial end with no row, and therefore no
+  // in-app cancel button, pointing at it. The trial makes that worse than it
+  // used to be, since the charge lands three days later rather than visibly at
+  // checkout.
+  const idempotencyBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+  const idempotencyKey = `pro-checkout:${user.id}:${plan}:${idempotencyBucket}`;
+
+  // consent_at has to come from the bucket start, not a fresh Date: Stripe
+  // treats a replayed idempotency key carrying a DIFFERENT body as a conflict
+  // error, and a freshly-computed timestamp would differ between two submits
+  // landing in the same bucket. This lands within 5 minutes of "now", which is
+  // all the billing-terms acknowledgment it records needs.
+  //
+  // Everything else in the body below is already stable across a replay while
+  // the trial is on: `discounts` is always undefined and `intro_reserved`
+  // always "false" (see the intro-coupon gate above). If that coupon is ever
+  // switched back on, two racing submits would differ on both fields - only
+  // one can win claim_promo - and the loser would get a Stripe idempotency
+  // error instead of a session. That is the correct outcome for a duplicate
+  // attempt, and the catch below already declines to release a reservation the
+  // loser never held, but it surfaces as an error rather than a redirect.
+  const consentAt = new Date(idempotencyBucket * 5 * 60 * 1000).toISOString();
 
   let session: Awaited<ReturnType<typeof stripe.checkout.sessions.create>>;
   try {
-    session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      line_items: [lineItem],
-      discounts,
-      // Stamp the step-up on the SUBSCRIPTION, not just the session. A
-      // duration:"once" coupon is consumed by the first invoice and Stripe
-      // detaches it, so by the time the renewal-reminders cron looks (days
-      // before the intro month ends) the discount may already be gone and the
-      // step-up would be invisible. This flag is the durable record that the
-      // next charge is higher than the last, and the cron reads it. It also
-      // doubles as the webhook's signal (on customer.subscription.updated /
-      // deleted) that THIS subscription is the one holding the promo
-      // reservation, for the abandoned-payment rollback.
-      subscription_data: {
-        metadata: { intro_step_up: discounts ? "true" : "false" },
+    session = await stripe.checkout.sessions.create(
+      {
+        mode: "subscription",
+        line_items: [lineItem],
+        discounts,
+        // The free trial, plus the step-up flag stamped on the SUBSCRIPTION
+        // rather than just the session. A duration:"once" coupon is consumed by
+        // the first invoice and Stripe detaches it, so by the time the
+        // renewal-reminders cron looks the discount may already be gone and the
+        // step-up would be invisible. The flag is the durable record that the
+        // next charge is higher than this one, and the cron reads it. It also
+        // doubles as the webhook's signal (on customer.subscription.updated /
+        // deleted) that THIS subscription is the one holding the promo
+        // reservation, for the abandoned-payment rollback.
+        subscription_data: subscriptionCheckoutData({
+          trialDays: freeTrial ? PRO_PLAN.trialDays : null,
+          introStepUp: freeTrial || Boolean(discounts),
+        }),
+        // Explicit, not left to the default: the card has to be on file BEFORE
+        // the trial starts, so the membership can convert on its own at trial
+        // end and the buyer has given billing information against the
+        // disclosure they were shown.
+        payment_method_collection: "always",
+        customer: customerId ?? undefined,
+        customer_email: customerId ? undefined : user.email ?? undefined,
+        metadata: {
+          type: "pro_subscription",
+          user_id: user.id,
+          plan,
+          consent_terms: consentTerms,
+          consent_at: consentAt,
+          // Session-level twin of intro_step_up above, for the OTHER half of
+          // the rollback: checkout.session.expired. An abandoned checkout never
+          // produces a subscription at all, so the webhook has nothing but this
+          // session's own metadata to check when deciding whether to release
+          // the reservation.
+          intro_reserved: claimedIntro ? "true" : "false",
+        },
+        success_url: `${siteUrl()}/pro/plus?welcome=1`,
+        cancel_url: `${siteUrl()}/pro/plus`,
       },
-      customer: customerId ?? undefined,
-      customer_email: customerId ? undefined : user.email ?? undefined,
-      metadata: {
-        type: "pro_subscription",
-        user_id: user.id,
-        plan,
-        consent_terms: consentTerms,
-        consent_at: new Date().toISOString(),
-        // Session-level twin of intro_step_up above, for the OTHER half of
-        // the rollback: checkout.session.expired. An abandoned checkout never
-        // produces a subscription at all, so the webhook has nothing but this
-        // session's own metadata to check when deciding whether to release
-        // the reservation.
-        intro_reserved: claimedIntro ? "true" : "false",
-      },
-      success_url: `${siteUrl()}/pro/plus?welcome=1`,
-      cancel_url: `${siteUrl()}/pro/plus`,
-    });
+      { idempotencyKey }
+    );
   } catch (err) {
     // The reservation above already wrote to promo_claims. If Stripe itself
     // failed to create the session, no checkout.session.expired event will

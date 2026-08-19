@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { getUserProfile } from "@/lib/user";
-import { getUser } from "@/lib/auth";
+import { getPasswordStatus, providerLabel } from "@/lib/auth";
 import AccountSecurityPanel from "@/components/AccountSecurityPanel";
 import AccountTabs from "../AccountTabs";
 import {
@@ -19,14 +20,31 @@ export default async function AccountSecurityPage() {
   const profile = await getUserProfile();
   if (!profile) redirect("/signin");
 
-  const user = await getUser();
-  const email = user?.email || profile.email || null;
+  // The LIVE sign-in email, straight from the auth server - not the cookie-
+  // cached getUser() and not the profile.email mirror. The delete action
+  // (deleteAccountAction) compares the typed confirmation against this live
+  // getUser() email, so the page has to print and enable the button on the
+  // exact same address. After an email change on another device, a cached or
+  // mirrored value would show the old address, the button would enable on it,
+  // and the server would reject it forever (M7).
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const email = user?.email ?? null;
+
+  // Read on every load, so the Password card shows the set-a-password flow to
+  // a Google signup and the normal change-password form the moment they have
+  // one.
+  const { hasPassword, provider } = await getPasswordStatus();
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <AccountTabs active="security" />
       <AccountSecurityPanel
         email={email}
+        hasPassword={hasPassword}
+        providerName={providerLabel(provider)}
         updateEmailAction={updateEmailAction}
         updatePasswordAction={updatePasswordAction}
         signOutOthersAction={signOutOthersAction}

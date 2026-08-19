@@ -8,7 +8,7 @@ import { saveCompanyAction } from "../actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
-import ServiceAreaInput from "@/components/ServiceAreaInput";
+import LaunchCityCheckboxes from "./LaunchCityCheckboxes";
 import InlineSpinner from "@/components/InlineSpinner";
 
 // Needs its own component because useFormStatus only reports pending state
@@ -24,9 +24,16 @@ function SeeOpenJobsButton() {
   );
 }
 
-// Honest end state for a pro who answers "No" to the Orange County question:
+// Honest end state for a pro whose signup carried no served city:
 // saveCompanyAction (../actions.ts) redirects here with ?waitlisted=1 instead
 // of dumping them back on this blank form having lost every field they typed.
+//
+// The form itself can no longer produce this: the service-area question is now
+// two checkboxes with at least one required, so there is no "No, I'm outside
+// your area" answer to give. Kept because saveCompanyAction still falls back
+// here for a post that carries no service-area answer at all (not a browser),
+// and because it is the panel to reuse the moment an out-of-area path exists
+// again.
 // Same tone as the homeowner out_of_area step
 // (src/app/onboarding/OnboardingForm.tsx): state plainly what happened, and
 // always leave a working way out.
@@ -40,12 +47,14 @@ function WaitlistedPanel() {
         You&apos;re on the waitlist
       </h1>
       <p className="text-sm text-stone-600 dark:text-stone-300">
-        Hearth is matching pros in Orange County, CA only right now. We added
-        you to the waitlist and will reach out when Hearth opens in your area.
+        Hearth is matching pros in Huntington Beach and Fountain Valley right
+        now. We added you to the waitlist and will reach out when Hearth opens
+        in your area.
       </p>
       <p className="text-sm text-stone-500 dark:text-stone-400">
-        There&apos;s nothing else to set up here yet since Hearth only covers
-        Orange County, CA right now.
+        There&apos;s nothing else to set up here yet since Hearth covers
+        Huntington Beach and Fountain Valley right now. Don&apos;t see your city
+        yet? You will soon.
       </p>
       <form action="/auth/signout" method="post">
         <button
@@ -155,21 +164,17 @@ function OnboardingCompanyFormInner({
               </div>
 
               <div>
-                <label className="label">Service Area</label>
-                <div className="relative">
-                  <FieldIcon>
-                    <path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0118 0z" />
-                    <circle cx="12" cy="10" r="3" />
-                  </FieldIcon>
-                  <ServiceAreaInput
-                    name="service_area"
-                    className="input pl-9"
-                    placeholder="e.g. Irvine, Tustin, Costa Mesa"
-                  />
-                </div>
+                <fieldset>
+                  <legend className="label">
+                    Do you serve Huntington Beach or Fountain Valley?
+                  </legend>
+                  <LaunchCityCheckboxes />
+                </fieldset>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Where you are willing to travel for jobs. Start typing a city
-                  (even initials like &quot;fv&quot;) and pick from the list.
+                  Check every city you serve. Hearth is matching pros in
+                  Huntington Beach and Fountain Valley right now, so at least
+                  one is required. You can add more cities from your profile
+                  once we open in them.
                 </p>
               </div>
 
@@ -190,41 +195,6 @@ function OnboardingCompanyFormInner({
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   Hearth serves California only right now, so this is set for
                   you. Your job board shows homeowner jobs in California.
-                </p>
-              </div>
-
-              <div>
-                <fieldset>
-                  <legend className="label">
-                    Do you serve Orange County, California?
-                  </legend>
-                  <div className="space-y-2">
-                    <label className="flex items-start gap-2 text-sm text-stone-700 dark:text-stone-300">
-                      <input
-                        type="radio"
-                        name="serves_orange_county"
-                        value="true"
-                        required
-                        className="mt-0.5 h-4 w-4 border-stone-300 text-bark-600 focus:ring-bark-500 dark:border-white/20"
-                      />
-                      <span>Yes, I serve Orange County.</span>
-                    </label>
-                    <label className="flex items-start gap-2 text-sm text-stone-700 dark:text-stone-300">
-                      <input
-                        type="radio"
-                        name="serves_orange_county"
-                        value="false"
-                        required
-                        className="mt-0.5 h-4 w-4 border-stone-300 text-bark-600 focus:ring-bark-500 dark:border-white/20"
-                      />
-                      <span>No, notify me when you expand to my area.</span>
-                    </label>
-                  </div>
-                </fieldset>
-                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Hearth is currently matching pros in Orange County, CA only.
-                  Choose &quot;No&quot; and we&apos;ll add you to the waitlist
-                  instead of setting up a company profile.
                 </p>
               </div>
 

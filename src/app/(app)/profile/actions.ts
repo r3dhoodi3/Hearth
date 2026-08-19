@@ -7,13 +7,47 @@ import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { setFlash } from "@/lib/flash";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
+import {
+  boundedNumber,
+  boundedInt,
+  cappedFieldOrNull,
+  isAllowedValue,
+} from "@/lib/formFields";
+
+// Server-side ceilings for the free-text columns on home_systems. The form's
+// maxLength is a hint; a server action takes whatever FormData it is handed,
+// so a paste of arbitrary size would otherwise land in the row. Truncate
+// rather than reject: losing the tail of a long note is better than losing
+// the whole save.
+const MAX_MATERIAL = 120;
+const MAX_NOTES = 2000;
+
+// Ranges for the numeric columns. The install-year floor matches
+// properties.year_built (which allows back to 1700, see updatePropertyAction
+// below and onboarding/actions.ts): an owner of an 1885 home types 1885 as a
+// real install year, and a 1900 floor here would silently null it out under a
+// "System updated" toast. condition still matches confirmSystemAction
+// (src/app/(app)/walkthrough/actions.ts) so a rating means the same thing
+// however it was entered.
+const INSTALL_YEAR_MIN = 1700;
+const INSTALL_YEAR_MAX = 2100;
+const CONDITION_MIN = 1;
+const CONDITION_MAX = 5;
 
 // "MM/YYYY" from the simple text field back to a "YYYY-MM-01" date for storage.
-// Returns null if blank or not in that format.
+// Returns null if blank, not in that format, or the month isn't 1-12. The
+// month check matters: without it "13/2024" became "2024-13-01", which
+// Postgres rejects with 22008 (datetime field overflow) and kills the WHOLE
+// update - and the retry that only drops optional columns still carried the
+// bad date, so the owner got "Couldn't save" forever with no field named.
+// Catching a bad month here turns that dead end into a clear, recoverable
+// error at the call site instead.
 function mmYyyyToDate(v: string | null): string | null {
   if (!v) return null;
   const m = v.trim().match(/^(\d{1,2})\/(\d{4})$/);
   if (!m) return null;
+  const month = Number(m[1]);
+  if (month < 1 || month > 12) return null;
   return `${m[2]}-${m[1].padStart(2, "0")}-01`;
 }
 
@@ -118,23 +152,38 @@ export async function addSystemAction(
   }
   const supabase = createClient();
 
-  const num = (k: string) => {
-    const v = formData.get(k);
-    return v ? Number(v) : null;
-  };
   const systemType = formData.get("system_type") as string;
+  // The type drives the default lifespan, the icon, the label, and the "find a
+  // pro" category, so an unknown value would write a system nothing in the app
+  // can read back. Re-checked here because the <select> is only a client hint.
+  if (!isAllowedValue(SYSTEM_TYPES, systemType)) {
+    setFlash("Couldn't add that system. Try again.", "error");
+    return err("Couldn't add that system. Please pick a type from the list.");
+  }
 
   const baseRow = {
     property_id: property.id,
     system_type: systemType,
-    material_or_model: (formData.get("material_or_model") as string) || null,
-    install_year: num("install_year"),
+    material_or_model: cappedFieldOrNull(
+      formData,
+      "material_or_model",
+      MAX_MATERIAL
+    ),
+    install_year: boundedInt(
+      formData.get("install_year"),
+      INSTALL_YEAR_MIN,
+      INSTALL_YEAR_MAX
+    ),
     last_serviced: mmYyyyToDate(formData.get("last_serviced") as string),
-    condition_rating: num("condition_rating"),
+    condition_rating: boundedInt(
+      formData.get("condition_rating"),
+      CONDITION_MIN,
+      CONDITION_MAX
+    ),
     // Seed the expected lifespan from the type default so the dashboard works
     // immediately; the owner never has to know typical lifespans.
     expected_lifespan_years: DEFAULT_LIFESPANS[systemType] ?? null,
-    notes: (formData.get("notes") as string) || null,
+    notes: cappedFieldOrNull(formData, "notes", MAX_NOTES),
   };
 
   // Optional columns that a live DB might not have yet (HVAC filter reminder
@@ -199,6 +248,12 @@ export async function quickAddSystemAction(formData: FormData) {
   const supabase = createClient();
 
   const systemType = formData.get("system_type") as string;
+  // Same allow-list as addSystemAction: the quick-add chips post a known type,
+  // but the action itself will take any FormData.
+  if (!isAllowedValue(SYSTEM_TYPES, systemType)) {
+    setFlash("Couldn't add that system. Try again.", "error");
+    return;
+  }
   const { error } = await supabase.from("home_systems").insert({
     property_id: property.id,
     system_type: systemType,
@@ -236,16 +291,61 @@ export async function updateSystemAction(
 ): Promise<ActionResult> {
   const id = formData.get("id") as string;
   const supabase = createClient();
-  const num = (k: string) => {
-    const v = formData.get(k);
-    return v ? Number(v) : null;
-  };
+
+  // Edit-specific guard against a silent field wipe. On an EDIT the owner
+  // usually already has a good value in these fields, so a non-empty entry
+  // that fails validation - an out-of-range install year, or a bad month like
+  // 13/2024 - must NOT be quietly written as null under a "System updated"
+  // toast the way an intentionally-cleared field is. Return a named,
+  // recoverable error instead; SystemRow renders it inline (res.error) and
+  // keeps the edit form open with the owner's entry intact. A genuinely blank
+  // field still means "clear this" and parses to null with no error, exactly
+  // as before.
+  const rawInstallYear = formData.get("install_year");
+  const installYear = boundedInt(
+    rawInstallYear,
+    INSTALL_YEAR_MIN,
+    INSTALL_YEAR_MAX
+  );
+  if (
+    typeof rawInstallYear === "string" &&
+    rawInstallYear.trim() !== "" &&
+    installYear === null
+  ) {
+    return err(
+      `Install year should be a 4-digit year between ${INSTALL_YEAR_MIN} and ${INSTALL_YEAR_MAX}. Please check it and try again.`
+    );
+  }
+
+  const rawLastServiced = formData.get("last_serviced");
+  const lastServiced = mmYyyyToDate(rawLastServiced as string);
+  if (
+    typeof rawLastServiced === "string" &&
+    rawLastServiced.trim() !== "" &&
+    lastServiced === null
+  ) {
+    return err(
+      "Last serviced should be a month and year like 03/2024. Please check it and try again."
+    );
+  }
+
+  // Same caps and ranges as addSystemAction: an edit is just as forgeable as
+  // the original add, so it gets the same treatment. system_type isn't
+  // editable here, so there is nothing to allow-list on this path.
   const baseUpdate = {
-    material_or_model: (formData.get("material_or_model") as string) || null,
-    install_year: num("install_year"),
-    last_serviced: mmYyyyToDate(formData.get("last_serviced") as string),
-    condition_rating: num("condition_rating"),
-    notes: (formData.get("notes") as string) || null,
+    material_or_model: cappedFieldOrNull(
+      formData,
+      "material_or_model",
+      MAX_MATERIAL
+    ),
+    install_year: installYear,
+    last_serviced: lastServiced,
+    condition_rating: boundedInt(
+      formData.get("condition_rating"),
+      CONDITION_MIN,
+      CONDITION_MAX
+    ),
+    notes: cappedFieldOrNull(formData, "notes", MAX_NOTES),
   };
 
   // Optional columns a live DB might not have yet (filter reminder fields,
@@ -298,19 +398,20 @@ export async function updatePropertyAction(formData: FormData) {
   }
   const supabase = createClient();
 
-  const num = (k: string) => {
-    const v = formData.get(k);
-    return v ? Number(v) : null;
-  };
+  // Same finite-and-in-range treatment the systems above get, with the same
+  // ranges onboarding uses for these columns: a NaN or a wild value would
+  // otherwise be written straight onto the home.
+  const num = (k: string, min: number, max: number) =>
+    boundedNumber(formData.get(k), min, max);
 
   const { error } = await supabase
     .from("properties")
     .update({
-      year_built: num("year_built"),
-      sqft: num("sqft"),
-      beds: num("beds"),
-      baths: num("baths"),
-      lot_size_sqft: num("lot_size_sqft"),
+      year_built: num("year_built", 1700, 2100),
+      sqft: num("sqft", 1, 1_000_000),
+      beds: num("beds", 0, 100),
+      baths: num("baths", 0, 100),
+      lot_size_sqft: num("lot_size_sqft", 0, 100_000_000),
       purchase_date: validPurchaseDate(
         (formData.get("purchase_date") as string) || null
       ),

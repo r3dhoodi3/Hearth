@@ -2,6 +2,7 @@
 
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -23,7 +24,19 @@ import { createCandidateAndInvite } from "@/lib/checkr";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
 import { validateYelpUrl, validateGoogleReviewsUrl } from "@/lib/reviewLinks";
+import {
+  cappedField,
+  cappedFieldOrNull,
+  isAllowedValue,
+} from "@/lib/formFields";
+import { selectLaunchCities } from "./onboarding/launchCities";
 import type { Json } from "@/lib/database.types";
+
+// Ceiling for the free-text "Other" service on CategoryPicker. It renders on
+// the public /p/<id> page and the browse cards next to the canonical labels,
+// which are all short, so this is generous for a real answer and still bounds
+// a forged post.
+const MAX_CUSTOM_CATEGORY = 100;
 
 // Server-side counterpart to src/lib/analytics.ts's track(): that helper
 // fires via navigator.sendBeacon, which doesn't exist in a server action, so
@@ -167,13 +180,45 @@ export async function saveCompanyAction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
-  const categories = formData.getAll("categories").map(String).filter(Boolean);
+  // A category decides which pros a posted job reaches, so the canonical
+  // values are held to the shared list: a forged one would silently opt a
+  // company into a matching bucket the rest of the app has no entry for.
+  //
+  // But CategoryPicker.tsx is NOT a pure allow-list picker. Alongside the 14
+  // checkboxes it renders a free-text "Other" box and posts whatever the pro
+  // typed as one more `categories` value (see its hidden input), and it reads
+  // that value back out on edit by treating every stored non-canonical entry
+  // as the custom one. So an allow-list over ALL posted values would delete a
+  // pro's custom service on their next save of any field, and because an
+  // EMPTY categories array means "matches every request" downstream
+  // (src/app/(app)/contractors/actions.ts:1209), a pro whose only category
+  // was custom would flip from matching nothing to matching everything.
+  // Canonical values go through the list; at most one leftover is kept as the
+  // free-text service, trimmed and capped, which is all the form can produce.
+  const rawCategories = formData
+    .getAll("categories")
+    .map((c) => String(c).trim())
+    .filter(Boolean);
+  const categories = Array.from(
+    new Set([
+      ...rawCategories.filter((c) => isAllowedValue(JOB_CATEGORIES, c)),
+      ...rawCategories
+        .filter((c) => !isAllowedValue(JOB_CATEGORIES, c))
+        .slice(0, 1)
+        .map((c) => c.slice(0, MAX_CUSTOM_CATEGORY)),
+    ])
+  );
+  // Trimmed and capped server-side. The form's maxLength is a client hint
+  // only, and this row is public (the /p/<id> page, the job board, the share
+  // cards all render it), so an unbounded paste would land in front of
+  // homeowners as well as in the database.
   const fields = {
-    name: formData.get("name") as string,
-    license_number: (formData.get("license_number") as string) || null,
-    service_area: (formData.get("service_area") as string) || null,
-    contact_phone: (formData.get("contact_phone") as string) || null,
-    contact_email: (formData.get("contact_email") as string) || user.email || null,
+    name: cappedField(formData, "name", 200),
+    license_number: cappedFieldOrNull(formData, "license_number", 50),
+    service_area: cappedFieldOrNull(formData, "service_area", 300),
+    contact_phone: cappedFieldOrNull(formData, "contact_phone", 40),
+    contact_email:
+      cappedFieldOrNull(formData, "contact_email", 254) || user.email || null,
     categories,
   };
 
@@ -196,20 +241,58 @@ export async function saveCompanyAction(formData: FormData) {
     serviceStateEntry !== null ? { service_state: serviceState } : {};
   const hasStateWrite = serviceStateEntry !== null;
 
-  // Orange County launch gate (0074). Same missing-column-safe pattern as
-  // service_state above: only overwrite when the submitting form actually
-  // carries the field. The onboarding form renders `serves_orange_county` as
-  // two required radios ("true"/"false"), so a submit from that form always
-  // posts one of those strings here; a form that doesn't render the field at
-  // all (e.g. the profile edit form) posts null and must never wipe a stored
-  // value.
+  // Signup service area: the two launch cities, as checkboxes. One answer
+  // feeds both stored fields (see ./onboarding/launchCities.ts) - service_area
+  // gets the canonical comma-separated string the rest of the app already
+  // renders, and 0074's serves_orange_county attestation stays truthful
+  // because both cities are in Orange County.
+  //
+  // Same missing-field-safe discipline as service_state above, with the hidden
+  // `service_cities_present` marker doing the work `formData.get` can't:
+  // unchecked checkboxes post nothing, so an empty getAll() is ambiguous on
+  // its own. The marker is what says "this form asked the question". The
+  // profile edit form posts no marker (it still uses the free-text
+  // ServiceAreaInput), so its own service_area value in `fields` stands and
+  // nothing here touches its stored attestation.
+  const cityMarker = formData.get("service_cities_present");
+  const hasCityWrite = cityMarker !== null;
+  const citySelection = selectLaunchCities(
+    formData.getAll("service_cities").map(String)
+  );
+  // Server-side floor under the browser's `required`: a post that asked the
+  // question but carries no city must not create a company and must not land
+  // on the waitlist panel either. Answering nothing is not the same as
+  // answering "I'm outside your area", so send them back to pick one.
+  if (hasCityWrite && citySelection.cities.length === 0) {
+    setFlash("Pick at least one city you serve.", "error");
+    redirect("/pro/onboarding");
+  }
+  if (hasCityWrite) {
+    fields.service_area = citySelection.serviceArea;
+  }
+
+  // Orange County launch gate (0074). Derived from the cities above when the
+  // form asked for them; the older `serves_orange_county` yes/no radio is
+  // still honored as a fallback so any form still posting it keeps working.
+  // A form carrying neither (e.g. the profile edit form) posts null for both
+  // and must never wipe a stored value.
   const ocEntry = formData.get("serves_orange_county");
-  const servesOrangeCounty = ocEntry !== null && String(ocEntry) === "true";
-  const ocWrite =
-    ocEntry !== null ? { serves_orange_county: servesOrangeCounty } : {};
-  const hasOcWrite = ocEntry !== null;
+  const servesOrangeCounty = hasCityWrite
+    ? citySelection.servesOrangeCounty
+    : ocEntry !== null && String(ocEntry) === "true";
+  const hasOcWrite = hasCityWrite || ocEntry !== null;
+  const ocWrite = hasOcWrite ? { serves_orange_county: servesOrangeCounty } : {};
 
   const existing = await getCurrentContractor();
+
+  // Server-side floor under the browser's `required`, same discipline as the
+  // city check above: the name is trimmed now, so a post of nothing but spaces
+  // would otherwise create (or rename to) a nameless listing on the job board
+  // and the public /p/<id> page.
+  if (!fields.name) {
+    setFlash("Enter your company name.", "error");
+    redirect(existing ? "/pro/profile" : "/pro/onboarding");
+  }
 
   // Optional outbound review-page links (0110). Same missing-column-safe
   // pattern as service_state / serves_orange_county above: only write a field
@@ -350,18 +433,44 @@ export async function saveCompanyAction(formData: FormData) {
   // Orange County launch gate (0074), first-time company creation only. A pro
   // who didn't check the box never gets a contractors row at all: instead
   // they land on a waitlist so Hearth can reach out when it opens in their
-  // area. Best-effort insert (the unique index on lower(email), role means a
+  // area. The signup form no longer routes here (its two city checkboxes
+  // require at least one, and the guard above catches an empty answer), so
+  // this now only catches a post that carries no service-area answer at all.
+  // Best-effort insert (the unique index on lower(email), role means a
   // resubmit is silently a no-op, not an error) - the reject must go through
   // either way.
   if (!servesOrangeCounty) {
     try {
       const waitlistEmail = (fields.contact_email || user.email || "").trim();
       if (waitlistEmail) {
-        await (supabase as any).from("market_waitlist").insert({
-          email: waitlistEmail,
-          role: "pro",
-          state: serviceState,
-        });
+        // Throttle before the insert, the same way the homeowner side does
+        // (joinMarketWaitlistAction in src/app/onboarding/actions.ts). The
+        // email here is caller-supplied (contact_email off this very form),
+        // so 0074's uniqueness on (lower(email), role) is not a ceiling: one
+        // account can post a different address every time. Keyed on IP, not
+        // user id, because that is what a burst of fresh throwaway pro
+        // accounts actually shares. Same derivation, same bucket shape, same
+        // 5/hour budget, and the same fail-open posture: only an explicit
+        // `allowed === false` blocks, so a limiter outage never costs a real
+        // out-of-area pro their place on the list. The reject below still
+        // goes through either way.
+        const ip =
+          headers().get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+        const { data: allowed } = await createAdminClient().rpc(
+          "rate_limit_hit",
+          {
+            p_bucket: `waitlist:${ip ?? "unknown"}`,
+            p_limit: 5,
+            p_window_seconds: 3600,
+          }
+        );
+        if (allowed !== false) {
+          await (supabase as any).from("market_waitlist").insert({
+            email: waitlistEmail,
+            role: "pro",
+            state: serviceState,
+          });
+        }
       }
     } catch (err) {
       console.error(
@@ -851,7 +960,10 @@ export async function applyToJobAction(formData: FormData) {
   // already loaded the full row via the admin client, so this is a read of
   // data already in hand, not a second query.
   if (!(contractor as any).serves_orange_county) {
-    setFlash("Hearth is Orange County only right now.", "error");
+    setFlash(
+      "Hearth serves Huntington Beach and Fountain Valley right now.",
+      "error"
+    );
     revalidatePath("/pro");
     return;
   }
@@ -952,20 +1064,28 @@ export async function applyToJobAction(formData: FormData) {
     p_lead: leadId,
     p_message: message,
   });
-  if (error)
+  if (error) {
     // The DB raises 'Job is full' at the applicant cap and 'Already working
     // with this homeowner' at the relationship guard (0060) - both different
     // problems than a short wallet, so each gets its own message instead of
-    // the raw error.
-    setFlash(
-      error.message.includes("Job is full")
-        ? "This job is full: 3 pros already applied. Try another job."
-        : error.message.includes("Already working with this homeowner")
-          ? "You already have an active job with this homeowner in this category. Message them there instead."
-          : error.message,
-      "error"
-    );
-  else if (data === false)
+    // the raw error. Anything else is a database failure the pro can't act
+    // on, so it's logged server-side and shown as a plain generic: raw
+    // Postgres text names our tables, columns and constraints.
+    if (error.message.includes("Job is full")) {
+      setFlash(
+        "This job is full: 3 pros already applied. Try another job.",
+        "error"
+      );
+    } else if (error.message.includes("Already working with this homeowner")) {
+      setFlash(
+        "You already have an active job with this homeowner in this category. Message them there instead.",
+        "error"
+      );
+    } else {
+      console.error("applyToJobAction: apply_to_lead failed:", error);
+      setFlash("Couldn't apply just now. Please try again.", "error");
+    }
+  } else if (data === false)
     setFlash("Not enough balance. Add funds to apply.", "error");
   else {
     setFlash("Applied. The homeowner will review your application.", "success");
@@ -1090,7 +1210,10 @@ export async function unlockDirectRequestAction(formData: FormData) {
     p_lead: leadId,
   });
   if (error) {
-    setFlash(error.message, "error");
+    // Raw Postgres text names our tables, columns and constraints, so it's
+    // logged server-side and the pro sees a plain generic instead.
+    console.error("unlockDirectRequestAction: unlock_direct_request failed:", error);
+    setFlash("Couldn't unlock this request just now. Please try again.", "error");
     revalidatePath("/pro");
     return;
   }
@@ -1196,7 +1319,10 @@ export async function declineDirectRequestAction(formData: FormData) {
     p_lead: leadId,
   });
   if (error) {
-    setFlash(error.message, "error");
+    // Same reasoning as unlockDirectRequestAction above: log the raw error,
+    // show copy that doesn't leak the schema.
+    console.error("declineDirectRequestAction: decline_direct_request failed:", error);
+    setFlash("Couldn't pass on this request just now. Please try again.", "error");
     revalidatePath("/pro");
     return;
   }

@@ -24,9 +24,18 @@ import JobStatusSelect from "./JobStatusSelect";
 import JobPhotoStrip from "./JobPhotoStrip";
 import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist";
 import { agingLeadFee } from "@/lib/leadPricing";
-import { hasProPlan } from "@/lib/subscription";
+import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { getOpenJobsForMe } from "@/lib/greeting";
+import {
+  walletQueryPlan,
+  closedLeadIdSet,
+  bonusAvailableCents,
+  photoUrlsByLead,
+  totalSpentCents,
+} from "@/lib/proDashboard";
 
 const SEVERITY_STYLE: Record<string, string> = {
   low: "border-stone-200 bg-stone-50 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300",
@@ -133,15 +142,21 @@ export default async function ProDashboard({
   // for a column that might predate the current migration.
   const ASSIGNED_COLUMNS_WITH_SCOPE = `${ASSIGNED_BASE_COLUMNS}, square_footage, material_notes, has_plans_permits`;
 
+  // FIRST ROUND TRIP: everything that needs nothing but the contractor row.
   // Open jobs to apply to (safe fields only, category-matched, not yet applied),
-  // the pro's own applications, and the jobs they were chosen for (full detail).
+  // the pro's own applications, the jobs they were chosen for (full detail),
+  // direct requests, and the wallet.
   const [
-    { data: openJobs },
+    openJobs,
     { data: myApps },
     { data: assignedData },
     { data: directData },
+    { data: wallet },
   ] = await Promise.all([
-    (supabase as any).rpc("open_jobs_for_me"),
+    // The same per-request cached helper the pro shell uses for the copilot's
+    // opening line, so open_jobs_for_me runs once per page view instead of
+    // once here and once in the layout.
+    getOpenJobsForMe(),
     (supabase as any).rpc("my_applications"),
     (async () => {
       // Cast to any: the two branches select different column sets, and the
@@ -165,9 +180,14 @@ export default async function ProDashboard({
     // Direct requests a homeowner aimed at this pro (0104). Masked, contact-free
     // fields plus the live-priced fee; the ONLY read path to a pending request.
     (supabase as any).rpc("my_direct_requests"),
+    (supabase as any)
+      .from("wallets")
+      .select("id, cash_balance_cents, bonus_balance_cents")
+      .eq("contractor_id", contractor.id)
+      .maybeSingle(),
   ]);
 
-  let open = (openJobs ?? []) as any[];
+  let open = openJobs as any[];
   const apps = (myApps ?? []) as any[];
   const directRequests = (directData ?? []) as any[];
 
@@ -189,46 +209,106 @@ export default async function ProDashboard({
       ? MAJOR_INTRO_FEE
       : null;
 
-  // Advisory signal only (see migration 0092's RESIDUAL note): apply_to_lead
-  // has no awareness of owner_closed_at, so open_jobs_for_me - a DB function,
-  // out of scope for this page - can still hand back a job the homeowner
-  // already closed without picking anyone. Filtered out here, client-side,
-  // rather than in the RPC body. Admin client: RLS only lets a pro SELECT a
-  // lead once they're its assigned contractor ("leads contractor select",
-  // 0005 migration), which an open, unassigned job never is. Best-effort and
-  // fail-open: any error here (including migration 0092 not having run yet,
-  // so owner_closed_at doesn't exist) leaves the board unchanged rather than
-  // hiding jobs or breaking the page.
-  if (open.length) {
-    const admin = createAdminClient();
-    const { data: closedRows, error: closedError } = await admin
-      .from("contractor_leads")
-      .select("id, owner_closed_at")
-      .in(
-        "id",
-        open.map((j) => j.id)
-      );
-    if (!closedError) {
-      const closedIds = new Set(
-        (closedRows ?? [])
-          .filter((r: any) => r.owner_closed_at)
-          .map((r: any) => r.id)
-      );
-      if (closedIds.size) {
-        open = open.filter((j) => !closedIds.has(j.id));
-      }
-    }
-  }
-
-  // Open jobs posted by a homeowner this pro already has an active job with,
-  // in the same category. Those cards get "message them instead" in place of
-  // the apply button: the pro already has the homeowner in Messages, so a
-  // second apply fee would double-charge them for the same relationship.
-  // Once the earlier job closes, the job becomes applyable again.
-  const relationshipConflicts = await findActiveJobConflicts(
-    contractor.id,
-    open.map((j) => j.id)
+  // Won/lost jobs sink to the bottom; active ones stay on top (newest first,
+  // which the query already ordered). Array.sort is stable, so order holds.
+  const isDone = (l: any) => l.status === "closed" || l.status === "lost";
+  const assigned = ((assignedData ?? []) as any[]).sort(
+    (a, b) => (isDone(a) ? 1 : 0) - (isDone(b) ? 1 : 0)
   );
+
+  const openJobIds = open.map((j) => j.id);
+  const assignedIssueIds = assigned
+    .map((l) => l.issue_id)
+    .filter((v): v is string => Boolean(v));
+  const rawBonusCents = Number(wallet?.bonus_balance_cents ?? 0);
+  const walletReads = walletQueryPlan(wallet, rawBonusCents);
+
+  // SECOND ROUND TRIP: everything that needed a result from the first batch.
+  // None of these six depend on each other, so they all go out together.
+  const [closedRows, relationshipConflicts, photoRows, grants, appRows, txnRows] =
+    await Promise.all([
+      // Advisory signal only (see migration 0092's RESIDUAL note): apply_to_lead
+      // has no awareness of owner_closed_at, so open_jobs_for_me - a DB function,
+      // out of scope for this page - can still hand back a job the homeowner
+      // already closed without picking anyone. Filtered out below, client-side,
+      // rather than in the RPC body. Admin client: RLS only lets a pro SELECT a
+      // lead once they're its assigned contractor ("leads contractor select",
+      // 0005 migration), which an open, unassigned job never is. Best-effort and
+      // fail-open: any error here (including migration 0092 not having run yet,
+      // so owner_closed_at doesn't exist) returns null and leaves the board
+      // unchanged rather than hiding jobs or breaking the page.
+      openJobIds.length
+        ? (async () => {
+            const admin = createAdminClient();
+            const { data, error } = await admin
+              .from("contractor_leads")
+              .select("id, owner_closed_at")
+              .in("id", openJobIds);
+            return error ? null : ((data ?? []) as any[]);
+          })()
+        : Promise.resolve(null),
+      // Open jobs posted by a homeowner this pro already has an active job with,
+      // in the same category. Those cards get "message them instead" in place of
+      // the apply button: the pro already has the homeowner in Messages, so a
+      // second apply fee would double-charge them for the same relationship.
+      // Once the earlier job closes, the job becomes applyable again. Asked with
+      // the pre-filter id list so it can run alongside the closed-job sweep: a
+      // job dropped by that sweep is simply never looked up in the map.
+      findActiveJobConflicts(contractor.id, openJobIds),
+      // Full-resolution job photos for the leads this pro was chosen for. The
+      // photos table is owner-only under RLS, so we read the urls via the admin
+      // client (best-effort: any error just leaves those cards photo-less). The
+      // /api/job-photo route re-checks entitlement with can_view_job_photo_full
+      // before it signs anything, so this lookup is display data, not the gate.
+      assignedIssueIds.length
+        ? (async () => {
+            const admin = createAdminClient();
+            const { data } = await admin
+              .from("photos")
+              .select("related_id, url, uploaded_at")
+              .eq("related_type", "issue")
+              .in("related_id", assignedIssueIds)
+              .order("uploaded_at", { ascending: true });
+            return (data ?? []) as any[];
+          })()
+        : Promise.resolve([] as any[]),
+      // Live, unexpired bonus grants, which cap the spendable bonus below.
+      walletReads.grants
+        ? (async () => {
+            const { data } = await (supabase as any)
+              .from("bonus_grants")
+              .select("remaining_cents")
+              .eq("wallet_id", wallet.id)
+              .gt("remaining_cents", 0)
+              .gt("expires_at", new Date().toISOString());
+            return (data ?? []) as any[];
+          })()
+        : Promise.resolve([] as any[]),
+      // "Your results" card: how the pro's applications have paid off so far.
+      walletReads.applications
+        ? (async () => {
+            const { data } = await (supabase as any)
+              .from("lead_applications")
+              .select("status")
+              .eq("contractor_id", contractor.id);
+            return (data ?? []) as any[];
+          })()
+        : Promise.resolve([] as any[]),
+      walletReads.transactions
+        ? (async () => {
+            const { data } = await (supabase as any)
+              .from("wallet_transactions")
+              .select("type, cash_delta_cents, bonus_delta_cents")
+              .eq("wallet_id", wallet.id);
+            return (data ?? []) as any[];
+          })()
+        : Promise.resolve([] as any[]),
+    ]);
+
+  const closedIds = closedLeadIdSet(closedRows);
+  if (closedIds.size) {
+    open = open.filter((j) => !closedIds.has(j.id));
+  }
 
   // Sort the open-jobs board. The effective fee (after the aging markdown) is
   // what "cheapest" means to a pro, and "deal" surfaces the biggest markdowns.
@@ -244,39 +324,7 @@ export default async function ProDashboard({
       (a, b) => effFee(b).off - effFee(a).off || effFee(a).fee - effFee(b).fee
     );
 
-  // Won/lost jobs sink to the bottom; active ones stay on top (newest first,
-  // which the query already ordered). Array.sort is stable, so order holds.
-  const isDone = (l: any) => l.status === "closed" || l.status === "lost";
-  const assigned = ((assignedData ?? []) as any[]).sort(
-    (a, b) => (isDone(a) ? 1 : 0) - (isDone(b) ? 1 : 0)
-  );
-
-  // Full-resolution job photos for the leads this pro was chosen for. The
-  // photos table is owner-only under RLS, so we read the urls via the admin
-  // client (best-effort: any error just leaves those cards photo-less). The
-  // /api/job-photo route re-checks entitlement with can_view_job_photo_full
-  // before it signs anything, so this lookup is display data, not the gate.
-  const assignedPhotos = new Map<string, string[]>();
-  const assignedIssueIds = assigned
-    .map((l) => l.issue_id)
-    .filter((v): v is string => Boolean(v));
-  if (assignedIssueIds.length) {
-    const admin = createAdminClient();
-    const { data: photoRows } = await admin
-      .from("photos")
-      .select("related_id, url, uploaded_at")
-      .eq("related_type", "issue")
-      .in("related_id", assignedIssueIds)
-      .order("uploaded_at", { ascending: true });
-    for (const l of assigned) {
-      if (!l.issue_id) continue;
-      const urls = ((photoRows ?? []) as any[])
-        .filter((p) => p.related_id === l.issue_id)
-        .map((p) => p.url as string)
-        .filter(Boolean);
-      if (urls.length) assignedPhotos.set(l.id, urls);
-    }
-  }
+  const assignedPhotos = photoUrlsByLead(assigned, photoRows);
 
   // Applications still waiting on the homeowner (not yet chosen for the job).
   const pendingApps = apps.filter((a) => a.status === "applied");
@@ -286,11 +334,6 @@ export default async function ProDashboard({
     (l) => l.status !== "closed" && l.status !== "lost"
   ).length;
 
-  const { data: wallet } = await (supabase as any)
-    .from("wallets")
-    .select("id, cash_balance_cents, bonus_balance_cents")
-    .eq("contractor_id", contractor.id)
-    .maybeSingle();
   // Spendable bonus is what apply_to_lead (migration 0058) actually honors:
   // only bonus backed by live, unexpired grants. The raw wallet counter can
   // overstate that for up to a day, because an expired grant lingers in the
@@ -298,21 +341,9 @@ export default async function ProDashboard({
   // grant sum so canAfford and the ?need= deposit amount below match what the
   // apply RPC will accept, instead of offering an Apply that gets refused or
   // under-asking on the add-funds prompt.
-  const rawBonusCents = Number(wallet?.bonus_balance_cents ?? 0);
-  let bonusAvailCents = rawBonusCents;
-  if (wallet?.id && rawBonusCents > 0) {
-    const { data: grants } = await (supabase as any)
-      .from("bonus_grants")
-      .select("remaining_cents")
-      .eq("wallet_id", wallet.id)
-      .gt("remaining_cents", 0)
-      .gt("expires_at", new Date().toISOString());
-    const grantSumCents = ((grants ?? []) as any[]).reduce(
-      (sum: number, g: any) => sum + Number(g.remaining_cents ?? 0),
-      0
-    );
-    bonusAvailCents = Math.min(rawBonusCents, grantSumCents);
-  }
+  const bonusAvailCents = walletReads.grants
+    ? bonusAvailableCents(rawBonusCents, grants)
+    : rawBonusCents;
   const balanceCents =
     Number(wallet?.cash_balance_cents ?? 0) + bonusAvailCents;
   const balance = balanceCents / 100;
@@ -355,33 +386,26 @@ export default async function ProDashboard({
   ];
 
   // "Your results" card: how the pro's applications have paid off so far.
-  const { data: appRows } = wallet
-    ? await (supabase as any)
-        .from("lead_applications")
-        .select("status")
-        .eq("contractor_id", contractor.id)
-    : { data: [] };
-  const appliedCount = (appRows ?? []).length;
-  const wonCount = (appRows ?? []).filter(
-    (a: any) => a.status === "chosen"
-  ).length;
+  const appliedCount = appRows.length;
+  const wonCount = appRows.filter((a: any) => a.status === "chosen").length;
+
+  const spent = totalSpentCents(txnRows) / 100;
 
   // Only the empty-state card needs membership status (to hide the Pro-alerts
-  // suggestion from members), so skip the lookup when the board has jobs.
+  // suggestion from members), so skip the lookup when the board has jobs. This
+  // one stays sequential on purpose: it depends on the board AFTER the
+  // closed-job filter above, and on the common path (jobs on the board) it
+  // never runs at all.
   const isProMember = open.length === 0 ? await hasProPlan() : false;
-
-  const { data: txnRows } = wallet?.id
-    ? await (supabase as any)
-        .from("wallet_transactions")
-        .select("cash_delta_cents, bonus_delta_cents")
-        .eq("wallet_id", wallet.id)
-    : { data: [] };
-  const spentCents = (txnRows ?? []).reduce((sum: number, t: any) => {
-    const delta =
-      Number(t.cash_delta_cents ?? 0) + Number(t.bonus_delta_cents ?? 0);
-    return delta < 0 ? sum + Math.abs(delta) : sum;
-  }, 0);
-  const spent = spentCents / 100;
+  // Whether that same suggestion may lead with the free trial. Guarded exactly
+  // like isProMember, plus the flag: while COLD_START_FREE_ALERTS is on the
+  // upsell never renders, so the lookup never runs. Only a pro with no
+  // pro-side subscriptions row gets a trial (the row survives a cancellation),
+  // which is the same signal /pro/crm uses.
+  const proTrialEligible =
+    open.length === 0 && !COLD_START_FREE_ALERTS && !isProMember
+      ? !(await getProSubscription())
+      : false;
 
   return (
     <div className="space-y-8">
@@ -422,8 +446,8 @@ export default async function ProDashboard({
               // bonus-grant expiry in migration 0041.
               <p className="text-xs text-stone-500 dark:text-stone-400">
                 {contractor.license_number
-                  ? "Not chosen on your first application? The fee comes back as lead credit, spendable on any lead, and it expires after 60 days."
-                  : "Adding your license unlocks the first-application guarantee. Not chosen on your first application? The fee comes back as lead credit, spendable on any lead, and it expires after 60 days."}
+                  ? "Not chosen on your first application? The fee comes back on its own as wallet credit, spendable on any lead, and it expires after 60 days. It's credit toward future leads, not cash back to your card."
+                  : "Adding your license unlocks the first-application guarantee. Not chosen on your first application? The fee comes back on its own as wallet credit, spendable on any lead, and it expires after 60 days. It's credit toward future leads, not cash back to your card."}
               </p>
             )}
           </>
@@ -681,8 +705,8 @@ export default async function ProDashboard({
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
                   <span>
                     Not chosen on your first application? The fee comes back
-                    as lead credit, spendable on any lead, and it expires
-                    after 60 days.{" "}
+                    on its own as wallet credit, spendable on any lead, and it
+                    expires after 60 days.{" "}
                     <Link
                       href="/pro/billing"
                       className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
@@ -713,9 +737,13 @@ export default async function ProDashboard({
                         href="/pro/plus"
                         className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
                       >
-                        Get alerts the moment a job posts
+                        {proTrialEligible
+                          ? proCtaLabel(true)
+                          : "Get alerts the moment a job posts"}
                       </Link>{" "}
-                      with a Pro membership, so you never check an empty board.
+                      {proTrialEligible
+                        ? `and get alerts the moment a job posts, so you never check an empty board. ${proTrialSubline()}`
+                        : "with a Pro membership, so you never check an empty board."}
                     </span>
                   </li>
                 )
@@ -956,8 +984,9 @@ export default async function ProDashboard({
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400">
               Ghost protection: if the homeowner never responds and no one is
-              picked, your fee comes back automatically after 7 days. A single
-              reply from them ends it.
+              picked, your fee comes back automatically after 7 days, as wallet
+              credit for your next application. A single reply from them ends
+              it.
             </p>
           </div>
           <ul className="space-y-2">
@@ -981,7 +1010,7 @@ export default async function ProDashboard({
                 </div>
                 {a.refunded_at ? (
                   <span className="chip shrink-0 border border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300">
-                    Fee returned
+                    Fee back as credit
                   </span>
                 ) : (
                   <span className="chip shrink-0 border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
@@ -1000,6 +1029,12 @@ export default async function ProDashboard({
             Not selected{" "}
             <span className="text-stone-500 dark:text-stone-400">({declinedApps.length})</span>
           </h2>
+          {/* The 0106 credit-back promise, stated where the loss lands. */}
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            When a homeowner picks someone else, your apply fee comes back as
+            wallet credit, good for 60 days. Check your billing page for the
+            credit.
+          </p>
           <ul className="space-y-2">
             {declinedApps.map((a) => (
               <li

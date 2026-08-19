@@ -9,7 +9,6 @@ export const runtime = "nodejs";
 // Cap the raw body we'll even look at, so a caller can't DoS this endpoint
 // (or the log/table) with an unbounded payload.
 const MAX_BODY_CHARS = 2048;
-const MAX_LOG_CHARS = 2048;
 // props is stored as jsonb; keep the serialized size sane independent of the
 // overall body cap above (a single giant prop blob would still fit under
 // MAX_BODY_CHARS otherwise).
@@ -59,10 +58,11 @@ export async function POST(req: NextRequest) {
 
     const body = await req.text();
     if (body.length > MAX_BODY_CHARS) {
-      console.log(
-        "[track] (truncated, body too large)",
-        body.slice(0, MAX_LOG_CHARS)
-      );
+      // Log only the size, NEVER the raw payload: this runs before JSON.parse
+      // and before the event allowlist, so the body is fully untrusted caller
+      // input that could carry anything, and Vercel logs are third-party
+      // retention. The length alone is enough to spot an abusive caller.
+      console.log("[track] dropped oversized body", body.length);
       return NextResponse.json({ ok: true });
     }
 

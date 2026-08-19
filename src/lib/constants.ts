@@ -401,17 +401,27 @@ export function isMajorCategory(category: string): boolean {
 
 // Hearth Pro membership (contractor side) pricing, USD. This is the ONE place
 // the prices live: the /pro/plus page and checkout both read from here, so a
-// price change is a one-line edit. First-time monthly subscribers get an
-// intro month at introFirstMonth (a one-time $20-off Stripe coupon at
-// checkout); yearly carries no intro discount. Membership is perks only: it
-// never gates lead access. Every pro sees every job and pays per application,
-// member or not.
+// price change is a one-line edit. Every brand-new Pro subscriber, on either
+// cadence, gets a trialDays free trial (a Stripe trial, so the card is
+// collected up front but nothing is charged until it ends). Membership is
+// perks only: it never gates lead access. Every pro sees every job and pays
+// per application, member or not.
 export const PRO_PLAN = {
   monthly: 29.99,
   // 12 x 19.99: the yearly plan works out to exactly $19.99/mo, a real $120
   // saving vs paying monthly. Always compare against monthly x 12 in copy,
   // never an invented list price.
   yearly: 239.88,
+  trialDays: 3,
+  // RETIRED while trialDays is on, kept only so the number stays in one place
+  // if it is ever brought back. The old offer was a first month at this price
+  // via a one-time $20-off Stripe coupon, and it CANNOT coexist with the free
+  // trial: Stripe considers a duration:"once" coupon used "after the invoice
+  // finalizes", and a trial start finalizes a $0 invoice, so the coupon would
+  // be burned on the $0 invoice and the first real bill would silently be full
+  // price - more than the buyer was shown. startProCheckoutAction therefore
+  // only attaches the coupon when the checkout carries no trial, which today
+  // is never. Nothing that quotes a price to a buyer reads this.
   introFirstMonth: 9.99,
 } as const;
 
@@ -493,9 +503,10 @@ export const PRO_DEPOSIT_BOOST_PTS = 5;
 // apply_to_lead (supabase/migrations/0028_ghost_protection.sql).
 export const MAX_APPLICANTS_PER_JOB = 3;
 
-// Ghost protection: an application the homeowner never responds to is
-// auto-refunded after this many days. Display-only mirror of the cron window
-// in supabase/migrations/0028_ghost_protection.sql.
+// Ghost protection: an application the homeowner never responds to gets its
+// fee back as wallet credit after this many days (credit only, never cash).
+// Display-only mirror of the cron window in
+// supabase/migrations/0028_ghost_protection.sql.
 export const GHOST_PROTECTION_DAYS = 7;
 
 // Default lifetime (days) of granted bonus credit. Display-only mirror of the

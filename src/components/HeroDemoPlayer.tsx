@@ -1807,6 +1807,21 @@ export default function HeroDemoPlayer() {
       if (!paused && !clockHold) {
         vnow = Math.min(vnow + delta, effTotalMs);
         fireDueEvents();
+        // The final scene-boundary event drifts a few ms past effTotalMs:
+        // fireDueEvents nudges vnow up to each fired event's own instant, so
+        // every scene cut bases its next `after` a frame late and the drift
+        // accumulates. On an unbroken playthrough vnow clamps at effTotalMs
+        // before that last event is ever due, so runScene(len)/finishTour
+        // never run, the replay overlay never shows, and the demo hangs on
+        // the silent end card with both rAF loops spinning. Close it out the
+        // moment the clock reaches the end, matching seekTo's own end guard.
+        // Guarded by `playing` so the rare exact-boundary event that already
+        // fired finishTour itself can't double-fire it; only tick reaches
+        // this, never the seek sweep (which runs fireDueEvents from vnow=0).
+        if (playing && vnow >= effTotalMs) {
+          finishTour();
+          return;
+        }
       }
       // While the user drags the seek bar, the preview owns these writes.
       if (!scrubbing) {

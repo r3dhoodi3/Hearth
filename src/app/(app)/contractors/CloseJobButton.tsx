@@ -53,8 +53,8 @@ export default function CloseJobButton({
         <p className="max-w-xs text-right text-xs text-stone-500 dark:text-stone-400">
           {applicantCount} pro{applicantCount === 1 ? " has" : "s have"}{" "}
           already paid to apply. Closing won&apos;t pick anyone: they&apos;ll
-          be notified you closed the job, and their fee is refunded
-          automatically if nobody&apos;s chosen within a week.
+          be notified you closed the job, and their fee comes back to them as
+          Hearth credit automatically if nobody&apos;s chosen within a week.
         </p>
       )}
       <select

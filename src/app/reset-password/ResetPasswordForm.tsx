@@ -61,7 +61,17 @@ export default function ResetPasswordForm({
     }
 
     setBusy(true);
-    const { error } = await supabase.auth.updateUser({ password });
+    // password_set is our own marker that this account now has a password.
+    // Supabase doesn't record one we can read: when someone who signed up with
+    // Google sets a password here, the password works but no "email" identity
+    // is added, so user.identities still shows Google alone. Without this flag
+    // the account security page would keep telling them they have no password
+    // forever (getPasswordStatus in src/lib/auth.ts reads it). Set in the same
+    // call as the password so the two can't disagree.
+    const { error } = await supabase.auth.updateUser({
+      password,
+      data: { password_set: true },
+    });
 
     if (error) {
       setBusy(false);

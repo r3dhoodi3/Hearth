@@ -61,6 +61,12 @@ const isQuoteCompanionBody = (body: string) => body.startsWith("Sent a quote:");
 // invoice posts alongside itself (see createInvoiceAction).
 const isInvoiceCompanionBody = (body: string) => body.startsWith("Sent an invoice:");
 
+// What a chat photo may actually be, mirroring PhotoUpload.tsx and the
+// home-photos bucket's own allowed_mime_types (migration 0079). Both lists
+// deliberately exclude image/svg+xml; see sendImage below.
+const CHAT_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const MAX_CHAT_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB, same as PhotoUpload
+
 // System-message markers used to open/close a thread. They're stored as normal
 // rows (sender_role = "system") so both sides see them with no schema change.
 // A close marker starts with CLOSE_PREFIX and embeds who closed it + the reason.
@@ -577,7 +583,33 @@ export default function LeadChat({
 
   // Upload an image to the home-photos bucket, then post it as a photo message.
   async function sendImage(file: File) {
-    if (!file.type.startsWith("image/")) return;
+    // Same checks as PhotoUpload.tsx, and for the same reason: a
+    // `type.startsWith("image/")` test on its own lets image/svg+xml through,
+    // which can carry a <script> and would then be served back off Hearth's
+    // own storage origin to whoever opens the chat. SVG gets its own message
+    // rather than a silent no-op, since "nothing happened" reads as a bug.
+    // The bucket's allowed_mime_types (migration 0079) is the real backstop;
+    // this stops the upload before it starts.
+    if (file.type === "image/svg+xml") {
+      setNotice(
+        "SVG images aren't supported. Please send a PNG, JPEG, or WEBP photo."
+      );
+      setTimeout(() => setNotice(null), 5000);
+      return;
+    }
+    // The file input accepts image/*, so a pick can still be a type the
+    // bucket rejects (GIF, HEIC, AVIF, BMP). Name what works instead of a
+    // bare return, which reads as "nothing happened" / a broken button.
+    if (!CHAT_IMAGE_TYPES.has(file.type)) {
+      setNotice("That image type isn't supported. Please send a PNG, JPEG, or WEBP photo.");
+      setTimeout(() => setNotice(null), 5000);
+      return;
+    }
+    if (file.size > MAX_CHAT_IMAGE_BYTES) {
+      setNotice("That photo is too large. Please send one under 15MB.");
+      setTimeout(() => setNotice(null), 5000);
+      return;
+    }
     setBusy(true);
     setPendingPhoto(file);
     try {
@@ -608,6 +640,7 @@ export default function LeadChat({
       setBusy(false);
       setPendingPhoto(null);
       setNotice("Could not send the photo. Please try again.");
+      setTimeout(() => setNotice(null), 5000);
     }
   }
 

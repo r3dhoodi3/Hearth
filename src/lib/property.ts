@@ -13,6 +13,17 @@ export const ACTIVE_HOME_COOKIE = "hearth_active_home";
 // with them as a household member.
 export type PropertyWithShared = Property & { isShared: boolean };
 
+// The only fields the client-side home switcher needs. Projecting to this
+// before handing homes to a "use client" component keeps the sensitive
+// properties columns (mortgage_balance, purchase_price, assessed_value,
+// insurance_premium, ownership_owner_names, parcel_id, purchase_date, and the
+// owner's user_id) out of the RSC payload the browser receives on every app
+// page.
+export type HomeSummary = Pick<
+  PropertyWithShared,
+  "id" | "address_line1" | "isShared"
+>;
+
 // Cached per request so calling it twice (e.g. layout) only queries once.
 //
 // No .eq("user_id", ...) filter here on purpose: once 0048_household_sharing

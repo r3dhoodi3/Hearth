@@ -19,7 +19,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 export const metadata: Metadata = {
   // The root layout's title template appends "| Hearth"; don't repeat it here.
   title: "Contact us",
-  description: "Send Hearth a message. No account needed, and we read every message and reply by email.",
+  description: "Send Hearth a message. No account needed, and we read every message and will reach out by phone call or email.",
   alternates: {
     canonical: `${SITE_URL}/contact`,
   },
@@ -51,7 +51,7 @@ export default function ContactPage({
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
         Send us a message below. No account needed. We read every message and
-        reply by email.
+        will reach out by phone call or email.
       </p>
 
       <div className="mt-8">

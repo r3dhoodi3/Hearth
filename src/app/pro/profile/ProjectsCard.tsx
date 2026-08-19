@@ -8,6 +8,10 @@ import { saveProjectAction, deleteProjectAction } from "./project-actions";
 import ProjectPhotoManager from "./ProjectPhotoManager";
 import CategoryIcon from "@/components/CategoryIcon";
 import InlineSpinner from "@/components/InlineSpinner";
+import ProUpgradeCta, {
+  proCtaLabel,
+  proTrialSubline,
+} from "@/components/pro/ProUpgradeCta";
 
 // Small submit buttons below. Each needs its own component because
 // useFormStatus only reports pending state inside a descendant of the
@@ -65,10 +69,15 @@ const FREE_PROJECT_LIMIT = 3;
 export default function ProjectsCard({
   contractorId,
   member,
+  trialEligible,
   projects,
 }: {
   contractorId: string;
   member: boolean;
+  // Whether the upgrade prompts below may lead with the free trial. Decided on
+  // the server in page.tsx (no pro-side subscriptions row = first-time member),
+  // because only that side can tell a never-member from a lapsed one.
+  trialEligible: boolean;
   projects: ProProject[];
 }) {
   // null = list view, "new" = create form, otherwise the id being edited.
@@ -192,9 +201,7 @@ export default function ProjectsCard({
             free. Hearth Pro members get unlimited projects, plus
             Before/After badges on their public photos.
           </p>
-          <Link href="/pro/plus" className="btn-primary inline-block">
-            See Hearth Pro
-          </Link>
+          <ProUpgradeCta trialEligible={trialEligible} />
         </section>
       )}
 
@@ -202,11 +209,11 @@ export default function ProjectsCard({
         <p className="text-xs text-stone-500 dark:text-stone-400">
           Free accounts can showcase up to {FREE_PROJECT_LIMIT} projects.
           Hearth Pro members get unlimited projects and public Before/After
-          badges:{" "}
+          badges.{" "}
           <Link href="/pro/plus" className="text-hearth-700 hover:underline dark:text-hearth-300">
-            see Hearth Pro
+            {proCtaLabel(trialEligible)}
           </Link>
-          .
+          {trialEligible ? ` ${proTrialSubline()}` : ""}
         </p>
       )}
     </div>

@@ -3,15 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
+import { ok, err, type ActionResult } from "@/lib/actionResult";
+
+// Upper bound on a single logged maintenance cost, in cents ($1,000,000). A
+// real repair never reaches it, and without a ceiling a typed (or forged)
+// number rolls straight into the report's lifetime-spend totals and makes
+// every figure on the page nonsense.
+const MAX_COST_CENTS = 100_000_000;
 
 // Owner-entered dollars -> integer cents, so money never touches the database
-// as a float. Returns null for blank/invalid/zero input (cost is optional).
+// as a float. Returns null for blank/invalid/zero/implausible input (cost is
+// optional, so an unusable value is simply not recorded).
 function toCents(v: FormDataEntryValue | null): number | null {
   if (!v) return null;
   const n = Number(String(v).trim().replace(/[^0-9.]/g, ""));
   if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n * 100);
+  const cents = Math.round(n * 100);
+  return cents > MAX_COST_CENTS ? null : cents;
 }
 
 // Log a maintenance record the owner already knows happened (a past service,
@@ -20,18 +30,25 @@ function toCents(v: FormDataEntryValue | null): number | null {
 // a reminder, and it writes to the exact same maintenance_tasks table/status
 // the dashboard's "mark done" flow uses, so a manual entry here shows up
 // anywhere else that reads completed tasks, and vice versa.
-export async function addMaintenanceHistoryAction(formData: FormData) {
+export async function addMaintenanceHistoryAction(
+  formData: FormData
+): Promise<ActionResult> {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property) return err("Couldn't save that entry. Please try again.");
 
-  const title = ((formData.get("title") as string) || "").trim();
+  // Capped server-side: both fields render on the report and in the exported
+  // PDF, so an unbounded paste would land in front of the owner as well as in
+  // the database. The inputs' maxLength is only a client hint.
+  const title = cappedField(formData, "title", FIELD_MAX.title);
   const date = ((formData.get("completed_date") as string) || "").trim();
   if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    setFlash("Add what was done and a date.", "error");
-    return;
+    return err("Add what was done and a date.");
   }
-  const performedBy =
-    ((formData.get("performed_by") as string) || "").trim() || null;
+  const performedBy = cappedFieldOrNull(
+    formData,
+    "performed_by",
+    FIELD_MAX.name
+  );
   const costCents = toCents(formData.get("cost"));
   // Noon UTC avoids a date shifting a day in either direction across
   // timezones; only the date part is ever shown or deduped on.
@@ -55,8 +72,7 @@ export async function addMaintenanceHistoryAction(formData: FormData) {
       t.completed_at?.slice(0, 10) === date
   );
   if (isDupe) {
-    setFlash("That's already in your maintenance history.", "info");
-    return;
+    return err("That's already in your maintenance history.");
   }
 
   const baseRow = {
@@ -79,11 +95,11 @@ export async function addMaintenanceHistoryAction(formData: FormData) {
     ({ error } = await supabase.from("maintenance_tasks").insert(baseRow));
   }
   if (error) {
-    setFlash("Couldn't save that entry. Please try again.", "error");
-    return;
+    return err("Couldn't save that entry. Please try again.");
   }
 
   setFlash("Added to your maintenance history.");
   revalidatePath("/home-report");
   revalidatePath("/dashboard");
+  return ok();
 }

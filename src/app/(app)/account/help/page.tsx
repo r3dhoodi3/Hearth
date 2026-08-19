@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
-import { FOUNDER } from "@/lib/constants";
 import SupportForm from "./SupportForm";
 
 const FAQ: { q: string; a: string; href?: string; hrefLabel?: string }[] = [
@@ -83,26 +82,29 @@ export default async function HelpPage() {
         </div>
       </div>
 
-      <SupportForm name={name} email={email} phone={phone} />
+      <div id="support-form">
+        <SupportForm name={name} email={email} phone={phone} />
+      </div>
 
-      {/* Bug bounty, small and honest. Only renders while FOUNDER.email is a
-          real, monitored inbox (see the note in constants.ts). */}
-      {FOUNDER.email && (
-        <div className="card">
-          <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
-            Found a bug?
-          </h2>
-          <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-            Tell us about it and get up to $20 in Hearth credit.
-          </p>
-          <a
-            href={`mailto:${FOUNDER.email}?subject=${encodeURIComponent("I found a bug")}`}
-            className="mt-3 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
-          >
-            Report a bug
-          </a>
-        </div>
-      )}
+      {/* Found a bug: reports go through the support form on this page, same
+          inbox as everything else - not a mailto link, which dumped people
+          into whatever desktop mail app the OS picked. No credit offer here:
+          Hearth has no homeowner wallet or credit to pay one out (that's a
+          pro-side thing), so promising one would be a bug of its own. */}
+      <div className="card">
+        <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
+          Found a bug?
+        </h2>
+        <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
+          Tell us about it. We read every report and fix what we can.
+        </p>
+        <a
+          href="#support-form"
+          className="mt-3 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
+        >
+          Report a bug
+        </a>
+      </div>
 
       <p className="text-sm text-stone-500 dark:text-stone-400">
         You can also ask Hearth directly from the assistant on any page.

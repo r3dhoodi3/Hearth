@@ -210,7 +210,7 @@ export default function AduCostGuide() {
               href="/contractors?category=remodeling"
               className="font-medium text-bark-700 hover:underline dark:text-stone-300"
             >
-              Get quotes from Orange County ADU builders →
+              Get quotes from local ADU builders →
             </Link>
           </p>
         </section>

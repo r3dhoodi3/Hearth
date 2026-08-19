@@ -27,7 +27,15 @@ export default function SignInForm({
 }: {
   next: string | null;
   // Set when /auth/callback couldn't exchange the link's code for a session
-  // (?error=auth_failed): usually an expired or already-used email link.
+  // (?error=auth_failed). Two very different situations land here and the
+  // callback can't tell them apart: (1) a link that genuinely expired or was
+  // already used, and (2) a confirmation or set-password link opened on a
+  // DIFFERENT device from the one that requested it. Case 2 is common and
+  // benign: the PKCE code_verifier cookie lives only in the browser that
+  // started the flow, so exchangeCodeForSession fails on the other device even
+  // though the account was already confirmed - signing in just works. The copy
+  // below has to read as true in both cases, so it points at signing in first
+  // rather than shouting "expired," which was wrong (and alarming) for case 2.
   authFailed?: boolean;
 }) {
   const supabase = createClient();
@@ -78,11 +86,12 @@ export default function SignInForm({
 
         {authFailed && (
           <p
-            role="alert"
-            className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+            role="status"
+            className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-center text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
           >
-            That link expired or was already used. Sign in, or request a new
-            link.
+            If you just confirmed your email or opened a link from another
+            device, try signing in below - it probably worked already. If a
+            link really did expire, use Forgot password to get a fresh one.
           </p>
         )}
 

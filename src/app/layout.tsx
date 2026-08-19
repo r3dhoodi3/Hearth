@@ -29,18 +29,18 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 // Organization JSON-LD, so search results can attribute pages to Hearth as a
 // business rather than guessing from the page title. Mirrors the Service
 // JSON-LD CityLandingPage builds per city (src/components/CityLandingPage.tsx):
-// same reasoning, root-level scope. areaServed names the county, not a city,
-// since Hearth isn't limited to the two cities that have their own landing
-// pages today.
+// same reasoning, root-level scope. areaServed names the two cities Hearth
+// actually serves today, matching the service-area line on the landing page
+// and /pros.
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "Hearth",
   url: SITE_URL,
-  areaServed: {
-    "@type": "AdministrativeArea",
-    name: "Orange County, CA",
-  },
+  areaServed: [
+    { "@type": "City", name: "Huntington Beach, CA" },
+    { "@type": "City", name: "Fountain Valley, CA" },
+  ],
 };
 
 export const metadata: Metadata = {

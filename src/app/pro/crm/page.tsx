@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import { Bot, Clock, Star, FileText, Tag, BarChart3 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
-import { hasProPlan } from "@/lib/subscription";
+import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { labelFor, JOB_CATEGORIES, PRO_PLAN } from "@/lib/constants";
 import ClientRow from "./ClientRow";
 import CategoryIcon from "@/components/CategoryIcon";
@@ -85,7 +85,7 @@ export default async function ProCrmPage({
   const supabase = createClient();
   const q = (searchParams.q ?? "").trim();
 
-  const [{ data: clientRows }, { data: leadRows }, member] = await Promise.all([
+  const [{ data: clientRows }, { data: leadRows }, member, proSub] = await Promise.all([
     supabase
       .from("pro_clients")
       .select("*")
@@ -101,6 +101,11 @@ export default async function ProCrmPage({
     // Paying Pro-member check: drives the locked upgrade teaser below only. It
     // never gates any of the CRM functionality above.
     hasProPlan(),
+    // The Pro-side row itself, for the teaser's CTA copy: the free trial is
+    // for brand-new members only, and the row survives cancellation, so a pro
+    // who churned and came back must not be offered a trial they won't get.
+    // Free to ask for - hasProPlan() reads the same request-cached rows.
+    getProSubscription(),
   ]);
 
   const clients = clientRows ?? [];
@@ -376,9 +381,15 @@ export default async function ProCrmPage({
                 : "Tap to see how Pro unlocks it."}
             </p>
           </div>
+          {/* Leads with the free trial, not the price, and only for a pro who
+              will actually get one: /pro/plus is where the full auto-renewal
+              disclosure and the actual checkout live, and this button must not
+              out-promise it. */}
           {!member && (
             <Link href="/pro/plus" className="btn-primary shrink-0">
-              Upgrade to Pro (${PRO_PLAN.monthly}/mo)
+              {proSub
+                ? "See Hearth Pro"
+                : `Try Pro free for ${PRO_PLAN.trialDays} days`}
             </Link>
           )}
         </div>

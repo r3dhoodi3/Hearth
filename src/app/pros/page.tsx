@@ -7,13 +7,14 @@ import {
   LEAD_TIER_FEES,
   MAJOR_INTRO_FEE,
   COLD_START_FREE_ALERTS,
+  PRO_PLAN,
 } from "@/lib/constants";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
-import ProDemoPlayer from "@/components/ProDemoPlayer";
+import ProDemoPlayerLazy from "@/components/ProDemoPlayerLazy";
 import {
   Tag,
   MousePointerClick,
@@ -48,7 +49,7 @@ function Check({ className = "h-4 w-4" }: { className?: string }) {
 // Canonical first-application guarantee sentence. Used verbatim everywhere the
 // guarantee is described on this page so the terms can never drift.
 const FIRST_APPLICATION_GUARANTEE =
-  "Not chosen on your first application? The fee comes back as credit you can spend on any job within 60 days.";
+  "Not chosen on your first application? The fee comes back automatically as wallet credit you can spend on any job within 60 days. It's credit toward future leads, not cash back to your card.";
 
 export const metadata: Metadata = {
   title: "Hearth for Pros: real local leads, honest pricing",
@@ -192,7 +193,10 @@ export default async function ProsLanding({
               Already have an account? Sign in
             </Link>
             <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-              Serving Orange County, California
+              Serving Huntington Beach and Fountain Valley
+            </p>
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+              Don&apos;t see your city yet? You will soon.
             </p>
           </div>
         </div>
@@ -200,10 +204,12 @@ export default async function ProsLanding({
 
       {/* Pro-side click-to-play demo, the contractor sibling of the homeowner
           hero video. Sits right after the warm band, mirroring how the
-          landing page mounts HeroDemoPlayer. */}
+          landing page mounts its player: through a lazy wrapper, so the
+          ~2,800-line component loads as its own chunk after hydration
+          instead of riding along in this page's first-load JS. */}
       <section className="mx-auto mt-16 flex max-w-3xl flex-col items-center px-6 sm:mt-20">
         <div className="w-full max-w-xl">
-          <ProDemoPlayer />
+          <ProDemoPlayerLazy />
         </div>
       </section>
 
@@ -214,12 +220,15 @@ export default async function ProsLanding({
       <div className="mt-14 grid gap-4 sm:grid-cols-2">
         <section className="rounded-2xl border border-bark-100 bg-bark-50 p-6 text-center shadow-sm dark:border-bark-700 dark:bg-bark-700/20">
           <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-            Ghost protection: if the lead is dead, you get your fee back.
+            Ghost protection: if the lead is dead, your fee comes back as
+            credit.
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
             If a homeowner doesn&apos;t respond within 7 days, your apply fee
-            comes back to your wallet automatically. You don&apos;t have to fill
-            out a form, open a support ticket, or argue with anyone.
+            comes back to your wallet automatically as credit toward your next
+            application. You don&apos;t have to fill out a form, open a support
+            ticket, or argue with anyone. It&apos;s credit, not cash back to
+            your card.
           </p>
         </section>
         <section className="rounded-2xl border border-bark-100 bg-bark-50 p-6 text-center shadow-sm dark:border-bark-700 dark:bg-bark-700/20">
@@ -349,7 +358,9 @@ export default async function ProsLanding({
         <p className="mx-auto mt-6 max-w-md text-center text-sm text-stone-500 dark:text-stone-400">
           A Pro membership adds an AI back office on top: draft estimates,
           invoices, follow-up messages, review replies, and overdue-invoice
-          reminders in seconds.{" "}
+          reminders in seconds. New pros try Pro free for {PRO_PLAN.trialDays}{" "}
+          days, then it is ${PRO_PLAN.monthly.toFixed(2)} a month, cancel
+          anytime.{" "}
           <Link href="/pro/plus" className="text-bark-700 hover:underline dark:text-stone-300">
             See what&apos;s included
           </Link>
@@ -386,7 +397,7 @@ export default async function ProsLanding({
           ))}
         </ol>
         {/* The honest deal: every line here is a real, shipped product rule
-            (3-spot cap, ghost refunds, first-apply guarantee, aging tiers,
+            (3-spot cap, ghost-protection credit, first-apply guarantee, aging tiers,
             pay-per-apply). Restyled from claims elsewhere on this page; add
             nothing here that isn't true in code. */}
         <div className="mx-auto mt-8 max-w-md rounded-2xl border border-stone-200 bg-stone-50 p-5 dark:border-white/10 dark:bg-stone-800">
@@ -400,14 +411,16 @@ export default async function ProsLanding({
                 Max 3 pros per job, so you&apos;re never competing against a crowd
                 of other pros. You never lose
                 money on a job you didn&apos;t get: if the homeowner picks
-                someone else, your fee comes back as credit, good for 60 days.
+                someone else, your fee comes back on its own as wallet credit,
+                good for 60 days.
               </span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
               <span>
                 Ghost protection: if the homeowner doesn&apos;t respond
-                within 7 days, your fee comes back automatically.
+                within 7 days, your fee comes back automatically as wallet
+                credit for your next application.
               </span>
             </li>
             <li className="flex items-start gap-2">

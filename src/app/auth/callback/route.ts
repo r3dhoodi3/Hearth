@@ -106,6 +106,24 @@ export async function GET(request: NextRequest) {
               userId: data.user.id,
               updateError,
             });
+          } else if (needsRole) {
+            // The role we just stamped lives in auth.users, but the session
+            // cookie this request set (exchangeCodeForSession above) still
+            // holds the pre-stamp JWT with no role. Cookie-based getRole()
+            // (the /pro and /pro/onboarding guards read it, not the live auth
+            // server) would therefore see null and bounce a brand-new Google
+            // contractor through the role picker -> /pro -> /get-started ->
+            // picker until the token expired. Refresh the session so the
+            // cookie carries a JWT with role BEFORE we redirect them in.
+            // Same cookie-write path exchangeCodeForSession already relies on,
+            // so it propagates onto the redirect response the same way.
+            const { error: refreshError } = await supabase.auth.refreshSession();
+            if (refreshError) {
+              console.error(
+                "auth/callback: failed to refresh session after role stamp",
+                { userId: data.user.id, refreshError }
+              );
+            }
           }
         }
 

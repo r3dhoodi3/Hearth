@@ -44,19 +44,38 @@ export async function updateSession(request: NextRequest) {
   // auth cookies, fail open instead of bouncing a signed-in user to /signin:
   // RLS still guards every read downstream, and the segment error boundaries
   // show a retry screen if data loads fail too.
+  //
+  // Reads only. The fail-open is a UX cushion for someone LOOKING at a page,
+  // and the cost of being wrong there is a rendered shell with no data. On a
+  // POST it is a different trade: that's a server action or form submit that
+  // WRITES, and the only thing standing between an unverified caller and the
+  // handler would be RLS alone. Anything reached with the service-role client
+  // (admin lookups, notifications, wallet RPCs) sits outside RLS entirely, so
+  // a forged/expired cookie during an outage must not get that far. Unsafe
+  // methods keep the strict behavior and bounce to /signin; the user retries
+  // the write once auth is back.
+  const isReadMethod = request.method === "GET" || request.method === "HEAD";
   const authUnreachable =
     authError != null &&
     (authError.name === "AuthRetryableFetchError" || authError.status === 0);
   const hasAuthCookies = request.cookies
     .getAll()
     .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
-  if (authUnreachable && hasAuthCookies) {
+  if (authUnreachable && hasAuthCookies && isReadMethod) {
     return response;
   }
 
   const path = request.nextUrl.pathname;
   const isPublic =
     path === "/" ||
+    // The root social-preview image (src/app/opengraph-image.tsx). Link
+    // scrapers (iMessage, Slack, Facebook) fetch it with no cookies and no
+    // account; without this entry they get a 307 to /signin and every share
+    // of the root URL renders with a broken preview. The matcher's extension
+    // exclusions never catch it because the route is extensionless.
+    // startsWith, not exact: Next can serve metadata variants with generated
+    // suffixes, and every path in that family is equally public.
+    path.startsWith("/opengraph-image") ||
     path.startsWith("/get-started") ||
     path.startsWith("/signin") ||
     // Password reset request page: a signed-out user is exactly who needs it,
@@ -139,6 +158,16 @@ export async function updateSession(request: NextRequest) {
     // the anonymous landing page's demo player; a 307 to /signin here makes
     // the narration silently fail.
     path.startsWith("/demo-vo/") ||
+    // Anonymous analytics beacons (src/app/api/track): the landing page fires
+    // pre-auth events (hero_demo_play, signup_homeowner, post_job_from_chat)
+    // from signed-out visitors via sendBeacon. WITHOUT this entry the
+    // middleware 307s the POST to /signin AND converts it to GET, so every
+    // anonymous beacon is silently dropped and never recorded. It must not
+    // redirect. The route is built to be publicly reachable: it accepts only a
+    // fixed client-event allowlist (server-only events like job_won are
+    // refused), caps the body at 2048 chars, caps props at 1024, and
+    // rate-limits per IP (60 / 5 min) before doing any work.
+    path.startsWith("/api/track") ||
     // Cron routes authenticate via CRON_SECRET (Bearer/header/query), not a
     // user session. Vercel Cron sends no session cookie, so WITHOUT this
     // entry every scheduled job would 307 to /signin (an HTML 200!) before

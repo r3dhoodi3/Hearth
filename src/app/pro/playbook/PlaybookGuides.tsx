@@ -35,7 +35,7 @@ export default function PlaybookGuides({
           id="playbook-search"
           type="search"
           className="input"
-          placeholder="Search by topic, like refund or pricing"
+          placeholder="Search by topic, like credit or pricing"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />

@@ -81,10 +81,30 @@ function cityState(
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { code: string } }
 ) {
   const code = (params.code ?? "").trim();
+
+  // Unauthenticated and public, and every hit that carries a plausible code
+  // spends two SERVICE-ROLE queries before rendering a 1200x630 image. A code
+  // is not enumerable (see the note above), but nothing stopped a caller from
+  // hammering this route to burn database and render time either way. Keyed on
+  // IP, fixed-window via the shared rate_limit_hit RPC (migration 0068), and
+  // checked BEFORE the lookups so a blocked caller costs nothing. Fails open on
+  // an RPC hiccup - only an explicit `allowed === false` blocks - so a limiter
+  // outage never breaks the card behind a link someone actually shared. The
+  // budget is set well above what a social scraper needs for one link.
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const rlAdmin = createAdminClient();
+  const { data: allowed } = await rlAdmin.rpc("rate_limit_hit", {
+    p_bucket: `invitecard:${ip ?? "unknown"}`,
+    p_limit: 30,
+    p_window_seconds: 300,
+  });
+  if (allowed === false) {
+    return new Response("Too many requests", { status: 429 });
+  }
 
   // Resolve the inviter, best-effort. referral_code / referred_by aren't in
   // database.types.ts (not regenerated for 0099), so this is cast to any, the

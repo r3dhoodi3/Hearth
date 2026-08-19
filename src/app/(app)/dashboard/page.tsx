@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import { getUser } from "@/lib/auth";
 import { hasPlus } from "@/lib/subscription";
 import { generateMaintenancePlanAction } from "./actions";
 import SubmitButton from "@/components/SubmitButton";
@@ -156,9 +157,9 @@ export default async function HomePage({
   // so the CTA can offer the real build once, then revert to the Plus pitch.
   let freePlanCredit = false;
   if (!plus) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    // The cached, network-free getUser(): the row below is RLS-protected and
+    // pinned to this id, so a live auth-server round trip buys nothing here.
+    const user = await getUser();
     if (user) {
       const { data: creditRow, error: creditErr } = await supabase
         .from("users")

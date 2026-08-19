@@ -187,7 +187,7 @@ function normalize(raw: any) {
   const maxYear = new Date().getFullYear() + 1;
   const yearNum = Number(raw?.install_year);
   const install_year =
-    Number.isInteger(yearNum) && yearNum >= 1900 && yearNum <= maxYear
+    Number.isInteger(yearNum) && yearNum >= 1700 && yearNum <= maxYear
       ? yearNum
       : null;
 

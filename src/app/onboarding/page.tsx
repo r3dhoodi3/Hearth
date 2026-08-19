@@ -38,6 +38,24 @@ export default async function OnboardingPage({
     typeof searchParams?.next === "string" ? searchParams.next : null
   );
 
+  // Household invite (QR scan) escape hatch. A signed-out scanner is sent
+  // through /homeowner-signup?next=/join/household/<token>, and with email
+  // confirmation ON the signup builds its confirmation link as
+  // /auth/callback?next=/onboarding?next=/join/household/<token> - so after
+  // confirming they land HERE, on the claim-your-home step. But an invited
+  // housemate (a spouse, an adult child) has no property of their own to
+  // claim; forcing them through this form would strand them, and they'd only
+  // reach the invite after claiming a home they don't have. When next points
+  // at a /join/ redemption page, skip onboarding entirely and hand them
+  // straight there, where the token is redeemed under their new session. This
+  // does NOT consume the QR scan grace: the 30-minute window was already
+  // stamped when they first opened the invite link (migration 0097), and this
+  // redirect just delivers them back to it. The ordinary onboarding flow (no
+  // next, or any non-/join destination) is untouched.
+  if (next && next.startsWith("/join/")) {
+    redirect(next);
+  }
+
   // ?ref=: the inviter's referral code (migration 0099), carried here from
   // /homeowner-signup. Handed to OnboardingForm as a hidden field so
   // claimPropertyAction can attribute a first home claim to the neighbor who

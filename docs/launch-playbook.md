@@ -44,16 +44,16 @@ Recruit 30-40 signups to net 16-24 active (about half of cold-recruited supply n
 >
 > Hi [Name], I'm [founder name], I live locally and I built a small jobs board called Hearth for FV and Huntington Beach homeowners. I'm choosing the first 10 [plumbers] for the launch and your reviews on [Google/Yelp specific detail] made you an obvious call.
 >
-> The honest version: we're new, so I won't promise volume. What I can promise: browsing and job alerts are free, every job shows its fee before you touch it, max 3 pros per job, and if the homeowner never responds within 7 days the fee returns to your wallet automatically, no dispute ticket. Your first application is guaranteed: not chosen means the fee comes back as credit.
+> The honest version: we're new, so I won't promise volume. What I can promise: browsing and job alerts are free, every job shows its fee before you touch it, max 3 pros per job, and if the homeowner never responds within 7 days the fee comes back to your wallet as credit automatically, no dispute ticket. Your first application is guaranteed: not chosen means the fee comes back as credit too. It is credit toward future leads, not cash back.
 >
 > Worth 10 minutes this week? I'm the founder, this is my cell: [number].
 
 **Supply-house counter, 30 seconds:**
-> "Morning, quick one while you're in line. I'm [name], local guy, I built a jobs board for Fountain Valley and Huntington Beach homeowners. It's not Angi: the fee is printed on every job card before you pay, max three pros per job, and if the homeowner ghosts, the money comes back to your wallet automatically within 7 days. Signing up and getting job alerts costs nothing, you only pay if you choose to apply to a specific job. I'm signing the first ten plumbers now. Card's got my cell on it, I answer it myself."
+> "Morning, quick one while you're in line. I'm [name], local guy, I built a jobs board for Fountain Valley and Huntington Beach homeowners. It's not Angi: the fee is printed on every job card before you pay, max three pros per job, and if the homeowner ghosts, the fee comes back to your wallet as credit automatically within 7 days. Signing up and getting job alerts costs nothing, you only pay if you choose to apply to a specific job. I'm signing the first ten plumbers now. Card's got my cell on it, I answer it myself."
 
 **Phone follow-up objection handling:**
-- "Fake leads": every job is posted first-party by the homeowner, contact info verified, 7-day auto refund coded in, not a policy.
-- "Refunds are a fight": there is no refund form because there is nothing to request; dead lead, wallet recredited. Say "wallet credit" yourself before they ask.
+- "Fake leads": every job is posted first-party by the homeowner, contact info verified, 7-day automatic credit-back coded in, not a policy.
+- "Refunds are a fight": there is no refund form because there is nothing to request; dead lead, wallet credited. Say "wallet credit, not cash" yourself before they ask.
 - "Empty platform": concede immediately, then reframe: zero cost, free alerts, free CSLB-verified badge + SEO public profile + AI back office (worth having even if no job ever comes), founder texts matched jobs personally, first application credit-back.
 
 **Never promise:** lead volume, income figures, "homeowners ready to hire" (that phrase is in the FTC's $7.2M HomeAdvisor order), cash refunds (it is wallet credit), exclusivity.
@@ -62,7 +62,7 @@ Recruit 30-40 signups to net 16-24 active (about half of cold-recruited supply n
 - Day 0 onboarding call, founder does the typing: profile complete, license verified, one single-player win (AI estimate from an old invoice).
 - Day 2 text: their public profile URL + "send this to your last 3 happy customers for reviews."
 - Day 7 personal check-in with an honest demand report. Over-communicate; silence kills.
-- First matched job: personal text alongside the alert. If it goes sideways, make sure the refund visibly fires: the first automatic refund converts a skeptic into an evangelist.
+- First matched job: personal text alongside the alert. If it goes sideways, make sure the credit visibly fires: the first automatic credit-back converts a skeptic into an evangelist.
 - Day 30 call: what would make you leave, who should I recruit next.
 
 ---

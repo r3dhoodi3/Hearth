@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSubscription, getProSubscription } from "@/lib/subscription";
 import { billingTermsText } from "@/lib/billingTerms";
+import { subscriptionCheckoutData } from "@/lib/checkoutSubscriptionData";
 import { PLUS_PLAN, EXTRA_HOME, extraHomeUnitPrice } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 
@@ -182,10 +183,10 @@ export async function startPlusCheckoutAction(formData: FormData) {
         // one signal to read for both memberships. Plus's free trial is a Stripe
         // trial, which stays visible on the subscription, but the flag costs
         // nothing and keeps the two flows from diverging.
-        subscription_data: {
-          ...(freeTrial ? { trial_period_days: PLUS_PLAN.trialDays } : {}),
-          metadata: { intro_step_up: freeTrial ? "true" : "false" },
-        },
+        subscription_data: subscriptionCheckoutData({
+          trialDays: freeTrial ? PLUS_PLAN.trialDays : null,
+          introStepUp: freeTrial,
+        }),
         customer: customerId ?? undefined,
         customer_email: customerId ? undefined : user.email ?? undefined,
         metadata: {

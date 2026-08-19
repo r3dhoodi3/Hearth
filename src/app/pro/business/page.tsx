@@ -3,7 +3,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor, getRole } from "@/lib/contractor";
-import { hasProPlan } from "@/lib/subscription";
+import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 import { buildProStats } from "@/lib/proStats";
 import { computeResponseTimeMinutes } from "@/lib/responseTime";
 import AccountPanel from "@/components/pro/AccountPanel";
@@ -74,6 +75,7 @@ export default async function ProBusinessPage() {
     { data: wallet },
     { data: reviewRows },
     isPro,
+    proSub,
   ] = await Promise.all([
     (supabase as any).rpc("my_applications"),
     supabase
@@ -105,7 +107,15 @@ export default async function ProBusinessPage() {
       .order("created_at", { ascending: false })
       .limit(5),
     hasProPlan(),
+    // The Pro-side subscription row itself, for the two upgrade nudges below.
+    // The free trial is for brand-new members only and the row survives a
+    // cancellation, so a pro who churned and came back must never be offered
+    // one. Free to ask for: hasProPlan() reads the same request-cached rows.
+    getProSubscription(),
   ]);
+
+  // Only a pro who has never held a membership will actually get the trial.
+  const trialEligible = !isPro && !proSub;
 
   const apps = (myApps ?? []) as any[];
   const won = (wonData ?? []) as any[];
@@ -198,6 +208,14 @@ export default async function ProBusinessPage() {
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                 {COLD_START_FREE_ALERTS || isPro ? (
                   "You already get instant alerts the moment a matching job posts, open Hearth as soon as one comes in to keep that edge."
+                ) : trialEligible ? (
+                  <>
+                    <Link href="/pro/plus" className="font-medium underline">
+                      {proCtaLabel(true)}
+                    </Link>{" "}
+                    and turn on instant job alerts, so you see new jobs the
+                    moment they post. {proTrialSubline()}
+                  </>
                 ) : (
                   <>
                     Turn on instant job alerts with a{" "}
@@ -235,7 +253,7 @@ export default async function ProBusinessPage() {
             {dollars(spentCents)}
           </p>
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            Ghost-protection refunds already added back
+            Ghost-protection credits already added back
           </p>
         </div>
         <div className="card">
@@ -339,7 +357,7 @@ export default async function ProBusinessPage() {
                   {dollars(stats.feesSpentCents)}
                 </p>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  On leads, net of ghost refunds
+                  On leads, net of ghost-protection credits
                 </p>
               </div>
             </div>
@@ -511,7 +529,7 @@ export default async function ProBusinessPage() {
                   {appliedCount}
                 </p>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  All-time, refunds included
+                  All-time, credited ones included
                 </p>
               </div>
               <div className="card ring-1 ring-hearth-200 dark:ring-hearth-800">
@@ -552,15 +570,17 @@ export default async function ProBusinessPage() {
                 href="/pro/plus"
                 className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
               >
-                Unlock Insights with Hearth Pro
+                {trialEligible
+                  ? `${proCtaLabel(true)} and unlock Insights`
+                  : "Unlock Insights with Hearth Pro"}
               </Link>
-              .
+              .{trialEligible ? ` ${proTrialSubline()}` : ""}
             </p>
           </div>
         )}
       </section>
 
-      {/* In flight: applications waiting on a homeowner, with the refund clock. */}
+      {/* In flight: applications waiting on a homeowner, with the credit clock. */}
       <section className="space-y-3">
         <div>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
@@ -568,8 +588,8 @@ export default async function ProBusinessPage() {
             <span className="text-stone-500 dark:text-stone-400">({pendingApps.length})</span>
           </h2>
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            Ghost protection: a fee comes back automatically if the homeowner
-            never responds.
+            Ghost protection: a fee comes back automatically as wallet credit
+            if the homeowner never responds.
           </p>
         </div>
         {pendingApps.length === 0 ? (
@@ -607,8 +627,8 @@ export default async function ProBusinessPage() {
                   </div>
                   <span className="shrink-0 text-right text-xs text-stone-500 dark:text-stone-400">
                     {daysLeft === 0
-                      ? "Fee returns today if no response"
-                      : `Fee returns in ${daysLeft} day${
+                      ? "Fee comes back as credit today if no response"
+                      : `Fee comes back as credit in ${daysLeft} day${
                           daysLeft === 1 ? "" : "s"
                         } if no response`}
                   </span>

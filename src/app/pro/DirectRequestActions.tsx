@@ -72,8 +72,8 @@ export default function DirectRequestActions({
         <p className="text-xs text-stone-500 dark:text-stone-400">
           Unlocking accepts this request and charges the {fee} lead fee from your
           wallet. You get the homeowner&apos;s contact and the chat opens. If they
-          never message you, ghost protection returns the fee after{" "}
-          {GHOST_PROTECTION_DAYS} days.
+          never message you, ghost protection puts the fee back in your wallet
+          as credit after {GHOST_PROTECTION_DAYS} days.
         </p>
         <div className="flex gap-2">
           <button

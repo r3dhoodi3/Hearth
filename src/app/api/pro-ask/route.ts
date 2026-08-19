@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { hasProPlan } from "@/lib/subscription";
+import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { countAiUsage } from "@/lib/aiUsage";
 import { wrapUntrusted } from "@/lib/promptSafe";
 import {
@@ -77,6 +77,12 @@ export async function POST(req: NextRequest) {
   // they are a paying Pro member also decides the higher daily cap below.
   let companyName: string | null = null;
   let isProMember = false;
+  let isProTrialing = false;
+  // Whether this pro can still get the one-time free trial. The Pro-side row
+  // survives a cancellation, so a CHURNED pro (canceled row, not a current
+  // member) is not eligible even though isProMember is false. Without this the
+  // model would read them as free-tier and pitch a trial they cannot get.
+  let isProTrialEligible = false;
   let context = "This pro hasn't finished setting up their company yet.";
   try {
     const contractor = await getCurrentContractor();
@@ -124,6 +130,19 @@ export async function POST(req: NextRequest) {
 
       // Pro membership status (perks only, never gates lead access).
       isProMember = await hasProPlan();
+
+      // Trialing is called out separately below because two perks with money
+      // attached (the monthly lead credit and the deposit match) do not start
+      // until the trial converts. hasProPlan() is true for both statuses, so
+      // without this the model would tell a trialing pro their next deposit
+      // gets matched. Free to ask for: hasProPlan() reads the same
+      // request-cached row.
+      isProTrialing = (await getProSubscription())?.status === "trialing";
+
+      // Trial eligibility, emitted as its own signal below. The row survives a
+      // cancellation, so no Pro-side row at all is the only trial-eligible
+      // state. Request-cached: getProSubscription reads the same row again.
+      isProTrialEligible = !(await getProSubscription());
 
       // Wallet balance, cash + bonus, if easily available. Never fatal.
       let walletLine = "";
@@ -199,7 +218,8 @@ export async function POST(req: NextRequest) {
         `Service area: ${serviceArea}.\n` +
         `${licenseLine}\n` +
         `${bgLine}\n` +
-        `Pro membership: ${isProMember ? "active Hearth Pro member" : "not a Pro member (on the free tier)"}.\n` +
+        `Pro membership: ${isProMember ? (isProTrialing ? `Hearth Pro member on their ${PRO_PLAN.trialDays}-day free trial, not yet charged` : "active Hearth Pro member") : "not a Pro member (on the free tier)"}.\n` +
+        `Free trial eligibility: ${isProTrialEligible ? "eligible for the one-time free trial (no prior Hearth Pro subscription)" : "NOT eligible for a free trial (they already have or previously had a Hearth Pro subscription)"}.\n` +
         (walletLine ? `${walletLine}\n` : "") +
         (openLeadsLine ? `${openLeadsLine}\n` : "") +
         (openJobsDetail ? `${openJobsDetail}\n` : "") +
@@ -225,8 +245,8 @@ export async function POST(req: NextRequest) {
     `Today's date is ${today}. ` +
     "You help this contractor grow their business, and ONLY with pro topics. Those are:\n" +
     "Winning work: read a posted lead and draft a persuasive, specific apply message; draft or sharpen a quote or estimate with sensible line items priced to compete locally in the Fountain Valley and Huntington Beach, California area; and give speed-to-lead and follow-up advice, since replying fast wins jobs.\n" +
-    `The marketplace money model: the per-lead fee to apply is tiered by job value, light work is $${LEAD_TIER_FEES.light}, skilled trades are $${LEAD_TIER_FEES.skilled}, and big-ticket work is $${LEAD_TIER_FEES.major} per lead. The $${MAJOR_INTRO_FEE} intro price applies ONLY to a pro's FIRST big-ticket lead ever; every big-ticket lead after that is the normal $${LEAD_TIER_FEES.major}. You cannot see whether this pro has already used that intro, so never promise them the $${MAJOR_INTRO_FEE} price: if they are unsure whether they have used it, tell them to check their billing page for a past big-ticket charge. The wallet holds cash plus bonus credit, and larger deposits earn a deposit bonus. Ghost protection auto-refunds a lead fee after ${GHOST_PROTECTION_DAYS} days of homeowner silence. A posted job fills at ${MAX_APPLICANTS_PER_JOB} applicants, so applying early matters. Do the simple ROI math when it helps, framed around THEIR own trade and a realistic job value for it: a lead fee is usually a small fraction of the job it can win. Never illustrate with a trade that is not one of theirs.\n` +
-    `Pro membership: Hearth Pro is $${PRO_PLAN.monthly} per month or $${PRO_PLAN.yearly} per year, and its main perk is an extra ${PRO_DEPOSIT_BOOST_PTS} percentage points of deposit bonus on every wallet deposit. Membership is perks only, it never changes which leads they can see or apply to. Weigh it against their volume: if they deposit and apply often, the deposit boost can pay for itself.\n` +
+    `The marketplace money model: the per-lead fee to apply is tiered by job value, light work is $${LEAD_TIER_FEES.light}, skilled trades are $${LEAD_TIER_FEES.skilled}, and big-ticket work is $${LEAD_TIER_FEES.major} per lead. The $${MAJOR_INTRO_FEE} intro price applies ONLY to a pro's FIRST big-ticket lead ever; every big-ticket lead after that is the normal $${LEAD_TIER_FEES.major}. You cannot see whether this pro has already used that intro, so never promise them the $${MAJOR_INTRO_FEE} price: if they are unsure whether they have used it, tell them to check their billing page for a past big-ticket charge. The wallet holds cash plus bonus credit, and larger deposits earn a deposit bonus. Ghost protection automatically returns a lead fee to the pro's wallet as credit after ${GHOST_PROTECTION_DAYS} days of homeowner silence, and a pro who is not chosen gets their apply fee back as wallet credit too. Every fee-back rule pays wallet credit toward future leads, never cash and never a card refund, so never tell a pro they get money back. A posted job fills at ${MAX_APPLICANTS_PER_JOB} applicants, so applying early matters. Do the simple ROI math when it helps, framed around THEIR own trade and a realistic job value for it: a lead fee is usually a small fraction of the job it can win. Never illustrate with a trade that is not one of theirs.\n` +
+    `Pro membership: Hearth Pro is $${PRO_PLAN.monthly} per month or $${PRO_PLAN.yearly} per year, and its main perk is an extra ${PRO_DEPOSIT_BOOST_PTS} percentage points of deposit bonus on every wallet deposit. New members start with a ${PRO_PLAN.trialDays}-day free trial: the card is entered at signup, nothing is charged for the first ${PRO_PLAN.trialDays} days, it then renews automatically at the price above until cancelled, and cancelling before the trial ends means no charge. Only brand-new members get the trial. The company details below state this pro's free trial eligibility explicitly: if they are NOT eligible, never offer or promise them a trial, and talk about Hearth Pro at its regular price instead. Two perks wait for the first payment: the deposit boost and the monthly $10 lead credit both start when the trial converts, NOT while it runs. So if the details below say this pro is on their free trial, never tell them their next deposit will be matched or that credit is coming this week: deposits during the trial earn only the normal tier bonus, and the match starts the day the trial converts. Membership is perks only, it never changes which leads they can see or apply to. Weigh it against their volume: if they deposit and apply often, the deposit boost can pay for itself.\n` +
     "Trust and compliance: how to earn the CSLB verified badge and what each license status means (verified, failed, pending, or unverified); background checks through Checkr and what homeowners see; and insurance and bonding basics as general guidance, not legal advice. Also how to improve their public profile at /p/<their id> with photos, reviews, and a complete listing to win more homeowners.\n" +
     "Growing locally: gathering reviews, seasonal demand, and using the app well, setting their categories and service area, managing notifications and applications, and marking jobs won.\n\n" +
     "SCOPING: You are the CONTRACTOR's business copilot, not a homeowner's home assistant. Do NOT act as their personal home helper: never diagnose the pro's own house as a project, and never tell them to post a job to hire someone. You may share trade knowledge when it helps them win or do work, but keep the frame on their business. If they ask something that clearly belongs to the homeowner side, gently steer back to growing their business on Hearth.\n\n" +

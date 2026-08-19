@@ -12,6 +12,26 @@ const MAX_LINE_ITEMS = 20;
 const MAX_LABEL = 80;
 const MAX_NOTE = 1000;
 
+// Quotes and invoices both notify the homeowner (email and SMS included), so
+// an unthrottled loop is a way to use Hearth to spam someone who once posted a
+// job. One shared budget across both, keyed on the contractor rather than the
+// user, so a pro can't split the same burst between the two composers. Same
+// fixed-window limiter (migration 0068) and same fail-open posture as the rest
+// of the app: only an explicit `allowed === false` blocks, so a limiter outage
+// never stops a pro quoting real work.
+const SEND_LIMIT = 20;
+const SEND_WINDOW_SECONDS = 3600;
+
+async function sendBudgetExhausted(contractorId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `quote:${contractorId}`,
+    p_limit: SEND_LIMIT,
+    p_window_seconds: SEND_WINDOW_SECONDS,
+  });
+  return allowed === false;
+}
+
 // A pro composes and sends a structured quote inside a lead's chat thread.
 // Inserts the lead_quotes row plus a plain companion message ("Sent a quote:
 // $X total") in the same messages table everything else already reads, so
@@ -57,6 +77,15 @@ export async function sendQuoteAction(formData: FormData) {
 
   const totalCents = lineItems.reduce((sum, li) => sum + li.amount_cents, 0);
   if (totalCents <= 0) return;
+
+  // Charge the shared send budget only now, immediately before the insert -
+  // after the cheap ownership and line-item checks have already passed. Spent
+  // any earlier (before parsing), a pro whose form failed validation would
+  // burn a slot for a quote that was never going to send. Returning silently
+  // is the file's existing failure shape: LeadChat confirms a send by looking
+  // for the new row and shows "The quote could not be sent. Please try again."
+  // when it doesn't appear, keeping everything the pro typed.
+  if (await sendBudgetExhausted(contractor.id)) return;
 
   const { data: quote, error } = await supabase
     .from("lead_quotes")
@@ -199,6 +228,12 @@ export async function createInvoiceAction(formData: FormData) {
 
   const totalCents = lineItems.reduce((sum, li) => sum + li.amount_cents, 0);
   if (totalCents <= 0) return;
+
+  // Charge the shared send budget only now, immediately before the insert -
+  // after the cheap ownership and line-item checks. Shares sendQuoteAction's
+  // budget, and fails the same silent way (LeadChat confirms the send by
+  // looking for the new invoice row).
+  if (await sendBudgetExhausted(contractor.id)) return;
 
   const { data: invoice, error } = await supabase
     .from("invoices")

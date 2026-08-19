@@ -44,15 +44,29 @@ export interface ParcelFacts {
   // actually knows the roof/foundation/HVAC.
   system_facts: Record<string, string> | null;
   // County assessor owner-of-record, for ownership verification (migration
-  // 0093, src/lib/ownershipMatch.ts). Read server-side only, in
-  // onboarding/actions.ts and contractors/actions.ts - never trust a
-  // client-submitted copy of these fields, since the ParcelFacts JSON that
-  // rides through the onboarding form is otherwise re-parsed client input.
+  // 0093, src/lib/ownershipMatch.ts). Server-only, and enforced as such:
+  // lookupParcelAction (onboarding/actions.ts) strips these three fields from
+  // the value it returns to the browser (see PublicParcelFacts below), so the
+  // client never receives the owner-of-record that claimPropertyAction later
+  // matches the typed name against - exposing it would be handing over the
+  // answer key. Server callers that legitimately need it (claimPropertyAction
+  // and contractors/actions.ts) read the full ParcelFacts from lookupParcel()
+  // directly instead.
   owner_names: string[] | null;
   owner_type: "individual" | "organization" | null;
   owner_occupied: boolean | null;
   source: "rentcast" | "none";
 }
+
+// The client-safe subset of ParcelFacts. lookupParcelAction returns this, not
+// ParcelFacts, so the owner-of-record fields (owner_names/owner_type/
+// owner_occupied) can never ship to the browser: they are the answer key the
+// claim-time ownership check compares the typed name against. OnboardingForm
+// only ever reads the fields below, so nothing on the client loses anything.
+export type PublicParcelFacts = Omit<
+  ParcelFacts,
+  "owner_names" | "owner_type" | "owner_occupied"
+>;
 
 // Shared by lookupParcel's request key and its canonical-key dual-write
 // below: normalizes whitespace/case on the street and takes the 5-digit ZIP

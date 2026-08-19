@@ -142,4 +142,3 @@ unaffected.
 - **Current-year** is a static constant in `src/lib/health.ts` — bump per
   release (the scaffolding environment disallowed `Date.now()`).
 - Lead **pricing** (`payout_amount`) and the agent-facing side are Phase 3.
-# Hearth

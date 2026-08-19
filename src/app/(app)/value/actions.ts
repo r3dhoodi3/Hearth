@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { setFlash } from "@/lib/flash";
+import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { lookupMarketValue } from "@/lib/parcel";
 
 // Saves (or updates) what the owner paid, the year they bought, and what they
@@ -19,7 +20,7 @@ import { lookupMarketValue } from "@/lib/parcel";
 // closing on that would show stale values as if the save succeeded.
 export async function saveHomeValueAction(
   formData: FormData
-): Promise<{ ok: boolean }> {
+): Promise<ActionResult> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
 
@@ -32,12 +33,9 @@ export async function saveHomeValueAction(
   const mortgageBalance = balanceRaw ? Number(balanceRaw) : null;
 
   if (!purchasePrice || purchasePrice <= 0 || !purchaseYear) {
-    setFlash(
-      "Add what you paid and the year you bought your home to continue.",
-      "error"
+    return err(
+      "Add what you paid and the year you bought your home to continue."
     );
-    revalidatePath("/value");
-    return { ok: false };
   }
 
   // Server-side bounds (the form's min/max is client-only and can be
@@ -56,12 +54,9 @@ export async function saveHomeValueAction(
         mortgageBalance < 0 ||
         mortgageBalance > 100_000_000))
   ) {
-    setFlash(
-      "Those numbers don't look right. Double-check the year and amounts.",
-      "error"
+    return err(
+      "Those numbers don't look right. Double-check the year and amounts."
     );
-    revalidatePath("/value");
-    return { ok: false };
   }
 
   const supabase = createClient();
@@ -79,16 +74,13 @@ export async function saveHomeValueAction(
     setFlash("Home value saved");
   } catch {
     // Migration 0029 may not have run yet against this database, or the
-    // write failed for some other reason. Fail soft: the page just shows the
-    // setup form again instead of a 500.
-    setFlash("Couldn't save right now. Please try again in a bit.", "error");
-    revalidatePath("/value");
-    revalidatePath("/dashboard");
-    return { ok: false };
+    // write failed for some other reason. Fail soft: the page keeps the form
+    // open with an inline error instead of a 500.
+    return err("Couldn't save right now. Please try again in a bit.");
   }
   revalidatePath("/value");
   revalidatePath("/dashboard");
-  return { ok: true };
+  return ok();
 }
 
 // Lazily fetches and stores the RentCast AVM (estimated market value) for the

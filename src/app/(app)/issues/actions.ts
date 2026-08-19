@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import { ISSUE_CATEGORIES, SEVERITIES } from "@/lib/constants";
+import { isAllowedValue } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
+import { ok, err, type ActionResult } from "@/lib/actionResult";
 
 // Server-side length cap for free-text fields: trim, then quietly slice
 // rather than erroring, so a paste-happy owner never loses their report.
@@ -21,22 +24,36 @@ function validPhotoUrls(formData: FormData): string[] {
   );
 }
 
-export async function reportIssueAction(formData: FormData) {
+export async function reportIssueAction(
+  formData: FormData
+): Promise<ActionResult> {
   const property = await getActiveProperty();
   if (!property) {
-    setFlash("Couldn't log that issue. Try again.", "error");
-    return;
+    return err("Couldn't log that issue. Try again.");
   }
   const supabase = createClient();
 
   const category = formData.get("category") as string;
+  const severity = formData.get("severity") as string;
+  // The <select>s aren't the guard: a server action takes whatever FormData it
+  // is handed. Re-check both against the same lists the rest of the app reads
+  // (same pattern as saveInspectionFindingsAction in inspection/actions.ts), so
+  // a forged value can't write an enum that has no label, no icon, and no
+  // matching contractor category.
+  if (
+    !isAllowedValue(ISSUE_CATEGORIES, category) ||
+    !isAllowedValue(SEVERITIES, severity)
+  ) {
+    return err("Couldn't log that issue. Try again.");
+  }
+
   const { data: issue, error } = await supabase
     .from("issues")
     .insert({
       property_id: property.id,
       system_id: (formData.get("system_id") as string) || null,
       category,
-      severity: formData.get("severity") as string,
+      severity,
       description: clipText(formData.get("description"), 4000),
     })
     .select("id")
@@ -50,8 +67,7 @@ export async function reportIssueAction(formData: FormData) {
     // which will attach those same photo URLs once the insert succeeds.
     // Sweeping up true orphans (the owner gives up instead) is left to
     // future janitor work, not built here.
-    setFlash("Couldn't log that issue. Try again.", "error");
-    return;
+    return err("Couldn't log that issue. Try again.");
   }
 
   // Attach any uploaded photos.
@@ -79,26 +95,40 @@ export async function reportIssueAction(formData: FormData) {
   );
 }
 
-export async function updateIssueAction(formData: FormData) {
+export async function updateIssueAction(
+  formData: FormData
+): Promise<ActionResult> {
   const id = formData.get("id") as string;
   const supabase = createClient();
+
+  const category = formData.get("category") as string;
+  const severity = formData.get("severity") as string;
+  // Same allow-list as reportIssueAction above: an edit is just as forgeable
+  // as the original post, so it gets the same check.
+  if (
+    !isAllowedValue(ISSUE_CATEGORIES, category) ||
+    !isAllowedValue(SEVERITIES, severity)
+  ) {
+    return err("Couldn't save your changes. Try again.");
+  }
+
   // RLS limits the update to an issue on a property the caller owns.
   const { error } = await supabase
     .from("issues")
     .update({
-      category: formData.get("category") as string,
-      severity: formData.get("severity") as string,
+      category,
+      severity,
       description: clipText(formData.get("description"), 4000),
     })
     .eq("id", id);
   if (error) {
-    setFlash("Couldn't save your changes. Try again.", "error");
-    return;
+    return err("Couldn't save your changes. Try again.");
   }
   setFlash("Issue updated");
   revalidatePath("/issues");
   revalidatePath("/dashboard");
   revalidatePath("/forecast");
+  return ok();
 }
 
 // When an issue is resolved, lift the "bad condition" flag it put on its system
@@ -148,35 +178,41 @@ export async function resolveIssueAction(formData: FormData) {
   revalidatePath("/forecast");
 }
 
-// Undo: reopen a resolved issue (accidental check-off).
-export async function reopenIssueAction(id: string) {
+// Undo: reopen a resolved issue (accidental check-off). Called programmatically
+// from IssueRow's checkbox toggle, which needs the ActionResult to surface a
+// failure as a toast and revert the optimistic flip (setFlash alone never shows
+// on this stay-on-page path).
+export async function reopenIssueAction(id: string): Promise<ActionResult> {
   const supabase = createClient();
   const { error } = await supabase
     .from("issues")
     .update({ status: "open" })
     .eq("id", id);
   if (error) {
-    setFlash("Couldn't reopen that issue. Try again.", "error");
-    return;
+    return err("Couldn't reopen that issue. Try again.");
   }
   revalidatePath("/issues");
   revalidatePath("/dashboard");
   revalidatePath("/forecast");
+  return ok();
 }
 
-// Resolve via the checkbox toggle (takes an id, not FormData).
-export async function checkResolveIssueAction(id: string) {
+// Resolve via the checkbox toggle (takes an id, not FormData). Same
+// ActionResult contract as reopenIssueAction above.
+export async function checkResolveIssueAction(
+  id: string
+): Promise<ActionResult> {
   const supabase = createClient();
   const { error } = await supabase
     .from("issues")
     .update({ status: "resolved" })
     .eq("id", id);
   if (error) {
-    setFlash("Couldn't update that issue. Try again.", "error");
-    return;
+    return err("Couldn't update that issue. Try again.");
   }
   await liftSystemConditionForIssue(supabase, id);
   revalidatePath("/issues");
   revalidatePath("/dashboard");
   revalidatePath("/forecast");
+  return ok();
 }

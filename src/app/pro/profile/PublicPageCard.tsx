@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { Image as ImageIcon, PenLine, Contact, Star } from "lucide-react";
 import InlineSpinner from "@/components/InlineSpinner";
+import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
 import { savePublicPageAction, saveLicenseInsuranceAction } from "./actions";
 import LogoUpload from "./LogoUpload";
 import QrCodeCard from "./QrCodeCard";
@@ -30,9 +30,15 @@ function SaveButton({ label }: { label: string }) {
 export default function PublicPageCard({
   contractor,
   member,
+  trialEligible,
 }: {
   contractor: Contractor;
   member: boolean;
+  // Whether the upgrade card at the bottom may lead with the free trial.
+  // Decided on the server in page.tsx (no pro-side subscriptions row = a
+  // first-time member), since only that side can tell a never-member from a
+  // lapsed one, and a lapsed one will not get a second trial.
+  trialEligible: boolean;
 }) {
   // The new 0033 columns aren't in the generated types (database.types.ts is
   // not regenerated here), so read them off an any-cast view of the row.
@@ -331,9 +337,7 @@ export default function PublicPageCard({
             Membership never changes your rating or reviews: those are real
             for everyone.
           </p>
-          <Link href="/pro/plus" className="btn-primary inline-block">
-            See Hearth Pro
-          </Link>
+          <ProUpgradeCta trialEligible={trialEligible} />
         </section>
       )}
     </div>

@@ -28,6 +28,17 @@ export const runtime = "nodejs";
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB, matches extract-document's cap
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// Exactly what the pro-docs bucket's own allowed_mime_types permits
+// (supabase/migrations/0079_storage_mime_limits.sql). Kept in sync by hand
+// because the bucket config lives in SQL; anything not on this list is stored
+// as application/octet-stream rather than under the type the client claimed.
+const ALLOWED_UPLOAD_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/pdf",
+]);
+
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
@@ -210,7 +221,16 @@ export async function POST(req: NextRequest) {
     if (uploadedFile.size > MAX_FILE_BYTES) {
       return NextResponse.json({ error: "File too large." }, { status: 413 });
     }
-    const mime = uploadedFile.type || "application/octet-stream";
+    // The client's file.type is a claim, not a fact, and it used to be passed
+    // straight through as the stored object's contentType - which is what a
+    // browser trusts when the file is fetched back. Anything outside the list
+    // the pro-docs bucket itself allows (migration 0079) is stored as an inert
+    // octet-stream instead, so a mislabeled or crafted upload can never be
+    // served back as something a browser will render or execute.
+    const claimedMime = uploadedFile.type || "";
+    const mime = ALLOWED_UPLOAD_TYPES.has(claimedMime)
+      ? claimedMime
+      : "application/octet-stream";
     const bytes = new Uint8Array(await uploadedFile.arrayBuffer());
 
     // Upload first through the caller's own session, so storage RLS (the

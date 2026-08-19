@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
+import { cappedField, FIELD_MAX } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { ALWAYS_SCHEDULE, SYSTEM_SCHEDULE } from "@/lib/maintenancePlan";
@@ -21,8 +22,13 @@ export async function completeReminderAction(id: string): Promise<ActionResult> 
     .update({ status: "done", completed_at: new Date().toISOString() })
     .eq("id", id);
   if (error) {
+    // The raw Postgres message names our tables, columns and constraints. It
+    // isn't rendered today, but it still rides back over the wire where it's
+    // readable in devtools, so log it server-side and return the same plain
+    // copy the flash shows.
+    console.error("completeReminderAction failed:", error);
     setFlash("Couldn't update that reminder. Please try again.", "error");
-    return err(error.message);
+    return err("Couldn't update that reminder. Please try again.");
   }
   revalidatePath("/dashboard");
   return ok();
@@ -38,22 +44,48 @@ export async function deleteReminderAction(id: string): Promise<ActionResult> {
     .delete()
     .eq("id", id);
   if (error) {
+    // Generic string over the wire, raw error to the server log: see
+    // completeReminderAction above.
+    console.error("deleteReminderAction failed:", error);
     setFlash("Couldn't remove that reminder. Please try again.", "error");
-    return err(error.message);
+    return err("Couldn't remove that reminder. Please try again.");
   }
   revalidatePath("/dashboard");
   return ok();
+}
+
+// Only store a real calendar date, or null. The shape regex alone was not
+// enough: it accepts "2026-13-45", which Postgres then rejects (22008),
+// killing the whole update. Round-trip through Date so an impossible month or
+// day (2026-13-45, 2026-02-31) is caught here and degrades to null instead.
+// No year bounds - a reminder's due date is legitimately in the future.
+function validDueDate(v: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v) {
+    return null;
+  }
+  return v;
 }
 
 // Edit a reminder's title / due date.
 export async function editReminderAction(formData: FormData) {
   const id = formData.get("id") as string;
   const supabase = createClient();
+
+  // Both fields are client input, so the <input maxLength> and the date picker
+  // are hints, not guards. A title is capped rather than rejected (nobody
+  // should lose an edit to a long paste), and a date that isn't a real
+  // YYYY-MM-DD becomes null rather than being handed to a `date` column that
+  // would reject the whole update.
+  const rawDate = ((formData.get("due_date") as string) || "").trim();
+  const dueDate = validDueDate(rawDate);
+
   const { error } = await supabase
     .from("maintenance_tasks")
     .update({
-      title: ((formData.get("title") as string) || "").trim() || "Reminder",
-      due_date: (formData.get("due_date") as string) || null,
+      title: cappedField(formData, "title", FIELD_MAX.title) || "Reminder",
+      due_date: dueDate,
     })
     .eq("id", id);
   if (error)
@@ -69,8 +101,11 @@ export async function uncompleteReminderAction(id: string): Promise<ActionResult
     .update({ status: "open", completed_at: null })
     .eq("id", id);
   if (error) {
+    // Generic string over the wire, raw error to the server log: see
+    // completeReminderAction above.
+    console.error("uncompleteReminderAction failed:", error);
     setFlash("Couldn't update that reminder. Please try again.", "error");
-    return err(error.message);
+    return err("Couldn't update that reminder. Please try again.");
   }
   revalidatePath("/dashboard");
   return ok();

@@ -148,11 +148,38 @@ export default function TermsPage() {
             Homeowner features, contractor lead fees, and any subscription
             pricing are described where you encounter them in the app (for
             example, on a job card or the Hearth Plus page) before you pay.
-            Refund behavior, such as a fee returning as wallet credit if a
-            homeowner doesn&apos;t respond, is described in-app at the same
-            point. Pro wallet deposits are non-refundable and can only be
-            spent on lead applications, and promotional or bonus credit can
+            Where Hearth gives a lead fee back to a contractor, for example
+            when a homeowner never responds or picks another pro, it is
+            returned as Hearth wallet credit that can only be spent on future
+            lead applications. It is not cash, a payout, or a refund to the
+            card or account you paid from. Those rules are described in-app at
+            the same point. Pro wallet deposits are non-refundable and can only
+            be spent on lead applications, and promotional or bonus credit can
             expire.
+          </p>
+          {/* TODO(legal): attorney review required — discretionary
+              credit-not-cash remedy, and how it reads against the dispute and
+              chargeback handling in the sections below (which it does not
+              replace or limit). */}
+          <p className="mt-3 leading-relaxed">
+            More generally, payments you make to Hearth are not refundable as
+            cash. Where Hearth decides to make something right, it does so as
+            Hearth account credit, which can only be spent inside Hearth and
+            never becomes cash or a payout. Whether to do that at all is
+            Hearth&apos;s decision in each case, and doing it once does not
+            commit Hearth to doing it again. Nothing in this paragraph limits
+            any refund you are entitled to under the law that applies to you,
+            and it does not change how payment disputes and chargebacks are
+            handled.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            Paid memberships that start with a free trial are described in full
+            at checkout before you enter a payment method. Your card is
+            collected when you sign up, nothing is charged during the free
+            trial, and the membership renews automatically at the price shown
+            once the trial ends unless you cancel first. Cancel before the trial
+            ends and you are not charged. You can cancel at any time from the
+            membership page in the app.
           </p>
         </section>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import LearnGuide from "./LearnGuide";
 import { requestTopicAction } from "./actions";
 import { SYSTEM_TYPES } from "@/lib/constants";
@@ -27,6 +27,13 @@ const ALL = "All";
 export default function LearnGuides({ guides }: { guides: GuideData[] }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL);
+  // Feedback for the "request a topic" form. It stays on /learn, so the outcome
+  // comes back as an ActionResult and shows here inline rather than through the
+  // flash cookie (unread on a stay-on-page action).
+  const [reqMsg, setReqMsg] = useState<{ ok: boolean; text: string } | null>(
+    null
+  );
+  const requestFormRef = useRef<HTMLFormElement>(null);
 
   const categories = useMemo(() => {
     const seen = new Set<string>();
@@ -125,7 +132,16 @@ export default function LearnGuides({ guides }: { guides: GuideData[] }) {
           Tell us what you&apos;d like a guide for, and we&apos;ll add it.
         </p>
         <form
-          action={requestTopicAction}
+          ref={requestFormRef}
+          action={async (fd) => {
+            const res = await requestTopicAction(fd);
+            if (!res.ok) {
+              setReqMsg({ ok: false, text: res.error });
+              return;
+            }
+            setReqMsg({ ok: true, text: "Thanks. We'll add a guide for that." });
+            requestFormRef.current?.reset();
+          }}
           className="mt-3 flex flex-col gap-2 sm:flex-row"
         >
           <input
@@ -140,6 +156,18 @@ export default function LearnGuides({ guides }: { guides: GuideData[] }) {
             Request
           </SubmitButton>
         </form>
+        {reqMsg && (
+          <p
+            role={reqMsg.ok ? "status" : "alert"}
+            className={`mt-2 text-xs ${
+              reqMsg.ok
+                ? "text-green-700 dark:text-green-400"
+                : "text-red-600 dark:text-red-400"
+            }`}
+          >
+            {reqMsg.text}
+          </p>
+        )}
       </div>
     </div>
   );

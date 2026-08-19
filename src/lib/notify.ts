@@ -1,3 +1,7 @@
+// Build-time guard: this module reads the Resend/Twilio secrets and pulls in
+// the service-role client, so importing it from a Client Component must fail
+// the build, not ship any of that.
+import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -146,15 +150,21 @@ async function sendEmail(input: NotificationInput): Promise<void> {
       }),
     });
     if (!response.ok) {
-      let responseBody = "";
+      // NEVER log the raw provider body: Resend echoes the recipient email
+      // address back inside 403 sandbox and validation error messages, and
+      // Vercel logs are third-party retention. Parse out only the machine
+      // error name and log that plus the HTTP status - enough to debug, no
+      // recipient PII. `name` is a fixed enum string (e.g. "validation_error",
+      // "invalid_from_address"); the free-text `message` is dropped on purpose.
+      let code = "unknown";
       try {
-        responseBody = await response.text();
+        const parsed = (await response.json()) as { name?: unknown };
+        if (typeof parsed?.name === "string") code = parsed.name;
       } catch {
-        // Body unreadable; log what we have.
+        // Body unreadable or not JSON; status alone still tells us something.
       }
       console.error(
-        `sendEmail: Resend API rejected the request (status ${response.status}):`,
-        responseBody
+        `sendEmail: Resend API rejected the request (status ${response.status}, code ${code})`
       );
     }
   } catch {
@@ -217,15 +227,23 @@ async function sendSms(input: NotificationInput): Promise<void> {
       }
     );
     if (!response.ok) {
-      let responseBody = "";
+      // NEVER log the raw provider body: Twilio echoes the destination phone
+      // number back inside its most common failures (21211 invalid 'To',
+      // 21610 unsubscribed recipient, 21614 not a mobile number), and Vercel
+      // logs are third-party retention. Parse out only the numeric error
+      // `code` and log that plus the HTTP status - enough to debug against
+      // Twilio's error reference, no recipient PII. The free-text `message`
+      // (which is what carries the number) is dropped on purpose.
+      let code: string | number = "unknown";
       try {
-        responseBody = await response.text();
+        const parsed = (await response.json()) as { code?: unknown };
+        if (typeof parsed?.code === "number" || typeof parsed?.code === "string")
+          code = parsed.code;
       } catch {
-        // Body unreadable; log what we have.
+        // Body unreadable or not JSON; status alone still tells us something.
       }
       console.error(
-        `sendSms: Twilio API rejected the request (status ${response.status}):`,
-        responseBody
+        `sendSms: Twilio API rejected the request (status ${response.status}, code ${code})`
       );
     }
   } catch {

@@ -561,6 +561,29 @@
 }
 .bubble.show { opacity: 1; transform: none; }
 .bubble.them { align-self: flex-start; background: #f5f5f4; color: var(--dev-ink); border-bottom-left-radius: 4px; }
+/* Homeowner typing indicator: three pulsing dots in a them-bubble, shown
+   for a beat between the pro's reply and the confirmation so the exchange
+   reads like a real conversation. display:none while hidden (unlike the
+   text bubbles, which reserve their slot) so the thread only grows when
+   the homeowner actually "starts typing", like a real client. */
+.typing { display: none; gap: 4px; align-items: center; padding: 10px 12px; }
+.typing.show { display: inline-flex; }
+.typingDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #a8a29e;
+  animation: typingBlink 900ms ease-in-out infinite;
+}
+.typingDot:nth-child(2) { animation-delay: 150ms; }
+.typingDot:nth-child(3) { animation-delay: 300ms; }
+@keyframes typingBlink {
+  0%, 60%, 100% { opacity: 0.35; }
+  30% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typingDot { animation: none; opacity: 0.6; }
+}
 .bubble.me { align-self: flex-end; background: var(--dev-accent); color: #fff; border-bottom-right-radius: 4px; }
 .wonBadge {
   align-self: center;

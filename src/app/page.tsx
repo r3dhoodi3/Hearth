@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
 import CategoryIcon from "@/components/CategoryIcon";
-import HeroDemoPlayer from "@/components/HeroDemoPlayer";
+import HeroDemoPlayerLazy from "@/components/HeroDemoPlayerLazy";
 import HeroPhotoCycler from "@/components/HeroPhotoCycler";
 import ThemeToggle from "@/components/ThemeToggle";
 import { TrendingUp, Bell, MessageSquare, Wrench } from "lucide-react";
@@ -45,7 +45,9 @@ export default async function Home({
   // URL instead of /auth/callback), forward the code to the handler that
   // exchanges it for a session.
   if (searchParams.code) {
-    redirect(`/auth/callback?code=${searchParams.code}&next=/dashboard`);
+    redirect(
+      `/auth/callback?code=${encodeURIComponent(searchParams.code)}&next=/dashboard`
+    );
   }
 
   const supabase = createClient();
@@ -120,7 +122,7 @@ export default async function Home({
     },
     {
       q: "Where is Hearth available?",
-      a: "We're starting in Orange County, California, with local pros there. If you're outside Orange County you can still sign up and join the waitlist, which is how we decide where Hearth goes next.",
+      a: "We're serving Huntington Beach and Fountain Valley right now, with local pros there. Don't see your city yet? You will soon. If you're outside those two cities you can still sign up and join the waitlist, which is how we decide where Hearth goes next.",
     },
     {
       q: "What does Plus cost?",
@@ -322,7 +324,10 @@ export default async function Home({
                 ))}
               </div>
               <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-                Serving Orange County, California
+                Serving Huntington Beach and Fountain Valley
+              </p>
+              <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+                Don&apos;t see your city yet? You will soon.
               </p>
               <div className="mt-4 flex justify-center text-sm lg:justify-start">
                 <Link href="/signin" className="text-bark-700 hover:underline dark:text-stone-300">
@@ -342,10 +347,13 @@ export default async function Home({
 
           {/* The demo replaces what used to be a static Health Score mockup:
               same content, but now it actually plays. Click to play, inline,
-              never a takeover, see HeroDemoPlayer.tsx. */}
+              never a takeover, see HeroDemoPlayer.tsx. Loaded through
+              HeroDemoPlayerLazy so the player's chunk stays out of this
+              page's first-load JS; the poster paints at the same size either
+              way, so there is no shift when it arrives. */}
           <section className="mt-16 flex flex-col items-center sm:mt-20">
             <div className="w-full max-w-xl">
-              <HeroDemoPlayer />
+              <HeroDemoPlayerLazy />
             </div>
           </section>
         </div>
@@ -458,8 +466,7 @@ export default async function Home({
           what you choose to share.
         </p>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-stone-300">
-          Hearth started close to home, in Orange County, with local pages
-          for{" "}
+          Hearth started close to home. We serve{" "}
           <Link
             href="/fountain-valley"
             className="text-bark-500 hover:underline"
@@ -473,7 +480,7 @@ export default async function Home({
           >
             Huntington Beach
           </Link>{" "}
-          homeowners.
+          homeowners. Don&apos;t see your city yet? You will soon.
         </p>
         {/* Contact form works with no session and no owner-fillable fields,
             unlike the old mailto/tel here, so it's always shown - see
@@ -553,8 +560,8 @@ export default async function Home({
         </h3>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-stone-300">
           The fee is on every job before you pay, and if the homeowner never
-          responds, it comes back automatically. No subscription. You pay
-          only when you apply.
+          responds, it comes back automatically as wallet credit. No
+          subscription. You pay only when you apply.
         </p>
         <Link
           href="/pros"

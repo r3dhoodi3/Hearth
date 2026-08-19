@@ -151,3 +151,28 @@ body {
            dark:focus-visible:ring-bark-500 dark:focus-visible:ring-offset-stone-900;
   }
 }
+
+/* Print: keep the Home report (PrintButton -> window.print()) readable no
+   matter the on-screen theme. In dark mode the .dark class stays on <html>
+   during printing, so body is dark:bg-stone-900 dark:text-stone-200 and every
+   dark:text-* / dark:bg-* utility on the page still applies - which prints as
+   near-white ink on white paper. Force the printed page onto white with dark
+   ink whenever dark mode is active. Guarded by BOTH @media print AND html.dark,
+   so on-screen rendering (light or dark) and light-mode printing are never
+   touched; only the dark-mode print case is corrected. */
+@media print {
+  :root {
+    color-scheme: light;
+  }
+  html.dark body {
+    background: #fff !important;
+    color: #1c1917 !important; /* stone-900 */
+  }
+  /* Collapse every dark-mode color onto the paper: dark ink, white ground.
+     Borders keep their own colors, so the report's print:border-black rules
+     still frame the header and footer. */
+  html.dark body * {
+    color: #1c1917 !important;
+    background-color: transparent !important;
+  }
+}
