@@ -10,6 +10,7 @@ global install. Use `npx supabase ...` for anything not covered by an npm script
 
 ## BLOCKER: duplicate version numbers must be resolved first
 
+## Duplicate versions fixed as of 8/18 
 The CLI keys every migration by the number before the first underscore, so two
 files cannot share a prefix. Three pairs currently collide:
 
@@ -19,6 +20,7 @@ files cannot share a prefix. Three pairs currently collide:
 | `0020` | `0020_lower_bonus_threshold.sql`, `0020_notification_prefs.sql` |
 | `0021` | `0021_private_storage.sql`, `0021_support_messages.sql` |
 
+## Gap fixed as of 8/18
 There is also a gap: `0051` is followed by `0053`, with no `0052`. The gap is
 harmless (the CLI does not require contiguous numbering); the duplicates are not.
 
