@@ -1,0 +1,41 @@
+# Keeps the free Vercel test site (branch deploy/free-test) in step with main.
+#
+# Vercel Hobby allows 2 cron jobs, main's vercel.json declares 17, so the test
+# site builds from deploy/free-test, whose only intended difference is an
+# empty cron list. On every push to main this merges main into that branch,
+# keeps the branch's own vercel.json, and pushes. Vercel picks up the push
+# and redeploys. No force-push: it is an ordinary merge commit.
+name: Sync test deploy branch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deploy/free-test
+          fetch-depth: 0
+
+      - name: Merge main, keep this branch's vercel.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git merge origin/main --no-edit -m "Sync main into deploy/free-test" || true
+          # Whether or not the merge conflicted, the branch's own vercel.json
+          # (empty crons) is the one that must survive.
+          git checkout deploy/free-test -- vercel.json
+          git add vercel.json
+          if git diff --cached --quiet && git diff --quiet; then
+            # Merge committed cleanly without touching vercel.json.
+            :
+          else
+            git commit --no-edit -m "Sync main into deploy/free-test" || true
+          fi
+          git push origin HEAD:deploy/free-test
