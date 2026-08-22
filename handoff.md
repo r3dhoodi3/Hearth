@@ -74,14 +74,20 @@ Findings from the day that are NOT code:
    Screen gives a house icon that opens full-screen. Then the Next 15 smoke
    test on the same site (save something + toast, sign out/in, demo video,
    pro billing glance). Report anything off; formatting is the next focus.
-2. **Next 16**: a background agent was attempting it on branch
-   `upgrade/next-16` in worktree `.claude/worktrees/agent-a271b33cb247f403a`
-   when this handoff was written (uncommitted edits to package.json,
-   plus/page.tsx, contractor.ts, ogFont.ts at that moment). Result unknown.
-   Next session: inspect that worktree, run tsc/test/build, check
-   `npm audit --omit=dev` for the 3 highs, and only merge when green. It is
-   the same drift risk as next-15: re-merge main FIRST, commit the fixes IN
-   the branch, verify on the branch tip, then merge.
+2. **Next 16 is DONE on a branch, not merged.** `upgrade/next-16` at
+   `b44b06f` (pushed; worktree `.claude/worktrees/agent-a271b33cb247f403a`):
+   Next 16.3.2, React 19.2.8, eslint 9; tsc clean, 196/196 tests, build exit
+   0 with 0 warnings (Turbopack), `npm audit --omit=dev` = 0 vulnerabilities
+   (the 3 highs are gone). `src/middleware.ts` -> `src/proxy.ts` per Next 16,
+   test renamed to `src/proxy.test.ts`; `ogFont.ts` got a turbopackIgnore
+   hint; tsconfig `jsx: react-jsx`. The codemod's 75 `export const instant`
+   lines were reverted (Cache Components not enabled; separate decision).
+   BEFORE MERGE: (a) `npm run lint` is broken because `next lint` was
+   removed; add `eslint.config.mjs` (flat config, eslint-config-next
+   core-web-vitals) and change the script to `eslint .`; (b) re-merge main
+   into the branch, commit fixes IN the branch, verify on the tip; (c) let
+   Next 15 sit on the test site a few days first, then ask Landen to merge.
+
 3. **William (security/infra, per Landen 08-21)**: run audit queries 1a/1b
    from `PASTE-ME-live-audit-rls.sql` and confirm both empty; Resend SMTP in
    Supabase; CLI migration baseline (`supabase/MIGRATIONS.md`); go-live keys
