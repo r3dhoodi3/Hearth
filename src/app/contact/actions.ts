@@ -27,7 +27,7 @@ const HONEST_SUCCESS =
 // the redirect, and the root layout (src/app/layout.tsx) reads it on every
 // route, so the confirmation toast still shows at the destination.
 async function successDestination(): Promise<string> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -74,7 +74,7 @@ export async function sendContactMessageAction(
   // visitor can never exhaust their contact-form budget, or vice versa. Fails
   // open on an RPC hiccup: only an explicit `allowed === false` blocks the
   // message, so an outage never silently eats a real visitor's message.
-  const h = headers();
+  const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const admin = createAdminClient();
   const { data: allowed } = await admin.rpc("rate_limit_hit", {

@@ -21,8 +21,11 @@ import { JOB_CATEGORIES } from "@/lib/constants";
 const FREE_PROJECT_LIMIT = 3;
 const MAX_PHOTOS_PER_PROJECT = 20;
 
-function fail(message: string): never {
-  setFlash(message, "error");
+// async since Next 15: setFlash writes a cookie, and cookies() is a Promise
+// there. Still `never`-returning at the end (redirect throws), so every call
+// site keeps its control-flow meaning as long as it awaits.
+async function fail(message: string): Promise<never> {
+  await setFlash(message, "error");
   redirect("/pro/profile");
 }
 
@@ -54,7 +57,7 @@ export async function saveProjectAction(formData: FormData) {
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Cast: the 0045 tables aren't in the generated types (database.types.ts
   // is not regenerated here).
   const from = supabase.from as any;
@@ -65,8 +68,8 @@ export async function saveProjectAction(formData: FormData) {
 
   // Title: required, capped server-side (the input's maxLength is a hint).
   const title = str("title");
-  if (!title) fail("Give the project a title.");
-  if (title.length > 80) fail("The title must be 80 characters or fewer.");
+  if (!title) await fail("Give the project a title.");
+  if (title.length > 80) await fail("The title must be 80 characters or fewer.");
 
   // Category: must be one of the canonical job categories, or none.
   const categoryRaw = str("category");
@@ -76,12 +79,12 @@ export async function saveProjectAction(formData: FormData) {
 
   const description = str("description");
   if (description.length > 500) {
-    fail("The description must be 500 characters or fewer.");
+    await fail("The description must be 500 characters or fewer.");
   }
 
   const months = str("months");
   if (months.length > 20) {
-    fail('Keep the "when" short, like "March 2026".');
+    await fail('Keep the "when" short, like "March 2026".');
   }
 
   // Photos: paired hidden inputs in document order, so index i of photo_urls
@@ -97,7 +100,7 @@ export async function saveProjectAction(formData: FormData) {
     .map((url, i) => ({ url, is_before: befores[i] === "1" }))
     .filter((p) => isOwnedStoragePath(p.url, prefix));
   if (photos.length > MAX_PHOTOS_PER_PROJECT) {
-    fail(`A project can have up to ${MAX_PHOTOS_PER_PROJECT} photos.`);
+    await fail(`A project can have up to ${MAX_PHOTOS_PER_PROJECT} photos.`);
   }
 
   const fields = {
@@ -116,30 +119,30 @@ export async function saveProjectAction(formData: FormData) {
       .eq("id", projectId)
       .eq("contractor_id", contractor.id)
       .maybeSingle();
-    if (ownErr || !existing) fail("That project couldn't be found.");
+    if (ownErr || !existing) await fail("That project couldn't be found.");
 
     const { error } = await from("pro_projects")
       .update(fields)
       .eq("id", projectId)
       .eq("contractor_id", contractor.id);
-    if (error) fail("Couldn't save the project. Please try again.");
+    if (error) await fail("Couldn't save the project. Please try again.");
 
     // Replace the photo set with what the form currently shows.
     const { error: clearErr } = await from("pro_project_photos")
       .delete()
       .eq("project_id", projectId);
-    if (clearErr) fail("Couldn't save the project photos. Please try again.");
+    if (clearErr) await fail("Couldn't save the project photos. Please try again.");
   } else {
     // Create: enforce the free tier cap server-side. Members are unlimited.
     const { count, error: countErr } = await from("pro_projects")
       .select("id", { count: "exact", head: true })
       .eq("contractor_id", contractor.id);
     if (countErr) {
-      fail("Projects aren't set up yet. Please try again later.");
+      await fail("Projects aren't set up yet. Please try again later.");
     }
     const existingCount = count ?? 0;
     if (existingCount >= FREE_PROJECT_LIMIT && !(await hasProPlan())) {
-      fail(
+      await fail(
         `Free accounts can showcase up to ${FREE_PROJECT_LIMIT} projects. ` +
           "Hearth Pro members get unlimited projects: see /pro/plus."
       );
@@ -150,7 +153,7 @@ export async function saveProjectAction(formData: FormData) {
       .select("id")
       .single();
     if (error || !created) {
-      fail("Couldn't save that project just now. Please try again.");
+      await fail("Couldn't save that project just now. Please try again.");
     }
     savedId = created.id as string;
   }
@@ -163,10 +166,10 @@ export async function saveProjectAction(formData: FormData) {
       sort: i,
     }));
     const { error } = await from("pro_project_photos").insert(rows);
-    if (error) fail("Couldn't save the project photos. Please try again.");
+    if (error) await fail("Couldn't save the project photos. Please try again.");
   }
 
-  setFlash(projectId ? "Project updated." : "Project added.");
+  await setFlash(projectId ? "Project updated." : "Project added.");
   revalidatePath("/pro/profile");
   redirect("/pro/profile");
 }
@@ -178,19 +181,19 @@ export async function deleteProjectAction(formData: FormData) {
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Cast: the 0045 tables aren't in the generated types.
   const from = supabase.from as any;
 
   const projectId = String(formData.get("project_id") ?? "").trim();
-  if (!projectId) fail("That project couldn't be found.");
+  if (!projectId) await fail("That project couldn't be found.");
 
   const { data: existing, error: ownErr } = await from("pro_projects")
     .select("id")
     .eq("id", projectId)
     .eq("contractor_id", contractor.id)
     .maybeSingle();
-  if (ownErr || !existing) fail("That project couldn't be found.");
+  if (ownErr || !existing) await fail("That project couldn't be found.");
 
   // Collect storage paths before the rows cascade away.
   const { data: photoRows } = await from("pro_project_photos")
@@ -210,14 +213,14 @@ export async function deleteProjectAction(formData: FormData) {
     .delete()
     .eq("id", projectId)
     .eq("contractor_id", contractor.id);
-  if (error) fail("Couldn't delete the project. Please try again.");
+  if (error) await fail("Couldn't delete the project. Please try again.");
 
   if (paths.length > 0) {
     // Best-effort: 0033's owner delete policy covers these paths.
     await supabase.storage.from("pro-logos").remove(paths);
   }
 
-  setFlash("Project deleted.");
+  await setFlash("Project deleted.");
   revalidatePath("/pro/profile");
   redirect("/pro/profile");
 }

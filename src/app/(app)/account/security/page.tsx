@@ -27,7 +27,7 @@ export default async function AccountSecurityPage() {
   // exact same address. After an email change on another device, a cached or
   // mirrored value would show the old address, the button would enable on it,
   // and the server would reject it forever (M7).
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

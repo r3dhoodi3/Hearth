@@ -52,7 +52,7 @@ async function passwordAttemptsExhausted(userId: string): Promise<boolean> {
 // re-authenticating with a throwaway client (so the live session/cookies aren't
 // touched), then checks the new password matches its confirmation.
 export async function updatePasswordAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -114,7 +114,7 @@ export async function updatePasswordAction(formData: FormData) {
 // be safe whatever that toggle is set to. Mirrors the homeowner twin in
 // src/app/(app)/account/actions.ts.
 export async function updateEmailAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -190,7 +190,7 @@ export async function updateEmailAction(formData: FormData) {
 // Supabase doesn't expose a per-device session list to us, so this is the
 // whole feature: one honest button instead of a fake device list.
 export async function signOutOthersAction() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -237,7 +237,7 @@ function isOwnedStoragePath(raw: string, pathPrefix: string): boolean {
 // the unrestricted saveCompanyAction pattern (no plan gate). A failed write
 // (e.g. migration 0033 not applied yet) degrades to a soft flash, not a crash.
 export async function saveLicenseInsuranceAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -303,7 +303,7 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
 // saveLicenseInsuranceAction above). Everything is validated here, membership
 // is re-checked server-side, and a failed write degrades to a soft flash.
 export async function savePublicPageAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -368,7 +368,7 @@ export async function savePublicPageAction(formData: FormData) {
 // accounts have no password to re-enter, so they type their email address
 // instead; see the branch below.
 export async function deleteAccountAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

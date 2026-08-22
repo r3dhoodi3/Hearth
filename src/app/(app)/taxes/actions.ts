@@ -50,7 +50,7 @@ export async function saveTaxAssessmentAction(
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   try {
     // RLS's existing "owner selects/updates own property" policy covers this,
     // same as saveHomeValueAction in value/actions.ts.

@@ -126,7 +126,7 @@ async function attachPhotos(
 ) {
   const urls = (formData.getAll("photo_urls") as string[]).filter(Boolean);
   if (!urls.length) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("photos").insert(
     urls.map((url) => ({
       property_id: propertyId,
@@ -150,7 +150,7 @@ export async function addSystemAction(
     setFlash("Add your home first, then you can add its systems.", "error");
     return err("Add your home first, then you can add its systems.");
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const systemType = formData.get("system_type") as string;
   // The type drives the default lifespan, the icon, the label, and the "find a
@@ -245,7 +245,7 @@ export async function quickAddSystemAction(formData: FormData) {
     setFlash("Couldn't add that system. Try again.", "error");
     return;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const systemType = formData.get("system_type") as string;
   // Same allow-list as addSystemAction: the quick-add chips post a known type,
@@ -272,7 +272,7 @@ export async function quickAddSystemAction(formData: FormData) {
 // error (rather than an ActionResult no one reads) is the right signal.
 export async function deleteSystemAction(formData: FormData) {
   const id = formData.get("id") as string;
-  const supabase = createClient();
+  const supabase = await createClient();
   // RLS guarantees the row belongs to the caller's property.
   const { error } = await supabase.from("home_systems").delete().eq("id", id);
   if (error) {
@@ -290,7 +290,7 @@ export async function updateSystemAction(
   formData: FormData
 ): Promise<ActionResult> {
   const id = formData.get("id") as string;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Edit-specific guard against a silent field wipe. On an EDIT the owner
   // usually already has a good value in these fields, so a non-empty entry
@@ -396,7 +396,7 @@ export async function updatePropertyAction(formData: FormData) {
     setFlash("Couldn't save home details. Try again.", "error");
     return;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Same finite-and-in-range treatment the systems above get, with the same
   // ranges onboarding uses for these columns: a NaN or a wild value would

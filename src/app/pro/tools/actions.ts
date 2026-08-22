@@ -19,19 +19,19 @@ export async function deletePastJobAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("pro_past_jobs")
     .delete()
     .eq("id", id)
     .eq("contractor_id", contractor.id);
   if (error) {
-    setFlash("Couldn't remove that past job. Please try again.", "error");
+    await setFlash("Couldn't remove that past job. Please try again.", "error");
     revalidatePath("/pro/tools");
     return;
   }
 
-  setFlash("Past job removed.");
+  await setFlash("Past job removed.");
   revalidatePath("/pro/tools");
 }
 
@@ -68,7 +68,7 @@ export async function sendDraftToLeadAction(
     return { ok: false, error: "There's nothing to send yet." };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // The lead must really be one of this contractor's own jobs. The id arrives
   // as client input (picked from a list built client-side), so re-check here
@@ -153,7 +153,7 @@ export async function recordToolEditAction(formData: FormData) {
   if (!originalText || !editedText) return;
   if (originalText === editedText) return; // nothing the pro actually changed
 
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("pro_tool_edits").insert({
     contractor_id: contractor.id,
     tool,

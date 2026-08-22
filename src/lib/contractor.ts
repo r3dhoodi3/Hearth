@@ -75,7 +75,7 @@ export const getCurrentContractor = cache(
     // contractor's full row (balance, checkr_*, license_verify_detail, ...).
     // supabase.auth.getUser() here re-checks the id against Supabase's auth
     // server, so it's safe to trust before the admin-client query below.
-    const authClient = createClient();
+    const authClient = await createClient();
     const {
       data: { user },
     } = await authClient.auth.getUser();

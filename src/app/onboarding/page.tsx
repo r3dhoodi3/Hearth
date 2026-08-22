@@ -13,11 +13,12 @@ import OnboardingForm from "./OnboardingForm";
 // the claimed-home gate in (app)/layout.tsx sends every new homeowner through
 // here regardless of ?next=, which is expected; this just keeps their
 // original destination alive across that detour instead of dropping it.
-export default async function OnboardingPage({
-  searchParams,
-}: {
-  searchParams?: { next?: string; ref?: string };
-}) {
+export default async function OnboardingPage(
+  props: {
+    searchParams?: Promise<{ next?: string; ref?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // Contractors belong in /pro - don't let them create a homeowner property.
   if (await isContractor()) redirect("/pro");
 
@@ -26,7 +27,7 @@ export default async function OnboardingPage({
   // bounces every page back to /onboarding, this page had no sign-out, and
   // an account with contractor role metadata but no contractors row (pro
   // signup never finished) failed the isContractor() redirect above too.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

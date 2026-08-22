@@ -10,7 +10,7 @@ import InspectionUpload from "./InspectionUpload";
 export default async function InspectionPage() {
   const property = await getActiveProperty();
   if (!property) redirect("/onboarding");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Prefill the request form's contact fields from the owner's saved profile,
   // same as the contractors job-post form.

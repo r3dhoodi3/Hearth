@@ -70,12 +70,11 @@ export const metadata: Metadata = {
 // page would land contractors on the marketing pitch instead of their leads.
 // No revalidate export here - it would be a no-op against those reads, and
 // force-static would silently break the redirect rather than fail loudly.
-export default async function ProsLanding({
-  searchParams,
-}: {
-  searchParams?: { ref?: string };
+export default async function ProsLanding(props: {
+  searchParams?: Promise<{ ref?: string }>;
 }) {
-  const supabase = createClient();
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

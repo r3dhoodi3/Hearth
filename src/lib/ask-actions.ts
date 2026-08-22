@@ -27,10 +27,10 @@ export async function logIssueFromChat(payload: {
 }) {
   const property = await getActiveProperty();
   if (!property) {
-    setFlash("Add your home first, then I can log this for you.", "error");
+    await setFlash("Add your home first, then I can log this for you.", "error");
     return;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Find the matching system first so we can LINK the issue to it. That link is
   // what lets resolving the issue later lift the red flag off the system on the
@@ -73,7 +73,7 @@ export async function logIssueFromChat(payload: {
       .eq("id", systemId);
   }
 
-  setFlash("Logged to your home record.", "success");
+  await setFlash("Logged to your home record.", "success");
   revalidatePath("/dashboard");
   revalidatePath("/issues");
   revalidatePath("/forecast");
@@ -85,10 +85,10 @@ export async function setReminderFromChat(payload: {
 }) {
   const property = await getActiveProperty();
   if (!property || !payload.title) {
-    setFlash("Add your home first, then I can set this reminder.", "error");
+    await setFlash("Add your home first, then I can set this reminder.", "error");
     return;
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   await supabase.from("maintenance_tasks").insert({
     property_id: property.id,
@@ -97,6 +97,6 @@ export async function setReminderFromChat(payload: {
     status: "open",
   });
 
-  setFlash("Reminder added to your tasks.", "success");
+  await setFlash("Reminder added to your tasks.", "success");
   revalidatePath("/dashboard");
 }

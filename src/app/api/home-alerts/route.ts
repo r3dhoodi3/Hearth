@@ -101,7 +101,7 @@ export async function GET() {
   try {
     property = await getActiveProperty();
     if (!property) return empty;
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data } = await supabase
       .from("home_systems")
       .select("system_type, install_year, material_or_model, condition_rating")

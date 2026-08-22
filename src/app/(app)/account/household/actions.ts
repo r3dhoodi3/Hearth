@@ -24,7 +24,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // "household_members owner insert" policy re-checks ownership server side, so
 // this validation is about friendly error messages, not the real gate.
 export async function inviteMemberAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -118,7 +118,7 @@ export async function inviteMemberAction(formData: FormData) {
 // reach a row that still belongs to someone else, enforced by the
 // "household_members owner delete" policy.
 export async function removeMemberAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -140,7 +140,7 @@ export async function removeMemberAction(formData: FormData) {
 // this can only move a legitimate invite (status invited, no member yet, the
 // caller's own email) into an active membership tied to the caller's uid.
 export async function acceptInviteAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -167,7 +167,7 @@ export async function acceptInviteAction(formData: FormData) {
 // Decline an invite before claiming it, covered by the
 // "household_members invitee decline" policy.
 export async function declineInviteAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -187,7 +187,7 @@ export async function declineInviteAction(formData: FormData) {
 // Leave a home the caller is an active member of, covered by the
 // "household_members member leave" policy (member_user_id = auth.uid()).
 export async function leaveHomeAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -235,7 +235,7 @@ export async function mintHouseholdQrTokenAction(
   propertyId: string
 ): Promise<ActionResult<HouseholdQrToken>> {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

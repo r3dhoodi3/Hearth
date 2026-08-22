@@ -74,7 +74,7 @@ export default async function DocumentsPage() {
     hasPlus(),
   ]);
   const property = propertyOrNull!;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: docs, error: docsError } = await supabase
     .from("documents")

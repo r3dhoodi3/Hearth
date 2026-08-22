@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import NoticeAtCollection from "@/components/NoticeAtCollection";
-import { useState } from "react";
+import { useState, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
@@ -24,11 +24,15 @@ import { Eye, EyeOff } from "lucide-react";
 // posts to saveCompanyAction (src/app/pro/actions.ts, owned by another fix),
 // which redirects on its own, so a contractor's original destination isn't
 // honored past this point. Left alone rather than reaching into that file.
-export default function ContractorSignUpPage({
-  searchParams,
-}: {
-  searchParams?: { next?: string; ref?: string };
+// searchParams is a Promise since Next 15, and this is a client component, so
+// it is unwrapped with React's use() rather than await. Not optional: Next
+// always passes it to a page, and `use(undefined)` is a type error (and a
+// runtime throw) rather than a graceful fallback. The individual keys stay
+// optional, which is what the reads below actually guard against.
+export default function ContractorSignUpPage(props: {
+  searchParams: Promise<{ next?: string; ref?: string }>;
 }) {
+  const searchParams = use(props.searchParams);
   const supabase = createClient();
   const next = safeNextPath(
     typeof searchParams?.next === "string" ? searchParams.next : null

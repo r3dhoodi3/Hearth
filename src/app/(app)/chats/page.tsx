@@ -30,9 +30,9 @@ const SEEN_COOKIE = "hearth_ho_chat_seen";
 // amount even after the quote itself is withdrawn.
 const isQuoteCompanionBody = (body: string) => body.startsWith("Sent a quote:");
 
-function readSeenMap(): Record<string, string> {
+async function readSeenMap(): Promise<Record<string, string>> {
   try {
-    return JSON.parse(cookies().get(SEEN_COOKIE)?.value || "{}");
+    return JSON.parse((await cookies()).get(SEEN_COOKIE)?.value || "{}");
   } catch {
     return {};
   }
@@ -40,7 +40,7 @@ function readSeenMap(): Record<string, string> {
 
 async function markChatSeenAction(leadId: string) {
   "use server";
-  const jar = cookies();
+  const jar = await cookies();
   let map: Record<string, string> = {};
   try {
     map = JSON.parse(jar.get(SEEN_COOKIE)?.value || "{}");
@@ -64,11 +64,12 @@ async function markAllChatsSeenAction(_leadIds: string[]) {
   "use server";
 }
 
-export default async function HomeownerChatsPage({
-  searchParams,
-}: {
-  searchParams: { lead?: string };
-}) {
+export default async function HomeownerChatsPage(
+  props: {
+    searchParams: Promise<{ lead?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // getProactiveGreeting doesn't depend on the property lookup (or anything
   // else on this page) - run it alongside getActiveProperty instead of
   // stacking a round trip after the redirect check.
@@ -77,7 +78,7 @@ export default async function HomeownerChatsPage({
     getProactiveGreeting(),
   ]);
   if (!property) redirect("/onboarding");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // The homeowner's conversations are jobs where they've PICKED a pro. Open
   // postings with no chosen pro yet aren't chats - there's no one to message.
@@ -95,7 +96,7 @@ export default async function HomeownerChatsPage({
     .order("created_at", { ascending: false });
 
   const convos = leads ?? [];
-  const seen = readSeenMap();
+  const seen = await readSeenMap();
   const nameOf = (l: any) => l.contractors?.name ?? "Sourcing a pro";
 
   // Latest message per conversation, for preview + unread.

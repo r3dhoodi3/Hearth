@@ -59,7 +59,7 @@ export async function saveHomeValueAction(
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   try {
     // RLS's existing "owner selects/updates own property" policy covers this,
     // same as updatePropertyAction in profile/actions.ts.
@@ -128,7 +128,7 @@ export async function fetchAndSaveMarketValueAction(): Promise<{
     const facts = await lookupMarketValue(street, zip);
     if (facts.market_value == null) return { ok: false };
 
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await (supabase.from("properties") as any)
       .update({
         market_value: facts.market_value,

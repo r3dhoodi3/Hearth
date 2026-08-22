@@ -66,11 +66,11 @@ export async function addClientAction(formData: FormData) {
 
   const name = String(formData.get("client_name") ?? "").trim();
   if (!name) {
-    setFlash("A client name is required.", "error");
+    await setFlash("A client name is required.", "error");
     redirect("/pro/crm");
   }
   if (name.length > 80) {
-    setFlash("Client name must be 80 characters or fewer.", "error");
+    await setFlash("Client name must be 80 characters or fewer.", "error");
     redirect("/pro/crm");
   }
 
@@ -79,17 +79,17 @@ export async function addClientAction(formData: FormData) {
 
   const noteRaw = String(formData.get("note") ?? "").trim();
   if (noteRaw.length > 1000) {
-    setFlash("Note must be 1,000 characters or fewer.", "error");
+    await setFlash("Note must be 1,000 characters or fewer.", "error");
     redirect("/pro/crm");
   }
 
   const followUp = parseFollowUp(formData.get("follow_up_on"));
   if (!followUp.ok) {
-    setFlash("That follow up date doesn't look right.", "error");
+    await setFlash("That follow up date doesn't look right.", "error");
     redirect("/pro/crm");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("pro_clients").insert({
     contractor_id: contractor.id,
     client_name: name,
@@ -98,11 +98,11 @@ export async function addClientAction(formData: FormData) {
     follow_up_on: followUp.value,
   });
   if (error) {
-    setFlash("Couldn't add that client. Please try again.", "error");
+    await setFlash("Couldn't add that client. Please try again.", "error");
     redirect("/pro/crm");
   }
 
-  setFlash("Client added.");
+  await setFlash("Client added.");
   revalidatePath("/pro/crm");
   redirect("/pro/crm");
 }
@@ -121,7 +121,7 @@ export async function trackLeadAction(formData: FormData) {
   const stageRaw = String(formData.get("stage") ?? "lead");
   const stage: Stage = isStage(stageRaw) ? stageRaw : "lead";
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // The lead must really be one of this contractor's own jobs. The form only
   // ever offers those, but the id arrives as client input, so re check here
@@ -134,7 +134,7 @@ export async function trackLeadAction(formData: FormData) {
     .eq("contractor_id", contractor.id)
     .maybeSingle();
   if (!ownLead) {
-    setFlash("That job isn't yours to track.", "error");
+    await setFlash("That job isn't yours to track.", "error");
     redirect("/pro/crm");
   }
 
@@ -148,7 +148,7 @@ export async function trackLeadAction(formData: FormData) {
     .eq("lead_id", leadId)
     .maybeSingle();
   if (already) {
-    setFlash("Already tracking that one.");
+    await setFlash("Already tracking that one.");
     redirect("/pro/crm");
   }
 
@@ -159,11 +159,11 @@ export async function trackLeadAction(formData: FormData) {
     stage,
   });
   if (error) {
-    setFlash("Couldn't track that client. Please try again.", "error");
+    await setFlash("Couldn't track that client. Please try again.", "error");
     redirect("/pro/crm");
   }
 
-  setFlash("Client tracked.");
+  await setFlash("Client tracked.");
   revalidatePath("/pro/crm");
   redirect("/pro/crm");
 }
@@ -181,39 +181,39 @@ export async function updateClientDetailsAction(formData: FormData) {
 
   const name = String(formData.get("client_name") ?? "").trim();
   if (!name) {
-    setFlash("A client name is required.", "error");
+    await setFlash("A client name is required.", "error");
     back();
   }
   if (name.length > 80) {
-    setFlash("Client name must be 80 characters or fewer.", "error");
+    await setFlash("Client name must be 80 characters or fewer.", "error");
     back();
   }
 
   const phone = String(formData.get("phone") ?? "").trim();
   if (phone.length > 30) {
-    setFlash("Phone must be 30 characters or fewer.", "error");
+    await setFlash("Phone must be 30 characters or fewer.", "error");
     back();
   }
 
   const email = String(formData.get("email") ?? "").trim();
   if (email.length > 120) {
-    setFlash("Email must be 120 characters or fewer.", "error");
+    await setFlash("Email must be 120 characters or fewer.", "error");
     back();
   }
   if (email && !EMAIL_PATTERN.test(email)) {
-    setFlash("That email doesn't look right.", "error");
+    await setFlash("That email doesn't look right.", "error");
     back();
   }
 
   const address = String(formData.get("address") ?? "").trim();
   if (address.length > 200) {
-    setFlash("Address must be 200 characters or fewer.", "error");
+    await setFlash("Address must be 200 characters or fewer.", "error");
     back();
   }
 
   const estValue = parseEstValue(formData.get("est_value"));
   if (!estValue.ok) {
-    setFlash(estValue.message ?? "That estimated value doesn't look right.", "error");
+    await setFlash(estValue.message ?? "That estimated value doesn't look right.", "error");
     back();
   }
 
@@ -222,11 +222,11 @@ export async function updateClientDetailsAction(formData: FormData) {
 
   const followUp = parseFollowUp(formData.get("follow_up_on"));
   if (!followUp.ok) {
-    setFlash("That follow up date doesn't look right.", "error");
+    await setFlash("That follow up date doesn't look right.", "error");
     back();
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("pro_clients")
     .update({
@@ -242,11 +242,11 @@ export async function updateClientDetailsAction(formData: FormData) {
     .eq("id", id)
     .eq("contractor_id", contractor.id);
   if (error) {
-    setFlash("Couldn't save your changes. Please try again.", "error");
+    await setFlash("Couldn't save your changes. Please try again.", "error");
     back();
   }
 
-  setFlash("Client updated.");
+  await setFlash("Client updated.");
   revalidatePath("/pro/crm");
   revalidatePath(`/pro/crm/${id}`);
   back();
@@ -257,18 +257,18 @@ export async function deleteClientAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) redirect("/pro/crm");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("pro_clients")
     .delete()
     .eq("id", id)
     .eq("contractor_id", contractor.id);
   if (error) {
-    setFlash("Couldn't remove that client. Please try again.", "error");
+    await setFlash("Couldn't remove that client. Please try again.", "error");
     redirect(`/pro/crm/${id}`);
   }
 
-  setFlash("Client removed.");
+  await setFlash("Client removed.");
   revalidatePath("/pro/crm");
   redirect("/pro/crm");
 }
@@ -284,15 +284,15 @@ export async function addNoteAction(formData: FormData) {
 
   const body = String(formData.get("body") ?? "").trim();
   if (!body) {
-    setFlash("A note can't be empty.", "error");
+    await setFlash("A note can't be empty.", "error");
     redirect(`/pro/crm/${clientId}`);
   }
   if (body.length > 1000) {
-    setFlash("Note must be 1,000 characters or fewer.", "error");
+    await setFlash("Note must be 1,000 characters or fewer.", "error");
     redirect(`/pro/crm/${clientId}`);
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: ownClient } = await supabase
     .from("pro_clients")
     .select("id")
@@ -305,11 +305,11 @@ export async function addNoteAction(formData: FormData) {
     .from("pro_client_notes")
     .insert({ client_id: clientId, body });
   if (error) {
-    setFlash("Couldn't add that note. Please try again.", "error");
+    await setFlash("Couldn't add that note. Please try again.", "error");
     redirect(`/pro/crm/${clientId}`);
   }
 
-  setFlash("Note added.");
+  await setFlash("Note added.");
   revalidatePath(`/pro/crm/${clientId}`);
   revalidatePath("/pro/crm");
   redirect(`/pro/crm/${clientId}`);
@@ -321,7 +321,7 @@ export async function deleteNoteAction(formData: FormData) {
   const noteId = String(formData.get("note_id") ?? "");
   if (!clientId || !noteId) redirect("/pro/crm");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: ownClient } = await supabase
     .from("pro_clients")
     .select("id")
@@ -336,11 +336,11 @@ export async function deleteNoteAction(formData: FormData) {
     .eq("id", noteId)
     .eq("client_id", clientId);
   if (error) {
-    setFlash("Couldn't remove that note. Please try again.", "error");
+    await setFlash("Couldn't remove that note. Please try again.", "error");
     redirect(`/pro/crm/${clientId}`);
   }
 
-  setFlash("Note removed.");
+  await setFlash("Note removed.");
   revalidatePath(`/pro/crm/${clientId}`);
   redirect(`/pro/crm/${clientId}`);
 }

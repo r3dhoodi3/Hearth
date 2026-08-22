@@ -16,7 +16,7 @@ export default async function QuoteCheckPage() {
 
   let freeTaste = false;
   if (!plus) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

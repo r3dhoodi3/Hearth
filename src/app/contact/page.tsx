@@ -25,11 +25,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ContactPage({
-  searchParams,
-}: {
-  searchParams?: { topic?: string };
-}) {
+export default async function ContactPage(
+  props: {
+    searchParams?: Promise<{ topic?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // Optional context from LegalContact's `topic` prop (e.g. "Arbitration
   // opt-out"), shown back to the visitor so they know what they're writing
   // about. Capped and never trusted beyond display - it isn't stored.

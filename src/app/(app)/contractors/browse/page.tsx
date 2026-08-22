@@ -34,12 +34,13 @@ type BrowsePro = {
   created_at?: string | null;
 };
 
-export default async function BrowseProsPage({
-  searchParams,
-}: {
-  searchParams: { category?: string };
-}) {
-  const supabase = createClient();
+export default async function BrowseProsPage(
+  props: {
+    searchParams: Promise<{ category?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
 
   // Same guard the rest of (app) uses: no active property means the owner
   // hasn't onboarded a home yet.

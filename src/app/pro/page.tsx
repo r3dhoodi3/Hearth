@@ -118,11 +118,12 @@ const SORT_OPTIONS = [
   { value: "deal", label: "Biggest deal" },
 ] as const;
 
-export default async function ProDashboard({
-  searchParams,
-}: {
-  searchParams?: { sort?: string };
-}) {
+export default async function ProDashboard(
+  props: {
+    searchParams?: Promise<{ sort?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
   if (!contractor) {
     // No company yet: a user who chose the contractor role finishes company
@@ -132,7 +133,7 @@ export default async function ProDashboard({
     redirect("/pro/onboarding");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const ASSIGNED_BASE_COLUMNS =
     "id, issue_id, status, category, issue_severity, issue_description, homeowner_name, homeowner_email, homeowner_phone, property_address, created_at";

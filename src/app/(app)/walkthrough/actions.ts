@@ -39,7 +39,7 @@ export type ConfirmSystemResult =
 export async function confirmSystemAction(
   formData: FormData
 ): Promise<ConfirmSystemResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const systemId = s(formData, "system_id");
   if (!systemId)
     return { ok: false, error: "Something went wrong. Please try again." };

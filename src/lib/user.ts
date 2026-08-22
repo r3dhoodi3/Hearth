@@ -10,7 +10,7 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   const user = await getUser();
   if (!user) return null;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("users")
     .select("*")

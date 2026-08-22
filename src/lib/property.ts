@@ -100,7 +100,7 @@ export const getProperties = cache(async (): Promise<PropertyWithShared[]> => {
   // session and returns them) is the honest answer for it.
   if (!user) redirect("/signin");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // The `any` cast is unavoidable: PROPERTY_COLUMNS names real columns
   // (migrations 0029/0032/0039/0040/0043/0066) that src/lib/database.types.ts
   // has not been regenerated for, and the typed client rejects a select string
@@ -153,6 +153,6 @@ export async function getActiveProperty(): Promise<Property | null> {
   const props = await getProperties();
   if (props.length === 0) return null;
 
-  const activeId = cookies().get(ACTIVE_HOME_COOKIE)?.value;
+  const activeId = (await cookies()).get(ACTIVE_HOME_COOKIE)?.value;
   return props.find((p) => p.id === activeId) ?? props[0];
 }

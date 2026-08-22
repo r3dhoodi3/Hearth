@@ -33,7 +33,7 @@ const MODELS = [
 
 export async function POST(req: NextRequest) {
   // Require a signed-in user before touching the paid model, same as /api/ask.
-  const authClient = createClient();
+  const authClient = await createClient();
   const {
     data: { user },
   } = await authClient.auth.getUser();

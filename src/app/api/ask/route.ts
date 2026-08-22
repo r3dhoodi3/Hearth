@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   // Require a signed-in user before touching the paid model. Ask Hearth is an
   // authenticated feature; gating here (not just in middleware) stops anonymous
   // abuse that would run up Gemini cost.
-  const authClient = createClient();
+  const authClient = await createClient();
   const {
     data: { user: authUser },
   } = await authClient.auth.getUser();
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   let firstName: string | null = null;
   let context = "The homeowner hasn't added their home details yet.";
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

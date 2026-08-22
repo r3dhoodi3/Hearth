@@ -31,7 +31,7 @@ export async function reportIssueAction(
   if (!property) {
     return err("Couldn't log that issue. Try again.");
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const category = formData.get("category") as string;
   const severity = formData.get("severity") as string;
@@ -99,7 +99,7 @@ export async function updateIssueAction(
   formData: FormData
 ): Promise<ActionResult> {
   const id = formData.get("id") as string;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const category = formData.get("category") as string;
   const severity = formData.get("severity") as string;
@@ -162,7 +162,7 @@ async function liftSystemConditionForIssue(supabase: any, issueId: string) {
 
 export async function resolveIssueAction(formData: FormData) {
   const id = formData.get("id") as string;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("issues")
     .update({ status: "resolved" })
@@ -183,7 +183,7 @@ export async function resolveIssueAction(formData: FormData) {
 // failure as a toast and revert the optimistic flip (setFlash alone never shows
 // on this stay-on-page path).
 export async function reopenIssueAction(id: string): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("issues")
     .update({ status: "open" })
@@ -202,7 +202,7 @@ export async function reopenIssueAction(id: string): Promise<ActionResult> {
 export async function checkResolveIssueAction(
   id: string
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("issues")
     .update({ status: "resolved" })

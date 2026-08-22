@@ -13,8 +13,12 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 // inferred type collapses query results to `never`. supabase-js's own
 // SupabaseClient<Database> resolves correctly, and at runtime the ssr client IS
 // exactly that, so we cast to it. Remove the cast once ssr is upgraded to match.
-export function createClient(): SupabaseClient<Database> {
-  const cookieStore = cookies();
+//
+// async since Next 15: cookies() returns a Promise there, so the cookie store
+// has to be awaited before the adapter below can read it. Every caller awaits
+// createClient() as a result.
+export async function createClient(): Promise<SupabaseClient<Database>> {
+  const cookieStore = await cookies();
 
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

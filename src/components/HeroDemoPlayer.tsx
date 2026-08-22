@@ -2224,13 +2224,13 @@ export default function HeroDemoPlayer() {
   // times a second (the old break) and the audio from stuttering.
   const scrubbingRef = useRef(false);
 
-  function handleSeekPreview(e: ChangeEvent<HTMLInputElement>) {
+  function handleSeekPreview(e: { currentTarget: HTMLInputElement }) {
     if (!started) return;
     if (!scrubbingRef.current) {
       scrubbingRef.current = true;
       engineRef.current?.scrubStart();
     }
-    const p = Number(e.target.value) / 1000;
+    const p = Number(e.currentTarget.value) / 1000;
     const box = boxRef.current;
     const fill = box?.querySelector<HTMLElement>("[data-x='fill']");
     if (fill) fill.style.width = `${p * 100}%`;

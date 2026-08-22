@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import NoticeAtCollection from "@/components/NoticeAtCollection";
-import { useState } from "react";
+import { useState, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { friendlyAuthError } from "@/lib/friendlyAuthError";
@@ -34,11 +34,15 @@ import { Eye, EyeOff } from "lucide-react";
 // pro program - so claimPropertyAction can attribute a first home claim back
 // to the neighbor who shared the link. It means nothing outside onboarding,
 // so the sign-in / contractor links below keep plain nextQuery.
-export default function HomeownerSignUpPage({
-  searchParams,
-}: {
-  searchParams?: { next?: string; ref?: string };
+// searchParams is a Promise since Next 15, and this is a client component, so
+// it is unwrapped with React's use() rather than await. Not optional: Next
+// always passes it to a page, and `use(undefined)` is a type error (and a
+// runtime throw) rather than a graceful fallback. The individual keys stay
+// optional, which is what the reads below actually guard against.
+export default function HomeownerSignUpPage(props: {
+  searchParams: Promise<{ next?: string; ref?: string }>;
 }) {
+  const searchParams = use(props.searchParams);
   const supabase = createClient();
   const next = safeNextPath(
     typeof searchParams?.next === "string" ? searchParams.next : null

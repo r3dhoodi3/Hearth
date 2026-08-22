@@ -217,7 +217,7 @@ export default async function HomeReportPage() {
   if (!propertyOrNull) redirect("/onboarding");
 
   const property = propertyOrNull;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [
     { data: systems },

@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const next = safeNextPath(searchParams.get("next")) ?? "/dashboard";
 
   if (code) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       // The other half of the email-confirmation terms gap: when Supabase

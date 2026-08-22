@@ -72,7 +72,7 @@ const MODELS = [
 export async function POST(req: NextRequest) {
   // Require a signed-in contractor before touching the paid model, same
   // resolution order as /api/pro-tools.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

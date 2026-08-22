@@ -40,7 +40,9 @@ function StatusField({
   formRef,
 }: {
   current: string;
-  formRef: React.RefObject<HTMLFormElement>;
+  // `| null` since React 19: useRef<T>(null) now returns RefObject<T | null>
+  // rather than pretending the ref is always populated.
+  formRef: React.RefObject<HTMLFormElement | null>;
 }) {
   const { pending } = useFormStatus();
   return (

@@ -27,7 +27,7 @@ export async function saveDocumentAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const fileUrl = s(formData, "file_url");
   if (!fileUrl) throw new Error("No file uploaded");
@@ -70,12 +70,12 @@ export async function saveDocumentAction(
     }
     const message =
       "Couldn't save that document right now. Please try again in a bit.";
-    setFlash(message, "error");
+    await setFlash(message, "error");
     revalidatePath("/documents");
     return { ok: false, error: message };
   }
 
-  setFlash("Saved to your documents.", "success");
+  await setFlash("Saved to your documents.", "success");
   revalidatePath("/documents");
   return { ok: true };
 }
@@ -86,7 +86,7 @@ export async function saveDocumentAction(
 export async function applyDocumentToTwinAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const id = s(formData, "id");
   if (!id) throw new Error("No document");
@@ -108,7 +108,7 @@ export async function applyDocumentToTwinAction(formData: FormData) {
   if (!claimed) {
     // Already applied (possibly by a concurrent submit a moment ago): the
     // work is done, so report success rather than an error.
-    setFlash("Already added to your home.", "success");
+    await setFlash("Already added to your home.", "success");
     revalidatePath("/documents");
     revalidatePath("/dashboard");
     return;
@@ -173,7 +173,7 @@ export async function applyDocumentToTwinAction(formData: FormData) {
   const sysLabel = doc.system_type
     ? labelFor(SYSTEM_TYPES, doc.system_type)
     : null;
-  setFlash(
+  await setFlash(
     touchedSystem
       ? `Added to your home${sysLabel ? ` (${sysLabel})` : ""}.`
       : "Saved to your home record.",
@@ -184,12 +184,12 @@ export async function applyDocumentToTwinAction(formData: FormData) {
 }
 
 export async function deleteDocumentAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = s(formData, "id");
   if (!id) return;
   // RLS guarantees the row belongs to the caller's property.
   const { error } = await supabase.from("documents").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  setFlash("Document removed", "info");
+  await setFlash("Document removed", "info");
   revalidatePath("/documents");
 }

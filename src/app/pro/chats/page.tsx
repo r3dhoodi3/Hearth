@@ -17,9 +17,10 @@ import {
 // Seen-state cookie shared with the layout's unread badge.
 const SEEN_COOKIE = "hearth_chat_seen"; // { [leadId]: ISO timestamp last viewed }
 
-function readSeenMap(): Record<string, string> {
+// async since Next 15, where cookies() returns a Promise.
+async function readSeenMap(): Promise<Record<string, string>> {
   try {
-    return JSON.parse(cookies().get(SEEN_COOKIE)?.value || "{}");
+    return JSON.parse((await cookies()).get(SEEN_COOKIE)?.value || "{}");
   } catch {
     return {};
   }
@@ -28,7 +29,7 @@ function readSeenMap(): Record<string, string> {
 // Mark a conversation as read (called from the open thread).
 async function markChatSeenAction(leadId: string) {
   "use server";
-  const jar = cookies();
+  const jar = await cookies();
   let map: Record<string, string> = {};
   try {
     map = JSON.parse(jar.get(SEEN_COOKIE)?.value || "{}");
@@ -40,15 +41,14 @@ async function markChatSeenAction(leadId: string) {
   revalidatePath("/pro/chats");
 }
 
-export default async function ProChatsPage({
-  searchParams,
-}: {
-  searchParams: { lead?: string };
+export default async function ProChatsPage(props: {
+  searchParams: Promise<{ lead?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Exactly the five columns this page renders, not select("*"). A pro's inbox
   // can be long, and every row of it used to drag along the homeowner's email
   // and phone plus two unbounded free-text fields (issue_description,
@@ -68,7 +68,7 @@ export default async function ProChatsPage({
     .eq("contractor_id", contractor.id)
     .order("created_at", { ascending: false });
 
-  const seen = readSeenMap();
+  const seen = await readSeenMap();
 
   // The inbox is every lead assigned to this contractor (the homeowner picked
   // them). The old `paid` unlock flag predates the apply flow: the fee is now

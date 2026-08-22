@@ -51,7 +51,7 @@ export async function saveInspectionFindingsAction(
 ): Promise<SaveFindingsResult> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const rawSystems = parseJsonArray(formData.get("systems_json"));
   const rawIssues = parseJsonArray(formData.get("issues_json"));
@@ -90,7 +90,7 @@ export async function saveInspectionFindingsAction(
   }
 
   if (!systems.length && !issues.length) {
-    setFlash("Nothing was selected to add.", "info");
+    await setFlash("Nothing was selected to add.", "info");
     return { ok: false, reason: "nothing_selected" };
   }
 
@@ -118,7 +118,7 @@ export async function saveInspectionFindingsAction(
     );
     if (error) {
       console.error("saveInspectionFindingsAction systems insert failed:", error.message);
-      setFlash(SAVE_ERROR, "error");
+      await setFlash(SAVE_ERROR, "error");
       revalidatePath("/dashboard");
       return { ok: false, reason: "error", message: SAVE_ERROR };
     }
@@ -136,7 +136,7 @@ export async function saveInspectionFindingsAction(
     );
     if (error) {
       console.error("saveInspectionFindingsAction issues insert failed:", error.message);
-      setFlash(SAVE_ERROR, "error");
+      await setFlash(SAVE_ERROR, "error");
       revalidatePath("/dashboard");
       return { ok: false, reason: "error", message: SAVE_ERROR };
     }
@@ -148,7 +148,7 @@ export async function saveInspectionFindingsAction(
   // Everything the owner picked already existed on the home: honest info, not a
   // green "Added" panel.
   if (added === 0) {
-    setFlash(
+    await setFlash(
       "Those were already in your home, so nothing new was added.",
       "info"
     );
@@ -156,7 +156,7 @@ export async function saveInspectionFindingsAction(
     return { ok: true, added: 0, skipped };
   }
 
-  setFlash(
+  await setFlash(
     skipped
       ? `Added to your home. ${skipped} system${skipped === 1 ? "" : "s"} already existed and were skipped.`
       : "Added to your home.",

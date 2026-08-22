@@ -18,7 +18,7 @@ export const runtime = "nodejs";
 // true do we sign the URL with the admin client. The admin client is used ONLY
 // for signing, never for the authz decision.
 export async function GET(req: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -23,19 +23,19 @@ async function respondToQuote(
 ) {
   const property = await getActiveProperty();
   if (!property) {
-    setFlash(QUOTE_ERROR, "error");
+    await setFlash(QUOTE_ERROR, "error");
     revalidatePath("/chats");
     return;
   }
 
   const quoteId = String(formData.get("quote_id") || "");
   if (!quoteId) {
-    setFlash(QUOTE_ERROR, "error");
+    await setFlash(QUOTE_ERROR, "error");
     revalidatePath("/chats");
     return;
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: quote } = await supabase
     .from("lead_quotes")
@@ -45,7 +45,7 @@ async function respondToQuote(
     .maybeSingle();
   if (!quote) {
     // Already accepted/declined/withdrawn, so there's nothing left to change.
-    setFlash("That quote can no longer be updated.", "error");
+    await setFlash("That quote can no longer be updated.", "error");
     revalidatePath("/chats");
     return;
   }
@@ -57,7 +57,7 @@ async function respondToQuote(
     .eq("property_id", property.id)
     .maybeSingle();
   if (!lead) {
-    setFlash(QUOTE_ERROR, "error");
+    await setFlash(QUOTE_ERROR, "error");
     revalidatePath("/chats");
     return;
   }
@@ -68,7 +68,7 @@ async function respondToQuote(
     .eq("id", quoteId)
     .eq("status", "sent");
   if (error) {
-    setFlash(QUOTE_ERROR, "error");
+    await setFlash(QUOTE_ERROR, "error");
     revalidatePath("/chats");
     return;
   }
@@ -129,7 +129,7 @@ const INVOICE_ERROR = "Couldn't sign the invoice, please try again.";
 export async function signInvoiceAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) {
-    setFlash(INVOICE_ERROR, "error");
+    await setFlash(INVOICE_ERROR, "error");
     revalidatePath("/chats");
     return;
   }
@@ -137,12 +137,12 @@ export async function signInvoiceAction(formData: FormData) {
   const invoiceId = String(formData.get("invoice_id") || "");
   const method = String(formData.get("signature_method") || "");
   if (!invoiceId || (method !== "in_app" && method !== "in_person")) {
-    setFlash(INVOICE_ERROR, "error");
+    await setFlash(INVOICE_ERROR, "error");
     revalidatePath("/chats");
     return;
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: invoice } = await supabase
     .from("invoices")
@@ -152,7 +152,7 @@ export async function signInvoiceAction(formData: FormData) {
     .maybeSingle();
   if (!invoice) {
     // Already signed/voided, so there's nothing left to change.
-    setFlash("That invoice can no longer be signed.", "error");
+    await setFlash("That invoice can no longer be signed.", "error");
     revalidatePath("/chats");
     return;
   }
@@ -164,7 +164,7 @@ export async function signInvoiceAction(formData: FormData) {
     .eq("property_id", property.id)
     .maybeSingle();
   if (!lead) {
-    setFlash(INVOICE_ERROR, "error");
+    await setFlash(INVOICE_ERROR, "error");
     revalidatePath("/chats");
     return;
   }
@@ -176,7 +176,7 @@ export async function signInvoiceAction(formData: FormData) {
   if (method === "in_app") {
     signedBy = String(formData.get("signed_by") || "").trim().slice(0, 120);
     if (!signedBy) {
-      setFlash("Please type your name to sign.", "error");
+      await setFlash("Please type your name to sign.", "error");
       revalidatePath("/chats");
       return;
     }
@@ -196,7 +196,7 @@ export async function signInvoiceAction(formData: FormData) {
     .eq("id", invoiceId)
     .eq("status", "sent");
   if (error) {
-    setFlash(INVOICE_ERROR, "error");
+    await setFlash(INVOICE_ERROR, "error");
     revalidatePath("/chats");
     return;
   }

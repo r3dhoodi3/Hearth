@@ -40,7 +40,7 @@ const MAX_IMAGES_PER_REQUEST = 4;
 export async function POST(req: NextRequest) {
   // Require a signed-in user before touching the paid model. Gating here (not
   // just in middleware) stops anonymous abuse that would run up Gemini cost.
-  const authClient = createClient();
+  const authClient = await createClient();
   const {
     data: { user: authUser },
   } = await authClient.auth.getUser();
@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
       // Wallet balance, cash + bonus, if easily available. Never fatal.
       let walletLine = "";
       try {
-        const supabase = createClient();
+        const supabase = await createClient();
         const { data: wallet } = await (supabase as any)
           .from("wallets")
           .select("cash_balance_cents, bonus_balance_cents")
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
       let openJobsDetail = "";
       let pendingAppsLine = "";
       try {
-        const supabase = createClient();
+        const supabase = await createClient();
         const [{ data: openJobs }, { data: myApps }] = await Promise.all([
           (supabase as any).rpc("open_jobs_for_me"),
           (supabase as any).rpc("my_applications"),

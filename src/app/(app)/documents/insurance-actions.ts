@@ -28,7 +28,7 @@ export async function saveInsuranceAction(
   const premium = premiumRaw ? Number(premiumRaw) : null;
 
   if (!renewalDate || !premium || premium <= 0) {
-    setFlash(
+    await setFlash(
       "Add your renewal date and annual premium from your policy to continue.",
       "error"
     );
@@ -54,7 +54,7 @@ export async function saveInsuranceAction(
     !Number.isFinite(premium) ||
     premium > 100_000
   ) {
-    setFlash(
+    await setFlash(
       "Those numbers don't look right. Double-check the renewal date and premium.",
       "error"
     );
@@ -62,7 +62,7 @@ export async function saveInsuranceAction(
     return { ok: false };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   try {
     // RLS's existing "owner selects/updates own property" policy covers this,
     // same as saveHomeValueAction in value/actions.ts.
@@ -73,12 +73,12 @@ export async function saveInsuranceAction(
       })
       .eq("id", property.id);
     if (error) throw error;
-    setFlash("Insurance details saved");
+    await setFlash("Insurance details saved");
   } catch {
     // Migration 0040 may not have run yet against this database, or the
     // write failed for some other reason. Fail soft: the card just shows the
     // setup form again instead of a 500.
-    setFlash("Couldn't save right now. Please try again in a bit.", "error");
+    await setFlash("Couldn't save right now. Please try again in a bit.", "error");
     revalidatePath("/documents");
     return { ok: false };
   }

@@ -80,10 +80,8 @@ function cityState(
   return s ? `${c}, ${s}` : c;
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { code: string } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ code: string }> }) {
+  const params = await props.params;
   const code = (params.code ?? "").trim();
 
   // Unauthenticated and public, and every hit that carries a plausible code

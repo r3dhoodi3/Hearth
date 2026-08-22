@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 // request, and the database enforces real auth via RLS, so this is safe and
 // much faster. React's cache() also dedupes it to once per render.
 export const getUser = cache(async () => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -25,7 +25,7 @@ export const getUser = cache(async () => {
 // sequential round trips, because the supabase client has no request cache of
 // its own; React's cache() collapses them into one.
 export const getVerifiedUser = cache(async () => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -129,7 +129,7 @@ type HasPasswordRpc = (
 // as an ERROR we can fall back on, never as a wrong `false`.
 async function realHasPassword(): Promise<boolean | null> {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data, error } = await (supabase.rpc as unknown as HasPasswordRpc)(
       "current_user_has_password"
     );
@@ -161,7 +161,7 @@ export async function passwordStatusFor(
 }
 
 export const getPasswordStatus = cache(async (): Promise<PasswordStatus> => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

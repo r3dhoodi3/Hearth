@@ -15,7 +15,7 @@ export async function chooseRoleAction(formData: FormData) {
   // Re-auth server-side rather than trusting anything the form carried: this
   // is a "use server" action reachable by a crafted POST, so the caller's
   // identity has to come from a verified session, not the request body.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -15,11 +15,12 @@ export const metadata: Metadata = {
     "Forgot your Hearth password? Enter your email and we'll send you a link to set a new one.",
 };
 
-export default function ResetPasswordPage({
-  searchParams,
-}: {
-  searchParams?: { step?: string };
-}) {
+export default async function ResetPasswordPage(
+  props: {
+    searchParams?: Promise<{ step?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   return (
     <ResetPasswordForm
       step={searchParams?.step === "update" ? "update" : "request"}

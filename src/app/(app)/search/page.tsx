@@ -27,16 +27,17 @@ type Result = {
   icon?: LucideIcon | null;
 };
 
-export default async function SearchPage({
-  searchParams,
-}: {
-  searchParams: { q?: string };
-}) {
+export default async function SearchPage(
+  props: {
+    searchParams: Promise<{ q?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const q = (searchParams.q ?? "").trim();
   const ql = q.toLowerCase();
 
   const property = (await getActiveProperty())!;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const has = (text: string | null | undefined) =>
     !!text && text.toLowerCase().includes(ql);

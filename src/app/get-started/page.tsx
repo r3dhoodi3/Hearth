@@ -22,17 +22,18 @@ export const metadata: Metadata = {
 // bounced to sign-in, then chose to sign up instead) and threaded through to
 // whichever sign-up page they pick, so their original destination survives
 // the "who are you?" fork instead of being dropped here.
-export default async function GetStarted({
-  searchParams,
-}: {
-  searchParams?: { next?: string };
-}) {
+export default async function GetStarted(
+  props: {
+    searchParams?: Promise<{ next?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const next = safeNextPath(
     typeof searchParams?.next === "string" ? searchParams.next : null
   );
   const nextQuery = next ? `?next=${encodeURIComponent(next)}` : "";
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

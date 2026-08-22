@@ -187,7 +187,7 @@ async function verifiedElsewhere(
 // another account. Either gate failing writes 'failed' with a failure_reason
 // the profile page turns into plain-English copy plus a dispute form.
 async function verifyContractorLicense(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   contractorId: string,
   licenseNumber: string,
   currentVerifiedAt: string | null | undefined,
@@ -328,7 +328,7 @@ async function verifyContractorLicense(
 // be blocked by RLS, so the three lookups (full id, slug, 8-hex prefix) live
 // in one SECURITY DEFINER function instead.
 async function resolveReferralCode(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   raw: FormDataEntryValue | null
 ): Promise<string | null> {
   try {
@@ -344,7 +344,7 @@ async function resolveReferralCode(
 
 // Create (onboarding) or update (profile) the current user's contractor company.
 export async function saveCompanyAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -691,7 +691,8 @@ export async function saveCompanyAction(formData: FormData) {
         // out-of-area pro their place on the list. The reject below still
         // goes through either way.
         const ip =
-          headers().get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+          (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ??
+          null;
         const { data: allowed } = await createAdminClient().rpc(
           "rate_limit_hit",
           {
@@ -941,7 +942,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
     return;
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // A corrected (unsaved) number is persisted first, resetting verification
   // to square one: any earlier check proved a different license. If this
@@ -1213,7 +1214,7 @@ export async function updateLeadStatusAction(formData: FormData) {
     return;
   }
   const contractor = await assertContractor();
-  const supabase = createClient();
+  const supabase = await createClient();
   // Read the current status first so the review ask below fires only on a real
   // transition INTO Won, not on a re-save of an already-closed job. RLS scopes
   // the read to this contractor's own leads, same as the update.
@@ -1426,7 +1427,7 @@ export async function applyToJobAction(formData: FormData) {
     // Best-effort: on a read hiccup, fall through to the RPC as before.
   }
 
-  const supabase = createClient() as any;
+  const supabase = (await createClient()) as any;
 
   // Stale-tab price guard (staleDisplayedFeeError above): if the live price
   // is now HIGHER than the fee this confirm form displayed (typically the
@@ -1582,7 +1583,7 @@ export async function unlockDirectRequestAction(formData: FormData) {
     // Best-effort: on a read hiccup, fall through and notify as before.
   }
 
-  const supabase = createClient() as any;
+  const supabase = (await createClient()) as any;
 
   // Stale-tab price guard (staleDisplayedFeeError above): if the live price
   // is now HIGHER than the fee this confirm form displayed (typically the
@@ -1711,7 +1712,7 @@ export async function declineDirectRequestAction(formData: FormData) {
     // Best-effort: a lookup hiccup just means no homeowner notification.
   }
 
-  const supabase = createClient() as any;
+  const supabase = (await createClient()) as any;
   const { error } = await supabase.rpc("decline_direct_request", {
     p_lead: leadId,
   });

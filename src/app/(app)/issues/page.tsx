@@ -6,7 +6,7 @@ import IssueRow from "./IssueRow";
 
 export default async function IssuesPage() {
   const property = (await getActiveProperty())!;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [{ data: issues }, { data: systems }] = await Promise.all([
     supabase

@@ -19,7 +19,7 @@ const MAX_MEMBERS_PER_HOME = 4;
 // zones: pending invites addressed to me, the homes I own (manage members),
 // and the homes shared with me (leave).
 export default async function HouseholdPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

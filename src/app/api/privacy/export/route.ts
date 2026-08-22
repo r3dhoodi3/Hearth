@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
 // only the serialization at the bottom of this function differs, so the two
 // downloads can never say different things about what Hearth holds.
 export async function GET(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

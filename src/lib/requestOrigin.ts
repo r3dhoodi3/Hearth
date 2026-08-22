@@ -42,8 +42,9 @@ export function requestOrigin(request: NextRequest): string {
 // QR code in particular is printed/screenshotted and read by a phone
 // camera, so it has no "current window" to fall back on the way a redirect
 // would - the Host header is the only signal available.
-export function requestOriginFromHeaders(): string {
-  const h = headers();
+// async since Next 15, where headers() returns a Promise.
+export async function requestOriginFromHeaders(): Promise<string> {
+  const h = await headers();
   const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "")
     .split(",")[0]
     .trim();

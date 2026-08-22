@@ -63,7 +63,7 @@ function fmtDate(d: string): string {
 
 export async function POST() {
   // Require a signed-in user before touching the paid model.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

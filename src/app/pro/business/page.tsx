@@ -66,7 +66,7 @@ export default async function ProBusinessPage() {
     redirect("/pro/onboarding");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [
     { data: myApps },

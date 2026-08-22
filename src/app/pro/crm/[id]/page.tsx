@@ -30,15 +30,16 @@ function dollarsFromCents(cents: number | null): string {
 // action. Every query below is scoped to the signed in pro's own contractor
 // row, so a client that isn't theirs (or doesn't exist) behaves exactly like
 // a missing one: no information leak either way.
-export default async function ClientDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function ClientDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: client } = await supabase
     .from("pro_clients")

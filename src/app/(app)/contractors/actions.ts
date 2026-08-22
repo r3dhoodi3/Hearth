@@ -98,7 +98,7 @@ export async function postJobAction(formData: FormData) {
     setFlash(OUT_OF_AREA_POST_MESSAGE, "error");
     redirect("/contractors");
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -628,7 +628,7 @@ export async function postJobAction(formData: FormData) {
 export async function updateJobAction(
   formData: FormData
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -734,7 +734,7 @@ export async function updateJobAction(
 //    ghost-protection schedule if nobody was chosen - this action moves zero
 //    money and reads no wallet/fee columns.
 export async function closeJobAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const leadId = String(formData.get("lead_id"));
   // Capped before it ever reaches notification bodies or the flash message:
   // it's a free-text field with no length limit at the source.
@@ -890,7 +890,7 @@ export async function closeJobAction(formData: FormData) {
 // Homeowner picks a pro from the applicants. The DB function assigns + unlocks
 // the chosen pro (they get contact + chat) and declines the rest.
 export async function chooseApplicantAction(formData: FormData) {
-  const supabase = createClient() as any;
+  const supabase = (await createClient()) as any;
   const applicationId = String(formData.get("application_id"));
   const {
     data: { user },
@@ -1032,7 +1032,7 @@ const REVIEW_COMMENT_MAX = 600;
 export async function saveReviewAction(
   formData: FormData
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const leadId = String(formData.get("lead_id") || "");
   const rating = Number(formData.get("rating"));
   const comment = String(formData.get("comment") || "").trim();
@@ -1154,7 +1154,7 @@ export async function requestProAction(
   if (!launchCityForZip(property.zip ?? "")) {
     return err(OUT_OF_AREA_POST_MESSAGE);
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -1357,7 +1357,7 @@ export async function requestProAction(
 // to a lead on a property the caller owns; the direct_to / contractor_id guards
 // stop this from touching a normal open job or an already-unlocked one.
 export async function cancelDirectRequestAction(formData: FormData) {
-  const supabase = createClient() as any;
+  const supabase = (await createClient()) as any;
   const leadId = String(formData.get("lead_id") || "");
 
   const { data: lead } = await supabase
@@ -1399,7 +1399,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
     setFlash(OUT_OF_AREA_POST_MESSAGE, "error");
     redirect("/contractors");
   }
-  const supabase = createClient() as any;
+  const supabase = (await createClient()) as any;
   const leadId = String(formData.get("lead_id") || "");
 
   // RLS scopes this read to a lead the caller owns. It must still be a pending
@@ -1537,7 +1537,7 @@ export async function rehireProAction(
 ): Promise<ActionResult> {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },

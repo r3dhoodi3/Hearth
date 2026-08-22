@@ -30,7 +30,7 @@ export default async function ProProfilePage() {
   // Cast: the 0045 tables aren't in the generated types (database.types.ts is
   // not regenerated here). Degrades to an empty list if the migration hasn't
   // run yet.
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: projectRows } = await (supabase.from as any)("pro_projects")
     .select("*, pro_project_photos(*)")
     .eq("contractor_id", contractor.id)

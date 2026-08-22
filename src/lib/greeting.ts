@@ -17,7 +17,7 @@ export const getProactiveGreeting = cache(
     try {
       const property = await getActiveProperty();
       if (!property) return undefined;
-      const supabase = createClient();
+      const supabase = await createClient();
 
       const [profile, user] = await Promise.all([getUserProfile(), getUser()]);
       const metaName = (
@@ -90,7 +90,7 @@ export const getProactiveGreeting = cache(
 // page view instead of once for each of them.
 export const getOpenJobsForMe = cache(async (): Promise<any[]> => {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data } = await (supabase as any).rpc("open_jobs_for_me");
     return Array.isArray(data) ? data : [];
   } catch {

@@ -3,11 +3,12 @@ import { getCurrentContractor, getRole } from "@/lib/contractor";
 import { getUser } from "@/lib/auth";
 import OnboardingCompanyForm from "./OnboardingCompanyForm";
 
-export default async function ProOnboardingPage({
-  searchParams,
-}: {
-  searchParams?: { ref?: string | string[] };
-}) {
+export default async function ProOnboardingPage(
+  props: {
+    searchParams?: Promise<{ ref?: string | string[] }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // Already set up? Go straight to the leads inbox.
   const contractor = await getCurrentContractor();
   if (contractor) redirect("/pro");

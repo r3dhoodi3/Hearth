@@ -48,7 +48,7 @@ const RESPONSE_SCHEMA = {
 export async function POST(req: NextRequest) {
   // Authenticated feature: gating here (not just middleware) stops anonymous
   // abuse of the paid vision API, same as /api/confirm-system.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -151,11 +151,9 @@ async function logoDataUri(value: string | null): Promise<string | null> {
   }
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { reviewId: string } }
-) {
-  const supabase = createClient();
+export async function GET(req: NextRequest, props: { params: Promise<{ reviewId: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

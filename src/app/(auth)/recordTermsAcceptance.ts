@@ -37,7 +37,7 @@ export async function recordTermsAcceptance(
     return;
   }
 
-  const h = headers();
+  const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const userAgent = h.get("user-agent");
 
@@ -55,7 +55,7 @@ export async function recordTermsAcceptance(
   // fallback is narrowed below: rate-limited, and only accepted for a real
   // auth.users row created moments ago (i.e. an in-flight signup), not an
   // arbitrary/forged id.
-  const authClient = createClient();
+  const authClient = await createClient();
   const {
     data: { user: sessionUser },
   } = await authClient.auth.getUser();

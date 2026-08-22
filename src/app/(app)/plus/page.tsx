@@ -63,11 +63,12 @@ const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
     : []),
 ];
 
-export default async function PlusPage({
-  searchParams,
-}: {
-  searchParams: { reason?: string; welcome?: string };
-}) {
+export default async function PlusPage(
+  props: {
+    searchParams: Promise<{ reason?: string; welcome?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // ownsPlus, not hasPlus: this page manages the viewer's OWN billing. A
   // household member covered by the owner's Plus must still see the buy flow
   // here (their benefits come from the owner's plan, not a row of their own).

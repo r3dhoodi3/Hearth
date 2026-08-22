@@ -8,16 +8,17 @@ import SignInForm from "./SignInForm";
 // sent straight to where they were headed (?next=) or to their side of the
 // app, same pattern as /get-started and the root page, instead of being shown
 // the form again. Everyone else gets the client form (./SignInForm.tsx).
-export default async function SignInPage({
-  searchParams,
-}: {
-  searchParams?: { next?: string; error?: string };
-}) {
+export default async function SignInPage(
+  props: {
+    searchParams?: Promise<{ next?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const next = safeNextPath(
     typeof searchParams?.next === "string" ? searchParams.next : null
   );
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

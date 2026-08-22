@@ -54,7 +54,7 @@ export async function addMaintenanceHistoryAction(
   // timezones; only the date part is ever shown or deduped on.
   const completedAt = new Date(`${date}T12:00:00Z`).toISOString();
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Guard duplicate inserts here too (belt-and-suspenders with the DB unique
   // index from migration 0061, which may not be applied to the live database

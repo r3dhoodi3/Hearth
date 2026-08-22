@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     // case, not an error.
     let userId: string | null = null;
     try {
-      const supabase = createClient();
+      const supabase = await createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();

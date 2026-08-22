@@ -19,7 +19,7 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   // Require a signed-in user before touching the paid model. Gating here (not
   // just in middleware) stops anonymous abuse that would run up Gemini cost.
-  const authClient = createClient();
+  const authClient = await createClient();
   const {
     data: { user: authUser },
   } = await authClient.auth.getUser();

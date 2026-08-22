@@ -76,11 +76,12 @@ const PERKS: Array<{ icon: LucideIcon; title: string; body: string }> = [
   },
 ];
 
-export default async function ProPlusPage({
-  searchParams,
-}: {
-  searchParams: { welcome?: string };
-}) {
+export default async function ProPlusPage(
+  props: {
+    searchParams: Promise<{ welcome?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 

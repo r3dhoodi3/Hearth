@@ -93,7 +93,7 @@ function validPurchaseDate(v: string | null): string | null {
 export async function joinMarketWaitlistAction(
   zip: string
 ): Promise<ActionResult<null>> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -113,7 +113,7 @@ export async function joinMarketWaitlistAction(
   // src/app/contact/actions.ts and /api/track: only an explicit
   // `allowed === false` blocks, so a limiter outage never costs a real
   // out-of-area homeowner their place on the list.
-  const ip = headers().get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const { data: allowed } = await admin.rpc("rate_limit_hit", {
     p_bucket: `waitlist:${ip ?? "unknown"}`,
     p_limit: 5,
@@ -146,7 +146,7 @@ export async function lookupParcelAction(
   street: string,
   zip: string
 ): Promise<PublicParcelFacts> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -229,7 +229,7 @@ export async function lookupParcelAction(
 export async function claimPropertyAction(
   formData: FormData
 ): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -515,7 +515,7 @@ export async function claimPropertyAction(
   }
 
   // Make the new home the active one.
-  cookies().set(ACTIVE_HOME_COOKIE, created.id, {
+  (await cookies()).set(ACTIVE_HOME_COOKIE, created.id, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",

@@ -53,7 +53,7 @@ const MAX_IMAGE_B64_CHARS = 14_000_000;
 
 export async function POST(req: NextRequest) {
   // Require a signed-in user before touching the paid vision model.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -256,7 +256,7 @@ export async function POST(req: NextRequest) {
 // suspenders, and lets a broken/missing RLS policy fail closed to "no rows"
 // rather than open.
 export async function GET() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

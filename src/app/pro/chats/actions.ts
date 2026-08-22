@@ -43,7 +43,7 @@ export async function sendQuoteAction(formData: FormData) {
   const leadId = String(formData.get("lead_id") || "");
   if (!leadId) return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // The lead must really be one of this contractor's own jobs. The id
   // arrives as client input, so re check here rather than trust it, same
@@ -171,7 +171,7 @@ export async function withdrawQuoteAction(formData: FormData) {
   const quoteId = String(formData.get("quote_id") || "");
   if (!quoteId) return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: quote } = await supabase
     .from("lead_quotes")
     .update({ status: "withdrawn", updated_at: new Date().toISOString() })
@@ -196,7 +196,7 @@ export async function createInvoiceAction(formData: FormData) {
   const leadId = String(formData.get("lead_id") || "");
   if (!leadId) return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // The lead must really be one of this contractor's own jobs. The id
   // arrives as client input, so re check here rather than trust it, same
@@ -313,7 +313,7 @@ export async function voidInvoiceAction(formData: FormData) {
   const invoiceId = String(formData.get("invoice_id") || "");
   if (!invoiceId) return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: invoice } = await supabase
     .from("invoices")
     .update({ status: "void", updated_at: new Date().toISOString() })

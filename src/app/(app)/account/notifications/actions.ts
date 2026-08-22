@@ -8,7 +8,7 @@ import { NOTIFICATION_CHANNELS } from "./channels";
 // Save the homeowner's notification toggles onto their own user row. Each
 // checkbox posts "on" when checked, so an absent value means the channel is off.
 export async function saveNotificationPrefsAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -38,7 +38,7 @@ export async function saveNotificationPrefsAction(formData: FormData) {
     .update({ notification_prefs: prefs })
     .eq("id", user.id);
 
-  if (error) setFlash("Couldn't update your settings. Please try again.", "error");
-  else setFlash("Notification preferences saved.", "success");
+  if (error) await setFlash("Couldn't update your settings. Please try again.", "error");
+  else await setFlash("Notification preferences saved.", "success");
   revalidatePath("/account/notifications");
 }

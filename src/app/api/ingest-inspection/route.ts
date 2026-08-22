@@ -104,7 +104,7 @@ const MODELS = [
 
 export async function POST(req: NextRequest) {
   // Require a signed-in user before touching the paid vision model.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

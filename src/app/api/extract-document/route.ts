@@ -53,7 +53,7 @@ const MODELS = [
 export async function POST(req: NextRequest) {
   // Require a signed-in user. This is an authenticated feature; gating it here
   // (not just in middleware) stops anonymous abuse of the paid vision API.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

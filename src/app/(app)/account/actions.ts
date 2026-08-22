@@ -52,7 +52,7 @@ async function passwordAttemptsExhausted(userId: string): Promise<boolean> {
 // only by the /account/security actions below - this action ignores any
 // email/password fields a crafted POST might include.
 export async function saveAccountAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -147,7 +147,7 @@ export async function saveAccountAction(formData: FormData) {
 // depends on the "Secure email change" toggle in the dashboard, and this must
 // be safe whatever that toggle is set to.
 export async function updateEmailAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -220,7 +220,7 @@ export async function updateEmailAction(formData: FormData) {
 // re-authenticating with a throwaway client (so the live session/cookies aren't
 // touched), then checks the new password matches its confirmation.
 export async function updatePasswordAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -273,7 +273,7 @@ export async function updatePasswordAction(formData: FormData) {
 // Supabase doesn't expose a per-device session list to us, so this is the
 // whole feature: one honest button instead of a fake device list.
 export async function signOutOthersAction() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -311,7 +311,7 @@ export async function signOutOthersAction() {
 // accounts have no password to re-enter, so they type their email address
 // instead; see the branch below.
 export async function deleteAccountAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

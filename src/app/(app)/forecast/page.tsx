@@ -49,7 +49,7 @@ export default async function ForecastPage() {
   if (!propertyOrNull) redirect("/onboarding");
 
   const property = propertyOrNull;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Same "open issues" query the Home page runs, so a resolved issue drops
   // out here on the very next load too - no separate flag to keep in sync.

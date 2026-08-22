@@ -126,7 +126,7 @@ export default async function ProToolsPage() {
   // /api/pro-past-jobs. Fetched here (server side) and handed to the client
   // component as its starting list; ProToolsClient keeps its own copy in
   // state so an upload or a remove updates the screen immediately.
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: pastJobRows } = await supabase
     .from("pro_past_jobs")
     .select("*")

@@ -19,7 +19,7 @@ export async function requestTopicAction(
     .slice(0, MAX_QUESTION);
   if (!question) return err("Add a topic so we know what to write.");
 
-  const supabase = createClient() as any;
+  const supabase = (await createClient()) as any;
   const {
     data: { user },
   } = await supabase.auth.getUser();

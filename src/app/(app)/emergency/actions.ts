@@ -31,7 +31,7 @@ export async function savePrepItemAction(formData: FormData) {
   const photoUrl = rawUrl.length <= 1000 ? rawUrl : "";
   const note = ((formData.get("note") as string) || "").trim().slice(0, 2000);
 
-  const supabase = createClient();
+  const supabase = await createClient();
   try {
     const existing = ((property as any).emergency_prep ?? {}) as PrepMap;
     const next: PrepMap = {
@@ -46,10 +46,10 @@ export async function savePrepItemAction(formData: FormData) {
       .update({ emergency_prep: next })
       .eq("id", property.id);
     if (error) throw error;
-    setFlash("Saved. You're ready for this one.");
+    await setFlash("Saved. You're ready for this one.");
   } catch (err) {
     console.error("emergency_prep save failed", err);
-    setFlash(
+    await setFlash(
       "Couldn't save that just now. Please try again in a bit.",
       "error"
     );

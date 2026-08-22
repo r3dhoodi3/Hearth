@@ -167,7 +167,7 @@ const CATEGORY: Record<string, string> = {
 };
 
 export default async function LearnPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const property = await getActiveProperty();
 
   // First instance of each system type they own, for inline status; plus their

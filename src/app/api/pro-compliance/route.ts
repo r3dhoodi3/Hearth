@@ -166,7 +166,7 @@ async function extractExpiry(
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -313,7 +313,7 @@ export async function POST(req: NextRequest) {
 // itself is hardcoded to the home-photos bucket, so this route gets its own
 // minimal, owner-checked GET rather than trying to generalize that one.
 export async function GET(req: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

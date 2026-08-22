@@ -13,14 +13,14 @@ import { setFlash } from "@/lib/flash";
 // members are flagged priority so the team answers them first. The flag is
 // computed server-side; it is never taken from the form.
 export async function sendProSupportMessageAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   // Require a session: this stores attacker-controllable text that staff later
   // read, so don't accept anonymous writes.
   if (!user) {
-    setFlash("Please sign in to contact support.", "error");
+    await setFlash("Please sign in to contact support.", "error");
     return;
   }
 
@@ -35,7 +35,7 @@ export async function sendProSupportMessageAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    setFlash(
+    await setFlash(
       "You've sent several messages already. Please wait a bit before sending another.",
       "error"
     );
@@ -44,7 +44,7 @@ export async function sendProSupportMessageAction(formData: FormData) {
 
   const contractor = await getCurrentContractor();
   if (!contractor) {
-    setFlash("Finish setting up your company first.", "error");
+    await setFlash("Finish setting up your company first.", "error");
     return;
   }
 
@@ -52,7 +52,7 @@ export async function sendProSupportMessageAction(formData: FormData) {
   // contact form, which write to this same table.
   const message = cappedField(formData, "message", FIELD_MAX.message);
   if (!message) {
-    setFlash("Please write a short message first.", "error");
+    await setFlash("Please write a short message first.", "error");
     return;
   }
 
@@ -74,7 +74,7 @@ export async function sendProSupportMessageAction(formData: FormData) {
     ({ error } = await supabase.from("support_messages").insert(base));
   }
 
-  if (error) setFlash("Couldn't send your message. Please try again.", "error");
-  else setFlash("Thanks. We got your message and will get back to you.", "success");
+  if (error) await setFlash("Couldn't send your message. Please try again.", "error");
+  else await setFlash("Thanks. We got your message and will get back to you.", "success");
   revalidatePath("/pro/help");
 }

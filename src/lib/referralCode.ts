@@ -34,7 +34,7 @@ function generateCode(): string {
 // regenerated for 0099), so every query touching them is cast to any - the
 // same convention claimPropertyAction and the other post-migration writers use.
 export async function getOrCreateReferralCode(): Promise<string | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

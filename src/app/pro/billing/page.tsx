@@ -51,20 +51,19 @@ function txLabel(type: string | null | undefined): string {
   return TX_LABEL[type] ?? type.replace(/_/g, " ");
 }
 
-export default async function ProBillingPage({
-  searchParams,
-}: {
-  searchParams: {
+export default async function ProBillingPage(props: {
+  searchParams: Promise<{
     paid?: string;
     canceled?: string;
     need?: string;
     category?: string;
-  };
+  }>;
 }) {
+  const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Everything this page needs beyond the contractor row itself, in ONE wave.
   // These were five sequential awaits, and nothing in the list depends on

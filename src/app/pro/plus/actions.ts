@@ -83,7 +83,7 @@ export async function startProCheckoutAction(formData: FormData) {
   // attribute the resulting subscription), so a cookie-edited id would let
   // an attacker burn a victim's intro claim or misattribute a subscription.
   // supabase.auth.getUser() re-checks the id against Supabase's auth server.
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -150,7 +150,7 @@ export async function startProCheckoutAction(formData: FormData) {
       // If Stripe is unreachable, fall through to checkout as before.
     }
     if (alreadyMember) {
-      setFlash(
+      await setFlash(
         "You already have a Hearth Pro membership. No need to buy it twice.",
         "info"
       );
@@ -396,7 +396,7 @@ async function setProRenewal(opts: {
   // membership and must never be canceled or resumed from here.
   const sub = await getProSubscription();
   if (!sub?.stripe_subscription_id) {
-    setFlash(opts.missingFlash, "error");
+    await setFlash(opts.missingFlash, "error");
     redirect("/pro/plus");
   }
 
@@ -405,14 +405,14 @@ async function setProRenewal(opts: {
       cancel_at_period_end: opts.cancelAtPeriodEnd,
     });
   } catch {
-    setFlash(
+    await setFlash(
       "Something went sideways talking to Stripe. Try Manage billing instead.",
       "error"
     );
     redirect("/pro/plus");
   }
 
-  setFlash(opts.doneFlash);
+  await setFlash(opts.doneFlash);
   revalidatePath("/pro/plus");
 }
 

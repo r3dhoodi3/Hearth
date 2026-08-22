@@ -70,7 +70,13 @@ export default function GlobalError({}: {
             Try again
           </button>
           <div style={{ marginTop: "12px" }}>
-            {/* Plain anchor on purpose: the Next router may be broken here. */}
+            {/* Plain anchor on purpose: the Next router may be broken here.
+                global-error replaces the ROOT layout, so it renders outside the
+                router that <Link> depends on - this is the one file where the
+                no-html-link-for-pages rule is wrong. eslint-config-next 15
+                started flagging app-directory files it previously skipped, so
+                the exemption has to be stated explicitly. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
               href="/"
               style={{

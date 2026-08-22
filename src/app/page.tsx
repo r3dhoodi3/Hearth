@@ -48,11 +48,10 @@ function CheckPill({ label }: { label: string }) {
 // signed-in bounce into a client-side check), this page prerenders with no
 // other work. Until then a revalidate export would be a no-op and force-static
 // would silently break both redirects.
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: { code?: string };
+export default async function Home(props: {
+  searchParams: Promise<{ code?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   // Safety net: if a magic link lands here (e.g. Supabase fell back to the Site
   // URL instead of /auth/callback), forward the code to the handler that
   // exchanges it for a session.
@@ -62,7 +61,7 @@ export default async function Home({
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

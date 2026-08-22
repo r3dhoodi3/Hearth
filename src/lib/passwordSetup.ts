@@ -29,7 +29,7 @@ interface SetPasswordLinkResult {
 // strength meter and the 8-character minimum are the same ones every other
 // password change goes through.
 export async function sendSetPasswordLinkAction(): Promise<SetPasswordLinkResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -44,7 +44,7 @@ export async function sendSetPasswordLinkAction(): Promise<SetPasswordLinkResult
   // The address on the account, never anything the browser sent us: this
   // action takes no arguments on purpose, so there is no way to aim the link
   // at a mailbox the signed-in user doesn't already own.
-  const origin = requestOriginFromHeaders();
+  const origin = await requestOriginFromHeaders();
   const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
     redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(
       "/reset-password?step=update"

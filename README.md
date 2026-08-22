@@ -56,8 +56,11 @@ For the current state of the project, decisions, and what is next, read
 
 ## Stack
 
-- **Next.js 14** (App Router, TypeScript, Server Actions), **React 18**,
-  **Tailwind CSS**, `lucide-react` icons
+- **Next.js 15** + **React 19** (App Router, TypeScript, Server Actions),
+  **Tailwind CSS**, `lucide-react` icons. `cookies()`, `headers()`, and a
+  page's `params`/`searchParams` are async: server code awaits them, and
+  `createClient()` from `src/lib/supabase/server.ts` is async for the same
+  reason, so every call site awaits it.
 - **Supabase**: Postgres, Auth (email + password with confirmation, Google,
   Apple), Storage (private photo and document buckets)
 - **Stripe** subscriptions and wallet top-ups, **Resend**, **Twilio**,
@@ -171,15 +174,13 @@ hour. Until custom SMTP (Resend) is configured in Supabase Auth settings
 `email_address_invalid`, which the UI shows as "That didn't go through". To let
 a tester in before then, invite their email on the Supabase org's Team tab.
 
-## Known local limitation (Windows)
+## Windows build note
 
-`npm run build` on Windows fails during static prerender of
-`/opengraph-image` with `TypeError: Invalid URL` from the bundled `@vercel/og`
-module, which mangles a `file://` URL when locating its default font. This
-happens before any application code runs (`src/lib/ogFont.ts` explains the
-workaround used for `npm run dev`). Vercel builds on Linux and is unaffected.
-A Windows build is considered good when it compiles, typechecks, and the only
-export error reported is `/opengraph-image`.
+On Next 14, `npm run build` failed on Windows during static prerender of
+`/opengraph-image` (a `file://` URL bug inside the bundled `@vercel/og`).
+Next 15 ships a newer bundle and the failure is gone: a full `npm run build`
+on Windows now exits 0 with no export errors. `src/lib/ogFont.ts` is kept
+because it still covers the dev-server path.
 
 ## Data and revenue, honestly
 

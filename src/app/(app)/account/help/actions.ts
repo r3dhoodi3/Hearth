@@ -18,7 +18,7 @@ const HELP_PATH = "/account/help";
 // redirect is how the rest of the account actions surface their result, so
 // this matches them.
 export async function saveSupportMessageAction(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

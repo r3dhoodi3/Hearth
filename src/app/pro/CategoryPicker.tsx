@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+// JSX imported explicitly: React 19's types no longer install a GLOBAL `JSX`
+// namespace, they export it from "react" instead, so the bare `JSX.Element`
+// below stopped resolving.
+import { useState, type JSX } from "react";
 import { SERVICE_CATEGORIES } from "@/lib/constants";
 
 const CANONICAL = new Set<string>(SERVICE_CATEGORIES.map((c) => c.value));

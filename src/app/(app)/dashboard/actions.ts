@@ -16,7 +16,7 @@ import { ALWAYS_SCHEDULE, SYSTEM_SCHEDULE } from "@/lib/maintenancePlan";
 // know whether the checkbox should actually flip (a failed update must not
 // look done, or the next reload will silently un-check it with no explanation).
 export async function completeReminderAction(id: string): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("maintenance_tasks")
     .update({ status: "done", completed_at: new Date().toISOString() })
@@ -27,7 +27,7 @@ export async function completeReminderAction(id: string): Promise<ActionResult> 
     // readable in devtools, so log it server-side and return the same plain
     // copy the flash shows.
     console.error("completeReminderAction failed:", error);
-    setFlash("Couldn't update that reminder. Please try again.", "error");
+    await setFlash("Couldn't update that reminder. Please try again.", "error");
     return err("Couldn't update that reminder. Please try again.");
   }
   revalidatePath("/dashboard");
@@ -38,7 +38,7 @@ export async function completeReminderAction(id: string): Promise<ActionResult> 
 // ActionResult contract as completeReminderAction: ReminderItem must not
 // remove the row from the list until the delete actually succeeded.
 export async function deleteReminderAction(id: string): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("maintenance_tasks")
     .delete()
@@ -47,7 +47,7 @@ export async function deleteReminderAction(id: string): Promise<ActionResult> {
     // Generic string over the wire, raw error to the server log: see
     // completeReminderAction above.
     console.error("deleteReminderAction failed:", error);
-    setFlash("Couldn't remove that reminder. Please try again.", "error");
+    await setFlash("Couldn't remove that reminder. Please try again.", "error");
     return err("Couldn't remove that reminder. Please try again.");
   }
   revalidatePath("/dashboard");
@@ -71,7 +71,7 @@ function validDueDate(v: string): string | null {
 // Edit a reminder's title / due date.
 export async function editReminderAction(formData: FormData) {
   const id = formData.get("id") as string;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Both fields are client input, so the <input maxLength> and the date picker
   // are hints, not guards. A title is capped rather than rejected (nobody
@@ -89,13 +89,13 @@ export async function editReminderAction(formData: FormData) {
     })
     .eq("id", id);
   if (error)
-    setFlash("Couldn't save your changes. Please try again.", "error");
+    await setFlash("Couldn't save your changes. Please try again.", "error");
   revalidatePath("/dashboard");
 }
 
 // Undo: put a reminder back to open (in case it was checked off by accident).
 export async function uncompleteReminderAction(id: string): Promise<ActionResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("maintenance_tasks")
     .update({ status: "open", completed_at: null })
@@ -104,7 +104,7 @@ export async function uncompleteReminderAction(id: string): Promise<ActionResult
     // Generic string over the wire, raw error to the server log: see
     // completeReminderAction above.
     console.error("uncompleteReminderAction failed:", error);
-    setFlash("Couldn't update that reminder. Please try again.", "error");
+    await setFlash("Couldn't update that reminder. Please try again.", "error");
     return err("Couldn't update that reminder. Please try again.");
   }
   revalidatePath("/dashboard");
@@ -153,7 +153,7 @@ export async function generateMaintenancePlanAction() {
   if (!plus) {
     const {
       data: { user },
-    } = await createClient().auth.getUser();
+    } = await (await createClient()).auth.getUser();
     if (!user) redirect("/plus?reason=plan");
     try {
       const admin = createAdminClient();
@@ -183,7 +183,7 @@ export async function generateMaintenancePlanAction() {
     try {
       const {
         data: { user },
-      } = await createClient().auth.getUser();
+      } = await (await createClient()).auth.getUser();
       if (!user) return;
       await createAdminClient()
         .from("users")
@@ -200,7 +200,7 @@ export async function generateMaintenancePlanAction() {
     redirect("/dashboard");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: systems } = await supabase
     .from("home_systems")
     .select("system_type")
@@ -238,11 +238,11 @@ export async function generateMaintenancePlanAction() {
 
   if (rows.length > 0) {
     await supabase.from("maintenance_tasks").insert(rows);
-    setFlash("Your maintenance plan is ready. Check your reminders.", "success");
+    await setFlash("Your maintenance plan is ready. Check your reminders.", "success");
   } else {
     // Nothing new to add: don't let the one free build be spent on a no-op.
     await refundFreeCredit();
-    setFlash("Your maintenance plan is already up to date.", "info");
+    await setFlash("Your maintenance plan is already up to date.", "info");
   }
   revalidatePath("/dashboard");
 }

@@ -12,7 +12,7 @@ import SystemCaptureCard from "./SystemCaptureCard";
 // through the house turns every guess into a real fact, one scan at a time.
 export default async function WalkthroughPage() {
   const property = (await getActiveProperty())!;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [{ data: systems }, { data: issues }] = await Promise.all([
     supabase

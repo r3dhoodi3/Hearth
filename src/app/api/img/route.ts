@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 // (a property they own, or a chat/<lead> they're a party to). We then redirect
 // to the signed URL. No service role, no manual auth logic - RLS is the gate.
 export async function GET(req: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
