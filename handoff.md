@@ -1,4 +1,4 @@
-# Hearth handoff (2026-08-20)
+# Hearth handoff (2026-08-21)
 
 Snapshot to continue from after clearing the chat. Durable context also lives in
 the Claude memory files (the real cross-session handoff); this is the readable
@@ -6,168 +6,173 @@ summary. Everything below is committed and pushed unless marked otherwise.
 
 ## Current state (verified, not aspirational)
 
-- Branch `main` at `HEAD` == origin. 196 Vitest tests passing, `tsc --noEmit` clean.
-- LIVE Supabase DB is at migration **0126** - verified read-only against the live
-  API on 2026-08-20: launch_city_for_zip resolves all 9 cities (Santa Ana check),
-  Surfside 90743 correctly maps to Seal Beach, anon is denied EXECUTE, pros with
-  serves_orange_county are backfilled to all 9 launch cities, verified-license
-  set is duplicate-free. Landen pasted `supabase/PASTE-ME-live-0124-0125-0126-COMBINED.sql` himself.
-- Launch area: Huntington Beach, Fountain Valley, Seal Beach, Westminster,
-  Midway City, Garden Grove, Santa Ana, Costa Mesa, Newport Beach. Enforced end
-  to end: homeowner ZIP gates (onboarding + job post + direct request + post
-  publicly), pro city pick (9 checkboxes), open_jobs_for_me + apply_to_lead
-  filters. Deliberate exception: unlock_direct_request has NO city gate - the
-  homeowner picked that specific pro; gate it only if Landen decides to.
-- Dev server: `npm run dev` on :3000 (running in background at handoff time).
+- Branch `main` at `c5ba31a` == origin. **Next.js 15.5 + React 19** since
+  `c5dfeb1`. `tsc --noEmit` clean, 196 Vitest tests passing (14 files), full
+  `npm run build` exits 0 on Windows (112/112 pages; the old Windows
+  `/opengraph-image` prerender failure is gone on Next 15).
+- LIVE Supabase DB at migration **0126**. On 08-20 the live `properties`
+  table had drifted: RLS not enforced and the `authenticated` grant missing,
+  so a fresh account could read every home's address. Fixed with
+  `supabase/PASTE-ME-live-fix-properties-grants.sql` then
+  `supabase/PASTE-ME-live-audit-rls.sql` (drops any policy on properties that
+  is not one of the five from 0002/0051). Verified with a throwaway user
+  (deleted): fresh account sees [] on properties, home_systems, issues,
+  documents, contractor_leads, contractors; only its own users row; anon is
+  denied. Landen never pasted the audit's 1a/1b output, so other tables are
+  spot-checked, not audited.
+- **Free Vercel test site: https://hearth-seven-pink.vercel.app** (Vercel
+  project `hearth`, team slug `hearth-test`, Hobby plan). Builds from branch
+  `deploy/free-test`, whose only intended difference from main is an empty
+  cron list in `vercel.json` (Hobby allows 2 crons, main declares 17).
+  `.github/workflows/sync-test-deploy.yml` merges main into that branch on
+  every push to main, so the test site follows main automatically. Env vars
+  live in Vercel (Supabase URL/publishable/service role, Stripe TEST keys and
+  price ids, Gemini, `NEXT_PUBLIC_SITE_URL` = the vercel URL). Supabase Auth
+  URL config: Site URL = vercel URL, redirect allowlist has vercel URL `/**`
+  and `http://localhost:3000/**`.
+- Dev server: `npm run dev` on :3000, running in background at handoff time
+  (Next 15; `.next` was wiped and deps reinstalled after the merge).
+- Launch area unchanged: HB, FV, Seal Beach, Westminster, Midway City, Garden
+  Grove, Santa Ana, Costa Mesa, Newport Beach. `unlock_direct_request` still
+  deliberately has no city gate.
 
-## What shipped 2026-08-19 and 08-20 (commit order)
+## What shipped 2026-08-20 and 08-21 (commit order)
 
-1. `607b163`/`b5ccb30` - Ethan's PR #6 migration renumbering merged + stale-name cleanup.
-2. `5f88057` - Sign in with Apple on web (button on signin + both signups).
-   Owner setup steps in `docs/APPLE-SIGN-IN-SETUP.md`; App Store research in
-   `docs/APP-STORE-CHECKLIST.md`. THE TRAP: Apple's client secret JWT expires in
-   6 months and fails silently - Landen must set a 5-month recurring reminder.
-3. `840560a` - Pricing pages: Free / Annual hero / Monthly anchor on both plus
-   pages + /pricing; annual is the checkout default via checkoutCadence() (one
-   choke point, disclosure and charge can never disagree); per-day framing and
-   savings computed from constants (planMath helpers).
-4. `b1176b5` - Launch-city enforcement (0124) + CSLB license identity lock
-   (0125): name matching in src/lib/licenseMatch.ts (generic trade words do not
-   count as identity; containment is token-boundary anchored - a substring
-   forgery hole was found by the verifier and fixed), partial unique index =
-   one license verified on one account, first claim wins, dispute form lands in
-   support_messages.
-5. `3f4f37c` - Perf wave 1: 15 loading.tsx skeletons, middleware skips auth on
-   public paths, guides share one cached auth call, waterfalls collapsed
-   (pro/billing 7->3 waves), /profile is a config redirect, greeting fetched
-   lazily on dock open, contractor/property/chats selects trimmed to column
-   lists, qrcode loads on demand.
-6. `e921f55` - The big one: free-tier audit fixes (13-agent persona audit,
-   cross-examined; full report artifact "Free-Tier Feel Audit"), 9-city
-   expansion (0126), Ask Hearth consistency (strongest Gemini first, temp 0.4,
-   thinking budget, continuity prompt rules), owner fixes (home value AVM
-   preference, quote-form validation on submit only, BackLink on /p/[id],
-   #your-jobs anchor, plain-text project chips).
-7. `5659506` - Perf wave 2 (flash toast client-side so public pages can
-   prerender; job-post fan-out 402 queries -> 3) + trade-pictogram sweep
-   (CategoryIcon and every per-trade symbol deleted app-wide; icons in general
-   stay - tool tiles, nav, functional).
-8. (this commit) - getProperties redirects to /signin instead of returning []
-   when the session cookie is unreadable - fixes the "random onboarding page,
-   back, login, then homeowner side" loop Landen hit.
+1. `44f268a` - README rewritten to match the real app (it still described
+   the Phase 1 scaffold); properties grant fix file checked in.
+2. `20944d2` - Stripe client is lazy (`src/lib/stripe.ts`). `new Stripe("")`
+   threw at import and `subscription.ts` is imported by ~42 files, so a
+   machine without `STRIPE_SECRET_KEY` could not render any page. README and
+   `.env.local.example` now say what is required (Supabase URL, publishable
+   key, service role key) vs optional.
+3. `f5e90e6` - RLS audit + properties hard-reset paste file.
+4. `6fd5145` - GitHub Action that auto-syncs main into `deploy/free-test`.
+5. `c5dfeb1` - **Next 15 merged** (branch `upgrade/next-15`, re-merged with
+   main first; 5 conflicts resolved: async `searchParams`, `await
+   createClient()`, layout no longer reads flash server-side, README).
+6. `c5ba31a` - App header is ONE row at every width (Nav + ProNav): brand and
+   home switcher left (truncating), search / bell / profile pinned top-right,
+   wordmark and "for Pros" desktop-only. Installable on iPhone: web app
+   manifest (`src/app/manifest.ts`), generated Apple touch icon
+   (`src/app/apple-icon.tsx`, allowlisted in `src/lib/supabase/middleware.ts`
+   next to `/opengraph-image`), `appleWebApp` tags, light/dark `themeColor`.
+   Also carries the two `await createClient()` fixes the merge missed.
 
-Key monetization decisions Landen made (all implemented):
-- Email/SMS for proactive homeowner alerts/reminders are Plus-only, enforced
-  inside sendNotification (src/lib/notifyGating.ts is the kind list; fails
-  CLOSED; billing notices are never gated - legal). In-app bell is free forever.
-- Hearth pays for a pro's Checkr check only after 3 PAID leads (refunded ones
-  do not count). Atomic status claim before the Checkr call prevents
-  double-billing. Card shows "you're at X of 3" progress.
-- Home report: free users see the full page, printing carries a diagonal
-  "Hearth Plus preview" watermark; members print clean AND complete (print now
-  carries full per-system details via shared src/lib/health.ts helpers so
-  screen and print cannot drift).
+Findings from the day that are NOT code:
+- Supabase's built-in mailer only delivers to project TEAM MEMBERS and caps
+  at ~2/hour. Any other address fails signup with `email_address_invalid`,
+  shown as "That didn't go through". Unblock: Resend SMTP in Supabase Auth
+  settings (go-live item) or invite the tester on the Supabase org Team tab.
+  Google sign-in works for anyone now.
+- Landen's friend tried running the repo locally in VS Code; that path needs
+  the service role key and is not worth it. The test site is the answer.
 
 ## Next steps (priority order)
 
-1. **Landen: Next.js 15 smoke test, then merge.** Branch `upgrade/next-15` at
-   `fed0a84` in the worktree `.claude/worktrees/agent-a271b33cb247f403a` was
-   re-merged with all of the above and is fully green (tsc, 196 tests, full
-   build). ~2 min: save something + see toast, sign in/out, scrub demo video,
-   glance pro billing. Then say "merge it". After stable: Next 16 hop closes
-   the last 3 npm-audit highs.
-2. **Landen: Apple sign-in portal setup** per docs/APPLE-SIGN-IN-SETUP.md
-   ($99/yr + ~40 min + the 5-month JWT reminder).
-3. **Landen: legal track** - CA LLC (~$90 + $800/yr franchise tax, time it near
-   launch), DMCA agent ($6), attorney flat-fee REVIEW of ToS/privacy/pro-terms
-   ($1.5-4k), move legal contact off personal Gmail.
-4. **Landen: Stripe test-mode checklist** before the 3-day trial goes live.
-5. **Landen: GO-LIVE-WIRING keys** (Resend, Twilio + A2P, Stripe live, Checkr,
-   RentCast, CRON_SECRET) per docs/GO-LIVE-WIRING.md. Riders: register the
-   sending domain with Apple private relay; swap free Gemini key for paid
-   Claude API (privacy + the 25/day cap math changes).
-6. Open product decisions: (a) direct-request city-gate exception - keep or
-   gate; (b) /p/[id] full staticization (exact path written into that page's
-   comments - move the request-form CTA decision client-side); (c) landlord/
-   renter product idea - Phase 1 is a "tenant" flavor of household sharing
-   whose issues notify the landlord instead of posting jobs; do NOT start
-   before HB/FV launch proves itself; (d) eventual iOS app per
-   docs/APP-STORE-CHECKLIST.md.
-7. "Value features batch 2" from the old roadmap is ALREADY BUILT (verified
-   08-20: doc vault, service history/reviews/report, photo-to-AI, referrals,
-   email/SMS senders). Do not re-plan it; delivery wakes up with the keys.
+1. **Landen: check the header + install on an actual iPhone** at the test
+   site: one-row top bar with controls right; Safari Share -> Add to Home
+   Screen gives a house icon that opens full-screen. Then the Next 15 smoke
+   test on the same site (save something + toast, sign out/in, demo video,
+   pro billing glance). Report anything off; formatting is the next focus.
+2. **Next 16**: a background agent was attempting it on branch
+   `upgrade/next-16` in worktree `.claude/worktrees/agent-a271b33cb247f403a`
+   when this handoff was written (uncommitted edits to package.json,
+   plus/page.tsx, contractor.ts, ogFont.ts at that moment). Result unknown.
+   Next session: inspect that worktree, run tsc/test/build, check
+   `npm audit --omit=dev` for the 3 highs, and only merge when green. It is
+   the same drift risk as next-15: re-merge main FIRST, commit the fixes IN
+   the branch, verify on the branch tip, then merge.
+3. **William (security/infra, per Landen 08-21)**: run audit queries 1a/1b
+   from `PASTE-ME-live-audit-rls.sql` and confirm both empty; Resend SMTP in
+   Supabase; CLI migration baseline (`supabase/MIGRATIONS.md`); go-live keys
+   per `docs/GO-LIVE-WIRING.md`; rotate the service role key; later Vercel
+   Pro + Supabase Pro. Frame these as notes for William, not tasks for Landen.
+4. **Landen (owner-only)**: Apple sign-in portal (`docs/APPLE-SIGN-IN-SETUP.md`
+   + 5-month JWT reminder); legal track (CA LLC, DMCA agent, attorney review,
+   legal contact off Gmail); Stripe test-mode checklist then live-mode
+   verification; domain purchase.
+5. **Formatting / iPhone polish** is what Landen wants to spend sessions on
+   now. Rules in memory: compact UI, no per-trade pictograms, honest copy.
+   Method: Landen lists what looks off on his phone, fix in batches; or run a
+   screen-by-screen visual audit of the test site and hand him a ranked list.
+6. Open product decisions unchanged: direct-request city-gate exception;
+   `/p/[id]` full staticization; landlord/tenant idea (not before launch);
+   delete Landen's duplicate 17860 Santa Mariana property (not authorized).
+7. Untracked leftover `supabase/PASTE-ME-live-0118-0119.sql` (already
+   applied live) still needs a `git add` when someone is in there.
 
 ## What went bad (learn from these)
 
-- **Migration 0124 initially mapped Surfside (90743) to Huntington Beach** -
-  it belongs to Seal Beach. Caught in the 0126 work. ZIP facts need checking,
-  not vibes; there is now a test asserting every launch ZIP is in the OC set.
-- **The license name-matcher shipped with a substring hole** ("Ndo" matched
-  "MENDOZA CONSTRUCTION") - the adversarial verifier caught it before push.
-  The verify-everything-money-adjacent loop earns its cost; keep it.
-- **startBackgroundCheckAction claimed its whitelist closed the double-click
-  race - it did not** (read-then-write). Fixed with a conditional-update claim
-  before the paid call. Pattern to reuse: claim state atomically BEFORE
-  spending money (analyze-quote does it right).
-- **The /plus table sold "all alerts, every channel" while no code enforced
-  it** and the weather cron passed no contacts at all. Perk pages must be
-  cross-checked against enforcement; the audit found it, both halves fixed.
-- **A dishonest banner shipped at some point**: "You've used your free quote
-  check" shown unconditionally to fresh users. Now conditional. Copy that
-  states a fact must read the fact.
-- **getProperties returned [] for a missing session**, misrouting stale-cookie
-  users to /onboarding (the bug fixed in this commit). Empty-data and
-  no-session are different answers; never conflate them.
-- **Stale .next after mass file changes** broke localhost with webpack
-  "reading 'call'" errors - fix is stop server, delete .next, restart.
-- **Two agents stalled mid-run** (stream watchdog); a SendMessage nudge with
-  "re-read the tree, resume exactly where you left off" recovered both.
-- Landen's test account has a DUPLICATE property (two 17860 Santa Mariana St
-  rows; the 2-system one from 06-03 is the dead one). Default active home =
-  oldest, so the near-empty duplicate shows first. He was offered deletion -
-  not yet authorized. Use the home switcher meanwhile.
+- **Live `properties` table drifted to wide open** and nothing in the repo
+  could have caused it: a dashboard click. Policy edits in the Supabase UI
+  leave no trace. Check `pg_policies` for stray policies FIRST when a
+  permission symptom appears, and never use dashboard policy templates.
+- **The Next 15 merge went out missing two one-line fixes.** They were made
+  in the worktree after the merge commit and never committed, so `main`
+  failed tsc until the next push. Verify on the merged branch tip, not on a
+  dirty worktree.
+- **Instruction tables got pasted literally into Vercel.** A cell reading
+  "https://hearth-test.vercel.app for now; you'll correct it in step 4"
+  became the env value and broke the build (`new URL()`); four env names in
+  one cell failed validation. Give Landen one value per line, nothing else.
+- **`hearth-test.vercel.app` was never Landen's site** (names are global; his
+  is `hearth-seven-pink.vercel.app`). The "You need access" wall was someone
+  else's deployment. Confirm the real URL from Settings -> Domains first.
+- **README claimed optional env vars degrade gracefully; Stripe did not.**
+  Docs that state runtime behavior have to be checked against the code.
+- **Building another branch in the main checkout while the dev server ran**
+  corrupted `.next` (`__webpack_modules__[moduleId] is not a function`).
+  Build branches in the worktree, or stop the server first.
+- **Probing RLS by minting a magic link on Landen's account was blocked**
+  (correctly). A throwaway admin-created user, then deleted, is the way.
+- Browser screenshot verification of the signed-in header failed: Claude
+  cannot enter credentials and the resize did not take. Landen's phone is
+  the verification path for signed-in mobile UI.
 
 ## What went well (keep doing)
 
-- Plan (Fable) -> execute (Opus subagents) -> adversarially verify anything
-  money/security -> commit in reviewed batches. Verifier caught 2 real
-  pre-push bugs across the run.
-- The 13-agent persona audit with cross-examination produced findings that
-  survived scrutiny AND a balanced "leave these alone" list. Report artifact:
-  "Free-Tier Feel Audit"; runway doc artifact: "Hearth Launch Runway" (update
-  the same artifacts, do not create new ones).
-- Byte-level mechanical diffs of money functions (apply_to_lead re-issues)
-  instead of eyeballing.
-- Centralized choke points: checkoutCadence(), notifyGating, health.ts status
-  helpers, shared launch-area constants in serviceArea.ts - copies drift,
-  choke points cannot.
-- Honest copy discipline held: loss framing only where the loss is real, no
-  invented urgency, computed numbers only.
+- Reproducing against the live API with curl before theorizing (signup
+  probe found the team-member mailer rule; the anon probe found the leak).
+- Verifying the RLS fix with a real authenticated throwaway user instead of
+  trusting the SQL editor's "chart".
+- Green-before-merge held for Next 15: tsc, tests, and full build on the
+  re-merged branch, then merge.
+- Automation at the GitHub level (sync workflow) instead of a memory note
+  that depends on Claude remembering to push twice.
+- Memory files updated during the session (`hearth-test-deploy`,
+  `hearth-owners`), so a fresh chat starts with the deploy and ownership facts.
 
 ## Working agreements (carried forward; also in Claude memory)
 
 - Fable plans + reviews; Opus subagents execute; separate verifier re-checks
   money/security. Commit + push routine inside an active directive; STILL ASK
   before merges (PRs and big branches), force pushes, destructive/irreversible
-  actions.
+  actions. (Landen explicitly authorized the Next 15 merge on 08-21.)
 - No em dashes anywhere (prose or code).
-- UI: clean and compact; NO per-trade/category pictograms anywhere (wrench,
-  roller, etc.) - plain text labels; general icons (nav, tools, functional,
-  provider logos) stay. Forecast/quote features stay.
-- Live DB changes ship as PASTE-ME files; Landen pastes; Claude verifies
-  read-only afterward.
-- Don't `git add -A` without excluding handoff.md leftovers; `.claude/` is
+- UI: clean and compact; NO per-trade/category pictograms; general icons stay.
+  Landen's new priorities: iPhone-first formatting, controls top-right.
+- Live DB changes ship as PASTE-ME files; Landen pastes the CONTENTS (not the
+  path, and no surrounding prose); Claude verifies read-only afterward.
+- William owns security/infra go-live work from 08-21; Landen keeps the
+  owner-only accounts/money items.
+- Don't `git add -A` without excluding handoff leftovers; `.claude/` is
   gitignored agent scratch.
 
 ## Gotchas for the next session
 
-- Gemini thinking budget (512) is billed inside maxOutputTokens (1024) on the
-  2.5 models - if Ask Hearth answers start truncating, raise maxOutputTokens
-  rather than dropping thinking.
-- BackLink on /p/[id] uses history.length as the back heuristic - a shared-link
-  visitor with tab history gets "Back" that may pop off-site; document.referrer
-  origin check is the upgrade if it bothers anyone.
-- The FlashToast effect deliberately has no dependency array (revalidate-only
-  actions re-render without navigation); don't "fix" it.
-- next.config.mjs changes (the /profile redirect) need a dev-server restart.
-- vitest include is `src/**/*.test.{ts,tsx}`; 14 files / 196 tests as of now.
+- Next 15: `cookies()`, `headers()`, `params`, `searchParams` are async and
+  `createClient()` from `src/lib/supabase/server.ts` is async. tsc catches
+  missed awaits except behind `any` casts; grep `createClient()` without
+  `await` after any merge.
+- `deploy/free-test` keeps its own `vercel.json`; cron changes on main never
+  reach the test site by design.
+- `NEXT_PUBLIC_SITE_URL` is baked in at build time on Vercel; changing it
+  needs a redeploy. No trailing slash.
+- `/apple-icon` and `/opengraph-image` are extensionless generated routes
+  and must stay on the middleware public list or they 307 to /signin.
+- Gemini thinking budget (512) is billed inside maxOutputTokens (1024); raise
+  maxOutputTokens if Ask Hearth truncates.
+- The FlashToast effect deliberately has no dependency array; don't "fix" it.
+- `next.config.mjs` changes need a dev-server restart; stale `.next` fix is
+  stop server, delete `.next`, restart.
+- vitest include is `src/**/*.test.{ts,tsx}`; 14 files / 196 tests.
