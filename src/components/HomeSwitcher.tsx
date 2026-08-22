@@ -50,7 +50,7 @@ export default function HomeSwitcher({
         }
         className="-my-2.5 flex items-center gap-1 py-2.5 text-sm font-medium text-stone-600 active:opacity-70 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
       >
-        <span className="max-w-[12rem] truncate">{active?.address_line1}</span>
+        <span className="max-w-[8.5rem] truncate sm:max-w-[12rem]">{active?.address_line1}</span>
         <span
           className={`text-stone-500 transition dark:text-stone-400 ${open ? "rotate-180" : ""}`}
         >

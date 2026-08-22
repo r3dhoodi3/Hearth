@@ -49,14 +49,21 @@ export default function Nav({
         unread-messages badge instead of each rendering running its own. */}
     <UnreadProvider role="homeowner">
     <header className="sticky top-0 z-30 border-b border-stone-200 bg-bark-50 dark:border-white/10 dark:bg-stone-900">
-      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
+      {/* One row at every width. Below sm this used to stack into two rows
+          (brand line, then the controls left-aligned underneath), which on a
+          phone read as a second toolbar. Now the brand + home switcher sit on
+          the left and shrink (min-w-0 + truncation) while search, the bell,
+          and the profile menu stay pinned top-right like a native app. */}
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2">
           <Link
             href="/dashboard"
-            className="flex items-center gap-2 text-lg font-semibold text-stone-900 dark:text-stone-100"
+            className="flex shrink-0 items-center gap-2 text-lg font-semibold text-stone-900 dark:text-stone-100"
           >
             <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" />
-            Hearth
+            {/* Wordmark is desktop-only: on a phone the address is the more
+                useful label and the logo alone identifies the app. */}
+            <span className="hidden sm:inline">Hearth</span>
           </Link>
           <span className="hidden text-stone-300 sm:inline dark:text-stone-500">·</span>
           {/* Project to just the fields the client switcher renders. The full
@@ -73,7 +80,7 @@ export default function Nav({
             activeId={activeId}
           />
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {/* Primary destinations. Desktop/tablet (sm and up) keep this exact
               top strip, unchanged. Below sm it is hidden and the same links
               render as the fixed bottom tab bar further down. */}

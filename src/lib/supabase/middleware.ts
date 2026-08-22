@@ -119,6 +119,11 @@ function isPublicPath(path: string): boolean {
     // startsWith, not exact: Next can serve metadata variants with generated
     // suffixes, and every path in that family is equally public.
     path.startsWith("/opengraph-image") ||
+    // The iOS home-screen icon (src/app/apple-icon.tsx). Same shape as the
+    // OG image: extensionless generated PNG, fetched by Safari with no
+    // session when someone taps "Add to Home Screen", so it must not bounce
+    // to /signin or the installed app gets a screenshot for an icon.
+    path.startsWith("/apple-icon") ||
     path.startsWith("/get-started") ||
     path.startsWith("/signin") ||
     // Password reset request page: a signed-out user is exactly who needs it,

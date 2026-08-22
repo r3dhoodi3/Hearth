@@ -28,8 +28,10 @@ export default function ProNav({ company }: { company: string | null }) {
   return (
     <>
     <header className="sticky top-0 z-30 border-b border-stone-200 bg-hearth-50 dark:border-white/10 dark:bg-stone-900">
-      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
+      {/* One row at every width, mirroring the homeowner Nav: brand left,
+          bell + profile pinned top-right, nothing stacks on a phone. */}
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2">
           <Link
             href="/pro"
             className="flex items-center gap-2 text-lg font-semibold text-stone-900 dark:text-stone-100"
@@ -37,13 +39,13 @@ export default function ProNav({ company }: { company: string | null }) {
             <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" />
             <span>
               Hearth{" "}
-              <span className="font-normal text-stone-500 dark:text-stone-400">
+              <span className="hidden font-normal text-stone-500 sm:inline dark:text-stone-400">
                 for Pros
               </span>
             </span>
           </Link>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {/* Primary destinations. Desktop/tablet (sm and up) keep this exact
               top strip, unchanged. Below sm it is hidden and the same links
               render as the fixed bottom tab bar further down. */}

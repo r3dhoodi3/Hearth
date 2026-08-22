@@ -73,6 +73,19 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
   },
+  // Installable on phones. The manifest (src/app/manifest.ts) covers Android
+  // and desktop Chrome; Safari on iOS ignores manifest icons and reads the
+  // apple-* tags below plus src/app/apple-icon.tsx instead. "Add to Home
+  // Screen" then installs a real Hearth icon that opens full-screen with no
+  // browser chrome, which is the mobile counterpart of SEO: the app lives on
+  // the home screen rather than in a bookmark.
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Hearth",
+    statusBarStyle: "default",
+  },
+  formatDetection: { telephone: false },
 };
 
 // viewport-fit=cover is required so env(safe-area-inset-*) resolves to a
@@ -84,6 +97,13 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Tints the iOS status bar / Android toolbar to the header background so
+  // the installed app and the browser tab read as one surface. Values match
+  // the header (bg-bark-50 light, stone-900 dark) in Nav.tsx.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbf7f2" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c1917" },
+  ],
 };
 
 export default async function RootLayout({
