@@ -6,7 +6,8 @@ summary. Everything below is committed and pushed unless marked otherwise.
 
 ## Current state (verified, not aspirational)
 
-- Branch `main` at `c5ba31a` == origin. **Next.js 15.5 + React 19** since
+- Branch `main` at `7074a3d` == origin, working tree clean. **Next.js 15.5 +
+  React 19** since
   `c5dfeb1`. `tsc --noEmit` clean, 196 Vitest tests passing (14 files), full
   `npm run build` exits 0 on Windows (112/112 pages; the old Windows
   `/opengraph-image` prerender failure is gone on Next 15).
@@ -30,6 +31,9 @@ summary. Everything below is committed and pushed unless marked otherwise.
   price ids, Gemini, `NEXT_PUBLIC_SITE_URL` = the vercel URL). Supabase Auth
   URL config: Site URL = vercel URL, redirect allowlist has vercel URL `/**`
   and `http://localhost:3000/**`.
+- Test site verified at handoff time: `hearth-seven-pink.vercel.app` is
+  serving the `c5ba31a` build (manifest link and `/apple-icon` PNG present,
+  HTTP 200). The header change is deployed but NOT yet eyeballed on a phone.
 - Dev server: `npm run dev` on :3000, running in background at handoff time
   (Next 15; `.next` was wiped and deps reinstalled after the merge).
 - Launch area unchanged: HB, FV, Seal Beach, Westminster, Midway City, Garden
@@ -104,8 +108,7 @@ Findings from the day that are NOT code:
 6. Open product decisions unchanged: direct-request city-gate exception;
    `/p/[id]` full staticization; landlord/tenant idea (not before launch);
    delete Landen's duplicate 17860 Santa Mariana property (not authorized).
-7. Untracked leftover `supabase/PASTE-ME-live-0118-0119.sql` (already
-   applied live) still needs a `git add` when someone is in there.
+7. (done) `supabase/PASTE-ME-live-0118-0119.sql` was checked in at `39fd146`.
 
 ## What went bad (learn from these)
 
