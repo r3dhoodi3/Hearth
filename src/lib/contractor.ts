@@ -163,7 +163,7 @@ export const getRole = cache(async (): Promise<Role | null> => {
 // both need it share one query.
 export const countPaidLeadApplications = cache(
   async (contractorId: string): Promise<number | null> => {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { count, error } = await supabase
       .from("lead_applications")
       .select("id", { count: "exact", head: true })

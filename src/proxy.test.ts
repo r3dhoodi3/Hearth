@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { config } from "@/middleware";
+import { config } from "@/proxy";
 
 // The matcher decides which requests pay for a session refresh. It has to keep
 // letting every real page through while skipping the files served straight out
@@ -7,7 +7,7 @@ import { config } from "@/middleware";
 const matches = (path: string) =>
   config.matcher.some((pattern) => new RegExp(`^${pattern}$`).test(path));
 
-describe("middleware matcher", () => {
+describe("proxy matcher", () => {
   it("runs on app pages and API routes", () => {
     expect(matches("/")).toBe(true);
     expect(matches("/dashboard")).toBe(true);

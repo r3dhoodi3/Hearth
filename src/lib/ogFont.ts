@@ -22,7 +22,13 @@ export function ogFont(): Buffer | null {
   ];
   for (const rel of candidates) {
     try {
-      cached = readFileSync(join(process.cwd(), rel));
+      // turbopackIgnore: Next 16 builds with Turbopack, and its output tracer
+      // cannot see that `rel` always points inside node_modules, so it would
+      // otherwise trace and ship the WHOLE project (public/ included) as
+      // server code. Opting out is safe: if the file is not in the deployed
+      // bundle, readFileSync throws, we return null, and the caller falls
+      // back to @vercel/og's default loader exactly as before.
+      cached = readFileSync(join(/*turbopackIgnore: true*/ process.cwd(), rel));
       return cached;
     } catch {
       /* try the next candidate path */

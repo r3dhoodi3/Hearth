@@ -327,7 +327,7 @@ export default async function PlusPage(
   // someone they burned a credit we cannot prove they burned.
   let quoteCreditSpent = false;
   if (searchParams.reason === "quote") {
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
