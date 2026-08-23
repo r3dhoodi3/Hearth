@@ -1,11 +1,12 @@
 import { LegalContact } from "@/components/LegalContact";
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 // Public top-level page, same pattern as src/app/fountain-valley/page.tsx:
 // see src/lib/supabase/middleware.ts for the allowlist entry and
 // src/app/sitemap.ts for the sitemap entry. Content is derived from the
-// actual code paths (Supabase, Gemini, Stripe, CSLB, Checkr) rather than a
+// actual code paths (Supabase, Anthropic, Stripe, CSLB, Checkr) rather than a
 // generic template.
 
 const SITE_URL =
@@ -21,6 +22,98 @@ export const metadata: Metadata = {
     canonical: `${SITE_URL}/privacy`,
   },
 };
+
+// The "At a glance" rows, held as data so the same rows can render as a table
+// on a wide screen and as stacked cards on a phone without the wording
+// drifting between the two.
+const GLANCE_COLUMNS = [
+  "Data",
+  "Why we have it",
+  "Linked to you",
+  "Leaves Hearth?",
+] as const;
+
+const GLANCE_LABEL =
+  "text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400";
+const GLANCE_VALUE = "mt-0.5 leading-relaxed";
+
+const GLANCE_ROWS: {
+  data: string;
+  why: ReactNode;
+  linked: string;
+  leaves: ReactNode;
+}[] = [
+  {
+    data: "Name, email, phone",
+    why: "Your login, notifications, and introducing you to a pro you contact",
+    linked: "Yes",
+    leaves:
+      "Your email goes to Stripe at checkout. Your name, email and phone go to the specific pro you send a request to. Email and SMS reminders are delivered by Resend and Twilio when those channels are turned on.",
+  },
+  {
+    data: "Home address and location",
+    why: "Pre-filling your home facts, local pricing, weather alerts, and getting a pro to the right house",
+    linked: "Yes",
+    leaves:
+      "Street + ZIP go to RentCast to look up county records. Your address is included in the context sent to Anthropic when you use Ask Hearth. City and state go to Open-Meteo for the forecast behind weather alerts. Your full address goes to the pro you choose.",
+  },
+  {
+    data: "Home facts and systems",
+    why: "Year built, size, systems, ages, condition, issues and reminders, so advice is about your house",
+    linked: "Yes",
+    leaves:
+      "Sent to Anthropic as context when you ask a question. Appliance brand names are sent to the CPSC public recall service to check for recalls.",
+  },
+  {
+    data: "Home value and money details",
+    why: "Purchase price, mortgage balance, assessed and market value, property tax, insurance and HOA, for equity, tax-appeal and insurance tools",
+    linked: "Yes",
+    leaves: (
+      <>
+        Some of these numbers arrive from RentCast&apos;s records lookup.
+        Purchase price, assessed value, and Hearth&apos;s home-value estimate
+        are sent to Anthropic only when you generate a Property Tax Appeal
+        Kit. Insurance premium and renewal date are sent to Anthropic only
+        when you generate an Insurance Requote Packet. Nothing else in this row
+        leaves Hearth.
+      </>
+    ),
+  },
+  {
+    data: "Photos and documents",
+    why: "System photos, warranties, inspection reports and quotes",
+    linked: "Yes",
+    leaves:
+      "Stored privately. Sent to Anthropic only when you attach one to a question or ask us to read a document. Dictation happens on your own device, so no audio is uploaded at all.",
+  },
+  {
+    data: "Messages and support requests",
+    why: "Your conversation with a pro, reviews you write, and anything you send our support inbox",
+    linked: "Yes",
+    leaves:
+      "Visible to the pro on the other side of that thread. Not sent to any AI provider or advertiser.",
+  },
+  {
+    data: "Payments",
+    why: "Hearth Plus, pro lead fees, deposits and invoices",
+    linked: "Yes",
+    leaves:
+      "Handled by Stripe. We store the Stripe customer and subscription id and the invoice totals, never your card number.",
+  },
+  {
+    data: "Pro license and background checks",
+    why: "Verifying a contractor is who they say they are (pro accounts only)",
+    linked: "Yes",
+    leaves:
+      "License number is checked against the CSLB public registry. Where background checks are enabled, name and email go to Checkr; we store only the result.",
+  },
+  {
+    data: "Usage counts",
+    why: "A daily count of AI questions, to enforce plan limits",
+    linked: "Yes",
+    leaves: "No.",
+  },
+];
 
 export default function PrivacyPage() {
   return (
@@ -50,154 +143,67 @@ export default function PrivacyPage() {
             against your account rather than anonymously.
           </p>
 
-          {/* Wide on purpose: the wrapper scrolls, the page never does. */}
-          <div className="mt-4 overflow-x-auto rounded-lg border border-stone-200 dark:border-stone-700">
+          {/* The same rows twice: a real table from sm up, and a stack of
+              labelled cards below it. A 4-column table only fits in a
+              horizontal scroller on a phone, and the scroller gave no hint
+              it could be scrolled, so three of the four columns were simply
+              invisible to a phone reader. */}
+          <div className="mt-4 hidden overflow-x-auto rounded-lg border border-stone-200 sm:block dark:border-stone-700">
             <table className="w-full min-w-[40rem] border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-stone-900 dark:bg-stone-800 dark:text-stone-100">
                 <tr>
-                  <th scope="col" className="px-3 py-2 font-semibold">Data</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Why we have it</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Linked to you</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Leaves Hearth?</th>
+                  {GLANCE_COLUMNS.map((c) => (
+                    <th key={c} scope="col" className="px-3 py-2 font-semibold">
+                      {c}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-200 dark:divide-stone-700">
-                <tr>
-                  <th scope="row" className="px-3 py-3 text-left font-medium text-stone-900 align-top dark:text-stone-100">
-                    Name, email, phone
-                  </th>
-                  <td className="px-3 py-3 align-top">Your login, notifications, and introducing you to a pro you contact</td>
-                  <td className="px-3 py-3 align-top">Yes</td>
-                  <td className="px-3 py-3 align-top">
-                    Your email goes to Stripe at checkout. Your name, email and
-                    phone go to the specific pro you send a request to. Email
-                    and SMS reminders are delivered by Resend and Twilio when
-                    those channels are turned on.
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row" className="px-3 py-3 text-left font-medium text-stone-900 align-top dark:text-stone-100">
-                    Home address and location
-                  </th>
-                  <td className="px-3 py-3 align-top">
-                    Pre-filling your home facts, local pricing, weather alerts,
-                    and getting a pro to the right house
-                  </td>
-                  <td className="px-3 py-3 align-top">Yes</td>
-                  <td className="px-3 py-3 align-top">
-                    Street + ZIP go to RentCast to look up county records. Your
-                    address is included in the context sent to Google Gemini
-                    when you use Ask Hearth. City and state go to Open-Meteo
-                    for the forecast behind weather alerts. Your full address
-                    goes to the pro you choose.
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row" className="px-3 py-3 text-left font-medium text-stone-900 align-top dark:text-stone-100">
-                    Home facts and systems
-                  </th>
-                  <td className="px-3 py-3 align-top">
-                    Year built, size, systems, ages, condition, issues and
-                    reminders, so advice is about your house
-                  </td>
-                  <td className="px-3 py-3 align-top">Yes</td>
-                  <td className="px-3 py-3 align-top">
-                    Sent to Google Gemini as context when you ask a question.
-                    Appliance brand names are sent to the CPSC public recall
-                    service to check for recalls.
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row" className="px-3 py-3 text-left font-medium text-stone-900 align-top dark:text-stone-100">
-                    Home value and money details
-                  </th>
-                  <td className="px-3 py-3 align-top">
-                    Purchase price, mortgage balance, assessed and market
-                    value, property tax, insurance and HOA, for equity,
-                    tax-appeal and insurance tools
-                  </td>
-                  <td className="px-3 py-3 align-top">Yes</td>
-                  <td className="px-3 py-3 align-top">
-                    Some of these numbers arrive from RentCast&apos;s records
-                    lookup. Purchase price, assessed value, and
-                    Hearth&apos;s home-value estimate are sent to Google
-                    Gemini only when you generate a Property Tax Appeal Kit.
-                    Insurance premium and renewal date are sent to Google
-                    Gemini only when you generate an Insurance Requote
-                    Packet. Nothing else in this row leaves Hearth.
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row" className="px-3 py-3 text-left font-medium text-stone-900 align-top dark:text-stone-100">
-                    Photos, documents and voice notes
-                  </th>
-                  <td className="px-3 py-3 align-top">
-                    System photos, warranties, inspection reports, quotes, and
-                    dictated questions
-                  </td>
-                  <td className="px-3 py-3 align-top">Yes</td>
-                  <td className="px-3 py-3 align-top">
-                    Stored privately. Sent to Google Gemini only when you
-                    attach one to a question, ask us to read a document, or
-                    dictate instead of typing.
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row" className="px-3 py-3 text-left font-medium text-stone-900 align-top dark:text-stone-100">
-                    Messages and support requests
-                  </th>
-                  <td className="px-3 py-3 align-top">
-                    Your conversation with a pro, reviews you write, and
-                    anything you send our support inbox
-                  </td>
-                  <td className="px-3 py-3 align-top">Yes</td>
-                  <td className="px-3 py-3 align-top">
-                    Visible to the pro on the other side of that thread. Not
-                    sent to any AI provider or advertiser.
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row" className="px-3 py-3 text-left font-medium text-stone-900 align-top dark:text-stone-100">
-                    Payments
-                  </th>
-                  <td className="px-3 py-3 align-top">
-                    Hearth Plus, pro lead fees, deposits and invoices
-                  </td>
-                  <td className="px-3 py-3 align-top">Yes</td>
-                  <td className="px-3 py-3 align-top">
-                    Handled by Stripe. We store the Stripe customer and
-                    subscription id and the invoice totals, never your card
-                    number.
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row" className="px-3 py-3 text-left font-medium text-stone-900 align-top dark:text-stone-100">
-                    Pro license and background checks
-                  </th>
-                  <td className="px-3 py-3 align-top">
-                    Verifying a contractor is who they say they are (pro
-                    accounts only)
-                  </td>
-                  <td className="px-3 py-3 align-top">Yes</td>
-                  <td className="px-3 py-3 align-top">
-                    License number is checked against the CSLB public registry.
-                    Where background checks are enabled, name and email go to
-                    Checkr; we store only the result.
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row" className="px-3 py-3 text-left font-medium text-stone-900 align-top dark:text-stone-100">
-                    Usage counts
-                  </th>
-                  <td className="px-3 py-3 align-top">
-                    A daily count of AI questions, to enforce plan limits
-                  </td>
-                  <td className="px-3 py-3 align-top">Yes</td>
-                  <td className="px-3 py-3 align-top">No.</td>
-                </tr>
+                {GLANCE_ROWS.map((r) => (
+                  <tr key={r.data}>
+                    <th
+                      scope="row"
+                      className="px-3 py-3 text-left align-top font-medium text-stone-900 dark:text-stone-100"
+                    >
+                      {r.data}
+                    </th>
+                    <td className="px-3 py-3 align-top">{r.why}</td>
+                    <td className="px-3 py-3 align-top">{r.linked}</td>
+                    <td className="px-3 py-3 align-top">{r.leaves}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
+
+          {/* Phone rendering of the same data. */}
+          <ul className="mt-4 space-y-3 sm:hidden">
+            {GLANCE_ROWS.map((r) => (
+              <li
+                key={r.data}
+                className="rounded-lg border border-stone-200 p-4 text-sm dark:border-stone-700"
+              >
+                <p className="font-semibold text-stone-900 dark:text-stone-100">
+                  {r.data}
+                </p>
+                <dl className="mt-2 space-y-2">
+                  <div>
+                    <dt className={GLANCE_LABEL}>{GLANCE_COLUMNS[1]}</dt>
+                    <dd className={GLANCE_VALUE}>{r.why}</dd>
+                  </div>
+                  <div>
+                    <dt className={GLANCE_LABEL}>{GLANCE_COLUMNS[2]}</dt>
+                    <dd className={GLANCE_VALUE}>{r.linked}</dd>
+                  </div>
+                  <div>
+                    <dt className={GLANCE_LABEL}>{GLANCE_COLUMNS[3]}</dt>
+                    <dd className={GLANCE_VALUE}>{r.leaves}</dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
 
           <p className="mt-4 leading-relaxed">
             <span className="font-medium text-stone-900 dark:text-stone-100">
@@ -246,12 +252,12 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Ask Hearth and Google Gemini
+            Ask Hearth and Anthropic
           </h2>
           <p className="mt-2 leading-relaxed">
             When you ask Ask Hearth a question, we send your question and
-            relevant details about your home to Google&apos;s Gemini API so it
-            can generate a useful, specific answer. To be specific about what
+            relevant details about your home to Anthropic&apos;s Claude API so
+            it can generate a useful, specific answer. To be specific about what
             &ldquo;details about your home&rdquo; means, because it is more
             than people expect: it includes your systems and their ages, your
             open reminders, your recently logged issues, the year your home
@@ -264,49 +270,56 @@ export default function PrivacyPage() {
               your first name
             </span>
             , so the answer can greet you by name. That request is processed
-            server-side on Google&apos;s systems. If you attach a photo, the
-            photo is sent the same way so Gemini can look at it. We do not
-            send your question history to any other AI provider.
+            server-side on Anthropic&apos;s systems. If you attach a photo,
+            the photo is sent the same way so the model can look at it.
+            Anthropic is the only AI provider Hearth uses; your question
+            history is not sent to any other one.
           </p>
           <p className="mt-3 leading-relaxed">
-            We do not send your messages with pros to Gemini. We also do not
-            send your mortgage balance: it is used only in your own
+            We do not send your messages with pros to Anthropic. We also do
+            not send your mortgage balance: it is used only in your own
             maintenance-history calculations. We DO send some of your money
-            details to Gemini when you use specific tools: your purchase
+            details to Anthropic when you use specific tools: your purchase
             price, assessed value, and Hearth&apos;s own estimate of your
             home&apos;s market value when you generate a Property Tax Appeal
             Kit, and your current insurance premium and renewal date when you
             generate an Insurance Requote Packet. If you upload a
             contractor&apos;s quote to the quote analyzer, its full line
-            items and total are sent to Gemini so it can be read and
+            items and total are sent to Anthropic so it can be read and
             evaluated. None of this is sent unless you actively use that
             specific tool.
           </p>
           <p className="mt-3 leading-relaxed">
-            The pro side sends Gemini its own data too. When a contractor
+            The pro side sends Anthropic its own data too. When a contractor
             uses Ask Hearth for Pros, we send their wallet balance (cash and
             bonus, in dollars), their license number and verification
             status, and their background-check status as context, so the
             assistant can answer questions about their account accurately.
             When a contractor uses the estimate or invoice tools in the pro
             back office, their own past-job dollar totals (labor and
-            materials) are sent to Gemini as pricing reference. When a
+            materials) are sent to Anthropic as pricing reference. When a
             contractor uploads a past invoice, quote, or receipt to build
             that pricing history, the full image, including its dollar line
-            items, is sent to Gemini so it can be read. None of this is a
+            items, is sent to Anthropic so it can be read. None of this is a
             homeowner&apos;s data: it is the contractor&apos;s own account
             information.
           </p>
           <p className="mt-3 leading-relaxed">
-            One more fact worth being direct about: Hearth currently uses
-            Google&apos;s free-tier Gemini API quota. Under Google&apos;s
-            terms for that tier, Google may use what you submit, and
-            Gemini&apos;s responses, to improve its own products, and human
-            reviewers at Google may read disconnected samples of that
-            content. That is Google&apos;s policy for the free tier, not
-            Hearth&apos;s choice. We plan to move to Google&apos;s paid tier,
-            under which Google states it does not use your data this way.
-            See{" "}
+            The AI provider is Anthropic, PBC, and Hearth is on its paid API.
+            Under Anthropic&apos;s{" "}
+            <a
+              href="https://www.anthropic.com/legal/commercial-terms"
+              className="text-bark-700 hover:underline dark:text-stone-300"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              commercial terms
+            </a>
+            , what is sent to the API and what comes back are not used to
+            train Anthropic&apos;s models by default. Anthropic keeps API data
+            for up to 30 days for trust and safety purposes. Voice input never
+            reaches Anthropic at all: dictation runs on your own device, and
+            only the text it produces is sent anywhere. See{" "}
             <Link href="/ai-disclosure" className="text-bark-700 hover:underline dark:text-stone-300">
               How Hearth Uses AI
             </Link>{" "}
@@ -434,10 +447,10 @@ export default function PrivacyPage() {
             or a browser fingerprint in our database. This is unusual, so it
             is worth saying plainly: the companies listed on this page get
             your data because they perform a job you asked for, not because
-            they are watching you use the app. The one exception is
-            Google&apos;s Gemini API: see the AI section above for what it
-            receives and how Google&apos;s free-tier terms currently apply to
-            that data.
+            they are watching you use the app. That includes Anthropic, the
+            one AI provider on this list: see the AI section above for what it
+            receives, and note that under its paid API terms your data is not
+            used to train its models.
           </p>
           <p className="mt-3 leading-relaxed">
             Because of that, a browser&apos;s Do Not Track signal doesn&apos;t

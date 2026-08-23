@@ -1,7 +1,8 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getRole } from "@/lib/contractor";
-import { FOUNDER } from "@/lib/constants";
+import { getSides, landingFor } from "@/lib/contractor";
+import { FOUNDER, PLUS_PLAN } from "@/lib/constants";
 import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 import Link from "next/link";
 import Image from "next/image";
@@ -9,7 +10,53 @@ import Logo from "@/components/Logo";
 import HeroDemoPlayerLazy from "@/components/HeroDemoPlayerLazy";
 import HeroPhotoCycler from "@/components/HeroPhotoCycler";
 import ThemeToggle from "@/components/ThemeToggle";
+import StructuredData from "@/components/StructuredData";
 import { TrendingUp, Bell, MessageSquare, Wrench } from "lucide-react";
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+// The root layout already sets the default title/description (both true of
+// the landing page as-is) and openGraph.siteName/type/locale, which this page
+// inherits unchanged. The one thing missing at the root is a canonical link -
+// metadataBase alone doesn't emit one - so this only adds that.
+export const metadata: Metadata = {
+  alternates: {
+    canonical: `${SITE_URL}/`,
+  },
+};
+
+// The landing page's own structured data: the WebApplication/pricing facts an
+// app-install search result can use, per Google's guidance for "software
+// application" rich results. Organization deliberately is NOT repeated here -
+// src/app/layout.tsx emits the single Organization node (name, url, logo,
+// areaServed) on every page including this one, and publisher points at it by
+// @id rather than restating the business a second time on the same page.
+const landingJsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "Hearth",
+    url: SITE_URL,
+    applicationCategory: "LifestyleApplication",
+    operatingSystem: "iOS, Android, Web",
+    publisher: { "@id": `${SITE_URL}#organization` },
+    offers: [
+      {
+        "@type": "Offer",
+        name: "Hearth (first home)",
+        price: "0",
+        priceCurrency: "USD",
+      },
+      {
+        "@type": "Offer",
+        name: "Hearth Plus (yearly)",
+        price: String(PLUS_PLAN.yearly),
+        priceCurrency: "USD",
+      },
+    ],
+  },
+];
 
 // Shared "all clear" pill: same green tone (.chip-ok) used by both the hero
 // reassurance row and the trust strip below, so the two lists render off one
@@ -41,7 +88,7 @@ function CheckPill({ label }: { label: string }) {
 // longer reads cookies - see src/app/layout.tsx). Two per-request reads sit
 // above the markup and both are routing decisions, not decoration:
 // searchParams.code catches a magic link that landed here instead of
-// /auth/callback and forwards it, and auth.getUser() + getRole() sends a
+// /auth/callback and forwards it, and auth.getUser() + getSides() sends a
 // signed-in visitor to /pro or /dashboard. No per-request DATA feeds the
 // landing markup itself - every list below is a plain in-function constant -
 // so if those two redirects ever move (the code hand-off into middleware, the
@@ -67,7 +114,10 @@ export default async function Home(props: {
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect((await getRole()) === "contractor" ? "/pro" : "/dashboard");
+    // Their preferred side when they actually have it, otherwise whichever
+    // side they do have. An account can hold both, so this is never a guess
+    // off the role stamp alone.
+    redirect(landingFor(await getSides()));
   }
 
   const VALUE = [
@@ -270,6 +320,7 @@ export default async function Home(props: {
 
   return (
     <main className="pb-16">
+      <StructuredData data={landingJsonLd} />
       {/* Warm band wraps header, hero, and the product preview: a single
           flat fill, hearth-50 in light and stone-900 in dark (matching the
           body), no gradient. */}
@@ -293,9 +344,13 @@ export default async function Home(props: {
               </Link>
               <Link
                 href="/pros"
-                className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
+                className="whitespace-nowrap rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
               >
-                Hearth for Pros
+                {/* At 390px the full label wrapped to two lines and made the
+                    header two rows tall. Short label on mobile, unchanged
+                    wording from sm up. */}
+                <span className="sm:hidden">For Pros</span>
+                <span className="hidden sm:inline">Hearth for Pros</span>
               </Link>
             </div>
           </header>

@@ -187,7 +187,10 @@ export default async function ForecastPage() {
                   ? "1 of your systems has no install year, so its timing here is a rough placement."
                   : `${forecast.estimatedTimingCount} of your systems have no install year, so their timing here is a rough placement.`}{" "}
                 Add install years on your{" "}
-                <Link href="/dashboard#systems" className="underline">
+                <Link
+                  href="/dashboard#systems"
+                  className="underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+                >
                   home profile
                 </Link>{" "}
                 for a sharper forecast.

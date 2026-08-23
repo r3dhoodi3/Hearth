@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getActiveProperty } from "@/lib/property";
+import { formatAddressLine, getActiveProperty } from "@/lib/property";
 import { lookupParcel } from "@/lib/parcel";
 import { deriveOwnershipStatus } from "@/lib/ownershipMatch";
 import {
@@ -175,15 +175,30 @@ export async function postJobAction(formData: FormData) {
           .maybeSingle();
         fullName = profile?.full_name?.trim() || null;
       }
-      const facts = await lookupParcel(property.address_line1, property.zip);
-      ownershipStatus = deriveOwnershipStatus(fullName, facts);
-      await admin.rpc("record_ownership_check", {
-        p_property_id: property.id,
-        p_status: ownershipStatus,
-        p_owner_names: facts.owner_names,
-        p_owner_type: facts.owner_type,
-        p_owner_occupied: facts.owner_occupied,
-      });
+      if (property.unit) {
+        // Condo/townhome: the provider returns the building-level record, which
+        // is not this unit's owner of record. Matching against it would verify
+        // a neighbour or deny the real owner, so record an honest "unverified"
+        // with a reason (same as onboarding/actions.ts) and never re-check.
+        ownershipStatus = "unverified";
+        await admin.rpc("record_ownership_check", {
+          p_property_id: property.id,
+          p_status: "unverified",
+          p_owner_names: { reason: "unit-level records not available" },
+          p_owner_type: null,
+          p_owner_occupied: null,
+        });
+      } else {
+        const facts = await lookupParcel(property.address_line1, property.zip);
+        ownershipStatus = deriveOwnershipStatus(fullName, facts);
+        await admin.rpc("record_ownership_check", {
+          p_property_id: property.id,
+          p_status: ownershipStatus,
+          p_owner_names: facts.owner_names,
+          p_owner_type: facts.owner_type,
+          p_owner_occupied: facts.owner_occupied,
+        });
+      }
     } catch (err) {
       console.error("Lazy ownership verification check failed:", err);
     }
@@ -357,7 +372,11 @@ export async function postJobAction(formData: FormData) {
   // to the carrier issue, and pushed to pro alerts uses the redacted version.
   issueDescription = issueDescription ? redactContact(issueDescription) : issueDescription;
 
-  const address = [property.address_line1, property.city, property.state]
+  // formatAddressLine, not address_line1: this string is frozen onto the lead
+  // as property_address and is the only address the pro who wins the job ever
+  // sees. Without the unit they drive to the right building and knock on the
+  // wrong door.
+  const address = [formatAddressLine(property), property.city, property.state]
     .filter(Boolean)
     .join(", ");
 
@@ -1260,7 +1279,11 @@ export async function requestProAction(
     );
   }
 
-  const address = [property.address_line1, property.city, property.state]
+  // formatAddressLine, not address_line1: this string is frozen onto the lead
+  // as property_address and is the only address the pro who wins the job ever
+  // sees. Without the unit they drive to the right building and knock on the
+  // wrong door.
+  const address = [formatAddressLine(property), property.city, property.state]
     .filter(Boolean)
     .join(", ");
 

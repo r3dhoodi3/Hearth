@@ -66,7 +66,7 @@ export default function LearnGuide({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 dark:text-stone-100"
+        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 max-sm:-my-2 max-sm:min-h-10 max-sm:py-2 dark:text-stone-100"
       >
         <span className="flex flex-wrap items-center gap-2">
           <span>{label}</span>

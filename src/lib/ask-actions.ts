@@ -79,20 +79,44 @@ export async function logIssueFromChat(payload: {
   revalidatePath("/forecast");
 }
 
+// Bounds on what one chat-created reminder can be, and how many a home can
+// hold. Both exist because open reminders are read back into Ask Hearth's
+// system prompt on EVERY turn: without a ceiling, a few hundred long
+// self-created reminders turn every later question into a much larger (and
+// much more expensive) paid request, forever. A real home has a handful.
+const MAX_REMINDER_TITLE_CHARS = 120;
+const MAX_OPEN_TASKS = 200;
+
 export async function setReminderFromChat(payload: {
   title: string;
   due_date?: string;
 }) {
   const property = await getActiveProperty();
-  if (!property || !payload.title) {
+  const title = (payload.title ?? "").trim().slice(0, MAX_REMINDER_TITLE_CHARS);
+  if (!property || !title) {
     await setFlash("Add your home first, then I can set this reminder.", "error");
     return;
   }
   const supabase = await createClient();
 
+  // Refuse once the home is already carrying an unreasonable number of open
+  // reminders. Counted head-only, so this costs a count and no rows.
+  const { count } = await supabase
+    .from("maintenance_tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("property_id", property.id)
+    .eq("status", "open");
+  if ((count ?? 0) >= MAX_OPEN_TASKS) {
+    await setFlash(
+      "You already have a lot of open reminders. Finish or clear a few, then I can add this one.",
+      "error"
+    );
+    return;
+  }
+
   await supabase.from("maintenance_tasks").insert({
     property_id: property.id,
-    title: payload.title,
+    title,
     due_date: payload.due_date || null,
     status: "open",
   });

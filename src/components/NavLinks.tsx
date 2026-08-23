@@ -10,6 +10,7 @@ import {
   Inbox,
   Users,
   Building2,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import LiveUnreadBadge from "@/components/LiveUnreadBadge";
@@ -20,6 +21,7 @@ import LiveUnreadBadge from "@/components/LiveUnreadBadge";
 // boundary throws "Functions cannot be passed directly to Client Components".
 const NAV_ICONS: Record<string, LucideIcon> = {
   home: Home,
+  ask: Sparkles,
   issues: AlertTriangle,
   post: Briefcase,
   messages: MessageCircle,

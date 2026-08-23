@@ -56,6 +56,35 @@ const nextConfig = {
   // verification build write somewhere else while the dev server keeps
   // running. Hosted builds (e.g. Vercel) never set it, so they use .next.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  // How much of a request body Next will hand to middleware before it gives
+  // up on the rest. Default 10MB, and it TRUNCATES rather than rejecting.
+  //
+  // WHY THIS IS HERE. src/middleware.ts matches everything except _next and
+  // the two public asset folders, so it runs on /api/* too. Next only clones a
+  // request body when middleware is in play, and that clone is where the limit
+  // lives (next/dist/server/body-streams.js: getCloneableBody takes the size
+  // limit from experimental.middlewareClientMaxBodySize, and past it logs
+  // "Request body exceeded 10MB ... Only the first 10MB will be available
+  // unless configured" and closes BOTH streams, the middleware's copy and the
+  // one the route handler goes on to read). So the route does not get a 413 or
+  // an error: it gets a truncated body. For /api/ingest-inspection that means
+  // a 20MB inspection PDF (~26.7MB once base64'd into JSON, which is why the
+  // route's own MAX_BODY_BYTES is 26MB) arrives cut off mid-string, JSON.parse
+  // fails, and the owner is told their upload was a bad request - for a file
+  // that was exactly the size the page told them to send.
+  //
+  // 30mb, not 26: it has to clear the route's own ceiling plus the JSON
+  // envelope around the base64, and this value is only ever an upper bound on
+  // what may be buffered. The real per-route caps do the actual limiting, and
+  // they are unchanged - readJsonBounded still cancels the read the moment a
+  // body passes MAX_BODY_BYTES, so raising this does not widen what any route
+  // will accept, it only stops Next from silently corrupting a body the route
+  // was always going to bound itself.
+  //
+  // Still experimental in Next 15.5 (config-schema.js), hence the nesting.
+  experimental: {
+    middlewareClientMaxBodySize: "30mb",
+  },
   images: {
     // Supabase Storage public buckets serve images from your project domain.
     // Pinned to THIS project's host: a wildcard would let anyone's Supabase

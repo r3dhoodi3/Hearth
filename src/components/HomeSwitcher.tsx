@@ -36,8 +36,14 @@ export default function HomeSwitcher({
     };
   }, [open]);
 
+  // min-w-0 on the root: it sits in the header's shrinkable left group, and
+  // without it the automatic minimum size of this box is its content width,
+  // so on a narrow phone it refused to shrink and the address ran straight
+  // under the Tools button beside it ("8892 ConstitutiTools"). Restored to
+  // min-width:auto from sm up, where the header has room for the whole
+  // address and shrinking it would be a pointless truncation.
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative min-w-0 sm:min-w-[auto]">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -48,11 +54,16 @@ export default function HomeSwitcher({
             ? `Switch home, current: ${active.address_line1}`
             : "Switch home"
         }
-        className="-my-2.5 flex items-center gap-1 py-2.5 text-sm font-medium text-stone-600 active:opacity-70 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
+        className="-my-2.5 flex min-w-0 max-w-full items-center gap-1 py-2.5 text-sm font-medium text-stone-600 active:opacity-70 hover:text-stone-800 sm:min-w-[auto] sm:max-w-none dark:text-stone-400 dark:hover:text-stone-200"
       >
-        <span className="max-w-[8.5rem] truncate sm:max-w-[12rem]">{active?.address_line1}</span>
+        {/* min-w-0 as well as truncate: a <button> is laid out with a
+            min-content size equal to its max-content size, so the explicit
+            min-width:0 above is what actually lets this label give way. */}
+        <span className="min-w-0 max-w-[8.5rem] truncate sm:max-w-[12rem]">
+          {active?.address_line1}
+        </span>
         <span
-          className={`text-stone-500 transition dark:text-stone-400 ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-stone-500 transition dark:text-stone-400 ${open ? "rotate-180" : ""}`}
         >
           ▾
         </span>

@@ -25,8 +25,10 @@ navigating the browser anywhere, and the button hands the message to the page's 
 `onError` callback. That renders in the same red error box the email/password form already uses.
 The button re-enables itself, the page stays put, nothing crashes, nothing half-signs-in.
 
-So there is no rush and no risk in shipping the button ahead of the configuration. It just does
-not work yet, visibly and politely.
+Harmless, but still a dead button on the app's three most important pages, so it is not shown at
+all until `NEXT_PUBLIC_APPLE_SIGNIN=1` (see step 4). The fallback above is the safety net for a
+provider that breaks after being switched on - an expired secret, say - not the normal
+pre-configuration state.
 
 ## What you need before starting
 
@@ -135,6 +137,9 @@ matches what you put in the Services ID's Return URLs in step 2.
 
 Finally, under Authentication > URL Configuration, make sure your production domain is in the
 Site URL / Redirect URLs allow list. It already needs to be for Google, so it probably is.
+
+Then set `NEXT_PUBLIC_APPLE_SIGNIN=1` in Vercel (Settings > Environment Variables) and redeploy -
+the "Continue with Apple" button is hidden everywhere until that value is exactly `1`.
 
 ## Step 5 - Verify
 

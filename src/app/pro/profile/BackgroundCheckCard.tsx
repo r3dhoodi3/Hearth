@@ -139,7 +139,9 @@ export default function BackgroundCheckCard({
           </p>
           <button
             type="submit"
-            className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
+            // Same phone-only bump as the license Verify button next to it
+            // (PublicProfileForm.tsx): 44px below sm, untouched from sm up.
+            className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-4 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
           >
             Start my background check
           </button>

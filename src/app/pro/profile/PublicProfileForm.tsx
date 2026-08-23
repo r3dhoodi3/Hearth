@@ -21,7 +21,10 @@ function VerifyLicenseButton({ label }: { label: string }) {
       type="submit"
       formAction={verifyLicenseNowAction}
       disabled={pending}
-      className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
+      // "Reverify" / "Verify now" is the button that unblocks a badge, and at
+      // py-1.5 on text-xs it was a ~26px-tall target. Below sm it gets the
+      // full 44px; sm and up keep the exact button that was here.
+      className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 max-sm:min-h-11 max-sm:px-4 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
     >
       {pending && <InlineSpinner size={12} />}
       {label}
@@ -396,8 +399,9 @@ export default function PublicProfileForm({
 
               {/* Optional outbound review-page links (0110). Plain links only:
                   the public page shows a "See our reviews" button, never
-                  imported review content or star counts. */}
-              <div>
+                  imported review content or star counts. id="reviews" is the
+                  anchor the /pro setup checklist links to. */}
+              <div id="reviews">
                 <label className="label">Yelp page (optional)</label>
                 <div className="relative">
                   <FieldIcon>

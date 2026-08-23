@@ -2,15 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
-import { countAiUsage } from "@/lib/aiUsage";
+import { countAiUsage, overToolBurst } from "@/lib/aiUsage";
+import { reasonToClientPayload } from "@/lib/aiReason";
+import { readJsonBounded } from "@/lib/boundedBody";
 import { wrapUntrusted } from "@/lib/promptSafe";
 import { JOB_CATEGORIES } from "@/lib/constants";
 import type { ProPastJobLineItem } from "@/lib/database.types";
+import { generateJson, hasClaudeKey, isRateLimitError } from "@/lib/claude";
 
 export const runtime = "nodejs";
 
 // AI back office (Hearth Pro membership): five writing tools for the
-// paperwork pros hate. The pro describes the job in plain words and Gemini
+// paperwork pros hate. The pro describes the job in plain words and Claude
 // drafts a clean estimate, invoice, follow-up message, review response, or
 // overdue invoice reminder they can copy and send. Members only: this is
 // brand-new surface, nothing free moves behind it.
@@ -27,6 +30,14 @@ export const runtime = "nodejs";
 // Output: { result: string }
 //       | { result: null, reason: "no_key" | "rate_limited" | "failed" }
 
+// Hard ceiling on the request body, in bytes. Every field cap below is in
+// characters and applies only AFTER the body has been parsed, so without this
+// a caller could make the route buffer and JSON.parse an unbounded payload
+// for free. This route's fields add up to a few KB; half a megabyte is
+// generous. Counted on the bytes that actually arrive rather than trusted
+// from Content-Length. See src/lib/boundedBody.ts.
+const MAX_BODY_BYTES = 512_000;
+
 const MAX_DESCRIPTION = 4000;
 const MAX_NOTES = 2000;
 const MAX_SHORT = 120;
@@ -39,15 +50,6 @@ const MAX_STORY = 1000;
 const MAX_STYLE_EXAMPLES = 3;
 const MAX_STYLE_EXAMPLE_CHARS = 500;
 
-// Same fallback list as /api/analyze-quote: each free-tier model has its own
-// daily quota, so a 429 on one falls through to the next.
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
-];
-
 // The shared voice for every tool. The no-invented-prices rule matters most:
 // these documents go straight to a real customer, so the only numbers allowed
 // are the ones the pro typed in.
@@ -58,44 +60,52 @@ const VOICE =
   "No placeholders like [name] or [date]: if a detail is missing, phrase around it naturally. " +
   "Never use an em dash; use a comma, a colon, or a new sentence instead.";
 
+// Structured-output schemas: the model is constrained to the right shape
+// server-side, per tool. Money fields stay strings so the model copies what
+// the pro typed rather than doing arithmetic on it, and assemble() below is
+// still the only thing that turns any of this into the document the pro sees.
 const ESTIMATE_SCHEMA = {
-  type: "OBJECT",
+  type: "object",
   properties: {
-    title: { type: "STRING" },
-    scope: { type: "STRING" },
+    title: { type: "string" },
+    scope: { type: "string" },
     line_items: {
-      type: "ARRAY",
+      type: "array",
       items: {
-        type: "OBJECT",
+        type: "object",
         properties: {
-          label: { type: "STRING" },
-          amount: { type: "STRING" },
+          label: { type: "string" },
+          amount: { type: ["string", "null"] },
         },
-        required: ["label"],
+        required: ["label", "amount"],
+        additionalProperties: false,
       },
     },
-    total: { type: "STRING" },
-    terms: { type: "STRING" },
+    total: { type: ["string", "null"] },
+    terms: { type: "string" },
   },
-  required: ["title", "scope", "line_items", "terms"],
+  required: ["title", "scope", "line_items", "total", "terms"],
+  additionalProperties: false,
 };
 
 const INVOICE_SCHEMA = {
-  type: "OBJECT",
+  type: "object",
   properties: {
-    summary: { type: "STRING" },
-    amount_due: { type: "STRING" },
-    payment_terms: { type: "STRING" },
+    summary: { type: "string" },
+    amount_due: { type: "string" },
+    payment_terms: { type: "string" },
   },
   required: ["summary", "amount_due", "payment_terms"],
+  additionalProperties: false,
 };
 
 const FOLLOWUP_SCHEMA = {
-  type: "OBJECT",
+  type: "object",
   properties: {
-    message: { type: "STRING" },
+    message: { type: "string" },
   },
   required: ["message"],
+  additionalProperties: false,
 };
 
 // Turn a printed dollar string into a plain number so a past-job total or
@@ -199,12 +209,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "pro_required" }, { status: 403 });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  // BURST PRE-CHECK, in front of the body read. The authoritative burst check
+  // lives inside countAiUsage far below, after the whole per-tool prompt has
+  // been assembled, so nothing rate limited this route before it parsed a
+  // body and read the pro's past edits. One indexed row read on the same
+  // window countAiUsage will bump, so nothing is double counted, and the
+  // refusal is the same one.
+  if (await overToolBurst(user.id)) {
+    return NextResponse.json({
+      result: null,
+      ...reasonToClientPayload("user_burst"),
+    });
+  }
+
+  if (!hasClaudeKey()) {
     return NextResponse.json({ result: null, reason: "no_key" });
   }
 
-  const body = await req.json().catch(() => ({}));
+  const parsedBody = await readJsonBounded(req, MAX_BODY_BYTES);
+  if (!parsedBody.ok) {
+    return parsedBody.status === 413
+      ? NextResponse.json({ error: "That request is too large." }, { status: 413 })
+      : NextResponse.json({ error: "Unknown tool." }, { status: 400 });
+  }
+  const body = parsedBody.data;
   const tool = typeof body.tool === "string" ? body.tool : "";
 
   // Trim and clamp a free-text field so a caller can't push huge payloads at
@@ -217,7 +245,7 @@ export async function POST(req: NextRequest) {
 
   // Build the per-tool schema and prompt. Validation errors return before the
   // usage counter runs, so a bad form submit never burns quota.
-  let schema: object;
+  let schema: Record<string, unknown>;
   let userPrompt: string;
   let instruction: string;
 
@@ -475,62 +503,47 @@ export async function POST(req: NextRequest) {
   // Members share the same per-user daily cap as the other AI routes (the
   // Plus-tier 250/day ceiling in the shared ai_usage table), so this can't be
   // a side door around the abuse limits on the paid model. Fails open.
-  const { overLimit } = await countAiUsage(user.id, true);
+  const { overLimit, reason } = await countAiUsage(user.id, true);
   if (overLimit) {
-    return NextResponse.json({ result: null, reason: "rate_limited" });
+    // One mapping for every counter refusal, so a burst window reads as "give
+    // it a minute" instead of "you are out for the day". See
+    // src/lib/aiReason.ts.
+    return NextResponse.json({
+      result: null,
+      ...reasonToClientPayload(reason),
+    });
   }
 
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: instruction }] },
-    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-    generationConfig: {
-      maxOutputTokens: 1000,
-      responseMimeType: "application/json",
-      responseSchema: schema,
-    },
-  });
-
-  let rateLimited = false;
-  for (const model of MODELS) {
-    try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: requestBody,
-        }
-      );
-      if (resp.status === 429) {
-        rateLimited = true;
-        continue;
-      }
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!responseText) continue;
-
-      let parsed: any;
-      try {
-        parsed = JSON.parse(responseText);
-      } catch {
-        continue; // malformed, try the next model
-      }
-      const result = assemble(tool, parsed, contractor.name);
-      if (!result) continue; // missing required text, try the next model
-      return NextResponse.json({ result });
-    } catch {
-      // network error, try the next model
+  try {
+    // Customer-facing paperwork built from the pro's own words and numbers.
+    // The hard rule here is arithmetic and invention: no made-up prices, no
+    // recomputed totals. Reasoning on so the model holds that line across a
+    // long instruction with the pro's own past edits appended to it.
+    const { data: parsed } = await generateJson<Record<string, unknown>>({
+      system: instruction,
+      prompt: userPrompt,
+      schema,
+      maxTokens: 8000,
+      thinking: true,
+      timeoutMs: 120_000,
+      label: `pro-tools:${tool}`,
+    });
+    if (!parsed) {
+      return NextResponse.json({ result: null, reason: "failed" });
     }
+    const result = assemble(tool, parsed, contractor.name);
+    // Missing a required piece: better an honest failure than half a document
+    // going out to the pro's customer.
+    if (!result) {
+      return NextResponse.json({ result: null, reason: "failed" });
+    }
+    return NextResponse.json({ result });
+  } catch (e) {
+    return NextResponse.json({
+      result: null,
+      reason: isRateLimitError(e) ? "rate_limited" : "failed",
+    });
   }
-
-  return NextResponse.json({
-    result: null,
-    reason: rateLimited ? "rate_limited" : "failed",
-  });
 }
 
 // Coerce the model's JSON into one clean plain-text document per tool, rather

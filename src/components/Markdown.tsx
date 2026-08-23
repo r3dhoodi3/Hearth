@@ -1,6 +1,6 @@
 import React from "react";
 
-// A tiny, dependency-free renderer for the markdown Gemini returns, so Ask
+// A tiny, dependency-free renderer for the markdown the model returns, so Ask
 // Hearth answers show as real bold text and bullet/numbered lists instead of
 // literal "**", "-", and "#" characters. Handles the common cases only:
 // **bold**, *italic*, `code`, "- "/"* " bullets, "1." lists, "#" headings,

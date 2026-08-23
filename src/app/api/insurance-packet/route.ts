@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { hasPlus } from "@/lib/subscription";
 import { countAiUsage } from "@/lib/aiUsage";
+import { reasonToClientPayload } from "@/lib/aiReason";
 import { getActiveProperty } from "@/lib/property";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 import {
@@ -9,6 +10,7 @@ import {
   DEFAULT_INSURANCE_RATE,
 } from "@/app/(app)/documents/insuranceRates";
 import { stateName } from "@/lib/forecast";
+import { generateText, hasClaudeKey, isRateLimitError } from "@/lib/claude";
 
 export const runtime = "nodejs";
 
@@ -23,13 +25,6 @@ export const runtime = "nodejs";
 // Input:  none (everything comes from the active property, so a caller can't
 //         feed the model made-up numbers under Hearth's tone)
 // Output: { packet } | { packet: null, reason: "no_key" | "rate_limited" | "failed" }
-
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
-];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -104,17 +99,26 @@ export async function POST() {
     );
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!hasClaudeKey()) {
     return NextResponse.json({ packet: null, reason: "no_key" });
   }
 
   // Same per-user daily cap as /api/ask, /api/analyze-quote, and
   // /api/tax-appeal (same ai_usage table and limits), so this route can't be
   // a side door around the abuse limits on the paid model.
-  const { overLimit } = await countAiUsage(user.id, isPlus);
+  // "rate_limited" is reserved for a REAL limit (this owner's daily cap, or
+  // the owner-wide spend breaker). A counter that could not be read is not a
+  // limit, and telling someone they hit a usage limit they never touched
+  // sends them looking for an upgrade that would not help.
+  const { overLimit, reason } = await countAiUsage(user.id, isPlus);
   if (overLimit) {
-    return NextResponse.json({ packet: null, reason: "rate_limited" });
+    // One mapping for every counter refusal, so a burst window reads as "give
+    // it a minute" instead of "you are out for the day". See
+    // src/lib/aiReason.ts.
+    return NextResponse.json({
+      packet: null,
+      ...reasonToClientPayload(reason),
+    });
   }
 
   // The home's real data: systems with install years, and maintenance
@@ -220,55 +224,42 @@ export async function POST() {
     "Output only the packet text itself, with no commentary before or after it. " +
     "Never use an em dash or a hyphen as a connector: use a comma, a colon, or a new sentence instead.";
 
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: instruction }] },
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text:
-              "Build the requote packet from these facts about my home:\n\n" +
-              facts.map((f) => `- ${f}`).join("\n"),
-          },
-        ],
-      },
-    ],
-    generationConfig: {
-      maxOutputTokens: 1400,
-    },
-  });
-
-  let rateLimited = false;
-  for (const model of MODELS) {
-    try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: requestBody,
-        }
-      );
-      if (resp.status === 429) {
-        rateLimited = true;
-        continue;
-      }
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (typeof text !== "string" || !text.trim()) continue;
-      return NextResponse.json({ packet: text.trim() });
-    } catch {
-      // network error - try the next model
+  try {
+    // A structured long-form document built strictly from a fact list, where
+    // "use a bracketed placeholder rather than invent a figure" has to hold
+    // across five sections: worth the reasoning.
+    const { text, stopReason } = await generateText({
+      system: instruction,
+      prompt:
+        "Build the requote packet from these facts about my home:\n\n" +
+        facts.map((f) => `- ${f}`).join("\n"),
+      maxTokens: 8000,
+      thinking: true,
+      // Reasoning plus a long structured document: this is a slow call the
+      // owner is watching a progress bar for. An explicit ceiling, like the
+      // other document routes, so a hung request fails on our clock rather
+      // than the platform's.
+      timeoutMs: 120_000,
+      label: "insurance-packet",
+    });
+    // TRUNCATED IS NOT DONE. A packet that ran out of output budget stops
+    // mid-sentence, usually somewhere in the middle of the coverage questions,
+    // and it looks finished enough that someone would hand it to an agent
+    // with two sections missing. Say so instead of returning the stump.
+    if (stopReason === "max_tokens") {
+      return NextResponse.json({
+        packet: null,
+        reason: "too_long",
+        error:
+          "That packet ran long and got cut off. Try again, or trim some detail from your home record first.",
+      });
     }
+    if (text) return NextResponse.json({ packet: text });
+    return NextResponse.json({ packet: null, reason: "failed" });
+  } catch (e) {
+    return NextResponse.json({
+      packet: null,
+      reason: isRateLimitError(e) ? "rate_limited" : "failed",
+    });
   }
-
-  return NextResponse.json({
-    packet: null,
-    reason: rateLimited ? "rate_limited" : "failed",
-  });
 }

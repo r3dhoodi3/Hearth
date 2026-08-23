@@ -16,6 +16,14 @@ import { LAUNCH_CITIES } from "./launchCities";
 // stay unchecked. No custom validation layer, and saveCompanyAction still
 // enforces the same rule server-side for anything that isn't a browser.
 //
+// `requireOne` is the one escape hatch, for the onboarding wizard: there this
+// fieldset lives on a step panel that is `hidden` while the pro is on another
+// step, and a `required` control inside a hidden panel blocks the submit with a
+// browser message that cannot be shown or focused. The wizard passes false while
+// its city step is off screen and runs the same "at least one" rule itself
+// (see ./wizardSteps.ts). Defaults to true, so the profile editor and any other
+// caller keep the native behavior unchanged.
+//
 // LAYOUT: nine cities in one column is a scroll of its own, so the boxes sit
 // in a two-column grid (single column only on the narrowest phones, where two
 // columns would wrap a city name). No icons, no card chrome - the same plain
@@ -32,14 +40,16 @@ import { LAUNCH_CITIES } from "./launchCities";
 // pre-check a city Hearth doesn't serve.
 export default function LaunchCityCheckboxes({
   defaultCities = [],
+  requireOne = true,
 }: {
   defaultCities?: readonly string[];
+  requireOne?: boolean;
 }) {
   const initial = LAUNCH_CITIES.filter((city) =>
     defaultCities.some((c) => String(c).trim().toLowerCase() === city.toLowerCase())
   );
   const [checked, setChecked] = useState<readonly string[]>(initial);
-  const noneChecked = checked.length === 0;
+  const noneChecked = requireOne && checked.length === 0;
 
   return (
     <div className="grid grid-cols-1 gap-x-4 gap-y-2 min-[380px]:grid-cols-2">

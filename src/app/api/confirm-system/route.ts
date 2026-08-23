@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { hasPlus } from "@/lib/subscription";
-import { countAiUsage } from "@/lib/aiUsage";
+import { countAiUsage, overToolBurst } from "@/lib/aiUsage";
+import { reasonToClientPayload } from "@/lib/aiReason";
+import { readJsonBounded } from "@/lib/boundedBody";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
+import {
+  generateJson,
+  hasClaudeKey,
+  isRateLimitError,
+} from "@/lib/claude";
 
 export const runtime = "nodejs";
 
@@ -10,10 +17,15 @@ export const runtime = "nodejs";
 // paid vision model (cost/DoS). ~14M base64 chars ≈ 10MB of binary. Same cap
 // as /api/extract-document.
 const MAX_IMAGE_B64_CHARS = 14_000_000;
+// Hard ceiling on the whole request body, in bytes, counted as the bytes
+// arrive rather than trusted from Content-Length, which a chunked request
+// never sends (src/lib/boundedBody.ts). Sits just above the image cap so a
+// real scan still reaches the check above and gets its specific message.
+const MAX_BODY_BYTES = 15_000_000;
 
 // "Walk your home": read the data plate / model-and-serial label on ONE home
 // system so the owner can replace its estimated details with the real thing.
-// Same Gemini vision as /api/extract-document, pinned to a small schema. This
+// Same Claude vision as /api/extract-document, pinned to a small schema. This
 // only ever returns a SUGGESTION - src/app/(app)/walkthrough/actions.ts is the
 // only thing that writes to home_systems, and only after the owner confirms.
 //
@@ -21,22 +33,28 @@ const MAX_IMAGE_B64_CHARS = 14_000_000;
 // Output: { suggestion: { brand, model, serial, install_year } | null, reason? }
 // (any field null if it isn't on the label - never invented).
 
+// Structured output: the model is constrained to this shape server-side, so
+// there is no "reply with only JSON" instruction to ignore and nothing to
+// regex out of prose. Every field is nullable because a partly legible label
+// is the normal case, and a missing field must stay missing, never guessed.
 const RESPONSE_SCHEMA = {
-  type: "OBJECT",
+  type: "object",
   properties: {
-    brand: { type: "STRING" },
-    model: { type: "STRING" },
-    serial: { type: "STRING" },
-    install_year: { type: "INTEGER" },
+    brand: { type: ["string", "null"] },
+    model: { type: ["string", "null"] },
+    serial: { type: ["string", "null"] },
+    install_year: { type: ["integer", "null"] },
   },
+  required: ["brand", "model", "serial", "install_year"],
+  additionalProperties: false,
 };
 
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
-];
+type PlateFields = {
+  brand: string | null;
+  model: string | null;
+  serial: string | null;
+  install_year: number | null;
+};
 
 export async function POST(req: NextRequest) {
   // Require a signed-in user. This is an authenticated feature; gating it here
@@ -49,7 +67,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => ({}));
+  // BURST PRE-CHECK, in front of the body read. The authoritative burst check
+  // lives inside countAiUsage below and only runs after the body has been
+  // buffered and parsed, so a flood got megabytes of base64 read before any
+  // rate limit said no. One indexed row read on the same window countAiUsage
+  // will bump, so nothing is double counted, and the refusal is the same one.
+  if (await overToolBurst(user.id)) {
+    return NextResponse.json({
+      suggestion: null,
+      ...reasonToClientPayload("user_burst"),
+    });
+  }
+
+  const parsedBody = await readJsonBounded(req, MAX_BODY_BYTES);
+  if (!parsedBody.ok) {
+    return parsedBody.status === 413
+      ? NextResponse.json({ error: "Image too large." }, { status: 413 })
+      : NextResponse.json(
+          { error: "Missing image or system." },
+          { status: 400 }
+        );
+  }
+  const body = parsedBody.data;
   const image = typeof body.image === "string" ? body.image : "";
   const mime = typeof body.mime === "string" ? body.mime : "image/jpeg";
   const systemId = typeof body.system_id === "string" ? body.system_id : "";
@@ -76,8 +115,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!hasClaudeKey()) {
     // No key: the walkthrough still works, the owner just fills the form in
     // by hand instead of getting a suggestion.
     return NextResponse.json({ suggestion: null, reason: "no_key" });
@@ -86,9 +124,38 @@ export async function POST(req: NextRequest) {
   // Same per-user daily cap as every other AI-backed route (shared ai_usage
   // table, src/lib/aiUsage.ts), so scanning systems can't be a side door
   // around the abuse limits on the paid model.
-  const { overLimit } = await countAiUsage(user.id, await hasPlus());
+  //
+  // BURST OFF, and this is the one route where that is correct. The tool burst
+  // limit is 10 requests per 5 minutes (AI_TOOL_BURST_LIMIT), sized for
+  // one-off document scans that nobody makes ten of by hand. The walkthrough
+  // is the opposite shape by design: the owner walks their house photographing
+  // one data plate per system, back to back, and a home with a dozen systems
+  // is an ordinary one - up to 16 captures in a single sitting. Under the
+  // shared burst window that owner is refused on the 11th plate, mid-walk,
+  // with no explanation that makes sense to them ("slow down" while they are
+  // walking as fast as a person walks). The burst limit exists to stop a
+  // script, and it kept catching the feature instead.
+  //
+  // What still holds the line: the DAILY cap (25 free / 250 Plus) bounds the
+  // whole day's spend, the owner-wide breaker and the hourly ceiling both
+  // still run, each capture must name a system_id this caller owns (checked
+  // above, through RLS), and the body is bounded before any of it. A script
+  // pointed here can go faster than a person, but it cannot go past the same
+  // daily budget every other tool route shares, which is the limit that
+  // actually costs money.
+  //
+  // The overToolBurst pre-check at the top of this route is left in place on
+  // purpose: it is a non-counting READ of the same window, so it still refuses
+  // cheaply once some OTHER tool route has already burst-limited this caller,
+  // and it never bumps the counter itself.
+  const { overLimit, reason } = await countAiUsage(user.id, await hasPlus(), {
+    burst: false,
+  });
   if (overLimit) {
-    return NextResponse.json({ suggestion: null, reason: "rate_limited" });
+    return NextResponse.json({
+      suggestion: null,
+      ...reasonToClientPayload(reason),
+    });
   }
 
   const sysLabel = labelFor(SYSTEM_TYPES, system.system_type) || "home system";
@@ -100,79 +167,43 @@ export async function POST(req: NextRequest) {
     "For serial, read the serial number exactly as printed. " +
     "For install_year, use a manufacture date or install sticker if present (4-digit year only); if the label only shows a manufacture date code, decode it to a year if you're confident, otherwise leave it empty.";
 
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: instruction }] },
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: "Read the fields off this data plate." },
-          { inlineData: { mimeType: mime, data: image } },
-        ],
-      },
-    ],
-    generationConfig: {
-      // Deterministic extraction: reading a data plate is not a creative task,
-      // so keep the model from embellishing what it sees.
-      temperature: 0,
-      maxOutputTokens: 300,
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
-    },
-  });
-
-  let rateLimited = false;
-  for (const model of MODELS) {
-    try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: requestBody,
-        }
-      );
-      if (resp.status === 429) {
-        rateLimited = true;
-        continue;
-      }
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) continue;
-
-      let parsed: any;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        continue; // malformed - try the next model
-      }
-      const suggestion = normalize(parsed);
-      // Nothing legible came off the label (unreadable photo or wrong subject):
-      // surface it as a read failure so the owner gets the "couldn't read it,
-      // fill in what you can" note instead of an empty form that looks like a
-      // successful read. A partial read (any field present) still goes through.
-      if (
-        !suggestion.brand &&
-        !suggestion.model &&
-        !suggestion.serial &&
-        suggestion.install_year == null
-      ) {
-        return NextResponse.json({ suggestion: null, reason: "unreadable" });
-      }
-      return NextResponse.json({ suggestion });
-    } catch {
-      // network error - try the next model
+  try {
+    // Reading a data plate is mechanical transcription, not a judgement call,
+    // so run it at low effort: the schema does the shaping and the prompt does
+    // the rest.
+    const { data: parsed } = await generateJson<PlateFields>({
+      system: instruction,
+      prompt: "Read the fields off this data plate.",
+      images: [{ data: image, mime }],
+      schema: RESPONSE_SCHEMA,
+      maxTokens: 1024,
+      effort: "low",
+      label: "confirm-system",
+    });
+    if (!parsed) {
+      return NextResponse.json({ suggestion: null, reason: "failed" });
     }
-  }
 
-  return NextResponse.json({
-    suggestion: null,
-    reason: rateLimited ? "rate_limited" : "failed",
-  });
+    const suggestion = normalize(parsed);
+    // Nothing legible came off the label (unreadable photo or wrong subject):
+    // surface it as a read failure so the owner gets the "couldn't read it,
+    // fill in what you can" note instead of an empty form that looks like a
+    // successful read. A partial read (any field present) still goes through.
+    if (
+      !suggestion.brand &&
+      !suggestion.model &&
+      !suggestion.serial &&
+      suggestion.install_year == null
+    ) {
+      return NextResponse.json({ suggestion: null, reason: "unreadable" });
+    }
+    return NextResponse.json({ suggestion });
+  } catch (e) {
+    return NextResponse.json({
+      suggestion: null,
+      reason: isRateLimitError(e) ? "rate_limited" : "failed",
+    });
+  }
 }
 
 // Coerce the model's output into clean, storable values. Anything off-spec

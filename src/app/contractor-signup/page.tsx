@@ -7,7 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
-import AppleSignInButton from "@/components/AppleSignInButton";
+import AppleSignInButton, {
+  APPLE_SIGNIN_ENABLED,
+} from "@/components/AppleSignInButton";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
 import { LEAD_TIER_FEES, MAJOR_INTRO_FEE } from "@/lib/constants";
 import { Eye, EyeOff } from "lucide-react";
@@ -303,7 +305,10 @@ export default function ContractorSignUpPage(props: {
           <label className="flex items-start gap-2 text-xs text-stone-500 dark:text-stone-400">
             <input
               type="checkbox"
-              className="mt-0.5"
+              // 20px on a phone: the default box is ~13px, which is a miss
+              // waiting to happen on the one control that has to be ticked to
+              // sign up. Behind max-sm, so desktop keeps the box it had.
+              className="mt-0.5 max-sm:h-5 max-sm:w-5 max-sm:shrink-0"
               checked={agreedToTerms}
               onChange={(e) => setAgreedToTerms(e.target.checked)}
               required
@@ -339,11 +344,13 @@ export default function ContractorSignUpPage(props: {
           </div>
           {/* OAuth signups skip the checkbox above entirely, so the same
               agreement - including the 18+ age representation - needs to be
-              restated here instead. Covers both buttons above. Links to
+              restated here instead. Covers whichever buttons are above: the
+              Apple one is hidden until its provider is configured, and naming
+              a button that isn't on screen would read as a mistake. Links to
               /pro-terms, same as the checkbox (the B2B contractor terms). */}
           <p className="text-center text-xs text-stone-500 dark:text-stone-400">
-            By continuing with Google or Apple you confirm you are 18 or older
-            and agree to the{" "}
+            By continuing with Google{APPLE_SIGNIN_ENABLED ? " or Apple" : ""}{" "}
+            you confirm you are 18 or older and agree to the{" "}
             <Link href="/pro-terms" className="text-bark-700 hover:underline dark:text-stone-300">
               Contractor Terms
             </Link>{" "}

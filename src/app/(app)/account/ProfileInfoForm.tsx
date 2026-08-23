@@ -110,7 +110,7 @@ export default function ProfileInfoForm({
       <div className="mt-8 flex items-center justify-end gap-3 border-t border-stone-100 pt-5 dark:border-white/10">
         <Link
           href="/dashboard"
-          className="rounded-lg px-4 py-2 text-sm font-medium text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+          className="rounded-lg px-4 py-2 text-sm font-medium text-stone-500 hover:text-stone-700 max-sm:flex max-sm:min-h-10 max-sm:items-center dark:text-stone-400 dark:hover:text-stone-200"
         >
           Cancel
         </Link>

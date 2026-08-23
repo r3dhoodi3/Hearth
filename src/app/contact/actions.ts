@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { getRole } from "@/lib/contractor";
+import { getSides, landingFor } from "@/lib/contractor";
 import { cappedField, FIELD_MAX } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
 import { err, type ActionResult } from "@/lib/actionResult";
@@ -32,7 +32,7 @@ async function successDestination(): Promise<string> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return "/";
-  return (await getRole()) === "contractor" ? "/pro" : "/dashboard";
+  return landingFor(await getSides());
 }
 
 // Saves a message from the public /contact form (src/app/contact/page.tsx)

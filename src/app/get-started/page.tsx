@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getRole } from "@/lib/contractor";
+import { getSides, landingFor, ROLE_PICKER_PATH } from "@/lib/contractor";
 import Link from "next/link";
 import { safeNextPath } from "@/lib/safeNext";
 import { Home, Hammer } from "lucide-react";
@@ -39,16 +39,23 @@ export default async function GetStarted(
   } = await supabase.auth.getUser();
 
   if (user) {
-    const role = await getRole();
-    if (role) redirect(next ?? (role === "contractor" ? "/pro" : "/dashboard"));
-    // Signed in, but no role yet: this is the same fork /welcome/role asks,
-    // except the tiles below link to the two SIGN-UP pages, which would show
-    // someone a create-an-account form for the account they are already
-    // signed into. That is the dead end a Google user hits when /pro sends a
-    // role-less account here. /welcome/role asks the same question, stamps the
-    // role, records the right terms acceptance, and routes into the matching
-    // complete-your-profile step, so send them there instead.
-    redirect(`/welcome/role${nextQuery}`);
+    // Signed in, but with no side and no preference: this is the same fork
+    // /welcome/role asks, except the tiles below link to the two SIGN-UP
+    // pages, which would show someone a create-an-account form for the account
+    // they are already signed into. That is the dead end a Google user hits
+    // when /pro sends a role-less account here. /welcome/role asks the same
+    // question, stamps the role, records the right terms acceptance, and
+    // routes into the matching complete-your-profile step, so send them there
+    // instead - with ?next= attached, which landingFor cannot carry.
+    //
+    // Everyone else - a stamped preference, or a row that speaks for itself -
+    // skips the chooser and goes to the side they land on.
+    const sides = await getSides();
+    const landing = landingFor(sides);
+    if (landing === ROLE_PICKER_PATH) {
+      redirect(`${ROLE_PICKER_PATH}${nextQuery}`);
+    }
+    redirect(next ?? landing);
   }
 
   return (

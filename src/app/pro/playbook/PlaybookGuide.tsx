@@ -49,7 +49,7 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 dark:text-stone-100"
+        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 max-sm:min-h-11 dark:text-stone-100"
       >
         <span className="flex items-center gap-2">
           <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -86,7 +86,9 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
                     onClick={() => setOpenSection(active ? -1 : i)}
                     tabIndex={open ? 0 : -1}
                     aria-expanded={active}
-                    className="flex w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium text-stone-700 hover:text-hearth-700 dark:text-stone-300 dark:hover:text-hearth-300"
+                    // Each section row is a tap target, so on a phone it gets
+                    // the full 44px. py-2 (a ~36px row) stays on sm and up.
+                    className="flex w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium text-stone-700 hover:text-hearth-700 max-sm:min-h-11 dark:text-stone-300 dark:hover:text-hearth-300"
                   >
                     {s.title}
                     <span

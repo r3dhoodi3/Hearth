@@ -140,6 +140,12 @@ export default function ApplyJobButton({
         setDraftError(
           "You've hit today's drafting limit. It resets at midnight."
         );
+      } else if (data?.reason === "busy") {
+        // A burst window or an owner-wide ceiling, not this pro's own daily
+        // allowance. Saying "you've hit today's limit" for it sent pros to
+        // billing over a few seconds' wait. Copy comes from the server
+        // (src/lib/aiReason.ts); the fallback covers an older reply.
+        setDraftError(data?.error || "Give it a minute and try again.");
       } else if (data?.reason === "no_key") {
         setDraftError("Drafting is temporarily unavailable.");
       } else {

@@ -94,7 +94,9 @@ export default function CategoryPicker({
           type="text"
           value={other}
           onChange={(e) => setOther(e.target.value)}
-          placeholder="Describe the service you provide"
+          // Short on purpose: the longer version was cut off mid-word at
+          // 390px, where this input shares its row with the "Other" label.
+          placeholder="Describe your service"
           className="min-w-0 flex-1 border-0 bg-transparent text-base text-stone-700 placeholder:text-stone-500 focus:outline-none focus:ring-0 sm:text-sm dark:text-stone-200 dark:placeholder:text-stone-500"
         />
       </div>

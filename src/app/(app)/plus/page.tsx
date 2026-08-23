@@ -34,6 +34,9 @@ const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
   { label: "Cost forecast & repair fund", free: "10-year total + set-aside", plus: "Full per-system breakdown" },
   { label: "Quote analyzer", free: "-", plus: "Included" },
   { label: "Home report for resale & insurance", free: "-", plus: "Included" },
+  // Photo diagnosis is the Plus-only half of Ask Hearth; the question count is
+  // the other half. Both numbers must match what src/lib/aiUsage.ts enforces.
+  { label: "Ask Hearth", free: "3 a day, text only", plus: "15 a day, with photos" },
   // When the posting cap is on, unlimited postings are a real Plus perk, so
   // the row sits up here with the other upgrades.
   ...(COLD_START_FREE_POSTING
@@ -82,18 +85,24 @@ export default async function PlusPage(
   // free 3-day trial looks like in Stripe, so it is the step-up signal here.
   if (searchParams.welcome === "1") {
     return (
-      <PlusWelcome
-        plan={
-          sub?.status === "canceled"
-            ? undefined
-            : sub?.plan === "yearly"
-            ? "yearly"
-            : sub?.plan === "monthly"
-            ? "monthly"
-            : undefined
-        }
-        introEligible={sub?.status === "trialing"}
-      />
+      // Same max-w-md column as the upsell branch below. /plus renders four
+      // different things depending on subscription state, and the URL used to
+      // change width as you moved between them; pinning every branch to one
+      // measure keeps the page from visibly reflowing after checkout.
+      <div className="mx-auto max-w-md">
+        <PlusWelcome
+          plan={
+            sub?.status === "canceled"
+              ? undefined
+              : sub?.plan === "yearly"
+              ? "yearly"
+              : sub?.plan === "monthly"
+              ? "monthly"
+              : undefined
+          }
+          introEligible={sub?.status === "trialing"}
+        />
+      </div>
     );
   }
 
@@ -272,7 +281,9 @@ export default async function PlusPage(
   // left to stop.
   if (sub?.stripe_subscription_id && sub.status !== "canceled") {
     return (
-      <div className="mx-auto max-w-2xl space-y-6">
+      // max-w-md, matching the welcome and upsell branches: one measure for
+      // every state this URL can render.
+      <div className="mx-auto max-w-md space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             Hearth Plus
@@ -342,10 +353,10 @@ export default async function PlusPage(
   }
 
   return (
-    // Wider than the other branches of this page: the pricing block below is
-    // three real columns (Free, Yearly, Monthly), and max-w-2xl squeezes them
-    // to the point of wrapping every price line.
-    <div className="mx-auto max-w-3xl space-y-8">
+    // One column, one card. The pitch is a single Plus card with a cadence
+    // toggle, so the page is as wide as that card and nothing else competes
+    // with it for the reader's attention.
+    <div className="mx-auto max-w-md space-y-6">
       {/* COLD START: the posting cap is off while COLD_START_FREE_POSTING is
           on, so this banner must not show even if the URL is hit directly.
           Keep it for when the flag flips back. */}
@@ -396,6 +407,14 @@ export default async function PlusPage(
         </div>
       )}
 
+      {searchParams.reason === "ask" && (
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
+            Ask Hearth photo answers and more questions come with Plus.
+          </p>
+        </div>
+      )}
+
       {searchParams.reason === "report" && (
         <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
           <p className="text-sm text-bark-700 dark:text-stone-300">
@@ -428,16 +447,21 @@ export default async function PlusPage(
         {/* Money protection, not job-posting speed: the paid tier's real value
             is knowing what's coming (forecast, quote check, plan) before it
             hits the wallet. The reason banners above add the specific pitch. */}
-        <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">
+        <h1 className="text-2xl font-semibold text-stone-900 sm:text-3xl dark:text-stone-100">
           Know what&apos;s coming before it costs you
         </h1>
-        {/* Prices computed from PLUS_PLAN, never typed in, so this line can
-            never quote something the card isn't charged. Yearly leads because
-            it is the plan the pricing block preselects. */}
+        {/* The page's ONE trial-and-price line. Prices are computed from
+            PLUS_PLAN, never typed in, so it can never quote something the card
+            isn't charged. Yearly leads because it is the plan the card
+            preselects. The card below states the selected price once; the
+            auto-renewal disclosure inside the checkout form restates the
+            step-up and the recurring terms, which is deliberate - that
+            disclosure has to stand on its own next to the consent button
+            whether or not anyone read this line. */}
         <p className="mt-2 text-sm font-medium text-bark-700 dark:text-stone-300">
           {trialEligible
-            ? `Free for ${PLUS_PLAN.trialDays} days, then ${formatUsd(PLUS_PLAN.yearly)}/yr or ${formatUsd(PLUS_PLAN.monthly)}/mo. Cancel anytime.`
-            : `${formatUsd(PLUS_PLAN.yearly)}/yr or ${formatUsd(PLUS_PLAN.monthly)}/mo. Cancel anytime.`}
+            ? `Free for ${PLUS_PLAN.trialDays} days, then ${formatUsd(PLUS_PLAN.yearly)}/year or ${formatUsd(PLUS_PLAN.monthly)}/month. Cancel anytime.`
+            : `${formatUsd(PLUS_PLAN.yearly)}/year or ${formatUsd(PLUS_PLAN.monthly)}/month. Cancel anytime.`}
         </p>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
           {COLD_START_FREE_POSTING
@@ -446,29 +470,15 @@ export default async function PlusPage(
               "Line up local pros, on your terms. Get matched first and keep every proactive alert working for you."
             : "Line up local pros, on your terms. Post more jobs at once, get matched first, and keep every proactive alert working for you."}
         </p>
-        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-          Plus covers everyone in your household on that home, at no extra
-          cost.
-        </p>
-        <div className="mt-5">
-          {/* Label mirrors the pricing card's button exactly, so the promise
-              made here is the one the button below keeps. Everyone lands on
-              the yearly plan preselected (see PlanToggle), and
-              startPlusCheckoutAction defaults to the same cadence. */}
-          <a href="#pricing" className="btn-primary">
-            {trialEligible ? "Start my 3 days free" : "See plans"}
-          </a>
-          <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-            Cancel anytime. No commitment.
-          </p>
-        </div>
       </div>
 
-      {/* The full comparison stays available but foldable, so the page reads
-          headline -> anchor -> pricing without a wall of rows in between.
-          A server component can't know the viewport, so `open` is the
-          desktop-first default; phone users can collapse it. */}
-      <details open className="group">
+      <PlanToggle trialEligible={trialEligible} />
+
+      {/* The full comparison stays available but folded, under the card. The
+          card already carries the seven things Plus adds; this is the
+          row-by-row version for anyone who wants to check the free tier's
+          limits, and it costs no height until it's opened. */}
+      <details className="group">
         <summary className="w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm font-semibold text-stone-900 dark:text-stone-100">
           <span className="mr-1 inline-block transition-transform group-open:rotate-90">
             ▸
@@ -507,12 +517,6 @@ export default async function PlusPage(
           timeline, the year-by-year spend chart, and the running-costs section.
         </p>
       </details>
-
-      <p className="text-center text-sm text-stone-600 dark:text-stone-300">
-        A year of Plus costs less than one hour of an emergency plumber.
-      </p>
-
-      <PlanToggle trialEligible={trialEligible} />
 
       <p className="text-center text-xs text-stone-500 dark:text-stone-400">
         Questions?{" "}

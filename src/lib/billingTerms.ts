@@ -58,7 +58,11 @@ export function billingTerms(
   const pro = plan === "pro_monthly" || plan === "pro_yearly";
   const product = pro ? "Hearth Pro" : "Hearth Plus";
   const cancelPath = pro ? "/pro/plus" : "/plus";
-  const cancel = `Cancel anytime online at ${cancelPath} using the "Cancel membership" button. Cancelling takes effect at the end of the period you have already paid for, and there is nothing to call or email.`;
+  // Named in plain language rather than as a URL path: this sentence is read
+  // aloud in an email and inside a Stripe consent record as often as it is
+  // read on screen, and "/plus" is not a place anyone can follow there. The
+  // page it names is the one cancelPath links to, so the fact is identical.
+  const cancel = `Cancel anytime from your ${product} page using the Cancel membership button. Cancelling takes effect at the end of the period you have already paid for, and there is nothing to call or email.`;
 
   // Hearth Pro: every brand-new member, on either cadence, starts on the same
   // free trial (a Stripe trial, so the card is collected at checkout but

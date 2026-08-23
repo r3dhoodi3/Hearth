@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentContractor, getRole } from "@/lib/contractor";
+import { getCurrentContractor } from "@/lib/contractor";
 import PlaybookGuides from "./PlaybookGuides";
 import { PLAYBOOK_GUIDES } from "./guides";
 
@@ -8,10 +8,9 @@ import { PLAYBOOK_GUIDES } from "./guides";
 // (ghost protection, aging deals, the 3-spot cap) actually work.
 export default async function ProPlaybookPage() {
   const contractor = await getCurrentContractor();
-  if (!contractor) {
-    if ((await getRole()) === null) redirect("/get-started");
-    redirect("/pro/onboarding");
-  }
+  // No company yet: company setup is the only way in, whatever the account's
+  // preferred-side stamp says (see /pro/page.tsx).
+  if (!contractor) redirect("/pro/onboarding");
 
   return (
     <div className="space-y-6">

@@ -117,7 +117,10 @@ export default function DepositForm({
                 setAmount(String(p));
                 setHover(null);
               }}
-              className={`rounded-lg border px-3 py-1.5 text-sm ${
+              // Below sm the preset grows to a 44px-tall thumb target. Padding
+              // and type are untouched and the rule is behind max-sm, so the
+              // chip on a desktop is exactly the chip that was here before.
+              className={`rounded-lg border px-3 py-1.5 text-sm max-sm:inline-flex max-sm:min-h-11 max-sm:items-center ${
                 active
                   ? "border-hearth-500 bg-hearth-50 text-hearth-800 dark:border-hearth-400 dark:bg-hearth-900/40 dark:text-hearth-200"
                   : "border-stone-200 text-stone-600 hover:border-hearth-300 dark:border-white/10 dark:text-stone-300 dark:hover:border-hearth-400"
@@ -130,7 +133,7 @@ export default function DepositForm({
         <button
           type="button"
           onClick={() => inputRef.current?.focus()}
-          className="rounded-lg border border-dashed border-stone-300 px-3 py-1.5 text-sm text-stone-500 hover:border-hearth-300 dark:text-stone-400"
+          className="rounded-lg border border-dashed border-stone-300 px-3 py-1.5 text-sm text-stone-500 hover:border-hearth-300 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400"
         >
           Custom
         </button>
@@ -178,12 +181,16 @@ export default function DepositForm({
         </p>
       )}
 
-      <label className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-300">
+      {/* The whole row is the target: on a phone it is 44px tall and the box
+          itself is 20px, so agreeing doesn't take a precise tap on a 13px
+          checkbox. Both rules sit behind max-sm, so the desktop row is
+          unchanged. */}
+      <label className="flex items-center gap-2 text-xs text-stone-600 max-sm:min-h-11 dark:text-stone-300">
         <input
           type="checkbox"
           checked={agreed}
           onChange={(e) => setAgreed(e.target.checked)}
-          className="accent-hearth-600"
+          className="accent-hearth-600 max-sm:h-5 max-sm:w-5"
         />
         I understand and agree.
       </label>

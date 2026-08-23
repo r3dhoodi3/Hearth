@@ -43,7 +43,7 @@ Resend free + UptimeRobot free = ~$45/mo + Stripe's 2.9% + 30c per charge.
    value after step 9), STRIPE_PRICE_PLUS_MONTHLY/_YEARLY,
    STRIPE_PRO_MONTHLY/_YEARLY_PRICE_ID, STRIPE_PRO_INTRO_COUPON_ID
    (optional), CRON_SECRET (Sensitive; this exact name makes Vercel attach
-   it as the Bearer token on cron calls), GEMINI_API_KEY (Sensitive),
+   it as the Bearer token on cron calls), ANTHROPIC_API_KEY (Sensitive),
    RESEND_API_KEY (Sensitive), RESEND_FROM, RENTCAST_API_KEY (Sensitive,
    optional; free key at app.rentcast.io enables parcel pre-fill).
    Never set NEXT_DIST_DIR on Vercel. Leave Supabase vars OUT of Preview

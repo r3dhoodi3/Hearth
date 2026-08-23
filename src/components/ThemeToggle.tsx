@@ -2,6 +2,25 @@
 
 import { useEffect, useState } from "react";
 
+// Header background per theme, kept in sync with the theme-color meta tag so
+// the iOS status bar / Android toolbar tint follows the page. Light is the
+// value app/layout.tsx ships in its viewport export; dark matches stone-900.
+const THEME_COLOR_LIGHT = "#fbf7f2";
+const THEME_COLOR_DARK = "#1c1917";
+
+// Point the theme-color meta at the active theme. Next renders the tag from
+// the viewport export, but this creates it if it is somehow absent so the
+// tint is never left stale.
+function setThemeColorMeta(dark: boolean) {
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.name = "theme-color";
+    document.head.appendChild(meta);
+  }
+  meta.content = dark ? THEME_COLOR_DARK : THEME_COLOR_LIGHT;
+}
+
 // Light/dark switch. The source of truth is the .dark class on <html>, set
 // before paint by the inline script in app/layout.tsx; this component reads
 // it on mount, flips it on click, and saves the choice to localStorage so it
@@ -18,14 +37,21 @@ export default function ThemeToggle({
   // themselves come from the html class, not from this state.
   const [dark, setDark] = useState(false);
 
+  // The .dark class is the source of truth (themeInit already applied the
+  // stored choice before paint), so read it rather than localStorage. Syncing
+  // the meta here too covers the reload case: themeInit skips the tag when
+  // Next has not rendered it yet.
   useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
+    const isDark = document.documentElement.classList.contains("dark");
+    setDark(isDark);
+    setThemeColorMeta(isDark);
   }, []);
 
   function toggle() {
     const next = !dark;
     setDark(next);
     document.documentElement.classList.toggle("dark", next);
+    setThemeColorMeta(next);
     try {
       localStorage.setItem("hearth-theme", next ? "dark" : "light");
     } catch {

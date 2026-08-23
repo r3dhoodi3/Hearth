@@ -3,8 +3,18 @@ import Logo from "@/components/Logo";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
 import NotificationBell from "@/components/NotificationBell";
+import { setPreferredSideAction } from "@/lib/sideActions";
 
-export default function ProNav({ company }: { company: string | null }) {
+export default function ProNav({
+  company,
+  hasHome,
+}: {
+  company: string | null;
+  // Does this account also have a homeowner side (a home of their own, or one
+  // shared with them)? Decides whether the profile menu offers a switch or an
+  // invitation to add one.
+  hasHome: boolean;
+}) {
   // Primary nav stays to the four or five destinations a pro checks daily.
   // Playbook, Tools, and Membership moved into the profile menu's "Grow"
   // group below: useful, but not a daily-use tab.
@@ -23,6 +33,19 @@ export default function ProNav({ company }: { company: string | null }) {
       shortLabel: "Business",
       icon: "business",
     },
+  ];
+
+  // Phone bottom bar only, mirroring what the homeowner Nav did with Ask
+  // Hearth. The pro copilot used to be reachable only from the floating pill,
+  // which on a 390px screen sat on top of whatever was in the bottom-right
+  // corner (the /pro/tools cards, the /pro/profile fields, a client's notes).
+  // It is a tab now, third of five so a thumb reaches it, and the pill is
+  // desktop-only (see pro/layout.tsx). The desktop top strip keeps rendering
+  // LINKS above, untouched, because it still has the pill.
+  const BOTTOM_LINKS = [
+    ...LINKS.slice(0, 2),
+    { href: "/pro/ask", label: "Ask Hearth", shortLabel: "Ask", icon: "ask" },
+    ...LINKS.slice(2),
   ];
 
   return (
@@ -66,6 +89,21 @@ export default function ProNav({ company }: { company: string | null }) {
               { href: "/pro/billing", label: "Billing" },
               { href: "/pro/privacy", label: "Your privacy rights" },
               { href: "/pro/help", label: "Help" },
+              // The other side of the account, mirroring Nav.tsx: a switch
+              // records where they land next time; adding a home is a plain
+              // link into onboarding, told explicitly that this is an addition
+              // so it doesn't read as a wrong turn and send them back here.
+              hasHome
+                ? {
+                    href: "/dashboard",
+                    label: "Switch to your home",
+                    action: setPreferredSideAction,
+                    side: "homeowner" as const,
+                  }
+                : {
+                    href: "/onboarding?add=home",
+                    label: "Add your home",
+                  },
             ]}
           />
         </div>
@@ -74,14 +112,13 @@ export default function ProNav({ company }: { company: string | null }) {
     {/* Phone-only bottom tab bar, mirroring the homeowner Nav (see
         Nav.tsx for the full rationale). Kept to <=48px tall so it fits
         inside the pb-24 bottom padding pro/layout.tsx's <main> already
-        reserves below sm for the floating Ask Hearth dock; globals.css
-        nudges that dock and the toast notifier above this bar on the same
-        breakpoint. */}
+        reserves below sm; globals.css nudges the toast notifier above this
+        bar on the same breakpoint. */}
     <nav
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-hearth-50 pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-white/10 dark:bg-stone-900"
     >
-      <NavLinks links={LINKS} variant="bottom" accent="hearth" />
+      <NavLinks links={BOTTOM_LINKS} variant="bottom" accent="hearth" />
     </nav>
     </>
   );

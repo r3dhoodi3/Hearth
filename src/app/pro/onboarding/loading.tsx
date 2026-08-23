@@ -1,42 +1,41 @@
 import { Skeleton, SkeletonLine } from "@/components/Skeleton";
 
-// Mirrors pro/onboarding/page.tsx, which renders the company-setup form in a
-// max-w-3xl column: a heading and intro, the contact fields, the trade
-// category picker, the service-area checkboxes, and the submit button.
+// Mirrors pro/onboarding/page.tsx, which renders the company-setup wizard in a
+// max-w-lg column: a step counter over a three-segment progress bar, the step
+// heading and its one line of copy, the first step's three fields, and the
+// button row.
 export default function Loading() {
   return (
-    <div className="mx-auto max-w-3xl" aria-hidden="true">
-      <div className="card space-y-6">
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-64" />
-          <SkeletonLine width="w-3/4" />
+    <div className="mx-auto max-w-lg" aria-hidden="true">
+      <div className="card space-y-5">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-3 w-36" />
+          <Skeleton className="h-3 w-20" />
         </div>
 
-        {/* Company name, email, phone, license */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full rounded-lg" />
+        {/* Progress segments */}
+        <div className="flex gap-1.5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-1 flex-1 rounded-full" />
           ))}
         </div>
 
-        {/* Trade category cards */}
         <div className="space-y-2">
-          <Skeleton className="h-3 w-40" />
-          <div className="grid gap-2 sm:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full rounded-xl" />
-            ))}
-          </div>
+          <Skeleton className="h-6 w-52" />
+          <SkeletonLine width="w-3/4" />
         </div>
 
-        {/* Service-area checkboxes */}
-        <div className="space-y-2">
-          <Skeleton className="h-3 w-36" />
-          <Skeleton className="h-12 w-full rounded-lg" />
-          <Skeleton className="h-12 w-full rounded-lg" />
+        {/* Company name, phone, email */}
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+            </div>
+          ))}
         </div>
 
-        <Skeleton className="h-11 w-40 rounded-lg" />
+        <Skeleton className="h-11 w-full rounded-lg sm:w-32" />
       </div>
     </div>
   );

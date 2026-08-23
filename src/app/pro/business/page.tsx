@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentContractor, getRole } from "@/lib/contractor";
+import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 import { buildProStats } from "@/lib/proStats";
@@ -61,10 +61,16 @@ function timeToApplyText(minutes: number | null): string | null {
 // win rate, spend, cost per job won - plus the wallet and what's in flight.
 export default async function ProBusinessPage() {
   const contractor = await getCurrentContractor();
-  if (!contractor) {
-    if ((await getRole()) === null) redirect("/get-started");
-    redirect("/pro/onboarding");
-  }
+  // No company yet: company setup is the only way in, whatever the account's
+  // preferred-side stamp says (see /pro/page.tsx).
+  if (!contractor) redirect("/pro/onboarding");
+
+  // Whether an automatic CSLB check can ever run for this pro. Same test as
+  // verifyLicenseNowAction (src/app/pro/actions.ts) and PublicProfileForm, so
+  // /pro/business and /pro/profile can never disagree about it.
+  const serviceState =
+    (((contractor as any).service_state as string | null) ?? null) || null;
+  const cslbEligible = serviceState === null || serviceState === "CA";
 
   const supabase = await createClient();
 
@@ -320,6 +326,25 @@ export default async function ProBusinessPage() {
         license={{
           expires: contractor.license_expires ?? null,
           docPath: contractor.license_doc_path ?? null,
+        }}
+        // The number and its CSLB result (0037/0055/0125), read off the same
+        // columns /pro/profile renders from so the two screens can never
+        // disagree about whether a license is on file.
+        verification={{
+          number: contractor.license_number ?? null,
+          status: contractor.license_verified_status ?? "unverified",
+          verifiedAt: contractor.license_verified_at ?? null,
+          statusText: contractor.license_verify_detail?.statusText ?? null,
+          identityFailure: Boolean(
+            contractor.license_verify_detail?.failure_reason
+          ),
+          // Mirrors verifyLicenseNowAction and PublicProfileForm exactly: a
+          // null/blank service_state ("All states", or a pre-0046 row) can
+          // still run an explicit check; an explicit non-CA state cannot,
+          // because the CSLB only holds California licenses. The card needs
+          // this to tell "nobody has checked it yet" apart from "nothing
+          // will ever check it automatically".
+          cslbEligible,
         }}
         insurance={{
           expires: (contractor as any).insurance_expires ?? null,

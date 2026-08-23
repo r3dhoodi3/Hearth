@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getRole } from "@/lib/contractor";
+import { getSides, landingFor, ROLE_PICKER_PATH } from "@/lib/contractor";
 import { safeNextPath } from "@/lib/safeNext";
 import { chooseRoleAction } from "./actions";
 
@@ -44,8 +44,14 @@ export default async function WelcomeRolePage(
   // straight to their side of the app. This makes revisiting the URL harmless
   // - it can never flip an established account's role (the action enforces the
   // same guard on submit).
-  const role = await getRole();
-  if (role) redirect(role === "contractor" ? "/pro" : "/dashboard");
+  //
+  // Asked as "does landingFor still send them here?" rather than by repeating
+  // its rules: landingFor returns this page for exactly the accounts with no
+  // side and no preference, so the picker renders for those and only those,
+  // and the two can never disagree into a redirect loop.
+  const sides = await getSides();
+  const landing = landingFor(sides);
+  if (landing !== ROLE_PICKER_PATH) redirect(landing);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">

@@ -8,6 +8,7 @@ import { ISSUE_CATEGORIES, SEVERITIES } from "@/lib/constants";
 import { isAllowedValue } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
+import { isOwnedStoragePath } from "@/lib/ownedStoragePath";
 
 // Server-side length cap for free-text fields: trim, then quietly slice
 // rather than erroring, so a paste-happy owner never loses their report.
@@ -16,11 +17,21 @@ function clipText(v: FormDataEntryValue | null, max: number): string | null {
   return s ? s.slice(0, max) : null;
 }
 
-// Photo URLs come from our own upload component, so anything oversized is
-// not a real URL; drop it quietly instead of storing a broken link.
-function validPhotoUrls(formData: FormData): string[] {
-  return (formData.getAll("photo_urls") as string[]).filter(
-    (u) => typeof u === "string" && u.length > 0 && u.length <= 1000
+// Photo URLs come from PhotoUpload.tsx, which uploads to
+// `${propertyId}/<uuid>.<ext>` in the home-photos bucket and posts the
+// resulting URL back in a hidden field. "Comes from our own component" is not
+// something the server can assume, though: a server action takes whatever
+// FormData it is handed, and these strings are stored verbatim and later fed
+// to /api/img to be signed. The length check alone let a forged post attach
+// ANOTHER property's object key to a row on this one - a stored pointer at
+// someone else's photo, plus a signing request for a path this caller never
+// uploaded. So each URL now has to prove it sits under this property's own
+// prefix (src/lib/ownedStoragePath.ts). Anything else is dropped quietly, the
+// same way an oversized value already was: the only way to produce one is to
+// forge the post, and the issue itself still saves.
+function validPhotoUrls(formData: FormData, propertyId: string): string[] {
+  return (formData.getAll("photo_urls") as string[]).filter((u) =>
+    isOwnedStoragePath(u, propertyId)
   );
 }
 
@@ -71,7 +82,7 @@ export async function reportIssueAction(
   }
 
   // Attach any uploaded photos.
-  const urls = validPhotoUrls(formData);
+  const urls = validPhotoUrls(formData, property.id);
   if (urls.length) {
     await supabase.from("photos").insert(
       urls.map((url) => ({

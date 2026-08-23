@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { JOB_CATEGORIES, SERVICE_CATEGORIES, labelFor } from "@/lib/constants";
+import { isAcceptableCustomCategory } from "@/lib/customCategory";
 
 // Homeowner-facing pro directory. Lists claimed, launch-market pros from the
 // browse_pros() RPC (migration 0104, trust fields added in 0111), which
@@ -79,7 +80,7 @@ export default async function BrowseProsPage(
 
       {/* Flat category chips, same rounded-full convention as the rest of the
           app. "All" clears the filter. */}
-      <div className="-mx-1 flex flex-wrap gap-1.5 px-1">
+      <div className="-mx-1 flex flex-wrap gap-2 sm:gap-1.5 px-1">
         <FilterChip label="All" href="/contractors/browse" active={!filter} />
         {SERVICE_CATEGORIES.map((c) => (
           <FilterChip
@@ -138,10 +139,10 @@ function FilterChip({
     <Link
       href={href}
       aria-current={active ? "true" : undefined}
-      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium ${
+      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium max-sm:min-h-11 ${
         active
           ? "border-bark-200 bg-bark-100 text-bark-700 dark:border-bark-700 dark:bg-bark-700 dark:text-stone-200"
-          : "border-stone-200 bg-stone-50 text-stone-600 hover:border-bark-200 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:text-stone-200"
+          : "border-stone-200 bg-stone-50 text-stone-600 sm:hover:border-bark-200 sm:hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:text-stone-200"
       }`}
     >
       {label}
@@ -149,8 +150,29 @@ function FilterChip({
   );
 }
 
+// Render-side moderation for a pro's own custom service names, matching
+// /p/[id]/page.tsx. isAcceptableCustomCategory (src/lib/customCategory.ts)
+// gates the "Other" box at WRITE time, but it shipped after rows already
+// existed and cannot reach backwards: a live row still carries a slur in its
+// categories array, printed verbatim on its card here. Re-running the same
+// pure function at render costs nothing and keeps the rule in one place.
+//
+// Canonical values are checked FIRST and pass through untouched - the function
+// deliberately REJECTS canonical strings (typed into the "Other" box they are
+// duplicates), so filtering on it alone would blank every real chip.
+const CANONICAL_CATEGORY_VALUES = new Set<string>(
+  JOB_CATEGORIES.map((c) => c.value)
+);
+
+function visibleCategories(categories: string[]): string[] {
+  return categories.filter(
+    (c) => CANONICAL_CATEGORY_VALUES.has(c) || isAcceptableCustomCategory(c)
+  );
+}
+
 function ProCard({ pro }: { pro: BrowsePro }) {
   const profileHref = `/p/${pro.slug ?? pro.id}`;
+  const shownCategories = visibleCategories(pro.categories);
   const hasRating = pro.review_count > 0 && pro.rating != null;
   // Trust fields from migration 0111 are optional: each derives to null or
   // empty here, so cards from an older RPC render exactly as before.
@@ -310,7 +332,7 @@ function ProCard({ pro }: { pro: BrowsePro }) {
                   href={pro.yelp_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 hover:border-bark-200 hover:text-bark-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300 dark:hover:text-stone-200"
+                  className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 sm:hover:border-bark-200 sm:hover:text-bark-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300 dark:hover:text-stone-200"
                 >
                   Reviews on Yelp
                 </a>
@@ -320,16 +342,16 @@ function ProCard({ pro }: { pro: BrowsePro }) {
                   href={pro.google_reviews_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 hover:border-bark-200 hover:text-bark-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300 dark:hover:text-stone-200"
+                  className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 sm:hover:border-bark-200 sm:hover:text-bark-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300 dark:hover:text-stone-200"
                 >
                   Reviews on Google
                 </a>
               )}
           </div>
 
-          {pro.categories.length > 0 && (
+          {shownCategories.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
-              {pro.categories.map((c) => (
+              {shownCategories.map((c) => (
                 <span
                   key={c}
                   className="rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"

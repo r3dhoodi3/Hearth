@@ -241,22 +241,42 @@ export default function NotificationBell() {
         aria-label={
           unread > 0 ? `Notifications, ${unread} unread` : "Notifications"
         }
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-bark-50 hover:text-bark-700 active:scale-95 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+        // Phone only: a 44x44 hit area (the tap-target minimum) in 40px of
+        // header width, because -mx-0.5 pulls 2px of the extra box on each
+        // side back out of the layout.
+        //
+        // -mx-0.5 and not -mx-1: the nav row this sits in has gap-0.5 (2px)
+        // below sm, so pulling the full 4px per side made this button's
+        // tappable box overlap its neighbours' by 2px on each side - the
+        // search link on one side, the profile menu on the other - and the
+        // bell, painted later, won the overlap. At -mx-0.5 the boxes abut
+        // exactly instead, costing the row 4px it can spare and stealing no
+        // taps from either neighbour.
+        //
+        // From sm up the box goes back to a plain 36px: the desktop header
+        // row is sized off it, and a taller button there would push the whole
+        // bar down 4px for no benefit (a mouse doesn't need the bigger
+        // target).
+        className="group -mx-0.5 flex h-11 w-11 items-center justify-center active:scale-95 sm:mx-0 sm:h-9 sm:w-9"
       >
-        <svg
-          viewBox="0 0 24 24"
-          className="h-5 w-5"
-          fill="currentColor"
-          aria-hidden="true"
-        >
-          <path d="M12 2a6 6 0 00-6 6v3.09c0 .5-.16.98-.46 1.38L4 15.5c-.6.8-.02 2 .98 2h14.04c1 0 1.58-1.2.98-2l-1.54-3.03A2.25 2.25 0 0118 11.09V8a6 6 0 00-6-6z" />
-          <path d="M9.5 20a2.5 2.5 0 005 0h-5z" />
-        </svg>
-        {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
-            {unread > 9 ? "9+" : unread}
-          </span>
-        )}
+        {/* The visible control stays the old 36px circle - icon, hover ring,
+            and badge all unchanged. Only the tappable box around it grew. */}
+        <span className="relative flex h-9 w-9 items-center justify-center rounded-full text-stone-500 group-hover:bg-bark-50 group-hover:text-bark-700 dark:text-stone-400 dark:group-hover:bg-stone-800 dark:group-hover:text-stone-300">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M12 2a6 6 0 00-6 6v3.09c0 .5-.16.98-.46 1.38L4 15.5c-.6.8-.02 2 .98 2h14.04c1 0 1.58-1.2.98-2l-1.54-3.03A2.25 2.25 0 0118 11.09V8a6 6 0 00-6-6z" />
+            <path d="M9.5 20a2.5 2.5 0 005 0h-5z" />
+          </svg>
+          {unread > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </span>
       </button>
 
       {/* Plain disclosure panel, not an ARIA menu: we don't implement the

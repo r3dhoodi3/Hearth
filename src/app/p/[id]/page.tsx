@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
+import { isAcceptableCustomCategory } from "@/lib/customCategory";
 import Logo from "@/components/Logo";
 import RequestQuoteForm from "./RequestQuoteForm";
 import BackLink from "./BackLink";
@@ -34,6 +35,29 @@ import { requestProAction } from "@/app/(app)/contractors/actions";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Render-side moderation for a pro's own custom service names.
+//
+// isAcceptableCustomCategory (src/lib/customCategory.ts) gates the "Other" box
+// at WRITE time, but it shipped after rows already existed and it cannot reach
+// backwards: a live row still carries a slur in its categories array, printed
+// verbatim next to a business name on this page. Re-running the same pure
+// function at render is the cheap fix - no query, no round trip, and the gate
+// stays in one place.
+//
+// Canonical values are checked FIRST and pass through untouched. That order
+// matters: isAcceptableCustomCategory deliberately REJECTS canonical strings
+// (typed into the "Other" box they are duplicates), so filtering on it alone
+// would wipe every real category off the page.
+const CANONICAL_CATEGORY_VALUES = new Set<string>(
+  JOB_CATEGORIES.map((c) => c.value)
+);
+
+function visibleCategories(categories: string[]): string[] {
+  return categories.filter(
+    (c) => CANONICAL_CATEGORY_VALUES.has(c) || isAcceptableCustomCategory(c)
+  );
+}
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -277,7 +301,11 @@ export default async function PublicProPage(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const primaryCategory = profile.categories[0] ?? "other";
+  // Every place this page shows or forwards a category reads this list, not
+  // the raw one: the chips below, the quote form's category picker, and the
+  // ?category= prefill (a rejected value has no business riding a URL either).
+  const shownCategories = visibleCategories(profile.categories);
+  const primaryCategory = shownCategories[0] ?? "other";
   const quoteHref = `/contractors?category=${encodeURIComponent(primaryCategory)}`;
   const requestQuoteHref = `/homeowner-signup?next=${encodeURIComponent(quoteHref)}`;
 
@@ -497,9 +525,9 @@ export default async function PublicProPage(
             </div>
           )}
 
-          {profile.categories.length > 0 && (
+          {shownCategories.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-1.5">
-              {profile.categories.map((c) => (
+              {shownCategories.map((c) => (
                 <span
                   key={c}
                   className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-0.5 text-xs font-medium text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
@@ -517,7 +545,7 @@ export default async function PublicProPage(
               <RequestQuoteForm
                 contractorId={profile.id}
                 contractorName={profile.name}
-                categories={profile.categories}
+                categories={shownCategories}
                 action={requestProAction}
               />
             ) : (

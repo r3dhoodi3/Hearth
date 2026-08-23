@@ -139,8 +139,8 @@ export default function PricingPage() {
           {/* The real caps, named in the same column as the capabilities, so
               "free" is a plan rather than a teaser. */}
           <p className="mt-auto pt-4 text-sm text-stone-500 dark:text-stone-400">
-            Caps: one home, one plan build, one quote check, 25 Ask Hearth
-            questions a day.
+            Caps: one home, one plan build, one quote check, 3 Ask Hearth
+            questions a day (text only).
           </p>
         </div>
 
@@ -224,12 +224,14 @@ export default function PricingPage() {
       </div>
 
       {/* Plain disclosure of Ask Hearth's daily cap, so the AI features above
-          never read as unlimited. Numbers match DAILY_LIMIT_FREE /
-          DAILY_LIMIT_PLUS in src/lib/aiUsage.ts, the source of truth the
-          route actually enforces; keep this in sync if those change. */}
+          never read as unlimited. Numbers match ASK_DAILY_FREE /
+          ASK_DAILY_PLUS in src/lib/aiUsage.ts, the chat's own daily bucket and
+          the source of truth /api/ask actually enforces (the tool routes run
+          on a separate, larger budget); keep this in sync if those change. */}
       <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-        Ask Hearth, the AI assistant, is capped at 25 questions a day on Free
-        and 250 a day on Plus, so it stays fast and available for everyone.
+        Ask Hearth, the AI assistant, is capped at 3 text questions a day on
+        Free and 15 a day on Plus, with photo answers on Plus only, so it stays
+        fast and available for everyone.
       </p>
 
       {/* The honest auto-renew disclosure, stated plainly. Same facts the

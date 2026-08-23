@@ -875,6 +875,32 @@
   .volume { width: 44px; }
 }
 
+/* Phones. The bar is one ~318px row holding seven controls, which squeezed the
+   scrubber to 34px and left play / mute / fullscreen as 26px targets: on a
+   real phone the scrubber was undraggable and the buttons were a coin toss.
+   Below 640px the scrubber takes a full-width row of its own above the
+   buttons, with a 24px tall hit area over the same 3px visible track, and each
+   button grows to 44x44 by padding alone - every icon is still 15px, so
+   nothing looks bigger, it just stops missing. None of this applies from 640px
+   up, where the bar is exactly what it always was: the bound is 639.98px so it
+   ends exactly where Tailwind's sm: (min-width: 640px) begins, instead of
+   overlapping it for the one width the rest of the app calls desktop. */
+@media (max-width: 639.98px) {
+  /* The two rows cost height on a screen that has none to spare, so the
+     gradient's own padding gives some back: 8px top instead of 16px. */
+  .bottomGradient { padding: 8px 12px; }
+  /* Captions sat at 42px, just clear of the old 50px bar. The bar is 88px
+     tall now, so they move up with it rather than hiding behind it. */
+  .captionLayer { bottom: 94px; }
+  .controlBar { flex-wrap: wrap; gap: 4px; }
+  .seekWrap { order: -1; flex: 0 0 100%; width: 100%; height: 24px; }
+  .seekInput::-webkit-slider-runnable-track { height: 24px; }
+  .seekInput::-webkit-slider-thumb { margin-top: 6.5px; }
+  .seekInput::-moz-range-track { height: 24px; }
+  .iconBtn { width: 44px; height: 44px; }
+  .rateBtn { min-height: 44px; }
+}
+
 /* Playback speed cycler. */
 .rateBtn {
   flex: none;

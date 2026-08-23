@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getActiveProperty } from "@/lib/property";
+import { formatAddressLine, getActiveProperty } from "@/lib/property";
 import { getUser } from "@/lib/auth";
 import { hasPlus } from "@/lib/subscription";
 import { generateMaintenancePlanAction } from "./actions";
@@ -40,6 +40,7 @@ import {
   ClipboardList,
   FileText,
   CalendarDays,
+  ChevronRight,
 } from "lucide-react";
 import { estimateHomeValue, calculateEquity } from "@/lib/homeValue";
 import {
@@ -537,7 +538,7 @@ export default async function HomePage(
           <Link
             key={p.label}
             href={`/contractors?category=${p.category}`}
-            className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
+            className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
           >
             {/* Plain text labels, matching the "Other" chip below. The little
                 pictograms were removed on purpose - no surface renders the
@@ -548,13 +549,30 @@ export default async function HomePage(
         ))}
         <Link
           href="/contractors?category=other"
-          className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
+          className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
         >
           Other
         </Link>
       </div>
     </>
   );
+
+  // The facts line under the address, built from what we actually know. It used
+  // to print every slot unconditionally, so a home whose details were never
+  // filled in read "Built - · - sqft · - bd / - ba", which looks like broken
+  // data rather than missing data. Beds and baths stay paired ("3 bd / 2 ba")
+  // when both are known, exactly as before.
+  const bedBath = [
+    property.beds != null ? `${property.beds} bd` : null,
+    property.baths != null ? `${property.baths} ba` : null,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  const homeFacts = [
+    property.year_built != null ? `Built ${property.year_built}` : null,
+    property.sqft != null ? `${property.sqft} sqft` : null,
+    bedBath || null,
+  ].filter(Boolean) as string[];
 
   return (
     <div className="space-y-8">
@@ -603,7 +621,7 @@ export default async function HomePage(
       {/* Property header */}
       <section>
         <h1 className="break-words text-2xl font-semibold text-stone-900 dark:text-stone-100">
-          {property.address_line1}
+          {formatAddressLine(property)}
           {property.city ? `, ${property.city}` : ""}
         </h1>
         {/* Quiet trust signal: only when the ownership check actually matched
@@ -623,15 +641,28 @@ export default async function HomePage(
             </p>
           </details>
         )}
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Built {property.year_built ?? "-"} · {property.sqft ?? "-"} sqft ·{" "}
-          {property.beds ?? "-"} bd / {property.baths ?? "-"} ba
-        </p>
+        {homeFacts.length > 0 ? (
+          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+            {homeFacts.join(" · ")}
+          </p>
+        ) : (
+          // Nothing known about the house yet. The walkthrough is the app's
+          // "tell us about your home" flow, so it is the one honest place to
+          // send someone from here. block + w-fit, not inline-block: it stands
+          // in for the <p> above, so it has to take its own line rather than
+          // sharing one with the emergency link below it.
+          <Link
+            href="/walkthrough"
+            className="mt-1 block w-fit text-sm text-bark-700 hover:underline max-sm:flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
+          >
+            Add home details
+          </Link>
+        )}
         {/* Always-there escape hatch for urgent problems, kept quiet so it
             doesn't compete with the rest of the page. */}
         <Link
           href="/emergency"
-          className="mt-1 inline-block text-sm text-red-600 hover:underline dark:text-red-400"
+          className="mt-1 inline-block text-sm text-red-600 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-red-400"
         >
           Something broken right now?
         </Link>
@@ -687,7 +718,10 @@ export default async function HomePage(
           {biggestLever && (
             <p className="mt-2 text-xs">
               Biggest win:{" "}
-              <Link href="/walkthrough" className="font-medium underline">
+              <Link
+                href="/walkthrough"
+                className="font-medium underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+              >
                 confirm your{" "}
                 {labelFor(SYSTEM_TYPES, biggestLever.system.system_type).toLowerCase()}{" "}
                 (+{biggestLever.pts} pts)
@@ -704,7 +738,7 @@ export default async function HomePage(
               </p>
               <Link
                 href="/contractors#your-jobs"
-                className="text-sm text-bark-700 hover:underline dark:text-stone-300"
+                className="text-sm text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
               >
                 View job postings →
               </Link>
@@ -809,7 +843,7 @@ export default async function HomePage(
                   should not spend a round trip rediscovering that. */}
               <Link
                 href="/dashboard#systems"
-                className="text-sm text-bark-700 hover:underline dark:text-stone-300"
+                className="text-sm text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
               >
                 Finish your home profile →
               </Link>
@@ -838,7 +872,7 @@ export default async function HomePage(
                   {b.href && (
                     <Link
                       href={b.href}
-                      className="ml-1 font-medium text-bark-700 hover:underline dark:text-stone-300"
+                      className="ml-1 font-medium text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
                     >
                       {b.cta} →
                     </Link>
@@ -1138,16 +1172,23 @@ export default async function HomePage(
       </section>
 
       {/* Systems inventory (the old Home Profile) */}
-      <details id="systems" open={!isFirstVisit} className="group space-y-4">
-        <summary className="focus-ring w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden text-lg font-semibold text-stone-900 dark:text-stone-100">
-          <span className="mr-1 inline-block transition-transform group-open:rotate-90">
-            ▸
+      {/* Open by default, always. It used to collapse on a first visit
+          (?welcome), which hid the "+ Roof / + HVAC" quick-adds from exactly
+          the person who needs them. The summary line stays visible either
+          way - collapsing only drops the list under it. */}
+      <details id="systems" open className="group space-y-4">
+        <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden text-lg font-semibold text-stone-900 dark:text-stone-100">
+          {/* Real chevron rather than a "▸" glyph: it rotates to point down
+              when the section is open, so the control shows its own state. */}
+          <ChevronRight
+            className="h-5 w-5 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
+            aria-hidden="true"
+          />
+          <span>
+            Your systems{sortedSys.length > 0 ? ` (${sortedSys.length})` : ""}
           </span>
-          Your systems{sortedSys.length > 0 ? ` (${sortedSys.length})` : ""}
           {mustCount > 0 ? (
-            <span className="chip chip-danger ml-2">
-              {mustCount} must do
-            </span>
+            <span className="chip chip-danger">{mustCount} must do</span>
           ) : null}
         </summary>
 

@@ -16,7 +16,7 @@ const PACKET_STAGES = [
 ];
 
 // The "give me a head start on shopping" button on the Home insurance card.
-// Plus members get a Gemini-built requote packet: a plain-language summary of
+// Plus members get an AI-built requote packet: a plain-language summary of
 // the home's facts and recent upkeep they can hand to insurance agents when
 // shopping for quotes. Free users see what they'd get and a path to Plus.
 // Rendered in a copyable block because the whole point is taking it OUT of

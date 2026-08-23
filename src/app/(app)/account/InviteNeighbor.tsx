@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import InlineSpinner from "@/components/InlineSpinner";
 
 // "Invite a neighbor" card on /account. Shows the homeowner's personal invite
@@ -21,6 +21,18 @@ export default function InviteNeighbor({ code }: { code: string }) {
     "idle"
   );
   const [pending, setPending] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // The end of the link is the part that identifies it (?ref=<code>), and the
+  // field is narrower than the whole URL, so park the view at the end on
+  // mount. This used to be dir="rtl", which really does reverse the text
+  // direction: it moved the "?" and "=" of the query string to the wrong side
+  // of the visible tail, so the one part a neighbor might read back over the
+  // phone was rendered wrong. Scrolling shows the same characters in order.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, []);
 
   function inviteUrl(): string {
     const path = `/homeowner-signup?ref=${code}`;
@@ -72,6 +84,7 @@ export default function InviteNeighbor({ code }: { code: string }) {
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <input
+          ref={inputRef}
           type="text"
           readOnly
           value={inviteUrl()}

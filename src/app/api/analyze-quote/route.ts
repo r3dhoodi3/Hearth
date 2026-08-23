@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPlus } from "@/lib/subscription";
-import { countAiUsage, addAiUsage } from "@/lib/aiUsage";
+import { countAiUsage, addAiUsage, overToolBurst } from "@/lib/aiUsage";
+import { reasonToClientPayload } from "@/lib/aiReason";
+import { readJsonBounded } from "@/lib/boundedBody";
 import { sendNotification } from "@/lib/notify";
 import {
   runTranscribe,
@@ -11,12 +13,23 @@ import {
   buildAnalysis,
   type Analysis,
 } from "@/lib/quoteAnalysis";
+import { hasClaudeKey } from "@/lib/claude";
 
 export const runtime = "nodejs";
 
 // Cap the incoming base64 image so a caller can't push huge payloads at the
 // paid vision model (cost/DoS). ~14M base64 chars ≈ 10MB of binary.
 const MAX_IMAGE_B64_CHARS = 14_000_000;
+// And the same idea for PASTED text, which had no cap at all. A contractor's
+// quote is a page or two; 60,000 characters is far more than any real one and
+// still a hard ceiling on what one request can cost.
+const MAX_TEXT_CHARS = 60_000;
+// Hard ceiling on the whole request body, in bytes, enforced on the bytes
+// that actually arrive (src/lib/boundedBody.ts). Sits just above the two caps
+// above put together, so anything a real upload can legally contain still
+// reaches the field checks and gets their specific message; this one only
+// catches payloads that were never going to be accepted anyway.
+const MAX_BODY_BYTES = 15_000_000;
 
 // AI Quote Analyzer (Hearth Plus): a homeowner uploads a photo of a
 // contractor's quote or pastes the text, and Hearth reads every line item,
@@ -59,6 +72,19 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // BURST PRE-CHECK, in front of the body read and in front of the free-credit
+  // claim below. countAiUsage runs the authoritative burst check, but it runs
+  // AFTER the body has been buffered and parsed, so a flood got its megabytes
+  // read before anything said no. This is a single indexed row read on the
+  // same window countAiUsage will bump, so nothing is double counted. Same
+  // response as the real refusal below. See overToolBurst in src/lib/aiUsage.
+  if (await overToolBurst(user.id)) {
+    return NextResponse.json({
+      analysis: null,
+      ...reasonToClientPayload("user_burst"),
+    });
   }
 
   // The quote analyzer is a Hearth Plus feature, but every homeowner gets
@@ -109,16 +135,37 @@ export async function POST(req: NextRequest) {
     }
   };
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!hasClaudeKey()) {
     await refundFreeCredit();
     return NextResponse.json({ analysis: null, reason: "no_key" });
   }
 
-  const body = await req.json().catch(() => ({}));
+  // Hard byte ceiling on the body itself, counted as the bytes arrive rather
+  // than trusted from Content-Length (which a chunked request never sends).
+  // Sized just above what the field caps below already allow, so a real
+  // upload still gets the route's own specific message rather than this one.
+  const parsedBody = await readJsonBounded(req, MAX_BODY_BYTES);
+  if (!parsedBody.ok) {
+    await refundFreeCredit();
+    return parsedBody.status === 413
+      ? NextResponse.json({ error: "Image too large." }, { status: 413 })
+      : NextResponse.json(
+          { error: "Add a photo of the quote or paste its text." },
+          { status: 400 }
+        );
+  }
+  const body = parsedBody.data;
   const image = typeof body.image === "string" ? body.image : "";
   const mime = typeof body.mime === "string" ? body.mime : "image/jpeg";
-  const text = typeof body.text === "string" ? body.text.trim() : "";
+  // Pasted quote text, CAPPED. This was the cheapest way to push a large paid
+  // request at Hearth: the image had a size cap and the text had none, and a
+  // single send was measured at over 57,000 input tokens. Sliced rather than
+  // refused because a real quote never comes close to this, so anything past
+  // it is padding, not line items.
+  const text =
+    typeof body.text === "string"
+      ? body.text.trim().slice(0, MAX_TEXT_CHARS)
+      : "";
   const category = typeof body.category === "string" && body.category ? body.category : null;
   // Display-only label for the saved row (e.g. "roof-quote.jpg"), never used
   // to identify or re-fetch anything: the photo itself is never stored.
@@ -142,11 +189,20 @@ export async function POST(req: NextRequest) {
   // Same per-user daily cap as /api/ask (same ai_usage table and limits), so
   // the quote analyzer can't be a side door around the abuse limits on the
   // paid model. Counted exactly once here for the whole two-stage pipeline
-  // below, however many Gemini calls it ends up making.
-  const { overLimit } = await countAiUsage(user.id, isPlus);
+  // below, however many model calls it ends up making.
+  const { overLimit, reason: limitReason } = await countAiUsage(
+    user.id,
+    isPlus
+  );
   if (overLimit) {
     await refundFreeCredit();
-    return NextResponse.json({ analysis: null, reason: "rate_limited" });
+    // One mapping for every counter refusal, so a burst window reads as "give
+    // it a minute" instead of "you are out for the day". See
+    // src/lib/aiReason.ts.
+    return NextResponse.json({
+      analysis: null,
+      ...reasonToClientPayload(limitReason),
+    });
   }
 
   // From here on the request is committed to an actual analysis attempt, so
@@ -202,10 +258,12 @@ export async function POST(req: NextRequest) {
 
   // STAGE 1: transcribe the quote into a faithful, verbatim JSON record.
   // Nothing evaluative happens here.
-  const { transcript, rateLimited: t1RateLimited } = await runTranscribe(
-    { image, mime, text, category },
-    { apiKey }
-  );
+  const { transcript, rateLimited: t1RateLimited } = await runTranscribe({
+    image,
+    mime,
+    text,
+    category,
+  });
   if (!transcript) {
     await refundFreeCredit();
     const reason = t1RateLimited ? "rate_limited" : "failed";
@@ -232,10 +290,10 @@ export async function POST(req: NextRequest) {
   // photo or pasted text again, so every finding traces back to a verbatim
   // line (isEvidenceGrounded in quoteAnalysis.ts enforces this in code, not
   // just via the prompt).
-  const { diagnosis, rateLimited: t2RateLimited } = await runDiagnose(transcript, {
-    apiKey,
-    category,
-  });
+  const { diagnosis, rateLimited: t2RateLimited } = await runDiagnose(
+    transcript,
+    { category }
+  );
   if (!diagnosis) {
     await refundFreeCredit();
     const reason = t2RateLimited ? "rate_limited" : "failed";

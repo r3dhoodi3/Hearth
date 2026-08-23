@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import type { Contractor } from "@/lib/database.types";
+import type { AuthRoleDecision, Role, Sides } from "@/lib/roleRouting";
 
 // Every contractors column any caller of getCurrentContractor() actually
 // reads, and nothing else. Traced from all ~60 call sites: the pro layout and
@@ -127,11 +128,28 @@ export async function isContractor(): Promise<boolean> {
   return (await getCurrentContractor()) !== null;
 }
 
-export type Role = "homeowner" | "contractor";
+// Defined in ./roleRouting so the pure routing rules can be imported (and
+// unit tested) without dragging in the admin client's "server-only" guard.
+// Re-exported here because every existing caller imports Role from this module.
+export type { AuthRoleDecision, Role, Sides };
+export {
+  isProPath,
+  isHomeownerShellPath,
+  isSignupConfirmationPath,
+  resolveAuthRole,
+  landingFor,
+  ROLE_PICKER_PATH,
+} from "@/lib/roleRouting";
 
-// The current user's role, used to route a single sign-in to the right side of
-// the app. Set explicitly at sign-up (user_metadata.role); for legacy accounts
-// created before that, we fall back to inferring it from a contractor company.
+// The current user's PREFERRED side of the app - the one they land on when no
+// destination was asked for. It is not a permission and no layout gates on it:
+// an account can hold both sides at once (see getSides), and access to either
+// follows the rows that exist, never this stamp. Prefer getSides() +
+// landingFor() for any "where does this person go" decision; getRole() remains
+// for the few places that only need the stamp itself.
+//
+// Set explicitly at sign-up (user_metadata.role); for legacy accounts created
+// before that, we fall back to inferring it from a contractor company.
 // A user with neither signal has NO known role and gets null: callers that
 // only branch on "contractor"/"homeowner" behave as before (null falls into
 // the homeowner-side default), but /pro can now send them to the role chooser
@@ -148,6 +166,100 @@ export const getRole = cache(async (): Promise<Role | null> => {
   // Legacy fallback: a company row means they're a contractor.
   return (await isContractor()) ? "contractor" : null;
 });
+
+// The Sides type this returns lives in ./roleRouting (re-exported above), so
+// landingFor() can be unit tested without dragging in the admin client.
+//
+// Homes visible to the signed-in user - owned OR shared with them as a
+// household member, which is exactly what getProperties() returns and what
+// getActiveProperty() picks from, so "has a home side" means the same thing
+// here as it does to the (app) shell. A head count, not the rows: this is only
+// ever asked as a yes/no.
+//
+// A read failure reads as "no home". Same posture as getCurrentContractor():
+// the cost of being wrong is one misrouted request that self-corrects, and
+// every caller only ever OPENS a side on the strength of a row.
+async function hasHomeSide(): Promise<boolean> {
+  const supabase = await createClient();
+  // No .eq("user_id", ...): the "properties member select" policy (0048) is
+  // what makes a shared home visible, and filtering by owner would hide it.
+  const { count, error } = await supabase
+    .from("properties")
+    .select("id", { count: "exact", head: true });
+  if (error) {
+    console.error("hasHomeSide failed:", error.message ?? error);
+    return false;
+  }
+  return (count ?? 0) > 0;
+}
+
+// Both sides of the current account plus the side they prefer to land on.
+// Cached per request; the contractor half reuses getCurrentContractor()'s own
+// cache, so asking for sides in a layout that already loaded the company row
+// costs one extra count query and nothing else.
+export const getSides = cache(async (): Promise<Sides> => {
+  const user = await getUser();
+  if (!user) return { hasPro: false, hasHome: false, preferred: null };
+
+  const meta = (user.user_metadata?.role ?? user.app_metadata?.role) as
+    | string
+    | undefined;
+  const preferred =
+    meta === "contractor" || meta === "homeowner" ? meta : null;
+
+  const [contractor, hasHome] = await Promise.all([
+    getCurrentContractor(),
+    hasHomeSide(),
+  ]);
+  return { hasPro: contractor !== null, hasHome, preferred };
+});
+
+// Does a contractors row link to this auth user? Admin client, keyed on the
+// caller-supplied id, so it works in /auth/callback where the session cookie
+// for the just-exchanged code isn't readable back yet. Only the existence of
+// the row is returned, never its contents.
+//
+// A read failure returns false (i.e. "no evidence they're a pro"), matching
+// getCurrentContractor()'s behavior on error. The cost of being wrong is one
+// more pass through the same repair on their next request, not a wrong stamp:
+// callers only ever UPGRADE a role on the strength of a row.
+export async function contractorRowExists(userId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("contractors")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) {
+    console.error("contractorRowExists failed", { userId, error });
+    return false;
+  }
+  return data != null;
+}
+
+// Does a properties row belong to this auth user? The homeowner-side twin of
+// contractorRowExists, and used in the same place for the same reason: in
+// /auth/callback the session cookie for the just-exchanged code isn't readable
+// back yet, so the id has to be passed in and the query has to bypass RLS.
+//
+// Owned homes only (.eq("user_id")), not homes shared with them: this answers
+// "did this account build a homeowner side", and the callback only asks it to
+// tell a dual-side account apart from a pro who wandered through the homeowner
+// door. A read failure returns false, same as contractorRowExists.
+export async function propertyRowExists(userId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("properties")
+    .select("id")
+    .eq("user_id", userId)
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error("propertyRowExists failed", { userId, error });
+    return false;
+  }
+  return data != null;
+}
 
 // How many PAID lead applications this contractor has: lead_applications rows
 // they own whose fee was not refunded (a ghost-protection refund means the

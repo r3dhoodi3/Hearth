@@ -17,18 +17,49 @@ export type HomeAlert = {
   url?: string;
 };
 
+// One day of the 7-day panel the weather strip expands into. `date` is a plain
+// calendar date in the HOME's timezone (Open-Meteo with timezone=auto), never
+// an instant - see weatherLabels.dayLabel for why that distinction matters.
+// Every number is nullable: the route keeps a row whenever it has a date and
+// fills in nulls for whatever the upstream did not send, so rows never shift
+// position (which is what used to make the panel mislabel a day). The strip
+// renders a null as "--".
+export type DailyForecast = {
+  date: string;
+  code: number | null;
+  highF: number | null;
+  lowF: number | null;
+  rainPct: number | null;
+};
+
 export type CurrentWeather = {
   tempF: number;
   code: number;
+  // Open-Meteo's is_day flag. WMO codes 0/1/2 mean "clear"/"partly cloudy"
+  // with no notion of daylight, so without this the strip says "Sunny" at
+  // midnight.
+  isDay: boolean;
   highF: number;
   lowF: number;
   city: string;
+  // The home's own current calendar date, so the 7-day panel can label rows
+  // by DATE instead of by position. Optional because a payload cached before
+  // this field existed will not carry it; dayLabel falls back to weekday
+  // names rather than guessing which row is today.
+  today?: string;
+  daily: DailyForecast[];
 };
 
 export type HomeAlertsPayload = {
   weather: HomeAlert[];
   recalls: HomeAlert[];
   current: CurrentWeather | null;
+  // True when the active property has a resolvable location (city/state, or
+  // a zip in the launch-city map), regardless of whether the upstream
+  // weather lookup itself succeeded. WeatherStrip uses this to tell "no
+  // weather because this home has no location" (show nothing) apart from
+  // "no weather because the lookup failed" (show a quiet fallback).
+  hasLocation: boolean;
 };
 
 let shared: {

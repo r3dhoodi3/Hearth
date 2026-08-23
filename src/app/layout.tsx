@@ -22,16 +22,21 @@ const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 // Runs before first paint so a saved dark theme never flashes light. Kept as
 // a plain string (not a component) because it must execute synchronously in
-// <head>. Falls back to the OS preference when the user hasn't chosen yet.
+// <head>. Dark is strictly opt-in: light is the default for everyone, and the
+// class is added only when the user has actually chosen dark in ThemeToggle.
+// The OS preference is deliberately not consulted - a visitor whose phone is
+// in dark mode still gets Hearth's light look until they ask otherwise.
 const themeInit = `(function () {
   try {
-    var t = localStorage.getItem("hearth-theme");
-    if (
-      t === "dark" ||
-      (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)
-    ) {
-      document.documentElement.classList.add("dark");
-    }
+    if (localStorage.getItem("hearth-theme") !== "dark") return;
+    document.documentElement.classList.add("dark");
+    // Match the browser/status-bar tint to the restored theme. The
+    // theme-color meta is emitted by Next's viewport export, which may not
+    // have rendered yet when this runs, so only update an existing tag -
+    // never create a second one. ThemeToggle's mount effect syncs it when
+    // this finds nothing.
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute("content", "#1c1917");
   } catch (e) {}
 })();`;
 
@@ -46,11 +51,19 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 // started) serving. Only two of these cities have a landing page of their own;
 // the rest are served without one, which is fine here - this is a service-area
 // claim, not a sitemap.
+//
+// This is the ONE Organization node in the app. The landing page used to emit
+// a second one (name/url/logo) alongside its WebApplication, which left two
+// competing descriptions of the same business on the highest-value page; the
+// logo moved here instead, and the stable @id gives anything that wants to
+// point at Hearth-the-organization something to reference.
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
+  "@id": `${SITE_URL}#organization`,
   name: "Hearth",
   url: SITE_URL,
+  logo: `${SITE_URL}/icon-512.png`,
   areaServed: LAUNCH_CITY_NAMES.map((city) => ({
     "@type": "City",
     name: `${city}, CA`,
@@ -98,12 +111,15 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   // Tints the iOS status bar / Android toolbar to the header background so
-  // the installed app and the browser tab read as one surface. Values match
-  // the header (bg-bark-50 light, stone-900 dark) in Nav.tsx.
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbf7f2" },
-    { media: "(prefers-color-scheme: dark)", color: "#1c1917" },
-  ],
+  // the installed app and the browser tab read as one surface. Value matches
+  // the light header (bg-bark-50) in Nav.tsx.
+  //
+  // A single static color, not a prefers-color-scheme pair: the page itself
+  // is light unless the user opted into dark, so keying the tint off the OS
+  // put dark iPhone chrome above a light page. ThemeToggle rewrites this tag
+  // to #1c1917 when dark is on (and the inline themeInit script does the same
+  // on reload), which is the only thing that should darken it.
+  themeColor: "#fbf7f2",
 };
 
 export default async function RootLayout({

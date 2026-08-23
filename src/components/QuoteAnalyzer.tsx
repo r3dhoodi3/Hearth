@@ -144,7 +144,7 @@ export default function QuoteAnalyzer({
   const [copyFallback, setCopyFallback] = useState(false);
   const negotiationRef = useRef<HTMLParagraphElement>(null);
   // Drives the progress bar shown while analyze() is in flight. The pipeline is
-  // a couple of sequential Gemini calls, so budget ~22s for the label pacing.
+  // a couple of sequential model calls, so budget ~22s for the label pacing.
   const progress = useStagedProgress(ANALYZE_STAGES, 22000);
 
   // Restore state: whether the initial "load the latest saved analysis" fetch
@@ -345,7 +345,7 @@ export default function QuoteAnalyzer({
     try {
       // Longer than the single-call default: the route now runs a grounded
       // two-stage pipeline (transcribe, then diagnose), up to two sequential
-      // Gemini calls instead of one, each with its own model fallback chain.
+      // model calls instead of one, each with its own model fallback chain.
       // See src/app/api/analyze-quote/route.ts for the latency budget.
       const resp = await fetchWithTimeout(
         "/api/analyze-quote",
@@ -381,6 +381,12 @@ export default function QuoteAnalyzer({
         });
       } else if (data?.reason === "rate_limited") {
         setError("Hearth has hit today's free usage limit. Please try again later.");
+      } else if (data?.reason === "busy") {
+        // Not this homeowner's allowance: a burst window or an owner-wide
+        // ceiling. Nothing to buy and nothing to fix, so say how long instead
+        // of pointing at a limit they have not hit. The server sends the exact
+        // sentence (src/lib/aiReason.ts); the fallback covers an older reply.
+        setError(data?.error || "Hearth's AI is busy right now. Try again in a few minutes.");
       } else if (data?.reason === "no_key") {
         setError("The quote analyzer isn't set up yet.");
       } else {
@@ -471,87 +477,113 @@ export default function QuoteAnalyzer({
       )}
 
       <div className="card space-y-4">
+        {/* Two toggle buttons, not role="tab": we don't implement the tab
+            keyboard contract (arrow keys move between tabs), so aria-pressed
+            is the honest description of what these are. The ids also give
+            the two panels below something stable to point at. */}
         <div className="flex gap-2">
           <button
             type="button"
+            id="quote-mode-photo"
             onClick={() => {
               setMode("photo");
               reset();
             }}
             disabled={loading}
             aria-disabled={loading}
+            aria-pressed={mode === "photo"}
+            aria-controls="quote-input-photo"
             className={mode === "photo" ? "btn-primary" : "btn-secondary"}
           >
             Upload a photo
           </button>
           <button
             type="button"
+            id="quote-mode-text"
             onClick={() => {
               setMode("text");
               reset();
             }}
             disabled={loading}
             aria-disabled={loading}
+            aria-pressed={mode === "text"}
+            aria-controls="quote-input-text"
             className={mode === "text" ? "btn-primary" : "btn-secondary"}
           >
             Paste the text
           </button>
         </div>
 
-        {mode === "photo" ? (
-          <div>
-            <label
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center dark:border-white/10 ${
-                loading
-                  ? "cursor-not-allowed opacity-60"
-                  : "cursor-pointer hover:border-bark-500 hover:bg-bark-50"
-              }`}
-              aria-disabled={loading}
-            >
-              <ReceiptText className="h-8 w-8 text-stone-400 dark:text-stone-500" aria-hidden="true" />
-              <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
-                {preview ? "Use a different photo" : "Take or upload a photo of the quote"}
-              </span>
-              <span className="text-xs text-stone-500 dark:text-stone-400">
-                A clear photo of every line item and the total works best
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={onPick}
-                disabled={loading}
-                className="hidden"
-              />
-            </label>
-            {preview && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={preview}
-                alt="Quote preview"
-                className="mt-3 max-h-48 rounded-lg border border-stone-200 object-contain dark:border-white/10"
-              />
-            )}
-          </div>
-        ) : (
-          <div>
-            <label className="label">Quote text</label>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={6}
-              placeholder="Paste the line items and total from the quote here"
+        {/* Both panels stay mounted, the inactive one `hidden`, so the ids the
+            buttons' aria-controls point at always exist - a dangling
+            aria-controls is worse than none. role="group" is what makes
+            aria-labelledby apply: on a bare div the label is ignored. */}
+        <div
+          id="quote-input-photo"
+          role="group"
+          aria-labelledby="quote-mode-photo"
+          hidden={mode !== "photo"}
+        >
+          <label
+            className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center dark:border-white/10 ${
+              loading
+                ? "cursor-not-allowed opacity-60"
+                : "cursor-pointer hover:border-bark-500 hover:bg-bark-50"
+            }`}
+            aria-disabled={loading}
+          >
+            <ReceiptText className="h-8 w-8 text-stone-400 dark:text-stone-500" aria-hidden="true" />
+            <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
+              {preview ? "Use a different photo" : "Take or upload a photo of the quote"}
+            </span>
+            <span className="text-xs text-stone-500 dark:text-stone-400">
+              A clear photo of every line item and the total works best
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={onPick}
               disabled={loading}
-              aria-disabled={loading}
-              aria-busy={loading}
-              className="input"
+              className="hidden"
             />
-          </div>
-        )}
+          </label>
+          {preview && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview}
+              alt="Quote preview"
+              className="mt-3 max-h-48 rounded-lg border border-stone-200 object-contain dark:border-white/10"
+            />
+          )}
+        </div>
+
+        <div
+          id="quote-input-text"
+          role="group"
+          aria-labelledby="quote-mode-text"
+          hidden={mode !== "text"}
+        >
+          <label className="label" htmlFor="quote-text">
+            Quote text
+          </label>
+          <textarea
+            id="quote-text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={6}
+            placeholder="Paste the line items and total from the quote here"
+            disabled={loading}
+            aria-disabled={loading}
+            aria-busy={loading}
+            className="input"
+          />
+        </div>
 
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          Heads up: this runs on Google&apos;s free AI tier, so what you upload
-          may be used by Google to improve its models, which is Google&apos;s
-          free-tier policy, not Hearth&apos;s choice.{" "}
+          Heads up: your quote is sent to our AI provider, Anthropic, to be
+          read. Under its paid API terms it is not used to train their models.
+          It can be wrong, so treat the read as a second opinion, not a verdict.
+          {" "}
           <Link
             href="/ai-disclosure"
             className="underline decoration-dotted hover:text-stone-600 dark:hover:text-stone-300"

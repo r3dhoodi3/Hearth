@@ -78,7 +78,31 @@ before any Products exist in the dashboard.
    verifies signatures.
 2. Verify: start a background check from a test pro profile and watch the webhook log.
 
-## 6. Security audit follow-ups
+## 6. AI (Anthropic)
+
+Every AI feature in the app (Ask Hearth, Ask Hearth for Pros, the quote analyzer,
+document and inspection reading, the tax appeal letter, the insurance packet, job
+drafting, and the pro back-office tools) calls Anthropic's Claude. Without the key
+those routes return an error; the rest of the app is unaffected.
+
+1. Create an Anthropic account at console.anthropic.com, add a payment method, and
+   create an API key.
+2. In Vercel, set `ANTHROPIC_API_KEY` (mark it Sensitive). It is required in
+   Production; set it in Preview too if you want the AI features to work there.
+3. `GEMINI_API_KEY` is no longer used by any code path. Delete it from Vercel and
+   from any local `.env.local` so nobody mistakes it for a live dependency.
+4. Set a spend limit in the Anthropic console. Ask Hearth already caps usage per
+   user (3 questions a day on Free, 15 on Plus, plus a burst limit), but the spend
+   limit is the backstop.
+5. Verify: ask Ask Hearth one question in production and confirm an answer comes
+   back, then check the request appears in the Anthropic console's usage view.
+
+Privacy note for the record: Anthropic's paid API terms say API inputs and outputs
+are not used to train its models by default, and Anthropic retains API data for up
+to 30 days for trust and safety. That is what `/privacy` and `/ai-disclosure` state,
+so if the plan or vendor ever changes, those two pages have to change with it.
+
+## 7. Security audit follow-ups
 
 The 2026-07-19 red-team blockers were remediated in the waves committed on this branch
 (re-verified 2026-08-09 by a fresh security sweep: webhook signatures, cron auth, RLS on new

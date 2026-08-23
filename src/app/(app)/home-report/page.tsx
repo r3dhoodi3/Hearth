@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getActiveProperty } from "@/lib/property";
+import { formatAddressLine, getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import {
   labelFor,
@@ -382,7 +382,7 @@ export default async function HomeReportPage() {
           everyone else gets a chipped door to /plus and one honest line about
           what they're looking at. The watermark at the bottom of this file is
           the other half: without it, Ctrl+P walks straight past this. */}
-      <div className="mb-6 flex items-center justify-end gap-3 print:hidden">
+      <div className="mb-6 flex flex-col items-stretch justify-end gap-3 print:hidden sm:flex-row sm:items-center">
         {plus ? (
           <PrintButton />
         ) : (
@@ -390,7 +390,7 @@ export default async function HomeReportPage() {
             <p className="text-sm text-stone-500 dark:text-stone-400">
               This report is ready - printing and sharing it is a Plus thing.
             </p>
-            <Link href="/plus?reason=report" className="btn-primary">
+            <Link href="/plus?reason=report" className="btn-primary w-full sm:w-auto">
               Print or save as PDF
               <span className="chip ml-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
                 Plus
@@ -404,7 +404,10 @@ export default async function HomeReportPage() {
       <header className="mb-8 border-b border-stone-200 pb-6 print:border-black dark:border-stone-700">
         <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">Home report</h1>
         <p className="mt-2 text-lg text-stone-700 dark:text-stone-300">
-          {property.address_line1}
+          {/* The unit belongs here more than anywhere: this report gets
+              printed and handed to a buyer, an insurer, or an inspector, and
+              "123 Main St" for a condo names the wrong property. */}
+          {formatAddressLine(property)}
           {addressLine ? `, ${addressLine}` : ""}
           {property.zip ? ` ${property.zip}` : ""}
         </p>

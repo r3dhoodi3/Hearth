@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getRole } from "@/lib/contractor";
+import { getSides, landingFor } from "@/lib/contractor";
 import { safeNextPath } from "@/lib/safeNext";
 import SignInForm from "./SignInForm";
 
@@ -24,9 +24,7 @@ export default async function SignInPage(
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect(
-      next ?? ((await getRole()) === "contractor" ? "/pro" : "/dashboard")
-    );
+    redirect(next ?? landingFor(await getSides()));
   }
 
   // ?error=auth_failed: set by /auth/callback when a confirmation or magic

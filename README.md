@@ -26,7 +26,7 @@ For the current state of the project, decisions, and what is next, read
   tax appeal, insurance check-up, inspection ingest, walkthrough
 - Documents vault, home report (printable), emergency help, guides
 - Household sharing (invite members by link)
-- Ask Hearth assistant (Gemini today; see `HANDOFF.md` for the planned swap)
+- Ask Hearth assistant (Anthropic's Claude)
 - Account: security, notifications, privacy rights, help
 - Hearth Plus subscription via Stripe (free / annual / monthly)
 
@@ -64,7 +64,7 @@ For the current state of the project, decisions, and what is next, read
 - **Supabase**: Postgres, Auth (email + password with confirmation, Google,
   Apple), Storage (private photo and document buckets)
 - **Stripe** subscriptions and wallet top-ups, **Resend**, **Twilio**,
-  **Checkr**, **RentCast**, **Gemini**
+  **Checkr**, **RentCast**, **Anthropic** (Claude, the only AI provider)
 - **Vitest** + Testing Library for unit tests
 - Deployed on **Vercel**
 
@@ -119,7 +119,8 @@ Optional, each turns on one feature and is skipped when missing:
 - `STRIPE_SECRET_KEY` (+ price ids, webhook secret): checkout, billing portal,
   wallet top-ups. Pages load without it; billing actions fail with an error that
   names the variable. A test-mode key works locally.
-- `GEMINI_API_KEY`: Ask Hearth, quote analysis, document extraction.
+- `ANTHROPIC_API_KEY`: Ask Hearth, quote analysis, document extraction, and
+  every other AI feature. All of them run on Claude.
 - `RENTCAST_API_KEY`: county-record prefill in onboarding and home value.
 - `RESEND_API_KEY`/`RESEND_FROM`, `TWILIO_*`: email and SMS; senders no-op
   without them.

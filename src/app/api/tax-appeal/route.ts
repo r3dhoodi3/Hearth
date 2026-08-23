@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { hasPlus } from "@/lib/subscription";
 import { countAiUsage } from "@/lib/aiUsage";
+import { reasonToClientPayload } from "@/lib/aiReason";
 import { getActiveProperty } from "@/lib/property";
 import { estimateHomeValue } from "@/lib/homeValue";
+import { generateText, hasClaudeKey, isRateLimitError } from "@/lib/claude";
 
 export const runtime = "nodejs";
 
@@ -16,13 +18,6 @@ export const runtime = "nodejs";
 // Input:  none (everything comes from the active property, so a caller can't
 //         feed the model made-up numbers under Hearth's letterhead tone)
 // Output: { letter } | { letter: null, reason: "no_key" | "rate_limited" | "failed" }
-
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
-];
 
 export async function POST() {
   // Require a signed-in user before touching the paid model.
@@ -72,17 +67,26 @@ export async function POST() {
     );
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!hasClaudeKey()) {
     return NextResponse.json({ letter: null, reason: "no_key" });
   }
 
   // Same per-user daily cap as /api/ask and /api/analyze-quote (same ai_usage
   // table and limits), so this route can't be a side door around the abuse
   // limits on the paid model.
-  const { overLimit } = await countAiUsage(user.id, isPlus);
+  // "rate_limited" is reserved for a REAL limit (this owner's daily cap, or
+  // the owner-wide spend breaker). A counter that could not be read is a bug,
+  // not a limit, and saying "usage limit" for it sends people looking for an
+  // upgrade that would not help.
+  const { overLimit, reason } = await countAiUsage(user.id, isPlus);
   if (overLimit) {
-    return NextResponse.json({ letter: null, reason: "rate_limited" });
+    // One mapping for every counter refusal, so a burst window reads as "give
+    // it a minute" instead of "you are out for the day". See
+    // src/lib/aiReason.ts.
+    return NextResponse.json({
+      letter: null,
+      ...reasonToClientPayload(reason),
+    });
   }
 
   const currentYear = new Date().getFullYear();
@@ -168,55 +172,41 @@ export async function POST() {
     "Output only the letter text itself, with no commentary before or after it. " +
     "Never use an em dash or a hyphen as a connector: use a comma, a colon, or a new sentence instead.";
 
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: instruction }] },
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text:
-              "Draft the appeal letter from these facts about my home:\n\n" +
-              facts.map((f) => `- ${f}`).join("\n"),
-          },
-        ],
-      },
-    ],
-    generationConfig: {
-      maxOutputTokens: 1000,
-    },
-  });
-
-  let rateLimited = false;
-  for (const model of MODELS) {
-    try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: requestBody,
-        }
-      );
-      if (resp.status === 429) {
-        rateLimited = true;
-        continue;
-      }
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (typeof text !== "string" || !text.trim()) continue;
-      return NextResponse.json({ letter: text.trim() });
-    } catch {
-      // network error - try the next model
+  try {
+    // A letter the homeowner signs and files: every figure has to trace back
+    // to a fact on the list, and anything missing has to come out as a
+    // bracketed placeholder rather than an invented value. Reasoning on.
+    const { text, stopReason } = await generateText({
+      system: instruction,
+      prompt:
+        "Draft the appeal letter from these facts about my home:\n\n" +
+        facts.map((f) => `- ${f}`).join("\n"),
+      maxTokens: 8000,
+      thinking: true,
+      // Reasoning plus a full letter: a slow call the owner is watching a
+      // progress bar for. An explicit ceiling, like the other document
+      // routes, so a hung request fails on our clock, not the platform's.
+      timeoutMs: 120_000,
+      label: "tax-appeal",
+    });
+    // TRUNCATED IS NOT DONE. This letter gets signed and filed with a county
+    // assessor. One that ran out of output budget ends mid-sentence, often
+    // before the actual request for review, and a half-letter that looks
+    // complete is worse than no letter at all.
+    if (stopReason === "max_tokens") {
+      return NextResponse.json({
+        letter: null,
+        reason: "too_long",
+        error:
+          "That letter ran long and got cut off before it was finished. Please try again.",
+      });
     }
+    if (text) return NextResponse.json({ letter: text });
+    return NextResponse.json({ letter: null, reason: "failed" });
+  } catch (e) {
+    return NextResponse.json({
+      letter: null,
+      reason: isRateLimitError(e) ? "rate_limited" : "failed",
+    });
   }
-
-  return NextResponse.json({
-    letter: null,
-    reason: rateLimited ? "rate_limited" : "failed",
-  });
 }

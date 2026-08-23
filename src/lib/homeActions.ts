@@ -4,7 +4,11 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { ACTIVE_HOME_COOKIE, getProperties } from "@/lib/property";
+import {
+  ACTIVE_HOME_COOKIE,
+  formatAddressLine,
+  getProperties,
+} from "@/lib/property";
 import { setFlash } from "@/lib/flash";
 
 const COOKIE_OPTS = {
@@ -21,7 +25,10 @@ export async function setActiveHomeAction(formData: FormData) {
   const home = props.find((p) => p.id === id);
   if (home) {
     (await cookies()).set(ACTIVE_HOME_COOKIE, id, COOKIE_OPTS);
-    await setFlash(`Switched to ${home.address_line1}`, "info");
+    // formatAddressLine, not address_line1: someone with two units in the
+    // same building would otherwise be told "Switched to 123 Main St" either
+    // way and have no idea which one they landed on.
+    await setFlash(`Switched to ${formatAddressLine(home)}`, "info");
   }
   revalidatePath("/", "layout");
   redirect("/dashboard");

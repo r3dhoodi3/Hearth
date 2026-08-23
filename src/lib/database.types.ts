@@ -121,6 +121,11 @@ export interface Database {
           user_id: string;
           parcel_id: string | null;
           address_line1: string;
+          // Condo/townhome unit (migration 0127). Deliberately NOT folded into
+          // address_line1: that column stays the street line the parcel lookup
+          // and the assessor ownership match run against, and the unit is
+          // appended for display only (formatAddressLine in src/lib/property.ts).
+          unit: string | null;
           city: string | null;
           state: string | null;
           zip: string | null;
@@ -151,6 +156,7 @@ export interface Database {
           user_id: string;
           parcel_id?: string | null;
           address_line1: string;
+          unit?: string | null;
           city?: string | null;
           state?: string | null;
           zip?: string | null;
@@ -353,6 +359,11 @@ export interface Database {
           vetted: boolean;
           rating: number | null;
           review_count: number;
+          // Migration 0113: the pro's own Yelp / Google review pages, linked
+          // out to from the public profile. Hearth never imports the review
+          // text or star counts, it just points at them.
+          yelp_url: string | null;
+          google_reviews_url: string | null;
           balance: number;
           created_at: string;
         };

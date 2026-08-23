@@ -2,17 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_TYPES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import { hasPlus } from "@/lib/subscription";
-import { countAiUsage } from "@/lib/aiUsage";
+import { countAiUsage, overToolBurst } from "@/lib/aiUsage";
+import { reasonToClientPayload } from "@/lib/aiReason";
+import { readJsonBounded } from "@/lib/boundedBody";
+import { generateJson, hasClaudeKey, isRateLimitError } from "@/lib/claude";
 
 export const runtime = "nodejs";
 
 // Cap the incoming base64 image so a caller can't push huge payloads at the paid
 // vision model (cost/DoS). ~14M base64 chars ≈ 10MB of binary.
 const MAX_IMAGE_B64_CHARS = 14_000_000;
+// Hard ceiling on the whole request body, in bytes, counted as the bytes
+// arrive rather than trusted from Content-Length, which a chunked request
+// never sends (src/lib/boundedBody.ts). Sits just above the image cap so a
+// real upload still reaches the check above and gets its specific message.
+const MAX_BODY_BYTES = 15_000_000;
 
 // Read the facts off a home document (a warranty, manual, receipt, or the
 // model/serial data plate on an appliance) so they can auto-fill the digital
-// twin. This is the "feed the AI" half of the vault: the same Gemini vision the
+// twin. This is the "feed the AI" half of the vault: the same Claude vision the
 // chat uses, but pinned to a JSON shape so the answer is data, not prose - the
 // thing a web search can never do for THEIR specific unit.
 //
@@ -23,32 +31,38 @@ const MAX_IMAGE_B64_CHARS = 14_000_000;
 
 const SYSTEM_VALUES = SYSTEM_TYPES.map((s) => s.value);
 
-// Gemini structured-output schema. Keeping system_type an enum means the value
-// drops straight into home_systems without a mapping step.
+// Structured-output schema: the model is constrained to this shape
+// server-side. Keeping system_type an enum means the value drops straight into
+// home_systems without a mapping step, and "" stays in the enum so "none of
+// these fits" has somewhere to land. normalize() below still coerces every
+// field, so a value that slips through unusable becomes null, not a bad row.
 const RESPONSE_SCHEMA = {
-  type: "OBJECT",
+  type: "object",
   properties: {
     doc_type: {
-      type: "STRING",
+      type: "string",
       enum: ["warranty", "manual", "receipt", "inspection_report", "other"],
     },
-    title: { type: "STRING" },
-    brand: { type: "STRING" },
-    model: { type: "STRING" },
-    install_year: { type: "INTEGER" },
-    warranty_expires: { type: "STRING" }, // YYYY-MM-DD
-    system_type: { type: "STRING", enum: [...SYSTEM_VALUES, ""] },
-    summary: { type: "STRING" },
+    title: { type: "string" },
+    brand: { type: "string" },
+    model: { type: "string" },
+    install_year: { type: ["integer", "null"] },
+    warranty_expires: { type: "string" }, // YYYY-MM-DD, or ""
+    system_type: { type: "string", enum: [...SYSTEM_VALUES, ""] },
+    summary: { type: "string" },
   },
-  required: ["doc_type", "title", "summary"],
+  required: [
+    "doc_type",
+    "title",
+    "brand",
+    "model",
+    "install_year",
+    "warranty_expires",
+    "system_type",
+    "summary",
+  ],
+  additionalProperties: false,
 };
-
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
-];
 
 export async function POST(req: NextRequest) {
   // Require a signed-in user. This is an authenticated feature; gating it here
@@ -61,13 +75,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  // BURST PRE-CHECK, in front of the body read. The authoritative burst check
+  // lives inside countAiUsage below, which runs only after the body has been
+  // buffered and parsed, so a flood got megabytes of base64 read before any
+  // rate limit said no. One indexed row read on the same window countAiUsage
+  // will bump, so nothing is double counted, answering with the same refusal.
+  if (await overToolBurst(user.id)) {
+    return NextResponse.json({
+      doc: null,
+      ...reasonToClientPayload("user_burst"),
+    });
+  }
+
+  if (!hasClaudeKey()) {
     // No key: the vault still works, the owner just fills fields in by hand.
     return NextResponse.json({ doc: null, reason: "no_key" });
   }
 
-  const body = await req.json().catch(() => ({}));
+  const parsedBody = await readJsonBounded(req, MAX_BODY_BYTES);
+  if (!parsedBody.ok) {
+    return parsedBody.status === 413
+      ? NextResponse.json({ error: "Image too large." }, { status: 413 })
+      : NextResponse.json({ error: "No image." }, { status: 400 });
+  }
+  const body = parsedBody.data;
   const image = typeof body.image === "string" ? body.image : "";
   const mime = typeof body.mime === "string" ? body.mime : "image/jpeg";
   if (!image) {
@@ -80,9 +111,12 @@ export async function POST(req: NextRequest) {
   // Same per-user daily cap as /api/ask (same ai_usage table and limits), so
   // document extraction can't be a side door around the abuse limits on the
   // paid model. Over the cap degrades like any other model failure.
-  const { overLimit } = await countAiUsage(user.id, await hasPlus());
+  const { overLimit, reason } = await countAiUsage(user.id, await hasPlus());
   if (overLimit) {
-    return NextResponse.json({ doc: null, reason: "rate_limited" });
+    // One mapping for every counter refusal, so a burst window reads as "give
+    // it a minute" instead of "you are out for the day". See
+    // src/lib/aiReason.ts.
+    return NextResponse.json({ doc: null, ...reasonToClientPayload(reason) });
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -99,66 +133,37 @@ export async function POST(req: NextRequest) {
     "Write summary as one plain sentence a homeowner would find useful (what it is, and the single most important fact - e.g. the filter size, the covered period, or the total paid). " +
     `Today's date is ${today}.`;
 
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: instruction }] },
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: "Extract the fields from this document." },
-          { inlineData: { mimeType: mime, data: image } },
-        ],
-      },
-    ],
-    generationConfig: {
-      // Deterministic extraction: this is a read-the-label task, not a
-      // creative one, so keep the model from embellishing what it sees.
-      temperature: 0,
-      maxOutputTokens: 600,
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
-    },
-  });
+  // The picker accepts PDFs as well as photos (see DocumentUpload), and the
+  // two travel in the same `image` field. A PDF has to go in as a document
+  // block, not an image block, or the API rejects the media type.
+  const isPdf = mime.toLowerCase().startsWith("application/pdf");
 
-  let rateLimited = false;
-  for (const model of MODELS) {
-    try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: requestBody,
-        }
-      );
-      if (resp.status === 429) {
-        rateLimited = true;
-        continue;
-      }
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) continue;
-
-      let parsed: any;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        continue; // malformed - try the next model
-      }
-      return NextResponse.json({ doc: normalize(parsed) });
-    } catch {
-      // network error - try the next model
+  try {
+    // Extraction earns its reasoning: decoding a date code, computing a
+    // warranty expiry from a start date plus a term, and deciding a document
+    // is unreadable rather than guessing at it are all judgement calls.
+    const { data: parsed } = await generateJson<Record<string, unknown>>({
+      system: instruction,
+      prompt: "Extract the fields from this document.",
+      ...(isPdf
+        ? { documents: [{ data: image }] }
+        : { images: [{ data: image, mime }] }),
+      schema: RESPONSE_SCHEMA,
+      maxTokens: 4096,
+      thinking: true,
+      timeoutMs: 80_000,
+      label: "extract-document",
+    });
+    if (!parsed) {
+      return NextResponse.json({ doc: null, reason: "failed" });
     }
+    return NextResponse.json({ doc: normalize(parsed) });
+  } catch (e) {
+    return NextResponse.json({
+      doc: null,
+      reason: isRateLimitError(e) ? "rate_limited" : "failed",
+    });
   }
-
-  return NextResponse.json({
-    doc: null,
-    reason: rateLimited ? "rate_limited" : "failed",
-  });
 }
 
 // A real calendar date in YYYY-MM-DD form, with a plausible year: not just

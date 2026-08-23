@@ -93,8 +93,9 @@ function toBase64(file: File, maxDim = 1600, quality = 0.8): Promise<string> {
 }
 
 // Read a PDF straight to base64 (no canvas rescaling: a PDF isn't a raster we
-// can downsize, and Gemini reads the file's own pages). Returns base64 without
-// the data: prefix so the server can pass it through as inlineData.
+// can downsize, and the model reads the file's own pages). Returns base64
+// without the data: prefix, which is the shape src/lib/claude.ts passes
+// through as a document block.
 function pdfToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -602,15 +603,15 @@ export default function InspectionUpload() {
       )}
 
       {/* In-context data note on the surface where the owner decides to upload:
-          report reading runs on Google's free Gemini tier, so uploads can be
-          used by Google to improve its models. Same fact as the privacy page,
+          the report goes to Anthropic's API to be read, and Anthropic's paid
+          API terms mean it isn't training data. Same fact as the privacy page,
           compressed to one sentence. */}
       <p className="text-xs text-stone-500 dark:text-stone-400">
-        Report reading runs on Google&apos;s free AI tier, so what you upload may
-        be used by Google to improve its own products.{" "}
+        Your report is sent to our AI provider, Anthropic, to be read. Under its
+        paid API terms it is not used to train their models.{" "}
         <Link
           href="/ai-disclosure"
-          className="underline decoration-dotted hover:text-stone-600 dark:hover:text-stone-300"
+          className="underline decoration-dotted hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:hover:text-stone-300"
         >
           How Hearth uses AI
         </Link>

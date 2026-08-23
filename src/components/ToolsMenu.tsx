@@ -74,13 +74,16 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
   ];
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative shrink-0">
+      {/* Tighter horizontal padding below sm only: every pixel spent here
+          comes out of the home address label to its left, which is the thing
+          a phone user actually reads. sm and up keep the original px-3. */}
       <button
         ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-bark-50 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+        className="flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1.5 text-sm font-medium text-stone-600 hover:bg-bark-50 hover:text-stone-900 max-sm:min-h-10 sm:px-3 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
       >
         Tools
         <svg

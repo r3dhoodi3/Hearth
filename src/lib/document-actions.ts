@@ -7,6 +7,8 @@ import { setFlash } from "@/lib/flash";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { isOwnedStoragePath } from "@/lib/ownedStoragePath";
+import { toObjectPath } from "@/lib/storage";
 
 // The vault's write path. The client uploads the file and runs vision
 // extraction first; these actions persist the result and, on the owner's
@@ -31,6 +33,22 @@ export async function saveDocumentAction(
 
   const fileUrl = s(formData, "file_url");
   if (!fileUrl) throw new Error("No file uploaded");
+
+  // file_url is set by DocumentUpload.tsx AFTER it uploads to
+  // `${propertyId}/docs/<uuid>.<ext>`, but this action takes whatever FormData
+  // it is handed, and nothing downstream re-derives the key: it is stored
+  // as-is and later handed to /api/img to sign. So the claimed key has to be
+  // proved to live under THIS property before it is written, or a caller could
+  // point their own document row at another property's object (and get it
+  // signed on request). Rejected quietly with the same shape as a failed save,
+  // since the only way to reach it is a forged post.
+  if (!isOwnedStoragePath(fileUrl, property.id)) {
+    console.error("saveDocumentAction: file_url outside the property prefix");
+    const message =
+      "Couldn't save that document right now. Please try again in a bit.";
+    await setFlash(message, "error");
+    return { ok: false, error: message };
+  }
 
   const yearRaw = s(formData, "install_year");
   const year = yearRaw ? Number(yearRaw) : null;
@@ -64,7 +82,14 @@ export async function saveDocumentAction(
     // Next error overlay in front of the owner), and never strand the
     // already-uploaded file as an unfindable orphan in the bucket.
     console.error("saveDocumentAction failed:", error.message);
-    const path = fileUrl.split("/home-photos/")[1];
+    // toObjectPath, not a split on the bucket marker: the stored value can be
+    // a bare object key (no "/home-photos/" in it at all, so the split gave
+    // undefined and the orphan was never removed) or a URL with a "?t=" cache
+    // buster on the end (which the split kept, so the remove() named an object
+    // that does not exist). It is also the exact same reading /api/img and
+    // isOwnedStoragePath use, so the key deleted here is the key that was
+    // signed.
+    const path = toObjectPath(fileUrl);
     if (path) {
       await supabase.storage.from("home-photos").remove([path]);
     }

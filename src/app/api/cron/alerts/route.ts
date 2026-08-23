@@ -200,6 +200,38 @@ async function runCron(req: NextRequest) {
   const supabase = createAdminClient();
   let created = 0;
 
+  // Housekeeping FIRST, before any of the early returns below.
+  //
+  // This used to sit at the bottom of the function, which meant it only ran on
+  // the happy path: a properties count that errored, or an instance with no
+  // properties at all, returned before reaching it, and the prune silently
+  // never happened. Those are exactly the states where nobody is watching, so
+  // the table would grow unbounded while the cron reported success every day.
+  // It depends on nothing above it, so it belongs where it always runs.
+  //
+  // public.rate_limits (migration 0070) is append-only by design - rate_limit_hit
+  // inserts a row per (bucket, window) and nothing ever deletes one. Every AI
+  // request, burst window, and per-user daily bucket leaves a row behind
+  // forever, so the table grows without bound and the lookups that read it
+  // (askRemaining, the refund path) get slower for no reason. Nothing reads a
+  // window older than a day; a week of slack keeps recent history around for
+  // debugging an abuse report. Failure here is never fatal to the cron, but it
+  // IS logged: a prune that has been failing for a month is worth knowing
+  // about, and swallowing the error silently is how it stays unknown.
+  try {
+    const cutoff = new Date(Date.now() - 7 * DAY_MS).toISOString();
+    const { error: pruneError } = await supabase
+      .from("rate_limits")
+      .delete()
+      .lt("window_start", cutoff);
+    if (pruneError) {
+      console.error("alerts cron: rate_limits prune failed:", pruneError.message);
+    }
+  } catch (err) {
+    // Pruning is maintenance, never the point of this run.
+    console.error("alerts cron: rate_limits prune threw:", err);
+  }
+
   // Every property gets its turn: with no ordering, a bare .limit() would
   // return the same de facto fixed rows every run and silently never
   // weather-check anything past MAX_PROPERTIES. Instead, count the rows,

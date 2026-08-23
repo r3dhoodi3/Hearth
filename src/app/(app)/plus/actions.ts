@@ -426,7 +426,12 @@ export async function upgradeToYearlyAction() {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: 3999,
+            // Derived from PLUS_PLAN, never typed twice: this fallback only
+            // runs when STRIPE_PRICE_PLUS_YEARLY is unset, which is exactly
+            // when nobody would notice it quoting last year's price. A literal
+            // here could drift away from the number the pricing pages, the
+            // checkout, and the auto-renewal disclosure all read.
+            unit_amount: Math.round(PLUS_PLAN.yearly * 100),
             recurring: { interval: "year" as const },
             product: productId,
           },
@@ -572,7 +577,9 @@ export async function downgradeToMonthlyAction() {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: 499,
+            // Same rule as the yearly fallback in upgradeToYearlyAction:
+            // computed from PLUS_PLAN so a price edit moves this with it.
+            unit_amount: Math.round(PLUS_PLAN.monthly * 100),
             recurring: { interval: "month" as const },
             product: productId,
           },

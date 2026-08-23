@@ -10,6 +10,13 @@ type MenuLink = {
   // Optional visual accent for an item that needs to stand out (currently only
   // used by the homeowner "Emergency" link). Undefined renders the normal row.
   accent?: "red";
+  // Optional: submit a server action instead of navigating. The row renders as
+  // a form button that looks exactly like a link row. Used by the side
+  // switcher in both navs, which has to RECORD the switch (the preferred
+  // landing side) as well as go there; `side` rides along as a hidden field.
+  // Every other item leaves both undefined and renders as a plain Link.
+  action?: (formData: FormData) => void | Promise<void>;
+  side?: "homeowner" | "contractor";
 };
 
 // Avatar + dropdown shown in the top-right of both navs. Account-scoped only:
@@ -112,10 +119,13 @@ export default function ProfileMenu({
         {name && (
           <span className="hidden max-w-[12rem] truncate sm:inline">{name}</span>
         )}
-        {/* Dropdown indicator. */}
+        {/* Dropdown indicator. Hidden below sm: on a phone the avatar alone
+            already reads as the account button, and the 24px this costs is
+            24px the home address next to it does not have. sm and up are
+            unchanged. */}
         <svg
           viewBox="0 0 20 20"
-          className={`h-4 w-4 text-stone-500 transition-transform dark:text-stone-400 ${
+          className={`hidden h-4 w-4 text-stone-500 transition-transform sm:block dark:text-stone-400 ${
             open ? "rotate-180" : ""
           }`}
           fill="currentColor"
@@ -157,20 +167,42 @@ export default function ProfileMenu({
                 {linksLabel}
               </p>
             )}
-            {links.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className={
-                  l.accent === "red"
-                    ? "mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/15"
-                    : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
-                }
-              >
-                {l.label}
-              </Link>
-            ))}
+            {links.map((l) => {
+              const rowClass =
+                l.accent === "red"
+                  ? "mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/15"
+                  : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600";
+              if (l.action) {
+                return (
+                  <form key={l.href} action={l.action}>
+                    {l.side && (
+                      <input type="hidden" name="side" value={l.side} />
+                    )}
+                    {/* No onClick close here: closing the menu on click
+                        unmounts this form before the browser submits it
+                        ("Form submission canceled because the form is not
+                        connected"). The action redirects, which closes the
+                        menu by navigating away. */}
+                    <button
+                      type="submit"
+                      className={`${rowClass} w-[calc(100%-0.5rem)] text-left`}
+                    >
+                      {l.label}
+                    </button>
+                  </form>
+                );
+              }
+              return (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setOpen(false)}
+                  className={rowClass}
+                >
+                  {l.label}
+                </Link>
+              );
+            })}
           </div>
           {themeToggle && <ThemeToggle variant="row" />}
           <form

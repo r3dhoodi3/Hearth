@@ -128,7 +128,7 @@ export default function PrepPhotoUpload({
         defaultValue={initialNote}
         rows={2}
         placeholder="Notes, e.g. behind the water heater"
-        className="textarea text-sm"
+        className="textarea text-base sm:text-sm"
       />
       <SubmitButton className="btn-secondary w-full text-sm" pendingLabel="Saving…">
         Save

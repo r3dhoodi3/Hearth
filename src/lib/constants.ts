@@ -19,10 +19,11 @@ export const COLD_START_FREE_ALERTS = true;
 
 // =============================================================================
 // AI GLOBAL SPEND BREAKER: an owner-wide, all-users-combined daily ceiling on
-// the paid Gemini routes, enforced in src/lib/aiUsage.ts on top of the per-user
-// daily cap. This is NOT a per-user limit: it is one shared bucket across every
-// account, a runaway-cost circuit breaker so no volume of free signups can fan
-// the daily Gemini bill past a hard number. Set well ABOVE realistic total
+// the paid model routes (Claude, via src/lib/claude.ts), enforced in
+// src/lib/aiUsage.ts on top of the per-user daily cap. This is NOT a per-user
+// limit: it is one shared bucket across every account, a runaway-cost circuit
+// breaker so no volume of free signups can fan the daily model bill past a
+// hard number. Set well ABOVE realistic total
 // daily usage (across every route and every user) so legitimate traffic never
 // trips it, but low enough that a cost-abuse spike hits a wall. If real usage
 // ever approaches this, raise it deliberately rather than letting it silently
@@ -79,6 +80,57 @@ export const SYSTEM_TYPES = [
   { value: "sewer_line", label: "Sewer / septic"},
   { value: "fence", label: "Fence"},
 ] as const;
+
+// Example Brand / Model values shown as PLACEHOLDERS in the walkthrough's
+// manual-entry step (src/app/(app)/walkthrough/SystemCaptureCard.tsx), one per
+// SYSTEM_TYPES value.
+//
+// This exists because both fields used to show the same water-heater example
+// ("e.g. Rheem", "e.g. XE50T10H45U0") for every system, so an owner standing
+// at their roof, panel, or driveway was being shown a model number off a water
+// heater and had to guess what shape of answer the box wanted. A placeholder's
+// whole job is to show the shape of the answer, and the wrong example does
+// that job backwards.
+//
+// An EMPTY string means "this system has no brand or model" (a foundation, a
+// poured driveway): the card renders "Not applicable" rather than inventing an
+// example. Keep one entry per SYSTEM_TYPES value; the test in
+// src/lib/systemFieldExamples.test.ts fails if a type is missing.
+//
+// Keep every example SHORT. These render inside a half-width box in a two
+// column grid, so on a 390px phone anything past roughly a dozen characters is
+// simply cut off mid-word ("e.g. Duration sh"), and a hint you cannot finish
+// reading is worse than a shorter one that lands.
+export type SystemFieldExample = { brand: string; model: string };
+
+export const SYSTEM_FIELD_EXAMPLES: Record<string, SystemFieldExample> = {
+  roof: { brand: "Owens Corning", model: "Duration" },
+  hvac: { brand: "Carrier", model: "24ACC636" },
+  water_heater: { brand: "Rheem", model: "XE50T10H45U0" },
+  electrical_panel: { brand: "Square D", model: "QO130M200" },
+  // Whole-house plumbing has no plate to read: what matters is the pipe.
+  plumbing: { brand: "", model: "Copper pipe" },
+  windows: { brand: "Andersen", model: "400 Series" },
+  foundation: { brand: "", model: "" },
+  appliance: { brand: "Bosch", model: "SHPM65Z55N" },
+  gutters: { brand: "", model: "Aluminum, 5 in" },
+  siding: { brand: "James Hardie", model: "HardiePlank" },
+  garage_door: { brand: "LiftMaster", model: "8550W" },
+  deck: { brand: "Trex", model: "Transcend" },
+  driveway: { brand: "", model: "Concrete" },
+  sump_pump: { brand: "Zoeller", model: "M53" },
+  sewer_line: { brand: "", model: "ABS to main" },
+  fence: { brand: "", model: "Cedar, 6 ft" },
+};
+
+// The examples for one system type. An unknown type (a value added to the DB
+// ahead of this list) falls back to no example at all rather than to some
+// other system's, which is the bug this whole map exists to fix.
+export function systemFieldExample(
+  systemType: string | null | undefined
+): SystemFieldExample {
+  return SYSTEM_FIELD_EXAMPLES[systemType ?? ""] ?? { brand: "", model: "" };
+}
 
 // Marker text the auto-seeded starter inventory used to use as a per-system
 // note. We no longer store it (the notice lives at the top of the profile),
@@ -440,6 +492,32 @@ export function monthlyPerDay(plan: Pick<PlanPrices, "monthly">): number {
 export function yearlyAsMonthly(plan: Pick<PlanPrices, "yearly">): number {
   return toCents(plan.yearly / 12);
 }
+
+// =============================================================================
+// THE TWO PLUS ALLOWANCES THE MARKETING COPY QUOTES OUT LOUD.
+//
+// Both used to be typed into the /plus card by hand ("Up to 5 homes", "15
+// questions a day"), which is the one place a number is guaranteed to go stale
+// without anyone noticing: the card is copy, and copy is not what anybody
+// re-reads when they change a limit. A wrong number here is a promise the
+// product does not keep.
+// =============================================================================
+
+// Homes included with Plus, before any paid extra-home slots. Read by the cap
+// in claimPropertyAction (src/app/onboarding/actions.ts), which is the check
+// that actually enforces it, and by the /plus card that advertises it. The DB
+// backstop in supabase/migrations/0108_extra_home_slots.sql has to agree on
+// the same number.
+export const PLUS_INCLUDED_HOMES = 5;
+
+// Ask Hearth questions a day on Plus. MIRRORS ASK_DAILY_PLUS in
+// src/lib/aiUsage.ts, which is the value the server actually enforces and
+// cannot be imported here: aiUsage.ts pulls in the service-role Supabase
+// client, which is "server-only" and fails the build the moment a client
+// component (the /plus card) imports it. src/lib/constants.test.ts reads
+// aiUsage.ts's source and fails if the two ever disagree, so the mirror can
+// never quietly drift.
+export const PLUS_ASK_PER_DAY = 15;
 
 // Pay-per-extra-home add-on (Plus members only). The ONE place the add-on
 // pricing lives, so the /plus "More homes" UI, the setExtraHomesAction server

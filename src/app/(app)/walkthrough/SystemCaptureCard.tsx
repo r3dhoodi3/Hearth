@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { confirmSystemAction } from "./actions";
-import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
+import { labelFor, SYSTEM_TYPES, systemFieldExample } from "@/lib/constants";
 import TakePhotoButton from "@/components/TakePhotoButton";
 import Lightbox from "@/components/Lightbox";
 import AiNotice from "@/components/AiNotice";
@@ -89,6 +89,11 @@ export default function SystemCaptureCard({
   const progress = useStagedProgress(READ_STAGES, 10000);
 
   const name = labelFor(SYSTEM_TYPES, system.system_type);
+  // Placeholders for the manual-entry fields, keyed to THIS system. Both boxes
+  // used to show the same water-heater example whatever you were standing in
+  // front of; see SYSTEM_FIELD_EXAMPLES. An empty example means the system has
+  // no brand or model to give, and the field says so instead of guessing.
+  const example = systemFieldExample(system.system_type);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -140,6 +145,13 @@ export default function SystemCaptureCard({
       if (!read && data?.reason === "rate_limited") {
         failNote =
           "You've hit today's AI limit, so Hearth can't read the photo right now. Fill in what you can and confirm.";
+      } else if (!read && data?.reason === "busy") {
+        // An owner-wide ceiling, or a burst window filled by another tool
+        // (this route no longer counts toward the burst limit, so a normal
+        // walkthrough never trips it). Their own allowance is untouched, so
+        // do not tell them they are out for the day.
+        failNote =
+          "Hearth's AI is busy right now. Fill in what you can and confirm.";
       } else if (!read && data?.reason === "no_key") {
         failNote =
           "Automatic reading isn't set up yet. Fill in what you can and confirm.";
@@ -252,7 +264,7 @@ export default function SystemCaptureCard({
           <button
             type="button"
             onClick={skipToManual}
-            className="block text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
+            className="block text-xs text-stone-500 hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400 dark:hover:text-stone-300"
           >
             No photo handy? Enter details by hand
           </button>
@@ -321,7 +333,9 @@ export default function SystemCaptureCard({
               <input
                 name="brand"
                 className="input"
-                placeholder="e.g. Rheem"
+                placeholder={
+                  example.brand ? `e.g. ${example.brand}` : "Not applicable"
+                }
                 defaultValue={suggestion.brand ?? ""}
               />
             </div>
@@ -330,7 +344,9 @@ export default function SystemCaptureCard({
               <input
                 name="model"
                 className="input"
-                placeholder="e.g. XE50T10H45U0"
+                placeholder={
+                  example.model ? `e.g. ${example.model}` : "Not applicable"
+                }
                 defaultValue={suggestion.model ?? ""}
               />
             </div>

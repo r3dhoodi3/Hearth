@@ -4,6 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { safeNextPath } from "@/lib/safeNext";
 import { requestOrigin } from "@/lib/requestOrigin";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
+import {
+  contractorRowExists,
+  propertyRowExists,
+  resolveAuthRole,
+} from "@/lib/contractor";
 
 // Handles the PKCE/OAuth code exchange: ?code=...
 // (Magic-link flows use /auth/confirm instead.)
@@ -34,38 +39,58 @@ export async function GET(request: NextRequest) {
       // this route handles: password reset (resetPasswordForEmail's
       // redirectTo) also lands here, and that user did NOT just agree to
       // anything - terms_acceptances is a legal audit trail, so a row there
-      // has to mean what it says. The two signup pages always build their
-      // confirmation link's ?next= as /onboarding or /pro/onboarding (see
-      // confirmRedirectUrl() in each), so that prefix is the signal this is
-      // the signup-confirmation flow and not some other use of this route.
+      // has to mean what it says. That gate now lives in resolveAuthRole's
+      // termsDoc (src/lib/contractor.ts), keyed on the same signal: the two
+      // signup pages always build their confirmation link's ?next= as
+      // /onboarding or /pro/onboarding (see confirmRedirectUrl() in each).
       // recordTermsAcceptance is idempotent (checks for an existing row
       // first), so a user already recorded via the signup page's own call -
       // or a confirmation link visited twice - does not get a duplicate row.
-      const isSignupConfirmation =
-        next === "/onboarding" ||
-        next.startsWith("/onboarding?") ||
-        next === "/pro/onboarding" ||
-        next.startsWith("/pro/onboarding?");
-      if (data.user && isSignupConfirmation) {
-        let role = (data.user.user_metadata?.role ??
-          data.user.app_metadata?.role) as string | undefined;
-
-        // Google (GoogleSignInButton.tsx) signups arrive here with no role
-        // at all: unlike the email/password signup pages, signInWithOAuth()
-        // has no options.data to stamp role/full_name onto the new user at
-        // creation time, so it has to be backfilled the first time we see
-        // them with a session - which is here. `next` is reliable for this:
-        // isSignupConfirmation already established it's /onboarding or
-        // /pro/onboarding, and only contractor-signup's Google button ever
-        // points at the latter, so next.startsWith("/pro") is exactly
-        // "came from contractor-signup." An existing user signing IN via
-        // Google keeps whatever role they already have - they don't reach
-        // this branch at all unless `next` happens to be /onboarding or
-        // /pro/onboarding (only the two signup pages' redirectTo sets that),
-        // and even then `role` above is already set from their original
-        // signup, so the `!role` check below leaves them untouched.
+      if (data.user) {
         const meta = data.user.user_metadata ?? {};
-        const needsRole = !role;
+        const metadataRole = (meta.role ?? data.user.app_metadata?.role) as
+          | string
+          | undefined;
+
+        // The contractors row, not `next`, is what makes someone a pro.
+        // Google (GoogleSignInButton.tsx) sign-ins arrive with no options.data
+        // to stamp anything at creation time, so a pro who signs in through
+        // the HOMEOWNER door lands here carrying next=/onboarding and, if
+        // their metadata role is missing or wrong, used to be stamped
+        // "homeowner" on the strength of that door alone - which sent them
+        // around /onboarding -> /pro -> /dashboard -> /onboarding forever.
+        // Looked up with the admin client keyed on the id we just exchanged a
+        // code for, because a request-scoped client can't read back the
+        // session cookie this same request is still writing. Skipped entirely
+        // when the metadata already says contractor: the answer can't change
+        // the decision, so it isn't worth the query.
+        const hasContractorRow =
+          metadataRole === "contractor"
+            ? true
+            : await contractorRowExists(data.user.id);
+
+        // Does the same account also own a home? Only asked of a pro, because
+        // that is the only case where the answer changes anything: it tells a
+        // pro-who-also-owns-a-home (both sides are really theirs, so `next`
+        // stands and no stamp is rewritten) apart from a pro who wandered in
+        // through the homeowner door (bounced to /pro as before). Skipped
+        // entirely for everyone else, so this costs one query for pros and
+        // nothing at all for the common homeowner sign-in.
+        const hasPropertyRow = hasContractorRow
+          ? await propertyRowExists(data.user.id)
+          : false;
+
+        // Everything about who they are and where they go, decided in one
+        // pure function (src/lib/roleRouting.ts, re-exported from
+        // src/lib/contractor.ts) so the ordering of these signals is testable
+        // and lives in one place.
+        const decision = resolveAuthRole({
+          metadataRole,
+          hasContractorRow,
+          hasPropertyRow,
+          next,
+        });
+
         // Supabase maps Google's profile name into user_metadata.name (the
         // OIDC "name" claim). The current Supabase Auth (gotrue) Google
         // provider also copies that into a "to be deprecated" full_name
@@ -80,17 +105,16 @@ export async function GET(request: NextRequest) {
         const needsFullName =
           !meta.full_name && typeof meta.name === "string" && meta.name;
 
-        if (needsRole || needsFullName) {
-          if (needsRole) {
-            role = next.startsWith("/pro") ? "contractor" : "homeowner";
-          }
+        if (decision.needsStamp || needsFullName) {
           const admin = createAdminClient();
           const { error: updateError } = await admin.auth.admin.updateUserById(
             data.user.id,
             {
               user_metadata: {
                 ...meta,
-                ...(needsRole ? { role } : {}),
+                ...(decision.needsStamp && decision.role
+                  ? { role: decision.role }
+                  : {}),
                 ...(needsFullName ? { full_name: meta.name } : {}),
               },
             }
@@ -106,15 +130,14 @@ export async function GET(request: NextRequest) {
               userId: data.user.id,
               updateError,
             });
-          } else if (needsRole) {
+          } else if (decision.needsStamp) {
             // The role we just stamped lives in auth.users, but the session
             // cookie this request set (exchangeCodeForSession above) still
-            // holds the pre-stamp JWT with no role. Cookie-based getRole()
-            // (the /pro and /pro/onboarding guards read it, not the live auth
-            // server) would therefore see null and bounce a brand-new Google
-            // contractor through the role picker -> /pro -> /get-started ->
-            // picker until the token expired. Refresh the session so the
-            // cookie carries a JWT with role BEFORE we redirect them in.
+            // holds the pre-stamp JWT. Cookie-based getRole() (the /pro and
+            // /pro/onboarding guards read it, not the live auth server) would
+            // therefore see the old value and bounce them straight back out
+            // of the side they belong on, until the token expired. Refresh the
+            // session so the cookie carries the new role BEFORE we redirect.
             // Same cookie-write path exchangeCodeForSession already relies on,
             // so it propagates onto the redirect response the same way.
             const { error: refreshError } = await supabase.auth.refreshSession();
@@ -127,52 +150,21 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        await recordTermsAcceptance(
-          data.user.id,
-          role === "contractor" ? "pro_terms" : "terms"
-        );
+        // The other half of the email-confirmation terms gap (see above):
+        // only signup confirmations get a row, and the doc follows the
+        // RESOLVED role, so a pro who confirmed through the homeowner door
+        // is recorded against the contractor terms they actually signed up
+        // under. decision.termsDoc is null for every other use of this route.
+        if (decision.termsDoc) {
+          await recordTermsAcceptance(data.user.id, decision.termsDoc);
+        }
+
+        // decision.redirect covers all three cases: the role picker for
+        // someone we know nothing about, the corrected side of the app for a
+        // role/destination mismatch, and plain `next` for everyone else.
+        return NextResponse.redirect(new URL(decision.redirect, origin));
       }
 
-      // The plain-sign-in (and any-other-entry) case for a brand-new Google
-      // user. The block above only assigns a role when `next` is one of the
-      // two signup pages' redirect targets, because there the door the user
-      // walked through IS their role choice. A user arriving via the plain
-      // /signin page instead has `next` = /dashboard (or some other gated
-      // path), so isSignupConfirmation is false and no role was assigned -
-      // yet they still have none. We must not guess one here: that would
-      // half-initialize them on the wrong side of the app. Ask instead, by
-      // sending them to the role picker. Existing users already carry a role,
-      // so `!role` leaves them completely untouched and they follow `next`.
-      if (data.user && !isSignupConfirmation) {
-        const role = (data.user.user_metadata?.role ??
-          data.user.app_metadata?.role) as string | undefined;
-        if (!role) {
-          // Same best-effort full_name backfill as the signup block above -
-          // ownership verification (onboarding/actions.ts) reads
-          // user_metadata.full_name and OAuth users arrive without it. No
-          // terms acceptance is recorded on this path: /welcome/role records
-          // it after the user actually picks a role.
-          const meta = data.user.user_metadata ?? {};
-          const needsFullName =
-            !meta.full_name && typeof meta.name === "string" && meta.name;
-          if (needsFullName) {
-            const admin = createAdminClient();
-            const { error: updateError } =
-              await admin.auth.admin.updateUserById(data.user.id, {
-                user_metadata: { ...meta, full_name: meta.name },
-              });
-            if (updateError) {
-              console.error(
-                "auth/callback: failed to backfill OAuth full_name",
-                { userId: data.user.id, updateError }
-              );
-            }
-          }
-          return NextResponse.redirect(
-            new URL(`/welcome/role?next=${encodeURIComponent(next)}`, origin)
-          );
-        }
-      }
       return NextResponse.redirect(new URL(next, origin));
     }
   }

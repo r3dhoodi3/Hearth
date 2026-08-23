@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProperties } from "@/lib/property";
-import { isContractor } from "@/lib/contractor";
+import { getCurrentContractor } from "@/lib/contractor";
 import { ownsPlus } from "@/lib/subscription";
 import { safeNextPath } from "@/lib/safeNext";
 import OnboardingForm from "./OnboardingForm";
@@ -15,26 +15,10 @@ import OnboardingForm from "./OnboardingForm";
 // original destination alive across that detour instead of dropping it.
 export default async function OnboardingPage(
   props: {
-    searchParams?: Promise<{ next?: string; ref?: string }>;
+    searchParams?: Promise<{ next?: string; ref?: string; add?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
-  // Contractors belong in /pro - don't let them create a homeowner property.
-  if (await isContractor()) redirect("/pro");
-
-  // Who is signed in, for the escape hatch below. Before this existed, an
-  // account with no claimed home was hard-stuck here: the (app) layout
-  // bounces every page back to /onboarding, this page had no sign-out, and
-  // an account with contractor role metadata but no contractors row (pro
-  // signup never finished) failed the isContractor() redirect above too.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const roleMeta = (user?.user_metadata?.role ?? user?.app_metadata?.role) as
-    | string
-    | undefined;
-
   const next = safeNextPath(
     typeof searchParams?.next === "string" ? searchParams.next : null
   );
@@ -53,9 +37,39 @@ export default async function OnboardingPage(
   // stamped when they first opened the invite link (migration 0097), and this
   // redirect just delivers them back to it. The ordinary onboarding flow (no
   // next, or any non-/join destination) is untouched.
+  //
+  // Checked before the pro bounce below so a pro who was invited into someone
+  // else's household still redeems the invite instead of being sent to /pro.
   if (next && next.startsWith("/join/")) {
     redirect(next);
   }
+
+  // A pro is welcome to own a home - plenty do - so a contractors row no
+  // longer bars this page. What it still does is catch the pro who WANDERED
+  // in: a company, no home at all, and no explicit "I'm adding a home" intent.
+  // For them this page is a wrong turn (it used to be the tail of a redirect
+  // loop), so send them back to their leads.
+  //
+  // ?add=home is that explicit intent, and it comes from the one link that
+  // offers it - "Add your home" in the pro profile menu (ProNav.tsx).
+  const [contractor, homes] = await Promise.all([
+    getCurrentContractor(),
+    getProperties(),
+  ]);
+  const hasPro = contractor !== null;
+  if (hasPro && homes.length === 0 && searchParams?.add !== "home") {
+    redirect("/pro");
+  }
+
+  // Who is signed in, for the escape hatch below. Before this existed, an
+  // account with no claimed home was hard-stuck here: the (app) layout
+  // bounces every page back to /onboarding, this page had no sign-out, and
+  // an account with contractor role metadata but no contractors row (pro
+  // signup never finished) failed the contractors-row redirect above too.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // ?ref=: the inviter's referral code (migration 0099), carried here from
   // /homeowner-signup. Handed to OnboardingForm as a hidden field so
@@ -68,7 +82,6 @@ export default async function OnboardingPage(
       : null;
 
   // First home vs. adding another - onboarding stays reachable either way.
-  const homes = await getProperties();
   const isFirst = homes.length === 0;
 
   // Free plan covers 1 owned home (shared homes don't count - same tally as
@@ -105,6 +118,14 @@ export default async function OnboardingPage(
           >
             Back to dashboard
           </Link>
+          {hasPro && (
+            <Link
+              href="/pro"
+              className="mt-2 text-center text-sm text-stone-500 hover:underline dark:text-stone-400"
+            >
+              Go to Hearth Pro
+            </Link>
+          )}
         </main>
       );
     }
@@ -144,7 +165,7 @@ export default async function OnboardingPage(
           users with no home land here from every app URL, so this is the
           only place they can change course. */}
       <div className="mt-8 text-center text-sm text-stone-500 dark:text-stone-400">
-        {roleMeta === "contractor" && (
+        {hasPro && (
           <p>
             Here for the pro side?{" "}
             <Link href="/pro" className="underline hover:text-stone-700 dark:hover:text-stone-200">
@@ -152,7 +173,7 @@ export default async function OnboardingPage(
             </Link>
           </p>
         )}
-        <div className={roleMeta === "contractor" ? "mt-2" : undefined}>
+        <div className={hasPro ? "mt-2" : undefined}>
           <span className="break-words">Signed in as {user?.email ?? "unknown"}. Wrong account? </span>
           <form action="/auth/signout" method="post" className="inline">
             <button

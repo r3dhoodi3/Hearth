@@ -11,6 +11,14 @@ import {
   countPaidLeadApplications,
 } from "@/lib/contractor";
 import { sendNotification } from "@/lib/notify";
+// ALWAYS awaited, everywhere in this file. setFlash writes its cookie through
+// Next's async cookies() store, and every call site here is followed by a
+// redirect() that throws immediately - so an un-awaited setFlash raced the
+// unwind and the message it was meant to carry landed on the next page only
+// sometimes. That is worse than no message: half the flashes in here are the
+// only explanation the pro gets for why they were bounced back to the form
+// ("Pick at least one city you serve", "Not enough balance to apply"), so a
+// coin-flip toast reads as the app losing their work for no reason.
 import { setFlash } from "@/lib/flash";
 import {
   labelFor,
@@ -31,10 +39,15 @@ import { isMissingSchemaError } from "@/lib/dbErrors";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
 import { validateYelpUrl, validateGoogleReviewsUrl } from "@/lib/reviewLinks";
 import {
+  isAcceptableCustomCategory,
+  CUSTOM_CATEGORY_REJECTED,
+} from "@/lib/customCategory";
+import {
   cappedField,
   cappedFieldOrNull,
   isAllowedValue,
 } from "@/lib/formFields";
+import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import { selectLaunchCities } from "./onboarding/launchCities";
 import type { Json } from "@/lib/database.types";
 
@@ -365,17 +378,30 @@ export async function saveCompanyAction(formData: FormData) {
   // was custom would flip from matching nothing to matching everything.
   // Canonical values go through the list; at most one leftover is kept as the
   // free-text service, trimmed and capped, which is all the form can produce.
+  //
+  // MODERATION: that one leftover is unreviewed free text rendered verbatim on
+  // the public /p/<slug> page and the browse cards, so it goes through
+  // isAcceptableCustomCategory (src/lib/customCategory.ts) before it is kept.
+  // A rejected value is DROPPED, not fatal: the canonical picks, the company
+  // name, the license, and every other field on this form still save, and the
+  // pro is told why the one box was ignored via the flash below. Failing the
+  // whole save over it would lose everything else they just typed.
   const rawCategories = formData
     .getAll("categories")
     .map((c) => String(c).trim())
     .filter(Boolean);
+  const customCandidates = rawCategories
+    .filter((c) => !isAllowedValue(JOB_CATEGORIES, c))
+    .slice(0, 1)
+    .map((c) => c.slice(0, MAX_CUSTOM_CATEGORY));
+  const acceptedCustom = customCandidates.filter((c) =>
+    isAcceptableCustomCategory(c)
+  );
+  const customRejected = customCandidates.length > acceptedCustom.length;
   const categories = Array.from(
     new Set([
       ...rawCategories.filter((c) => isAllowedValue(JOB_CATEGORIES, c)),
-      ...rawCategories
-        .filter((c) => !isAllowedValue(JOB_CATEGORIES, c))
-        .slice(0, 1)
-        .map((c) => c.slice(0, MAX_CUSTOM_CATEGORY)),
+      ...acceptedCustom,
     ])
   );
   // Trimmed and capped server-side. The form's maxLength is a client hint
@@ -471,7 +497,7 @@ export async function saveCompanyAction(formData: FormData) {
   // pick one - to whichever form they actually submitted, now that the profile
   // editor asks this question too.
   if (hasCityWrite && citySelection.cities.length === 0) {
-    setFlash("Pick at least one city you serve.", "error");
+    await setFlash("Pick at least one city you serve.", "error");
     redirect(existing ? "/pro/profile" : "/pro/onboarding");
   }
 
@@ -480,7 +506,7 @@ export async function saveCompanyAction(formData: FormData) {
   // would otherwise create (or rename to) a nameless listing on the job board
   // and the public /p/<id> page.
   if (!fields.name) {
-    setFlash("Enter your company name.", "error");
+    await setFlash("Enter your company name.", "error");
     redirect(existing ? "/pro/profile" : "/pro/onboarding");
   }
 
@@ -502,7 +528,7 @@ export async function saveCompanyAction(formData: FormData) {
   if (yelpEntry !== null) {
     const r = validateYelpUrl(String(yelpEntry));
     if (!r.ok) {
-      setFlash(r.error, "error");
+      await setFlash(r.error, "error");
       redirect(reviewLinkBack);
     }
     reviewLinkWrite.yelp_url = r.value;
@@ -510,11 +536,16 @@ export async function saveCompanyAction(formData: FormData) {
   if (googleEntry !== null) {
     const r = validateGoogleReviewsUrl(String(googleEntry));
     if (!r.ok) {
-      setFlash(r.error, "error");
+      await setFlash(r.error, "error");
       redirect(reviewLinkBack);
     }
     reviewLinkWrite.google_reviews_url = r.value;
   }
+  // Set by the retries below when the two columns had to be dropped to get the
+  // rest of the save through. The flash has to say so: the save DID succeed,
+  // but the links the pro just typed are not on the row, and a plain "Profile
+  // saved." would be a lie they only discover by reloading the form.
+  let reviewLinksDropped = false;
 
   if (existing) {
     // The license is a legal identifier: locked once VERIFIED (0037), not
@@ -549,6 +580,32 @@ export async function saveCompanyAction(formData: FormData) {
       .from("contractors")
       .update({ ...fields, ...stateWrite, ...ocWrite, ...cityWrite, ...reviewLinkWrite } as any)
       .eq("id", existing.id);
+
+    // The review links need the same thing launch_cities does: 0085 revoked the
+    // TABLE-level UPDATE and re-granted an allowlist, and 0113 added yelp_url /
+    // google_reviews_url without extending it (0128 is the fix). Until 0128 is
+    // applied live, the columns EXIST but carry no grant, so this is a bare
+    // 42501 that isMissingSchemaError cannot see - which is why the retry below
+    // used to let it through and hard-500 every single profile save, whether or
+    // not the pro typed a link (the form posts both boxes either way).
+    //
+    // Retried FIRST, ahead of the launch_cities retry, on purpose. Dropping the
+    // review links is the cheapest honest fallback available; running the city
+    // retry first would throw away the pro's city selection to work around a
+    // failure the city columns had nothing to do with, and then still fail.
+    let effectiveReviewLinkWrite = reviewLinkWrite;
+    if (error && hasReviewLinkWrite && error.code === "42501") {
+      console.error(
+        "contractors update: review-link UPDATE grant missing (run migration 0128); retrying without yelp_url/google_reviews_url:",
+        error.message
+      );
+      effectiveReviewLinkWrite = {};
+      reviewLinksDropped = true;
+      ({ error } = await supabase
+        .from("contractors")
+        .update({ ...fields, ...stateWrite, ...ocWrite, ...cityWrite } as any)
+        .eq("id", existing.id));
+    }
     // launch_cities needs both the column (0124) and its own column-level
     // UPDATE grant, since 0085 revoked the table-level privilege and re-granted
     // an allowlist - exactly the 42501 shape 0098 had to fix for
@@ -580,7 +637,7 @@ export async function saveCompanyAction(formData: FormData) {
           ...fields,
           ...stateWrite,
           ...(columnMissing ? ocWrite : {}),
-          ...reviewLinkWrite,
+          ...effectiveReviewLinkWrite,
         } as any)
         .eq("id", existing.id));
     }
@@ -592,6 +649,8 @@ export async function saveCompanyAction(formData: FormData) {
       (hasStateWrite || hasOcWrite || hasReviewLinkWrite) &&
       isMissingSchemaError(error)
     ) {
+      // This retry drops the review links too, so the pro has to be told.
+      if (hasReviewLinkWrite) reviewLinksDropped = true;
       ({ error } = await supabase
         .from("contractors")
         .update(fields)
@@ -661,7 +720,25 @@ export async function saveCompanyAction(formData: FormData) {
       }
     }
 
-    setFlash("Profile saved.");
+    // The rejected-custom-service notice takes the flash slot when there is
+    // one: the save DID succeed, but one box was quietly ignored, and the
+    // flash cookie holds a single message - a plain "Profile saved." here
+    // would leave the pro believing their custom service was stored.
+    // Same single-slot reasoning covers the dropped review links (0128 not
+    // applied yet). When both went wrong the rejected service name is the one
+    // the pro has to act on, so it leads, with the links noted after it.
+    if (customRejected) {
+      await setFlash(
+        reviewLinksDropped
+          ? `${CUSTOM_CATEGORY_REJECTED} Review links could not be stored yet.`
+          : CUSTOM_CATEGORY_REJECTED,
+        "error"
+      );
+    } else if (reviewLinksDropped) {
+      await setFlash("Saved. Review links could not be stored yet.", "warning");
+    } else {
+      await setFlash("Profile saved.");
+    }
     revalidatePath("/pro/profile");
     redirect("/pro/profile");
   }
@@ -779,6 +856,25 @@ export async function saveCompanyAction(formData: FormData) {
   let { error } = await supabase
     .from("contractors")
     .insert({ ...base, ...referral, ...stateWrite, ...ocWrite, ...cityWrite, ...reviewLinkWrite } as any);
+
+  // Same story as the update path above: 0085 re-granted INSERT by column list
+  // and 0113's yelp_url / google_reviews_url never joined it (0128 is the fix),
+  // so on a live DB without 0128 the columns exist with no grant - a bare 42501
+  // that isMissingSchemaError cannot recognize. Retried first, ahead of the
+  // launch_cities and serves_orange_county retries, so a fixable review-link
+  // failure never costs the pro the city answers they just gave.
+  let effectiveReviewLinkWrite = reviewLinkWrite;
+  if (error && hasReviewLinkWrite && error.code === "42501") {
+    console.error(
+      "contractors insert: review-link INSERT grant missing (run migration 0128); retrying without yelp_url/google_reviews_url:",
+      error.message
+    );
+    effectiveReviewLinkWrite = {};
+    reviewLinksDropped = true;
+    ({ error } = await supabase
+      .from("contractors")
+      .insert({ ...base, ...referral, ...stateWrite, ...ocWrite, ...cityWrite } as any));
+  }
   if (
     error &&
     hasCityWrite &&
@@ -805,7 +901,7 @@ export async function saveCompanyAction(formData: FormData) {
         ...referral,
         ...stateWrite,
         ...(columnMissing ? ocWrite : {}),
-        ...reviewLinkWrite,
+        ...effectiveReviewLinkWrite,
       } as any));
   }
   if (error && hasOcWrite && error.code === "42501") {
@@ -815,7 +911,7 @@ export async function saveCompanyAction(formData: FormData) {
     );
     ({ error } = await supabase
       .from("contractors")
-      .insert({ ...base, ...referral, ...stateWrite, ...reviewLinkWrite } as any));
+      .insert({ ...base, ...referral, ...stateWrite, ...effectiveReviewLinkWrite } as any));
   }
   if (error && (referredBy || hasStateWrite || hasOcWrite || hasReviewLinkWrite)) {
     // isMissingSchemaError, not a hand-rolled regex: PostgREST reports a
@@ -823,6 +919,8 @@ export async function saveCompanyAction(formData: FormData) {
     // pattern here missed, hard-500ing every new pro signup on a live DB
     // without 0046 instead of falling back to the base insert.
     if (isMissingSchemaError(error)) {
+      // The base insert carries no review links either, so say so below.
+      if (hasReviewLinkWrite) reviewLinksDropped = true;
       ({ error } = await supabase.from("contractors").insert(base));
     } else {
       console.error("contractors insert failed:", error.message);
@@ -884,7 +982,62 @@ export async function saveCompanyAction(formData: FormData) {
     }
   }
 
-  setFlash("You're all set. Leads will appear here.");
+  // The company row is what makes this account a pro, so this is the moment
+  // the pro terms are agreed to - whoever they are and whichever door they
+  // came through. Idempotent (it checks for an existing row first), so a pro
+  // who already has a pro_terms row from contractor-signup or /auth/callback
+  // gets a no-op, and the homeowner who just added a business gets the row
+  // that was missing before.
+  await recordTermsAcceptance(user.id, "pro_terms");
+
+  // Preferred landing side. Only stamped when the account has NO side stamped
+  // yet: a homeowner who adds a business keeps landing on their home until
+  // they switch sides themselves (the profile menu's switcher,
+  // setPreferredSideAction), because the row they just created already gets
+  // them into /pro without touching this. The refresh matters for the same
+  // reason it does in /auth/callback: the session cookie still carries the
+  // pre-stamp JWT, and that cookie is what getSides() reads.
+  const currentSide = (user.user_metadata?.role ?? user.app_metadata?.role) as
+    | string
+    | undefined;
+  if (currentSide !== "contractor" && currentSide !== "homeowner") {
+    const admin = createAdminClient();
+    const { error: stampError } = await admin.auth.admin.updateUserById(
+      user.id,
+      { user_metadata: { ...(user.user_metadata ?? {}), role: "contractor" } }
+    );
+    if (stampError) {
+      // Best-effort: the contractors row alone already opens /pro, so a failed
+      // stamp only costs them their default landing side.
+      console.error("saveCompanyAction: failed to stamp preferred side", {
+        userId: user.id,
+        stampError,
+      });
+    } else {
+      const { error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        console.error(
+          "saveCompanyAction: failed to refresh session after side stamp",
+          refreshError
+        );
+      }
+    }
+  }
+
+  // Same single-flash-slot reasoning as the edit path above: the account was
+  // created either way, but a dropped custom service has to be said out loud.
+  if (customRejected) {
+    await setFlash(
+      reviewLinksDropped
+        ? `${CUSTOM_CATEGORY_REJECTED} Review links could not be stored yet.`
+        : CUSTOM_CATEGORY_REJECTED,
+      "error"
+    );
+  } else if (reviewLinksDropped) {
+    await setFlash("Saved. Review links could not be stored yet.", "warning");
+  } else {
+    await setFlash("You're all set. Leads will appear here.");
+  }
   revalidatePath("/", "layout");
   redirect("/pro");
 }
@@ -920,7 +1073,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
   const licenseNumber =
     licenseVerified || licenseEntry === null ? stored : typed;
   if (!licenseNumber) {
-    setFlash("Add a license number first.", "error");
+    await setFlash("Add a license number first.", "error");
     revalidatePath("/pro/profile");
     return;
   }
@@ -934,7 +1087,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
   const serviceState =
     (((contractor as any).service_state as string | null) ?? null) || null;
   if (serviceState !== null && serviceState !== "CA") {
-    setFlash(
+    await setFlash(
       "Automatic license checks currently cover California (CSLB) licenses only. Yours stays on file; set State You Serve to California to run a CSLB check.",
       "info"
     );
@@ -954,7 +1107,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
       .eq("id", contractor.id);
     if (error) {
       console.error("verifyLicenseNowAction: license save failed:", error.message);
-      setFlash("Couldn't save the corrected license number. Try again.", "error");
+      await setFlash("Couldn't save the corrected license number. Try again.", "error");
       revalidatePath("/pro/profile");
       return;
     }
@@ -976,7 +1129,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
         "verifyLicenseNowAction: license reset failed:",
         resetError.message
       );
-      setFlash("Couldn't save the corrected license number. Try again.", "error");
+      await setFlash("Couldn't save the corrected license number. Try again.", "error");
       revalidatePath("/pro/profile");
       return;
     }
@@ -996,23 +1149,23 @@ export async function verifyLicenseNowAction(formData: FormData) {
   );
 
   if (!result) {
-    setFlash("Already checked recently. Try again in a few minutes.", "info");
+    await setFlash("Already checked recently. Try again in a few minutes.", "info");
   } else if (result.failureReason === "name_mismatch") {
     // Deliberately does NOT echo the CSLB-registered name back: whoever is
     // sitting at this form may not be the person that name belongs to.
-    setFlash(
+    await setFlash(
       "The CSLB lists this license under a different name than your account. If this is your license, file a dispute below and we will review it.",
       "error"
     );
   } else if (result.failureReason === "duplicate_license") {
-    setFlash(
+    await setFlash(
       "This license number is already verified on another Hearth account. If someone else used your license, file a dispute below and we will investigate.",
       "error"
     );
   } else if (result.decision === "verified") {
-    setFlash("License verified against the CSLB database.", "success");
+    await setFlash("License verified against the CSLB database.", "success");
   } else if (result.decision === "failed") {
-    setFlash(
+    await setFlash(
       result.statusText
         ? `CSLB says: ${result.statusText}`
         : "CSLB could not confirm this license.",
@@ -1022,12 +1175,12 @@ export async function verifyLicenseNowAction(formData: FormData) {
     // Active, but CSLB returned no registered name to check the account
     // against, so nothing was decided either way. Not a failure - honest
     // "unknown" copy, and their status is untouched.
-    setFlash(
+    await setFlash(
       "CSLB didn't return a name we could check this license against. Nothing changed; try again later.",
       "info"
     );
   } else {
-    setFlash("Couldn't reach the CSLB site. Try again later.", "info");
+    await setFlash("Couldn't reach the CSLB site. Try again later.", "info");
   }
   revalidatePath("/pro/profile");
 }
@@ -1051,7 +1204,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
     ((contractor as any).background_check_status as string | undefined) ??
     "none";
   if (status !== "none" && status !== "consider") {
-    setFlash(
+    await setFlash(
       status === "clear"
         ? "Your background check has already cleared."
         : "Your background check is already in progress. Check your email for Checkr's invitation.",
@@ -1063,7 +1216,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
 
   const email = contractor.contact_email;
   if (!email) {
-    setFlash("Add an email address to your profile first.", "error");
+    await setFlash("Add an email address to your profile first.", "error");
     revalidatePath("/pro/profile");
     return;
   }
@@ -1079,7 +1232,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
   // sees a try-again message and nothing is charged.
   const paidLeads = await countPaidLeadApplications(contractor.id);
   if (paidLeads === null) {
-    setFlash(
+    await setFlash(
       "Couldn't check your lead history just now. Try again in a moment.",
       "error"
     );
@@ -1087,7 +1240,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
     return;
   }
   if (paidLeads < BACKGROUND_CHECK_MIN_PAID_LEADS) {
-    setFlash(
+    await setFlash(
       `Hearth covers your background check after ${BACKGROUND_CHECK_MIN_PAID_LEADS} paid leads - you're at ${paidLeads} of ${BACKGROUND_CHECK_MIN_PAID_LEADS}.`,
       "info"
     );
@@ -1106,7 +1259,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
     .trim()
     .slice(0, 80);
   if (!firstName || !lastName) {
-    setFlash("Enter your legal first and last name to start.", "error");
+    await setFlash("Enter your legal first and last name to start.", "error");
     revalidatePath("/pro/profile");
     return;
   }
@@ -1140,7 +1293,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
         claimError.message
       );
     }
-    setFlash(
+    await setFlash(
       "Your background check is already in progress. Check your email for Checkr's invitation.",
       "info"
     );
@@ -1171,7 +1324,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
         revertError.message
       );
     }
-    setFlash(
+    await setFlash(
       "Couldn't start your background check. Try again in a few minutes.",
       "error"
     );
@@ -1190,7 +1343,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
     .eq("id", contractor.id);
   if (error) {
     console.error("startBackgroundCheckAction: save failed:", error.message);
-    setFlash(
+    await setFlash(
       "Your check started, but we couldn't save it here. Contact support.",
       "error"
     );
@@ -1198,7 +1351,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
     return;
   }
 
-  setFlash(
+  await setFlash(
     "Background check started. Check your email for Checkr's invitation.",
     "success"
   );
@@ -1210,7 +1363,7 @@ export async function updateLeadStatusAction(formData: FormData) {
   const status = formData.get("status") as string;
   // Only accept a known status value; never write arbitrary client input.
   if (!LEAD_STATUSES.some((s) => s.value === status)) {
-    setFlash("Unknown status.", "error");
+    await setFlash("Unknown status.", "error");
     return;
   }
   const contractor = await assertContractor();
@@ -1230,7 +1383,7 @@ export async function updateLeadStatusAction(formData: FormData) {
     .eq("id", leadId);
   if (error) throw new Error(error.message);
   const baseFlash = `Lead marked ${labelFor(LEAD_STATUSES, status)}`;
-  setFlash(baseFlash);
+  await setFlash(baseFlash);
 
   // Hearth Pro perk: when a member marks a job Won, ask the homeowner for a
   // review automatically. Only on the closed transition (never for lost /
@@ -1250,7 +1403,7 @@ export async function updateLeadStatusAction(formData: FormData) {
         // to name it: a non-member just closed a job and, unlike a member, no
         // review ask left the building. Reviews are what win the NEXT job, so
         // this is a real loss, stated where it really happens.
-        setFlash(
+        await setFlash(
           `${baseFlash}. Job won - but no review request went out. Pro members get a review asked for automatically the moment they mark a job Won.`
         );
       }
@@ -1344,7 +1497,7 @@ export async function applyToJobAction(formData: FormData) {
   // already loaded the full row via the admin client, so this is a read of
   // data already in hand, not a second query.
   if (!(contractor as any).serves_orange_county) {
-    setFlash(
+    await setFlash(
       "Pick the cities you serve in your profile before applying to jobs.",
       "error"
     );
@@ -1360,7 +1513,7 @@ export async function applyToJobAction(formData: FormData) {
   const conflicts = await findActiveJobConflicts(contractor.id, [leadId]);
   const conflict = conflicts.get(leadId);
   if (conflict) {
-    setFlash(
+    await setFlash(
       `You already have an active ${labelFor(JOB_CATEGORIES, conflict.category)} job with this homeowner. Message them there instead; once that job wraps up, you can apply to their new ones again.`,
       "error"
     );
@@ -1392,7 +1545,7 @@ export async function applyToJobAction(formData: FormData) {
     );
   }
   if (!leadClosedError && (leadClosedCheck as any)?.owner_closed_at) {
-    setFlash(
+    await setFlash(
       "The homeowner closed this job before you applied, so you were not charged.",
       "error"
     );
@@ -1419,7 +1572,7 @@ export async function applyToJobAction(formData: FormData) {
       .eq("contractor_id", contractor.id)
       .maybeSingle();
     if (!existingAppError && existingApp) {
-      setFlash("You already applied to this job.");
+      await setFlash("You already applied to this job.");
       revalidatePath("/pro");
       return;
     }
@@ -1439,7 +1592,7 @@ export async function applyToJobAction(formData: FormData) {
     leadClosedError ? null : ((leadClosedCheck as any) ?? null)
   );
   if (staleError) {
-    setFlash(staleError, "error");
+    await setFlash(staleError, "error");
     revalidatePath("/pro");
     return;
   }
@@ -1456,21 +1609,21 @@ export async function applyToJobAction(formData: FormData) {
     // on, so it's logged server-side and shown as a plain generic: raw
     // Postgres text names our tables, columns and constraints.
     if (error.message.includes("Job is full")) {
-      setFlash(
+      await setFlash(
         "This job is full: 3 pros already applied. Try another job.",
         "error"
       );
     } else if (error.message.includes("Already working with this homeowner")) {
-      setFlash(
+      await setFlash(
         "You already have an active job with this homeowner in this category. Message them there instead.",
         "error"
       );
     } else {
       console.error("applyToJobAction: apply_to_lead failed:", error);
-      setFlash("Couldn't apply just now. Please try again.", "error");
+      await setFlash("Couldn't apply just now. Please try again.", "error");
     }
   } else if (data === false)
-    setFlash("Not enough balance. Add funds to apply.", "error");
+    await setFlash("Not enough balance. Add funds to apply.", "error");
   else {
     // A successful apply is the moment a non-member has just spent real money
     // on a lead, so it is the honest moment to name what a membership would
@@ -1481,7 +1634,7 @@ export async function applyToJobAction(formData: FormData) {
     // is the same constant the webhook passes to apply_deposit, so this can
     // never quote a match the wallet does not actually pay.
     const proMember = await hasProPlan();
-    setFlash(
+    await setFlash(
       proMember
         ? "Applied. The homeowner will review your application."
         : `Applied. The homeowner will review your application. Pro members earn +${PRO_DEPOSIT_BOOST_PTS}% on every deposit, so the same money buys more leads.`,
@@ -1598,7 +1751,7 @@ export async function unlockDirectRequestAction(formData: FormData) {
       leadRow
     );
     if (staleError) {
-      setFlash(staleError, "error");
+      await setFlash(staleError, "error");
       revalidatePath("/pro");
       return;
     }
@@ -1611,12 +1764,12 @@ export async function unlockDirectRequestAction(formData: FormData) {
     // Raw Postgres text names our tables, columns and constraints, so it's
     // logged server-side and the pro sees a plain generic instead.
     console.error("unlockDirectRequestAction: unlock_direct_request failed:", error);
-    setFlash("Couldn't unlock this request just now. Please try again.", "error");
+    await setFlash("Couldn't unlock this request just now. Please try again.", "error");
     revalidatePath("/pro");
     return;
   }
   if (data === false) {
-    setFlash("Not enough balance. Add funds to unlock.", "error");
+    await setFlash("Not enough balance. Add funds to unlock.", "error");
     revalidatePath("/pro");
     revalidatePath("/pro/billing");
     return;
@@ -1720,7 +1873,7 @@ export async function declineDirectRequestAction(formData: FormData) {
     // Same reasoning as unlockDirectRequestAction above: log the raw error,
     // show copy that doesn't leak the schema.
     console.error("declineDirectRequestAction: decline_direct_request failed:", error);
-    setFlash("Couldn't pass on this request just now. Please try again.", "error");
+    await setFlash("Couldn't pass on this request just now. Please try again.", "error");
     revalidatePath("/pro");
     return;
   }
@@ -1751,7 +1904,7 @@ export async function declineDirectRequestAction(formData: FormData) {
     }
   }
 
-  setFlash("You passed on this request.");
+  await setFlash("You passed on this request.");
   revalidatePath("/pro");
 }
 

@@ -12,8 +12,16 @@ import Lightbox from "@/components/Lightbox";
 import InlineSpinner from "@/components/InlineSpinner";
 import { track } from "@/lib/analytics";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
+import {
+  ASK_PLUS_LINK,
+  freeLockText,
+  isFreeLocked,
+  meterLabel,
+  shouldShowMeter,
+  type AskLink,
+} from "@/lib/askLimits";
 
-type Msg = {
+export type Msg = {
   role: "user" | "assistant";
   content: string;
   // Optional attached photo (downscaled JPEG, base64 without the data: prefix).
@@ -119,7 +127,9 @@ function extractBlock(
   return { content: cleaned, data };
 }
 
-function parseAssistant(content: string): {
+// Exported for its unit test (src/components/askParse.test.tsx). Nothing else
+// imports it: the component is its only real caller.
+export function parseAssistant(content: string): {
   text: string;
   job: Job | null;
   issue: any;
@@ -154,6 +164,12 @@ function parseAssistant(content: string): {
   text = text
     .replace(/\[\[[A-Za-z/]+\]\][\s\S]*?\[\[\/?[^\]]*\]\]/g, "")
     .replace(/\[\[\/?[^\]]*\]\]/g, "")
+    // And an UNTERMINATED opener at the very end: "[[OPTI", or "[[OPTIONS"
+    // with the closing brackets never generated. Both rules above need a "]]"
+    // to match, so a reply cut off mid-tag (max_tokens, a dropped stream) left
+    // the raw fragment sitting in the bubble. The lookahead makes this fire
+    // only when no "]]" follows, so a well-formed block is never touched.
+    .replace(/\[\[(?:(?!\]\])[\s\S])*$/, "")
     .trim();
   return { text, job, issue, reminder, options };
 }
@@ -295,6 +311,54 @@ function MessageActions({
   );
 }
 
+// What the waiting pill says, in order, a step every WAIT_STEP_MS. A single
+// frozen "Thinking…" for fifteen seconds reads as a page that has stopped
+// working; naming the actual stages makes the same wait feel attended to. It
+// is not a progress bar and never pretends to be one: these are the three
+// things the request really does, not a percentage anyone can act on.
+const WAIT_STEPS = [
+  "Thinking…",
+  "Checking your home details…",
+  "Writing…",
+] as const;
+const WAIT_STEP_MS = 3000;
+// After this long, say out loud that a long wait is normal, so nobody sits
+// wondering whether it has hung.
+const WAIT_SLOW_MS = 8000;
+
+function WaitingPill() {
+  const [step, setStep] = useState(0);
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const cycle = setInterval(
+      () => setStep((s) => (s + 1) % WAIT_STEPS.length),
+      WAIT_STEP_MS
+    );
+    const slowTimer = setTimeout(() => setSlow(true), WAIT_SLOW_MS);
+    return () => {
+      clearInterval(cycle);
+      clearTimeout(slowTimer);
+    };
+  }, []);
+  return (
+    <div className="flex flex-col items-start gap-1">
+      {/* aria-live so a screen reader hears the wait start, but "polite" and
+          on the wrapper so the three-second relabel doesn't interrupt. */}
+      <span
+        aria-live="polite"
+        className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400"
+      >
+        {WAIT_STEPS[step]}
+      </span>
+      {slow && (
+        <span className="px-1 text-xs text-stone-500 dark:text-stone-400">
+          This can take up to a minute.
+        </span>
+      )}
+    </div>
+  );
+}
+
 // One shared conversation kept in localStorage: it survives reloads, and
 // messages age out per the retention setting below (default: 24 hours), pruned
 // by each message's own timestamp on load. Keys are namespaced per user id
@@ -305,6 +369,14 @@ function MessageActions({
 const DEFAULT_STORAGE_KEY = "hearth_ask_chat";
 const DEFAULT_RETENTION_KEY = "hearth_ask_retention";
 const SYNC_EVENT = "hearth:ask-updated";
+// Remembered answer to "is this viewer on the free tier?", written from the
+// server's own verdict on every reply (see the meter fields below). It exists
+// for ONE line of copy: the free-allowance hint under an empty composer, which
+// has to be decided BEFORE the first question, when no reply has arrived and
+// the client knows nothing about the plan. Never a gate on anything: the
+// server is the only authority on the allowance, and this is only ever
+// allowed to HIDE a hint, never to grant or refuse a question.
+const DEFAULT_PLAN_KEY = "hearth_ask_plan";
 
 type Retention = "24h" | "2w" | "1m" | "never";
 const RETENTION_MS: Record<Retention, number> = {
@@ -315,6 +387,27 @@ const RETENTION_MS: Record<Retention, number> = {
 };
 // Even on "never", cap the history so localStorage can't bloat.
 const MAX_MESSAGES = 200;
+// How many of those messages actually go to the server. The routes already
+// slice to the same number before building the request, so anything past this
+// is bytes uploaded (with any attached photos, on a phone connection) purely
+// to be thrown away on arrival. Kept identical to MAX_HISTORY_MESSAGES in
+// src/app/api/ask/route.ts and src/app/api/pro-ask/route.ts.
+const MAX_SENT_MESSAGES = 40;
+
+// The conversation as it is ON DISK right now, pruned to the given window.
+// Read straight from localStorage rather than from React state, because the
+// two disagree for one commit every time the storage key changes (the effect
+// that reads the new key has run, its setMessages has not landed yet) - and
+// that is exactly the commit the one-shot initialQuestion fires in.
+function readStoredMessages(key: string, retention: Retention): Msg[] {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? prune(parsed, retention) : [];
+  } catch {
+    return [];
+  }
+}
 
 function loadRetention(key: string): Retention {
   try {
@@ -337,6 +430,47 @@ function prune(msgs: Msg[], retention: Retention): Msg[] {
       : msgs.filter((m) => !m.ts || m.ts >= cutoff);
   return kept.slice(-MAX_MESSAGES);
 }
+// ---------------------------------------------------------------------------
+// Pure conversation helpers. Exported for their unit test
+// (src/components/askState.test.tsx); the component is their only real caller.
+// ---------------------------------------------------------------------------
+
+/** The newest thing the owner said, or null if they haven't said anything. */
+export function lastUserMessage(msgs: Msg[]): Msg | null {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === "user") return msgs[i];
+  }
+  return null;
+}
+
+/**
+ * Is `question` already the newest thing this conversation asked?
+ *
+ * This is the guard on the one-shot `initialQuestion` (the /ask page's `?q=`,
+ * a question forwarded from elsewhere in the app). Without it, a reload or a
+ * Back with the query still on the URL re-asks a question that is already
+ * answered on screen: a second identical bubble, a second paid call, and one
+ * of three daily free questions spent on nothing.
+ */
+export function alreadyAsked(msgs: Msg[], question: string): boolean {
+  const q = question.trim();
+  if (!q) return false;
+  return lastUserMessage(msgs)?.content.trim() === q;
+}
+
+/**
+ * True when the conversation ends on a question that never got an answer.
+ *
+ * That is what a reload mid-request leaves behind: the user turn was written
+ * to localStorage the moment it was sent, the reply was still in flight, and
+ * nothing on the next page load knows the request is gone. Left alone it sits
+ * there forever with no answer, no error, and no way to try again.
+ */
+export function isUnanswered(msgs: Msg[]): boolean {
+  const last = msgs[msgs.length - 1];
+  return !!last && last.role === "user";
+}
+
 const DEFAULT_GREETING =
   "Hi, I'm Hearth. If you have any questions about your home, feel free to ask.";
 const DEFAULT_HEADING_TITLE = "Ask Hearth";
@@ -363,6 +497,7 @@ export default function AskHearth({
   suggestions,
   greeting,
   initialQuestion,
+  replaceUrlAfterInitial,
   endpoint = "/api/ask",
   storageKeyBase = DEFAULT_STORAGE_KEY,
   retentionKeyBase = DEFAULT_RETENTION_KEY,
@@ -374,6 +509,14 @@ export default function AskHearth({
   suggestions?: string[];
   greeting?: string;
   initialQuestion?: string;
+  // Where to rewrite the address bar to once `initialQuestion` has been dealt
+  // with. The /ask page passes "/ask" so its ?q= is dropped from history: with
+  // the query still on the URL, a reload or a Back into the page mounts a
+  // fresh chat that reads the same q and asks it AGAIN, spending another of
+  // three daily questions on a question already answered on screen. A plain
+  // string rather than a callback because the page handing it over is a
+  // server component.
+  replaceUrlAfterInitial?: string;
   // Which API to talk to and where to keep the conversation. Defaults keep the
   // homeowner "Ask Hearth" behavior identical; the pro copilot overrides them.
   endpoint?: string;
@@ -409,9 +552,38 @@ export default function AskHearth({
   // read of right now, and a stale number from yesterday would be a lie.
   const [freeLeft, setFreeLeft] = useState<number | null>(null);
   const [freeLimit, setFreeLimit] = useState<number | null>(null);
+  // The upsell destination the server last handed us (the daily-limit reply,
+  // or a photo lock). Kept so the locked bar and the photo hint can point
+  // somewhere real even on the turn that spends the last question, which is a
+  // normal answer with no link attached.
+  const [lockLink, setLockLink] = useState<AskLink | null>(null);
+  // True when the reply sitting at the bottom of the conversation IS the
+  // over-limit message. The bar then drops its own line and shows just the
+  // button, rather than repeating the sentence the bubble above already says.
+  const [lockEcho, setLockEcho] = useState(false);
+  // A free account tried to send a photo. The camera stays enabled (only the
+  // server knows the plan), so this one-line hint is how they learn why the
+  // photo bounced. Lives in component state, so it clears when the panel is
+  // closed and the chat unmounts.
+  const [photoLocked, setPhotoLocked] = useState(false);
+  // Free homeowners only, and only for the hint under an empty composer: what
+  // the server said about this viewer's plan the LAST time it answered them.
+  // "unknown" until a reply has ever arrived on this device.
+  const [knownPlan, setKnownPlan] = useState<"unknown" | "free" | "plus">(
+    "unknown"
+  );
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const submitRef = useRef<(t: string) => void>(() => {});
+  // Synchronous "a question is already in flight" latch. See submit().
+  const sendingRef = useRef(false);
+  // The conversation as of RIGHT NOW, readable from a callback without going
+  // through a render. submit() builds its optimistic append off this rather
+  // than off the `messages` closure it was created with: a storage re-read can
+  // land between the render that created the handler and the tap that runs it,
+  // and appending to a stale list either loses the turn or repeats one.
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   // Which account's chat this is. Until the id loads (or if it can't), fall
   // back to the legacy shared keys so nothing breaks.
@@ -419,6 +591,7 @@ export default function AskHearth({
   const [userReady, setUserReady] = useState(false);
   const storageKey = userId ? `${STORAGE_KEY}:${userId}` : STORAGE_KEY;
   const retentionKey = userId ? `${RETENTION_KEY}:${userId}` : RETENTION_KEY;
+  const planKey = userId ? `${DEFAULT_PLAN_KEY}:${userId}` : DEFAULT_PLAN_KEY;
 
   // Resolve the signed-in user once, and migrate any legacy shared-key chat to
   // the per-user key (then remove the legacy key so the next account on this
@@ -470,6 +643,14 @@ export default function AskHearth({
     function read() {
       const r = loadRetention(retentionKey);
       setRetention(r);
+      // A QUESTION IN FLIGHT OWNS THE CONVERSATION. This effect re-runs the
+      // moment the per-user storage key resolves, which on a fast tap is
+      // AFTER the owner has already sent something: re-reading then replaced
+      // the live list with whatever was on disk under the other key and the
+      // question they just asked vanished off the screen mid-wait. The
+      // in-flight submit persists the authoritative list when it finishes, so
+      // standing down here costs nothing.
+      if (sendingRef.current) return;
       try {
         const raw = localStorage.getItem(storageKey);
         const parsed = raw ? JSON.parse(raw) : null;
@@ -477,7 +658,17 @@ export default function AskHearth({
         if (Array.isArray(parsed) && pruned.length !== parsed.length) {
           localStorage.setItem(storageKey, JSON.stringify(pruned));
         }
-        setMessages(pruned.length ? pruned : [GREETING]);
+        const next = pruned.length ? pruned : [GREETING];
+        // Keep the ref in step immediately: submit() reads it, and a tap can
+        // land before this setMessages has rendered.
+        messagesRef.current = next;
+        setMessages(next);
+      } catch {
+        /* ignore */
+      }
+      try {
+        const p = localStorage.getItem(planKey);
+        setKnownPlan(p === "free" || p === "plus" ? p : "unknown");
       } catch {
         /* ignore */
       }
@@ -493,7 +684,34 @@ export default function AskHearth({
     window.addEventListener(SYNC_EVENT, onSync);
     return () => window.removeEventListener(SYNC_EVENT, onSync);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey, retentionKey]);
+  }, [storageKey, retentionKey, planKey]);
+
+  // Set the conversation everywhere it is read from: React state for the
+  // render, and the ref the send handler builds its optimistic append off.
+  // Always use this, never a bare setMessages, or the two drift for a commit
+  // and a tap landing in that window appends to the wrong list.
+  function applyMessages(msgs: Msg[]) {
+    messagesRef.current = msgs;
+    setMessages(msgs);
+  }
+
+  // Remember the server's verdict on this viewer's plan. Only ever read to
+  // decide whether to show the free-allowance hint under an empty composer.
+  //
+  // HOMEOWNER CHAT ONLY. The pro copilot's endpoint never sends an allowance,
+  // which on this side of the fence means "member" - and the pro and the
+  // homeowner are frequently the same browser. Writing the pro copilot's
+  // silence into the shared key would mark a free homeowner as a member and
+  // quietly delete a line of copy they should have seen.
+  function rememberPlan(plan: "free" | "plus") {
+    if (endpoint !== "/api/ask") return;
+    setKnownPlan(plan);
+    try {
+      localStorage.setItem(planKey, plan);
+    } catch {
+      /* ignore */
+    }
+  }
 
   // Save the conversation and notify other open instances on this page. Only on
   // real user turns, so loading a saved chat can't overwrite it.
@@ -509,7 +727,7 @@ export default function AskHearth({
   }
 
   function clearChat() {
-    setMessages([GREETING]);
+    applyMessages([GREETING]);
     try {
       localStorage.removeItem(storageKey);
     } catch {
@@ -527,7 +745,7 @@ export default function AskHearth({
     try {
       localStorage.setItem(retentionKey, r);
       const pruned = prune(messages, r);
-      setMessages(pruned.length ? pruned : [GREETING]);
+      applyMessages(pruned.length ? pruned : [GREETING]);
       localStorage.setItem(storageKey, JSON.stringify(pruned));
     } catch {
       /* ignore */
@@ -548,18 +766,38 @@ export default function AskHearth({
     submit(input.trim());
   }
 
-  async function submit(text: string) {
-    if ((!text && !pendingImage) || loading) return;
+  // `imageOverride` is only for the retry button below, which re-sends a
+  // question whose photo is already in the conversation rather than in the
+  // composer. Everything else leaves it off and the pending attachment is used.
+  async function submit(
+    text: string,
+    imageOverride?: { mime: string; data: string } | null
+  ) {
+    // Hold on to what was sent (and to the conversation as it stood before
+    // this turn) so a request the server refuses outright can put the question
+    // and its photo straight back in the composer instead of eating them.
+    const sentImage = imageOverride ?? pendingImage;
+    if ((!text && !sentImage) || loading || sendingRef.current) return;
+    // Claim the turn synchronously. `loading` is state, so two events landing
+    // in the same tick (Enter and the Send button, a double tap, an option
+    // button tapped twice) both read it as false and fire two requests: the
+    // reported "message sent twice, no reply". A ref flips immediately.
+    sendingRef.current = true;
+    // THE REF, not the `messages` closure this handler was built with. Those
+    // two are the same 99% of the time and differ in exactly the case that
+    // hurts: a storage re-read (the per-user key resolving, another instance
+    // on this page saving) landing between render and tap. Appending to the
+    // stale copy replays turns that are already in the conversation, which is
+    // how one question ends up on screen as two identical bubbles.
+    const before = messagesRef.current;
     const userMsg: Msg = {
       role: "user",
-      content: text || (pendingImage ? "Here's a photo - what is this?" : ""),
+      content: text || (sentImage ? "Here's a photo - what is this?" : ""),
       ts: Date.now(),
-      ...(pendingImage
-        ? { image: pendingImage.data, mime: pendingImage.mime }
-        : {}),
+      ...(sentImage ? { image: sentImage.data, mime: sentImage.mime } : {}),
     };
-    const next = [...messages, userMsg];
-    setMessages(next);
+    const next = [...before, userMsg];
+    applyMessages(next);
     persist(next);
     setInput("");
     setPendingImage(null);
@@ -568,49 +806,102 @@ export default function AskHearth({
       const res = await fetchWithTimeout(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        // Drop the leading canned greeting before sending history to the model.
+        // Drop the leading canned greeting before sending history to the
+        // model, then send only the tail the server is going to keep anyway.
+        // A month-old conversation on "never" retention is up to 200 messages,
+        // and uploading the 160 the route immediately slices off is pure cost
+        // on a phone connection - worse when some of them carry photos.
         body: JSON.stringify({
-          messages: next.filter((m, i) => !(i === 0 && m.role === "assistant")),
+          messages: next
+            .filter((m, i) => !(i === 0 && m.role === "assistant"))
+            .slice(-MAX_SENT_MESSAGES),
         }),
       });
-      const data = await res.json();
+      // Burst (429) and busy (503) replies carry their own plain-English
+      // answer, so parse the body whatever the status is and only fall back to
+      // a generic line if there is no JSON at all.
+      const data = await res.json().catch(() => null);
+      const answer: string =
+        typeof data?.answer === "string"
+          ? data.answer
+          : typeof data?.error === "string"
+            ? data.error
+            : "Something went wrong.";
+      const link: AskLink | null =
+        data?.link?.href && data?.link?.label
+          ? { href: String(data.link.href), label: String(data.link.label) }
+          : null;
+      if (link) setLockLink(link);
+      const reply: Msg = {
+        role: "assistant",
+        content: answer,
+        ts: Date.now(),
+        ...(link ? { link } : {}),
+      };
+
+      // Photo lock: a free account attached a photo. Nothing was asked and
+      // nothing was counted, so drop the user turn back into the composer,
+      // photo and all, and leave the meter exactly where it was.
+      if (data?.locked) {
+        const updated: Msg[] = [...before, reply];
+        applyMessages(updated);
+        persist(updated);
+        setInput(text);
+        setPendingImage(sentImage);
+        setPhotoLocked(true);
+        return;
+      }
+
       // Quiet daily-allowance meter for free users. The server only sends
-      // these fields when the viewer is on the free tier, so a member never
-      // sees a count at all.
-      setFreeLeft(
-        typeof data.freeRemaining === "number" ? data.freeRemaining : null
-      );
-      setFreeLimit(typeof data.freeLimit === "number" ? data.freeLimit : null);
-      const updated: Msg[] = [
-        ...next,
-        {
-          role: "assistant",
-          content: data.answer ?? data.error ?? "Something went wrong.",
-          ts: Date.now(),
-          ...(data.link?.href && data.link?.label
-            ? { link: { href: String(data.link.href), label: String(data.link.label) } }
-            : {}),
-        },
-      ];
-      setMessages(updated);
+      // these fields when the viewer is on the free tier, so a member (and the
+      // pro copilot, whose endpoint never sends them) sees no count at all. A
+      // refused request carries no allowance either, so leave the last known
+      // numbers alone rather than blanking the meter on a 429.
+      if (typeof data?.freeLimit === "number") {
+        setFreeLimit(data.freeLimit);
+        setFreeLeft(
+          typeof data.freeRemaining === "number" ? data.freeRemaining : null
+        );
+        // An over-limit reply (the only answer that arrives with a link) has
+        // just said this in a bubble, so the bar below stays quiet.
+        setLockEcho(data.freeRemaining === 0 && !!link);
+        rememberPlan("free");
+      } else if (res.ok) {
+        setFreeLeft(null);
+        setFreeLimit(null);
+        // No allowance on a successful answer means a member (or the pro
+        // copilot, whose endpoint never sends one). Remembered so the free
+        // hint under the composer never greets a paying member with a pitch
+        // for something they already bought.
+        rememberPlan("plus");
+      }
+
+      // A rejected request (429/503) never reached the model, so hand the
+      // typed question back rather than making them retype it.
+      if (!res.ok) setInput(text);
+
+      const updated: Msg[] = [...next, reply];
+      applyMessages(updated);
       persist(updated);
     } catch (e) {
-      // Timeout gets its own honest message; the chat itself is the retry
-      // affordance, since the form is re-enabled below and the owner can just
-      // ask again.
+      // Timeout gets its own honest message; either way the question goes back
+      // in the composer, so retrying is one tap on Send rather than typing it
+      // all again.
       const updated: Msg[] = [
         ...next,
         {
           role: "assistant",
           content: isTimeoutError(e)
             ? "That took too long. Try again."
-            : "Something went wrong. Please try again.",
+            : "Something went wrong, try again.",
           ts: Date.now(),
         },
       ];
-      setMessages(updated);
+      applyMessages(updated);
       persist(updated);
+      setInput(text);
     } finally {
+      sendingRef.current = false;
       setLoading(false);
     }
   }
@@ -638,12 +929,72 @@ export default function AskHearth({
   // submit can't clobber the stored history, and guard with a ref so it fires
   // exactly once.
   const initialSentRef = useRef(false);
+  const router = useRouter();
   useEffect(() => {
     if (!initialQuestion || !userReady || initialSentRef.current) return;
     initialSentRef.current = true;
-    const t = setTimeout(() => submitRef.current(initialQuestion), 0);
-    return () => clearTimeout(t);
-  }, [initialQuestion, userReady]);
+    // ALREADY ASKED? If the newest thing in the stored conversation is this
+    // exact question, this mount is a reload or a Back with ?q= still on the
+    // URL rather than a new request. Answering it a second time costs another
+    // paid call and a free question, and posts a duplicate of the bubble
+    // already on screen.
+    //
+    // Read from DISK, not from React state. `userReady` flips in the same
+    // commit that changes the storage key, so the effect that re-reads the
+    // conversation under the new key has run but its setMessages has not
+    // landed: state (and the ref that tracks it) still holds the previous
+    // key's list, which is usually empty. Checking that copy answers "no, go
+    // ahead and ask" for a question sitting right there in the saved history,
+    // which is precisely the duplicate this guard exists to stop.
+    const stored = readStoredMessages(
+      storageKey,
+      loadRetention(retentionKey)
+    );
+    const already =
+      alreadyAsked(stored, initialQuestion) ||
+      alreadyAsked(messagesRef.current, initialQuestion);
+    const t = already
+      ? null
+      : setTimeout(() => submitRef.current(initialQuestion), 0);
+    // Drop the query either way: it has now been either answered or
+    // recognized as already answered, and leaving it on the URL is what makes
+    // the next reload ask again.
+    if (replaceUrlAfterInitial) router.replace(replaceUrlAfterInitial);
+    return () => {
+      if (t) clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuestion, userReady, replaceUrlAfterInitial]);
+
+  // A QUESTION THAT NEVER GOT AN ANSWER. Reloading or closing the tab while a
+  // reply is in flight leaves the user turn in the saved conversation with
+  // nothing after it: no answer, no error, and nothing on the next visit that
+  // knows the request died with the old page. These two put it back in the
+  // owner's hands.
+  function retryLastQuestion() {
+    const msgs = messagesRef.current;
+    const last = msgs[msgs.length - 1];
+    if (!last || last.role !== "user" || loading || sendingRef.current) return;
+    // Take the orphan turn out first, then send it again: submit() appends its
+    // own copy, so leaving this one in place would put the same question on
+    // screen twice. Its photo, if it had one, rides along.
+    const trimmed = msgs.slice(0, -1);
+    applyMessages(trimmed);
+    persist(trimmed);
+    submit(
+      last.content,
+      last.image ? { mime: last.mime ?? "image/jpeg", data: last.image } : null
+    );
+  }
+
+  function deleteLastQuestion() {
+    const msgs = messagesRef.current;
+    const last = msgs[msgs.length - 1];
+    if (!last || last.role !== "user" || loading || sendingRef.current) return;
+    const trimmed = msgs.slice(0, -1);
+    applyMessages(trimmed.length ? trimmed : [GREETING]);
+    persist(trimmed.length ? trimmed : [GREETING]);
+  }
 
   async function onPickImage(file: File) {
     setImageError(false);
@@ -655,6 +1006,37 @@ export default function AskHearth({
       setImageError(true);
     }
   }
+
+  // Out of free questions for today: the input row becomes a locked bar, and
+  // anything that would fire another question stands down with it. Only ever
+  // true for free homeowners, since only they get an allowance from the
+  // server.
+  const atFreeLimit = isFreeLocked(freeLeft, freeLimit);
+  const plusLink = lockLink ?? ASK_PLUS_LINK;
+
+  // The conversation ends on a question with no reply, and nothing is in
+  // flight: the request it belonged to died with a previous page load. The
+  // last bubble gets a retry / delete row instead of sitting there forever.
+  const unanswered = !loading && isUnanswered(messages);
+
+  // Has this conversation had a turn yet? Drives the free-allowance hint,
+  // which is a "before you start" line and stands down the moment the meter
+  // has real numbers to show.
+  const hasAsked = messages.some((m) => m.role === "user");
+  // Quiet line under an empty composer telling a free homeowner what they get.
+  // Homeowner chat only (the pro copilot has no daily allowance and talks to a
+  // different endpoint), never for a member, and only until the first answer
+  // arrives, at which point the meter above takes over and says something
+  // truer: the actual count left today. The numbers match ASK_DAILY_FREE and
+  // ASK_DAILY_PLUS in src/lib/aiUsage.ts, which is server-only and cannot be
+  // imported here.
+  const showFreeHint =
+    endpoint === "/api/ask" &&
+    !hasAsked &&
+    !loading &&
+    !atFreeLimit &&
+    freeLimit === null &&
+    knownPlan !== "plus";
 
   // One message bubble (text + optional photo + action buttons).
   function bubble(m: Msg, i: number, isLast = false) {
@@ -707,7 +1089,35 @@ export default function AskHearth({
             )}
           </span>
         )}
-        {m.link && (
+        {/* A question whose answer never arrived (the page was reloaded or
+            closed mid-request). Say so plainly and give them the two things
+            they'd want: ask it again, or get rid of it. */}
+        {m.role === "user" && isLast && unanswered && (
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-stone-500 dark:text-stone-400">
+              No answer came back.
+            </span>
+            <button
+              type="button"
+              onClick={retryLastQuestion}
+              disabled={atFreeLimit}
+              className="rounded-full border border-bark-500 px-3 py-1 text-xs font-medium text-bark-700 hover:bg-bark-50 disabled:opacity-50 dark:border-bark-700 dark:text-stone-300 dark:hover:bg-stone-700"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={deleteLastQuestion}
+              className="px-1 py-1 text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+            >
+              Delete
+            </button>
+          </div>
+        )}
+        {/* The locked bar under the composer carries this exact link when the
+            reply that lands is the over-limit message, so the bubble drops its
+            own copy rather than stacking two identical calls to action. */}
+        {m.link && !(isLast && atFreeLimit && lockEcho) && (
           <Link
             href={m.link.href}
             className="mt-1 text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
@@ -732,7 +1142,7 @@ export default function AskHearth({
                   key={opt}
                   type="button"
                   onClick={() => submit(opt)}
-                  disabled={loading}
+                  disabled={loading || atFreeLimit || !userReady}
                   className="rounded-full border border-bark-500 bg-white px-3 py-2 text-xs font-medium text-bark-700 hover:bg-bark-50 disabled:opacity-50 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
                 >
                   {opt}
@@ -762,7 +1172,10 @@ export default function AskHearth({
         value={retention}
         onChange={(e) => changeRetention(e.target.value as Retention)}
         aria-label="How long chats are kept"
-        className="cursor-pointer appearance-none rounded border-0 bg-transparent px-1 py-1.5 text-xs text-stone-500 underline decoration-dotted hover:text-stone-600 focus:outline-none dark:text-stone-400 dark:hover:text-stone-300"
+        // min-h-10 + wider padding gives this a real 40px tap target on a
+        // phone, where it was 59x28 and sat right next to Clear. Both are
+        // reset at sm so the desktop row renders exactly as it did before.
+        className="min-h-10 cursor-pointer appearance-none rounded border-0 bg-transparent px-2 py-1.5 text-xs text-stone-500 underline decoration-dotted hover:text-stone-600 focus:outline-none dark:text-stone-400 dark:hover:text-stone-300 sm:min-h-0 sm:px-1"
       >
         <option value="24h">24 hours</option>
         <option value="2w">2 weeks</option>
@@ -797,65 +1210,117 @@ export default function AskHearth({
           Couldn&apos;t attach that image. Try a different photo.
         </p>
       )}
-      <form onSubmit={send} className="flex gap-2">
-        <label
-          title="Attach a photo"
-          className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+      {/* The camera button stays enabled for everyone: the client never knows
+          the plan, the server decides. Once it has said no to a photo, say so
+          here so the next attempt isn't a mystery. */}
+      {photoLocked && !atFreeLimit && (
+        <p className="mb-2 text-xs text-stone-500 dark:text-stone-400">
+          Photos need Hearth Plus.{" "}
+          <Link
+            href={plusLink.href}
+            className="font-medium text-bark-700 underline dark:text-stone-300"
           >
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <path d="M21 15l-5-5L5 21" />
-          </svg>
-          <span className="sr-only">Attach a photo</span>
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
+            {plusLink.label}
+          </Link>
+        </p>
+      )}
+      {atFreeLimit ? (
+        <div className="flex flex-col items-start gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-white/10 dark:bg-stone-700/40 sm:flex-row sm:items-center">
+          {/* Stacked on a phone: side by side, the sentence was squeezed into a
+              four-line column next to the button. */}
+          {!lockEcho && (
+            <p className="min-w-0 flex-1 text-xs text-stone-600 dark:text-stone-300">
+              {freeLockText(freeLimit)}
+            </p>
+          )}
+          <Link
+            href={plusLink.href}
+            className="btn-primary shrink-0 px-3 py-1.5 text-xs"
+          >
+            {plusLink.label}
+          </Link>
+        </div>
+      ) : (
+        <form onSubmit={send} className="flex gap-2">
+          <label
+            title="Attach a photo"
+            className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+            <span className="sr-only">Attach a photo</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={loading}
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (f) await onPickImage(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <VoiceButton
             disabled={loading}
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              if (f) await onPickImage(f);
-              e.target.value = "";
-            }}
+            onText={(t) =>
+              setInput((prev) => (prev ? `${prev} ${t}` : t))
+            }
           />
-        </label>
-        <VoiceButton
-          disabled={loading}
-          onText={(t) =>
-            setInput((prev) => (prev ? `${prev} ${t}` : t))
-          }
-        />
-        <input
-          ref={inputRef}
-          className="input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask, speak, or attach a photo…"
-        />
-        <button className="btn-primary" disabled={loading}>
-          {loading && <InlineSpinner />}
-          {fill ? "Send" : "Ask"}
-        </button>
-      </form>
+          <input
+            ref={inputRef}
+            className="input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            // Short enough to fit a 390px phone: the old "Ask, speak, or attach
+            // a photo…" was clipped mid-word there, and the mic and camera
+            // buttons sitting right next to the field already say the rest.
+            placeholder="Ask anything"
+          />
+          {/* `!userReady` is a sub-second gate on a freshly loaded page: until
+              the signed-in user resolves, this chat is still reading the
+              LEGACY storage key and does not yet know which account's saved
+              conversation it is appending to. A send inside that window built
+              its turn on an empty list and then wrote that over the real
+              history under the per-user key, silently wiping the
+              conversation. Nobody types and sends inside 400ms of a page
+              load, so this costs nothing and closes the hole. */}
+          <button className="btn-primary" disabled={loading || !userReady}>
+            {loading && <InlineSpinner />}
+            {fill ? "Send" : "Ask"}
+          </button>
+        </form>
+      )}
       {/* One shared AI label across every generated surface, carrying the
           per-surface caveat as its `detail` so this is a single line of fine
           print rather than two stacked paragraphs. */}
-      {/* Quiet allowance meter. Only near the end of the day's questions - a
-          counter shown from question one would be a nag, and one shown at
-          zero-left would arrive too late to be useful. */}
-      {freeLeft !== null && freeLimit !== null && freeLeft <= 5 && (
+      {/* Quiet allowance meter, free homeowners only (they are the only ones
+          the server sends a limit to). With three questions a day every one of
+          them counts, so it shows from the first reply on; at zero the locked
+          bar above says it instead. */}
+      {shouldShowMeter(freeLeft, freeLimit) && (
         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-          {freeLeft} of {freeLimit} free questions left today
+          {meterLabel(freeLeft as number, freeLimit as number)}
+        </p>
+      )}
+      {/* Before the first question there is no meter to show, and finding out
+          the allowance by running into it is a bad way to learn it. One quiet
+          line, then it hands over to the meter for good. */}
+      {showFreeHint && (
+        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+          3 free questions a day. Plus gives you 15 and photo answers.
         </p>
       )}
       <AiNotice detail={disclaimer} size="xxs" className="mt-1" />
@@ -884,9 +1349,7 @@ export default function AskHearth({
             {displayed.map((m, i) => bubble(m, i, i === displayed.length - 1))}
             {loading && (
               <div className="flex justify-start">
-                <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
-                  Thinking…
-                </span>
+                <WaitingPill />
               </div>
             )}
             <div ref={endRef} />
@@ -900,7 +1363,7 @@ export default function AskHearth({
                 key={q}
                 type="button"
                 onClick={() => submit(q)}
-                disabled={loading}
+                disabled={loading || atFreeLimit || !userReady}
                 className="rounded-full border border-bark-100 bg-white px-3 py-1 text-xs text-bark-700 hover:border-bark-500 disabled:opacity-50 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300"
               >
                 {q}
@@ -941,7 +1404,12 @@ export default function AskHearth({
           <button
             type="button"
             onClick={clearChat}
-            className="text-xs text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
+            // Same treatment as the retention control above it: a 30x16 hit
+            // area on a phone, one gesture away from wiping the conversation,
+            // is too easy to hit by accident and too hard to hit on purpose.
+            // A button centers its own label, so min-h alone does it. Reset at
+            // sm so the desktop dock header is unchanged.
+            className="min-h-10 px-2 text-xs text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300 sm:min-h-0 sm:px-0"
           >
             Clear
           </button>
@@ -952,9 +1420,7 @@ export default function AskHearth({
         {messages.map((m, i) => bubble(m, i, i === messages.length - 1))}
         {loading && (
           <div className="flex justify-start">
-            <span className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
-              Thinking…
-            </span>
+            <WaitingPill />
           </div>
         )}
         <div ref={endRef} />

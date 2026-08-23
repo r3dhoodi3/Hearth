@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { createClient } from "@supabase/supabase-js";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
+import { isAcceptableCustomCategory } from "@/lib/customCategory";
 import { ogFontOption } from "@/lib/ogFont";
 
 // Social share card for a pro's public page (/p/[id]). Rendered on demand by
@@ -140,7 +141,11 @@ export default async function OgImage({
   const hasRating = profile.review_count > 0 && profile.rating != null;
   // Same rounding the page's star row uses.
   const fullStars = hasRating ? Math.round(profile.rating!) : 0;
+  // Same render-side filter as the profile page: canonical values pass,
+  // custom ones must clear the moderation predicate (legacy rows predate it).
+  const canonical = new Set<string>(JOB_CATEGORIES.map((c) => c.value));
   const categoryLine = (profile.categories ?? [])
+    .filter((c) => canonical.has(c) || isAcceptableCustomCategory(c))
     .slice(0, 3)
     .map((c) => labelFor(JOB_CATEGORIES, c))
     .join("  ·  ");

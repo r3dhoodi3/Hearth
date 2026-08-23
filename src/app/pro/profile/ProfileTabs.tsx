@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PublicProfileForm from "./PublicProfileForm";
 import PublicPageCard from "./PublicPageCard";
 import ProjectsCard, { type ProProject } from "./ProjectsCard";
@@ -14,32 +14,51 @@ import {
 } from "./actions";
 import type { Contractor } from "@/lib/database.types";
 
+// `short` is the phone label. Four tabs at their full names do not fit a
+// 390px screen, and the strip scrolled with no hint that it did, so the last
+// tab was simply invisible. Shorter names fit all four with no scrolling; the
+// full names come back at sm.
 const TABS = [
   {
     key: "public" as const,
     label: "Public Profile",
+    short: "Profile",
     title: "Public Profile",
     subtitle: "Manage your public business profile and service offerings.",
   },
   {
     key: "page" as const,
     label: "Your Public Page",
+    short: "Public page",
     title: "Your Public Page",
     subtitle: "Share your Hearth page and manage what appears on it.",
   },
   {
     key: "projects" as const,
     label: "Projects",
+    short: "Projects",
     title: "Projects",
     subtitle: "Showcase completed work with photo albums on your public page.",
   },
   {
     key: "security" as const,
     label: "Account Security",
+    short: "Security",
     title: "Account Security",
     subtitle: "Your sign-in email, password, sessions, and account deletion.",
   },
 ];
+
+type TabKey = (typeof TABS)[number]["key"];
+
+// Deep links from elsewhere in the pro app point at a field that lives inside
+// one of these panels - /pro/profile#reviews, from the setup checklist on the
+// pro dashboard, is the review-link pair in the Public Profile form. Only the
+// selected panel is rendered, so the browser's own hash scroll finds nothing:
+// this map says which tab has to be showing before the id exists at all.
+const HASH_TAB: Record<string, TabKey> = {
+  reviews: "public",
+};
 
 export default function ProfileTabs({
   contractor,
@@ -73,10 +92,36 @@ export default function ProfileTabs({
   // on the server (page.tsx); this component cannot query.
   paidLeads: number | null;
 }) {
-  const [tab, setTab] = useState<"public" | "page" | "projects" | "security">(
-    "public"
-  );
+  const [tab, setTab] = useState<TabKey>("public");
+  // The id a deep link asked for, held until the tab that owns it has mounted.
+  const [pendingHash, setPendingHash] = useState<string | null>(null);
   const meta = TABS.find((t) => t.key === tab)!;
+
+  // Read the hash once, on mount, and switch to the tab that holds it.
+  useEffect(() => {
+    const id = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+    if (!id || !(id in HASH_TAB)) return;
+    setTab(HASH_TAB[id]);
+    setPendingHash(id);
+  }, []);
+
+  // Then scroll, after the panel above has actually rendered the element. The
+  // effect re-runs on the tab change that the effect above queued, which is
+  // the first pass where getElementById can find anything.
+  useEffect(() => {
+    if (!pendingHash) return;
+    const el = document.getElementById(pendingHash);
+    if (!el) return;
+    el.scrollIntoView({ block: "start" });
+    // block:"start" puts the section's top edge at y=0, which on this shell is
+    // behind the pinned top bar - the first field of the pair ends up covered.
+    // Give back exactly the bar's height so the whole section is on screen.
+    const bar = document.querySelector("header");
+    const pinned =
+      bar && ["sticky", "fixed"].includes(getComputedStyle(bar).position);
+    if (bar && pinned) window.scrollBy(0, -bar.getBoundingClientRect().height);
+    setPendingHash(null);
+  }, [pendingHash, tab]);
 
   return (
     <div className="space-y-6">
@@ -96,13 +141,14 @@ export default function ProfileTabs({
             role="tab"
             aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
-            className={`shrink-0 whitespace-nowrap rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+            className={`flex-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-medium transition-colors sm:flex-none sm:px-4 ${
               tab === t.key
                 ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
                 : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
             }`}
           >
-            {t.label}
+            <span className="sm:hidden">{t.short}</span>
+            <span className="hidden sm:inline">{t.label}</span>
           </button>
         ))}
       </div>

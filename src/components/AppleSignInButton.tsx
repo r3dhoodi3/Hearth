@@ -52,10 +52,23 @@ function AppleLogo() {
 // No queryParams here on purpose. Google's `prompt: "select_account"` is a
 // Google-ism; Apple ignores it, and the equivalent forced re-prompt is not
 // something Apple exposes to web clients.
-export default function AppleSignInButton({
-  next,
-  onError,
-}: {
+
+// Whether to render the button at all. Apple's provider needs a Services ID,
+// a signing key, and a six-month JWT pasted into Supabase before it works
+// (docs/APPLE-SIGN-IN-SETUP.md); until that is done, clicking the button only
+// ever produces a "provider is not enabled" error, which is a broken-looking
+// front door on the three most important pages in the app. So the button is
+// off by default and turns on with NEXT_PUBLIC_APPLE_SIGNIN=1, set in Vercel
+// once the provider is live.
+//
+// Exported so the sign-up pages can match their "By continuing with Google or
+// Apple" consent copy to what is actually on screen. The literal
+// process.env.NEXT_PUBLIC_* read is required for Next to inline the value
+// into the client bundle at build time.
+export const APPLE_SIGNIN_ENABLED =
+  process.env.NEXT_PUBLIC_APPLE_SIGNIN === "1";
+
+type AppleSignInButtonProps = {
   // Where /auth/callback should send the browser after the exchange. Same
   // relative-path contract as every other ?next= in this app; re-validated
   // here via safeNextPath since a prop can come from any future caller, not
@@ -69,7 +82,16 @@ export default function AppleSignInButton({
   // provider-not-enabled error instead of navigating, and it lands here - a
   // readable message in the page's normal error box, no crash, no dead tab.
   onError: (message: string) => void;
-}) {
+};
+
+// Gate kept separate from the body so the body's hooks are never called
+// conditionally.
+export default function AppleSignInButton(props: AppleSignInButtonProps) {
+  if (!APPLE_SIGNIN_ENABLED) return null;
+  return <AppleSignInButtonBody {...props} />;
+}
+
+function AppleSignInButtonBody({ next, onError }: AppleSignInButtonProps) {
   const [busy, setBusy] = useState(false);
   const supabase = createClient();
 

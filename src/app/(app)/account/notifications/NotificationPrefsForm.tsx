@@ -20,9 +20,11 @@ export default function NotificationPrefsForm({
     >
       <div className="divide-y divide-stone-100 dark:divide-white/10">
         {NOTIFICATION_CHANNELS.map((c) => (
+          // min-h-11: the whole row is the tap target, so it stays at least
+          // 44px tall even when a channel has a one-line description.
           <label
             key={c.key}
-            className="flex cursor-pointer items-start justify-between gap-4 py-4 first:pt-0"
+            className="flex min-h-11 cursor-pointer items-start justify-between gap-4 py-4 first:pt-0"
           >
             <span>
               <span className="block text-sm font-medium text-stone-900 dark:text-stone-100">
@@ -30,11 +32,16 @@ export default function NotificationPrefsForm({
               </span>
               <span className="block text-sm text-stone-500 dark:text-stone-400">{c.desc}</span>
             </span>
+            {/* accent-bark-600 is what actually colours the box: the project
+                does not load @tailwindcss/forms, so `text-bark-600` styled
+                nothing and these rendered as the browser's default blue
+                checkboxes. The focus ring is drawn with outline for the same
+                reason. */}
             <input
               type="checkbox"
               name={c.key}
               defaultChecked={isOn(c.key)}
-              className="mt-1 h-5 w-5 shrink-0 rounded border-stone-300 text-bark-600 focus:ring-bark-600 dark:border-white/20"
+              className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-bark-600 rounded border-stone-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bark-600 dark:border-white/20"
             />
           </label>
         ))}

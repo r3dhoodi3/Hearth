@@ -76,13 +76,51 @@ export type PublicParcelFacts = Omit<
 // change has no owner data. Bumping the key makes every such row a natural
 // miss - it just refetches once instead of silently serving stale facts
 // with owner data missing.
+//
+// The unit is deliberately NOT part of this key, and lookupParcel does not
+// send it either. The tempting theory is that unit 4B and unit 2A are separate
+// parcels with separate owners of record - true of the county filing, but not
+// of what RentCast returns: /v1/properties matches on the street address and
+// hands back the same base building record whichever unit rides along in the
+// string. Keying per unit would therefore buy nothing but N billed lookups and
+// N cache rows for one building, all holding identical facts, and the
+// ownership match it would appear to sharpen would still be a match against
+// the BUILDING's owner of record. Street + ZIP is what the record is actually
+// keyed on, so that is the key - and a claim that carries a unit is treated as
+// unverifiable rather than checked against the building (see
+// claimPropertyAction in src/app/onboarding/actions.ts).
 function parcelCacheKey(street: string, zip: string): string {
-  return street.trim().replace(/\s+/g, " ").toLowerCase() + "|" + zip.trim().slice(0, 5) + "|v2";
+  return (
+    street.trim().replace(/\s+/g, " ").toLowerCase() +
+    "|" +
+    zip.trim().slice(0, 5) +
+    "|v2"
+  );
+}
+
+// RentCast's endpoints take ONE `address` query parameter - a single formatted
+// string, "Street, City, State, Zip" per their docs - with no separate
+// unit/secondary-address field anywhere in the request, so a unit can only
+// travel as part of the street portion. Only lookupMarketValue below still
+// does that: an AVM is a price for a specific dwelling, so asking for the unit
+// is asking a different question. The property-record lookup does not (see
+// parcelCacheKey above) - it gets the same building record regardless.
+function lookupStreet(street: string, unit?: string | null): string {
+  const s = street.trim();
+  const u = (unit ?? "").trim();
+  return u ? `${s} ${u}` : s;
 }
 
 export async function lookupParcel(
   street: string,
-  zip: string
+  zip: string,
+  // Accepted and ignored. Callers that hold a property row (the claim, the
+  // lazy re-check in contractors/actions.ts) still pass property.unit, and
+  // taking it here keeps them compiling - but nothing is done with it, because
+  // RentCast returns the base building record for the street either way. The
+  // unit is display-only (formatAddressLine, src/lib/addressLine.ts); it is
+  // never a lookup key and never narrows the owner of record.
+  _unit?: string | null
 ): Promise<ParcelFacts> {
   // A successful RentCast lookup bills one call, so serve a fresh cached
   // result (migration 0069) instead of re-billing the same address. All
@@ -180,6 +218,8 @@ async function fetchParcelFacts(
       console.error("RentCast lookup failed:", err);
     }
   }
+  // address_line1 is the street line; the unit lives in its own column and is
+  // never folded in here.
   return blankFacts(street, zip);
 }
 
@@ -217,6 +257,10 @@ type RentcastRecord = {
   id?: string;
   formattedAddress?: string;
   addressLine1?: string;
+  // RentCast's secondary address line, where a condo/apartment unit usually
+  // lands. Not read as a value (the homeowner's own typed unit is the one
+  // stored), only acknowledged here so the shape is documented.
+  addressLine2?: string;
   city?: string;
   state?: string;
   zipCode?: string;
@@ -271,6 +315,12 @@ function normalizePropertyType(value: string | null | undefined): string | null 
   if (!value) return null;
   return RENTCAST_PROPERTY_TYPES[value.trim().toLowerCase()] ?? null;
 }
+
+// There used to be a stripUnit() here, to take the unit back off an address
+// the records source echoed after we had sent it as part of the street. The
+// unit no longer goes out with the property-record request at all (see
+// parcelCacheKey), so there is nothing to take back off: record.addressLine1
+// is the building's street line, which is exactly what address_line1 means.
 
 // lastSaleDate is an ISO timestamp string; onboarding only stores the date
 // portion (properties.purchase_date is a `date` column).
@@ -359,7 +409,7 @@ async function fetchFromRentcast(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    const address = `${street}, ${zip}`;
+    const address = `${street.trim()}, ${zip}`;
     const url = `https://api.rentcast.io/v1/properties?address=${encodeURIComponent(address)}`;
     const res = await fetch(url, {
       headers: { "X-Api-Key": apiKey, Accept: "application/json" },
@@ -387,8 +437,10 @@ async function fetchFromRentcast(
     return {
       parcel_id: record.assessorID ?? record.id ?? null,
       // Prefer the canonical county-record address over the typed one, but
-      // never lose what the homeowner typed if the record omits a part.
-      address_line1: record.addressLine1 ?? typed.address_line1,
+      // never lose what the homeowner typed if the record omits a part. No
+      // unit is sent, so what comes back is the building's street line, which
+      // is what address_line1 means here.
+      address_line1: record.addressLine1?.trim() || typed.address_line1,
       city: record.city ?? typed.city,
       state: record.state ?? typed.state,
       zip: record.zipCode ?? typed.zip,
@@ -454,10 +506,18 @@ const BLANK_MARKET_VALUE: MarketValueFacts = {
 // with lookupParcel's property-record cache row for the same address.
 export async function lookupMarketValue(
   street: string,
-  zip: string
+  zip: string,
+  // Condo/townhome unit (migration 0127). An AVM for "123 Main St" is the
+  // building, not unit 4B, so the unit rides into the request the same way it
+  // does for the property record above - and into the cache key, so two units
+  // never share one estimate. Omitted = unchanged behaviour, same key as
+  // before.
+  unit?: string | null
 ): Promise<MarketValueFacts> {
+  const u = (unit ?? "").trim().replace(/\s+/g, " ").toLowerCase();
   const cacheKey =
     street.trim().replace(/\s+/g, " ").toLowerCase() +
+    (u ? "/" + u : "") +
     "|" +
     zip.trim().slice(0, 5) +
     "|avm";
@@ -480,7 +540,7 @@ export async function lookupMarketValue(
     console.error("Market value cache read failed:", err);
   }
 
-  const facts = await fetchMarketValueFacts(street, zip);
+  const facts = await fetchMarketValueFacts(street, zip, unit);
 
   try {
     // Cache a miss too (source "none"), same reasoning as lookupParcel: a
@@ -506,7 +566,8 @@ export async function lookupMarketValue(
 // /value page just falls back to its existing purchase-price estimate.
 async function fetchMarketValueFacts(
   street: string,
-  zip: string
+  zip: string,
+  unit?: string | null
 ): Promise<MarketValueFacts> {
   const key = process.env.RENTCAST_API_KEY;
   if (!key) return BLANK_MARKET_VALUE;
@@ -514,7 +575,7 @@ async function fetchMarketValueFacts(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    const address = `${street}, ${zip}`;
+    const address = `${lookupStreet(street, unit)}, ${zip}`;
     const url = `https://api.rentcast.io/v1/avm/value?address=${encodeURIComponent(address)}`;
     const res = await fetch(url, {
       headers: { "X-Api-Key": key, Accept: "application/json" },

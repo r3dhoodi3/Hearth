@@ -3,6 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasPlus } from "@/lib/subscription";
 import { countAiUsage } from "@/lib/aiUsage";
+import {
+  reasonToClientPayload,
+  type AiClientReason,
+} from "@/lib/aiReason";
+import { readBodyBounded } from "@/lib/boundedBody";
+import { generateJson, hasClaudeKey } from "@/lib/claude";
 
 export const runtime = "nodejs";
 
@@ -22,10 +28,20 @@ export const runtime = "nodejs";
 //                whatever the vision call reads, and is the only way to set
 //                a date when extraction could not read one)
 //
-// Output: { ok: true, expires_on, issuer, needs_manual_date, doc_path }
+// Output: { ok: true, expires_on, issuer, needs_manual_date, skip_reason,
+//            manual_reason, doc_path }
 //       | { error: string }
+// skip_reason / manual_reason are non-null only when the vision read never
+// ran at all (a PDF, or a counter refusal), so the client can say which.
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB, matches extract-document's cap
+// Hard ceiling on the whole multipart body. MAX_FILE_BYTES above is checked
+// only AFTER req.formData() has already buffered and decoded everything, and
+// the Content-Length that used to be the only other bound is a claim a
+// chunked request never makes. This is counted on the bytes that actually
+// arrive, with a megabyte of headroom over the file cap for the multipart
+// envelope and the other fields. See src/lib/boundedBody.ts.
+const MAX_BODY_BYTES = 11 * 1024 * 1024;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Exactly what the pro-docs bucket's own allowed_mime_types permits
@@ -39,30 +55,50 @@ const ALLOWED_UPLOAD_TYPES = new Set([
   "application/pdf",
 ]);
 
+// Structured output: the model is constrained to this shape server-side. The
+// optional fields are nullable rather than omitted, since "no expiration date
+// is printed" is the case this route most has to get right: plausibleExpiry()
+// below still rejects anything that is not a real, believable date.
 const RESPONSE_SCHEMA = {
-  type: "OBJECT",
+  type: "object",
   properties: {
     doc_kind: {
-      type: "STRING",
+      type: "string",
       enum: ["license", "insurance", "other"],
     },
-    holder_matches_hint: { type: "STRING" },
-    expires_on: { type: "STRING" }, // YYYY-MM-DD, or omitted if unreadable
-    issuer: { type: "STRING" }, // state board or insurance carrier name
+    holder_matches_hint: { type: ["string", "null"] },
+    expires_on: { type: ["string", "null"] }, // YYYY-MM-DD, null if unreadable
+    issuer: { type: ["string", "null"] }, // state board or insurance carrier
   },
-  required: ["doc_kind"],
+  required: ["doc_kind", "holder_matches_hint", "expires_on", "issuer"],
+  additionalProperties: false,
 };
 
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
-];
+type ComplianceFields = {
+  doc_kind: string;
+  holder_matches_hint: string | null;
+  expires_on: string | null;
+  issuer: string | null;
+};
 
 function str(v: FormDataEntryValue | null): string {
   return typeof v === "string" ? v.trim() : "";
 }
+
+// Why the vision read was skipped, when it was. The route already returned
+// needs_manual_date, but that one boolean covered three different situations
+// and the client rendered the same sentence for all of them: "Hearth couldn't
+// read a date off that document." For a PDF nothing ever looked at, and for a
+// pro who is simply over their daily AI cap, that sentence is false and sends
+// them off to retake a photo that was fine.
+type SkipReason = "not_an_image" | AiClientReason | null;
+
+const SKIP_COPY: Record<NonNullable<SkipReason>, string> = {
+  not_an_image: "Hearth only reads dates off photos, not PDFs. Enter it:",
+  rate_limited: "You've hit today's AI limit. Enter the date:",
+  busy: "Hearth's AI is busy right now. Enter the date:",
+  unavailable: "Hearth couldn't read this one just now. Enter the date:",
+};
 
 // Sanity-bound a printed expiry date. DATE_RE only checks the shape, so a
 // vision misread like "2205-01-01" or an impossible "2026-13-40" can still
@@ -89,8 +125,7 @@ async function extractExpiry(
   base64: string,
   mime: string
 ): Promise<{ expires_on: string | null; issuer: string | null } | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+  if (!hasClaudeKey()) return null;
 
   const today = new Date().toISOString().slice(0, 10);
   const docLabel =
@@ -104,65 +139,39 @@ async function extractExpiry(
     "holder_matches_hint is a short note only if the named holder looks like a completely different business than expected, otherwise omit it. " +
     `Today's date is ${today}.`;
 
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: instruction }] },
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: "Extract the fields from this document." },
-          { inlineData: { mimeType: mime, data: base64 } },
-        ],
-      },
-    ],
-    generationConfig: {
-      maxOutputTokens: 300,
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
-    },
-  });
+  try {
+    // Reading one date and one issuer name off a certificate: mechanical, so
+    // low effort. Everything the model returns is still bounds-checked below.
+    const { data: parsed } = await generateJson<ComplianceFields>({
+      system: instruction,
+      prompt: "Extract the fields from this document.",
+      ...(mime.toLowerCase().startsWith("application/pdf")
+        ? { documents: [{ data: base64 }] }
+        : { images: [{ data: base64, mime }] }),
+      schema: RESPONSE_SCHEMA,
+      maxTokens: 1024,
+      effort: "low",
+      timeoutMs: 60_000,
+      label: "pro-compliance",
+    });
+    if (!parsed) return null;
 
-  for (const model of MODELS) {
-    try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: requestBody,
-        }
-      );
-      if (resp.status === 429) continue;
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) continue;
-
-      let parsed: any;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        continue;
-      }
-      const expiresRaw =
-        typeof parsed?.expires_on === "string" ? parsed.expires_on.trim() : "";
-      const issuerRaw =
-        typeof parsed?.issuer === "string" ? parsed.issuer.trim() : "";
-      return {
-        expires_on:
-          DATE_RE.test(expiresRaw) && plausibleExpiry(expiresRaw)
-            ? expiresRaw
-            : null,
-        issuer: issuerRaw || null,
-      };
-    } catch {
-      // Network error: try the next model.
-    }
+    const expiresRaw =
+      typeof parsed.expires_on === "string" ? parsed.expires_on.trim() : "";
+    const issuerRaw =
+      typeof parsed.issuer === "string" ? parsed.issuer.trim() : "";
+    return {
+      expires_on:
+        DATE_RE.test(expiresRaw) && plausibleExpiry(expiresRaw)
+          ? expiresRaw
+          : null,
+      issuer: issuerRaw || null,
+    };
+  } catch {
+    // Throttled, timed out, or refused: the pro types the date in by hand,
+    // which is the same path an unreadable document already takes.
+    return null;
   }
-  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -179,7 +188,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not a contractor" }, { status: 403 });
   }
 
-  const form = await req.formData().catch(() => null);
+  // Read the upload under a hard byte ceiling BEFORE handing it to the
+  // multipart parser, then parse the bytes we kept. Note the burst limit is
+  // deliberately NOT hoisted in front of this the way it is on the JSON tool
+  // routes: this endpoint also saves a hand-typed expiry date, which never
+  // touches the model, and refusing that because the pro's AI burst window is
+  // full would break a path that costs nothing. The AI branch below still
+  // goes through countAiUsage, which runs the real burst check.
+  const bounded = await readBodyBounded(req, MAX_BODY_BYTES);
+  if (!bounded.ok) {
+    return bounded.status === 413
+      ? NextResponse.json({ error: "File too large." }, { status: 413 })
+      : NextResponse.json({ error: "Bad request." }, { status: 400 });
+  }
+  // .buffer, not the view: readBodyBounded allocates the array at exactly the
+  // byte count it read, so the two are the same bytes, and ArrayBuffer is what
+  // BodyInit actually accepts.
+  const form = await new Response(bounded.bytes.buffer as ArrayBuffer, {
+    headers: { "content-type": req.headers.get("content-type") ?? "" },
+  })
+    .formData()
+    .catch(() => null);
   if (!form) {
     return NextResponse.json({ error: "Bad request." }, { status: 400 });
   }
@@ -215,6 +244,11 @@ export async function POST(req: NextRequest) {
   let expiresOn: string | null = manualExpiresOn;
   let issuer: string | null = null;
   let docPath: string | null = null;
+  // Why extraction never ran, when it never ran. null means it ran (and either
+  // read a date or genuinely could not). The client pairs this with
+  // needs_manual_date to say something true above the date field instead of
+  // always blaming the document. See SKIP_COPY below.
+  let skipReason: SkipReason = null;
 
   if (hasFile) {
     const uploadedFile = file as File;
@@ -250,23 +284,41 @@ export async function POST(req: NextRequest) {
     }
 
     // Vision extraction, counted against the same shared AI cap as every
-    // other Gemini-backed route so it can't be a side door around it.
-    if (!manualExpiresOn) {
-      const { overLimit } = await countAiUsage(user.id, await hasPlus());
-      if (!overLimit) {
-        const isImage = mime.startsWith("image/");
-        if (isImage) {
-          const base64 = Buffer.from(bytes).toString("base64");
-          const extracted = await extractExpiry(kind, base64, mime);
-          if (extracted) {
-            expiresOn = extracted.expires_on;
-            issuer = extracted.issuer;
-          }
+    // other model-backed route so it can't be a side door around it.
+    //
+    // COUNTED LAST, and only when a model call is actually going to happen.
+    // countAiUsage was previously called before the mime check, so uploading a
+    // PDF spent one of the pro's daily AI usages on a branch that never sends
+    // anything to the model: the route stores the PDF, skips vision because
+    // the model only reads images, and the pro is charged for it anyway. Ten
+    // PDFs and a free-tier pro is locked out of extraction for the day having
+    // never used it once. The mime and manual-date checks are free, so they go
+    // first and the counter only moves for a real call.
+    const isImage = mime.startsWith("image/");
+    if (!manualExpiresOn && isImage) {
+      const { overLimit, reason } = await countAiUsage(user.id, await hasPlus());
+      if (overLimit) {
+        // Refused by a counter, not by an unreadable document. Classified by
+        // the same shared mapper the other ten tool routes use, so a burst
+        // window says "busy" here too instead of claiming the pro is out for
+        // the day. Only the classification is borrowed: the sentence has to
+        // end in "enter the date", which is what this card asks for next.
+        skipReason = reasonToClientPayload(reason).reason;
+      } else {
+        const base64 = Buffer.from(bytes).toString("base64");
+        const extracted = await extractExpiry(kind, base64, mime);
+        if (extracted) {
+          expiresOn = extracted.expires_on;
+          issuer = extracted.issuer;
         }
-        // PDFs are stored but not sent to vision here: the model only reads
-        // images. A pro who uploads a PDF simply gets the "type the date"
-        // prompt, same as an unreadable photo.
       }
+    } else if (!manualExpiresOn && !isImage) {
+      // PDFs (and anything stored as octet-stream) are kept but never sent to
+      // vision here: the model only reads images. Nothing is counted for it,
+      // and the pro is told WHY they are being asked to type the date rather
+      // than being shown the generic "couldn't read a date" line, which reads
+      // as "your document is bad" for a document nothing ever looked at.
+      skipReason = "not_an_image";
     }
   }
 
@@ -303,6 +355,11 @@ export async function POST(req: NextRequest) {
     expires_on: expiresOn,
     issuer,
     needs_manual_date: hasFile && !expiresOn,
+    // Machine-readable, plus the sentence to show. Both null when extraction
+    // actually ran, in which case the client's existing "couldn't read a date"
+    // line is the true one.
+    skip_reason: skipReason,
+    manual_reason: skipReason ? SKIP_COPY[skipReason] : null,
     doc_path: docPath,
   });
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getRole } from "@/lib/contractor";
+import { getSides } from "@/lib/contractor";
 import {
   FOUNDER,
   LEAD_TIER_FEES,
@@ -52,10 +52,16 @@ function Check({ className = "h-4 w-4" }: { className?: string }) {
 const FIRST_APPLICATION_GUARANTEE =
   "Not chosen on your first application? The fee comes back automatically as wallet credit you can spend on any job within 60 days. It's credit toward future leads, not cash back to your card.";
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
   title: "Hearth for Pros: real local leads, honest pricing",
   description:
     "Browse local jobs free and pay only when you apply, with the price on every card. No subscription required, no ghost leads, and free license-verified badges for California pros.",
+  alternates: {
+    canonical: `${SITE_URL}/pros`,
+  },
 };
 
 // Marketing front door for contractors. Every claim here is a real product
@@ -64,7 +70,7 @@ export const metadata: Metadata = {
 //
 // STAYS DYNAMIC, and not because of the root layout (that no longer reads
 // cookies - see src/app/layout.tsx). Three independent per-request reads live
-// in the body below: auth.getUser() plus getRole() to bounce a signed-in
+// in the body below: auth.getUser() plus getSides() to bounce a signed-in
 // contractor straight to /pro, and searchParams.ref to thread a referral code
 // into the signup link. The redirect is the important one: prerendering this
 // page would land contractors on the marketing pitch instead of their leads.
@@ -79,10 +85,13 @@ export default async function ProsLanding(props: {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Contractors go straight to their leads. Everyone else, including signed-in
+  // Pros go straight to their leads. Everyone else, including signed-in
   // homeowners, can read the pitch: bouncing them to the dashboard made this
-  // page look like it demanded an account before showing anything.
-  if (user && (await getRole()) === "contractor") {
+  // page look like it demanded an account before showing anything. Keyed on a
+  // company row, not the role stamp - someone whose preferred side is
+  // contractor but who never finished setup should read the pitch, not be
+  // thrown into an empty /pro.
+  if (user && (await getSides()).hasPro) {
     redirect("/pro");
   }
 
@@ -172,9 +181,13 @@ export default async function ProsLanding(props: {
               <ThemeToggle />
               <Link
                 href="/"
-                className="inline-flex min-h-11 items-center rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 sm:min-h-0 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
+                className="inline-flex min-h-11 items-center whitespace-nowrap rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 sm:min-h-0 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
               >
-                For Homeowners
+                {/* Mirrors the landing header's "For Pros" / "Hearth for
+                    Pros" pair: short label on a phone, full wording from sm
+                    up, and never wrapping to a second line. */}
+                <span className="sm:hidden">Homeowners</span>
+                <span className="hidden sm:inline">For Homeowners</span>
               </Link>
             </div>
           </header>

@@ -3,9 +3,10 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { Bot, Clock, Star, FileText, Tag, BarChart3 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentContractor, getRole } from "@/lib/contractor";
+import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { labelFor, JOB_CATEGORIES, PRO_PLAN } from "@/lib/constants";
+import SubmitButton from "@/components/SubmitButton";
 import ClientRow from "./ClientRow";
 import { addClientAction, trackLeadAction } from "./actions";
 
@@ -77,10 +78,9 @@ export default async function ProCrmPage(
 ) {
   const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
-  if (!contractor) {
-    if ((await getRole()) === null) redirect("/get-started");
-    redirect("/pro/onboarding");
-  }
+  // No company yet: company setup is the only way in, whatever the account's
+  // preferred-side stamp says (see /pro/page.tsx).
+  if (!contractor) redirect("/pro/onboarding");
 
   const supabase = await createClient();
   const q = (searchParams.q ?? "").trim();
@@ -260,9 +260,15 @@ export default async function ProCrmPage(
             />
           </label>
           <div className="sm:col-span-2">
-            <button type="submit" className="btn-primary">
+            {/* The server action ends in a redirect back here, and Next serves
+                that redirected page inside the action's own response - so
+                loading.tsx never gets a turn and the screen just sat there,
+                unchanged and unresponsive, for as long as the insert plus the
+                re-read took. This says "Adding…" for exactly that window, and
+                blocks a second tap that would add the client twice. */}
+            <SubmitButton className="btn-primary" pendingLabel="Adding…">
               Add client
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>

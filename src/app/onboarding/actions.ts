@@ -5,8 +5,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ACTIVE_HOME_COOKIE, getProperties } from "@/lib/property";
-import { lookupParcel, type PublicParcelFacts } from "@/lib/parcel";
+import {
+  ACTIVE_HOME_COOKIE,
+  getProperties,
+  noteUnitColumnMissing,
+} from "@/lib/property";
+import {
+  lookupParcel,
+  type ParcelFacts,
+  type PublicParcelFacts,
+} from "@/lib/parcel";
 import { deriveOwnershipStatus } from "@/lib/ownershipMatch";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { ownsPlus, getExtraHomeSlots } from "@/lib/subscription";
@@ -14,13 +22,16 @@ import { setFlash } from "@/lib/flash";
 import { safeNextPath } from "@/lib/safeNext";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { isLaunchZip, LAUNCH_ONLY_MESSAGE } from "@/lib/serviceArea";
-import { PROPERTY_TYPES } from "@/lib/constants";
+import { PROPERTY_TYPES, PLUS_INCLUDED_HOMES } from "@/lib/constants";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
+import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import {
   boundedNumber,
   boundedInt,
+  cappedField,
   cappedFieldOrNull,
   isAllowedValue,
+  FIELD_MAX,
 } from "@/lib/formFields";
 
 // Ceiling on the two raw JSON blobs the confirm step carries in as hidden
@@ -52,6 +63,10 @@ const CURRENT_YEAR = new Date().getFullYear();
 // is the authoritative check - the matching one in OnboardingForm.tsx is
 // only there for faster client-side feedback.
 const MIN_ADDRESS_LENGTH = 5;
+// The ceiling on the same field. It matters more than it used to: the confirm
+// step now posts address_line1 from a real editable input the homeowner can
+// correct, not from a hidden copy of a looked-up value.
+const MAX_ADDRESS_LENGTH = 200;
 
 // Server-side ceilings for the free-text location columns (city/state/county
 // are all `text`). The form's fields are client hints only; a server action
@@ -61,6 +76,15 @@ const MIN_ADDRESS_LENGTH = 5;
 const MAX_CITY = 120;
 const MAX_STATE = 60;
 const MAX_COUNTY = 120;
+// The condo/townhome unit (migration 0127). Short on purpose: a real
+// designator is "4B", "Apt 12", "Ste 300" - twenty characters is already
+// generous, and the field is shown as a narrow box for the same reason.
+const MAX_UNIT = 20;
+// The county assessor's parcel number, carried in as a hidden field from the
+// lookup. A real APN is a short punctuated string ("934-231-14"); 64 is
+// already several times any format in use, and without a ceiling this is an
+// unbounded client-supplied string landing straight on the row.
+const MAX_PARCEL_ID = 64;
 
 // The purchase date arrives from the form as a plain string. Only store a real
 // YYYY-MM-DD with a year between 1900 and today; anything else becomes null so
@@ -142,21 +166,53 @@ export async function joinMarketWaitlistAction(
 }
 
 // Step 1: pull baseline facts from the parcel layer for the entered address.
+//
+// Returns a result object instead of throwing, for the same reason
+// claimPropertyAction below does. OnboardingForm.tsx calls this
+// programmatically (const result = await lookupParcelAction(...)), and in
+// PRODUCTION Next masks the message of anything a server action throws - the
+// client sees only "An error occurred in the Server Components render". So
+// every deliberate, user-facing refusal this action makes - the launch-area
+// message, the two validation messages, the two rate-limit messages - reached
+// the homeowner in dev and was replaced by the caller's generic "That didn't go
+// through. Please try again." in production. The out-of-area case was the worst
+// of them: the visitor was silently added to the waitlist and then told to try
+// again, with no way to learn Hearth simply isn't in their city.
+//
+// `waitlisted` rides along on the out-of-area refusal only, so the caller's
+// waitlist panel can tell "you're on the list" from "we couldn't save you" -
+// the same distinction joinMarketWaitlistAction already gives the client-side
+// ZIP check.
 export async function lookupParcelAction(
   street: string,
-  zip: string
-): Promise<PublicParcelFacts> {
+  zip: string,
+  // Optional condo/townhome unit (migration 0127). It plays NO part in the
+  // records lookup: RentCast matches on the street address and returns the
+  // building's record whichever unit is appended, so lookupParcel ignores it
+  // (see src/lib/parcel.ts). Still accepted here because the form has the
+  // value and this is where it would go if the source ever gained a real
+  // unit-level record; the unit itself is stored as display-only on the claim.
+  unit?: string | null
+): Promise<
+  | { ok: true; facts: PublicParcelFacts }
+  | { ok: false; error: string; waitlisted?: boolean }
+> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Please sign in to look up your address.");
+  if (!user) {
+    return { ok: false, error: "Please sign in to look up your address." };
+  }
 
   if (street.trim().length < MIN_ADDRESS_LENGTH) {
-    throw new Error("Enter your home's street address to continue.");
+    return {
+      ok: false,
+      error: "Enter your home's street address to continue.",
+    };
   }
   if (!/^\d{5}(-\d{4})?$/.test(zip.trim())) {
-    throw new Error("Enter a valid 5-digit ZIP code.");
+    return { ok: false, error: "Enter a valid 5-digit ZIP code." };
   }
   // Launch-restriction gate: the launch cities only (isLaunchZip), not
   // all of Orange County - Hearth has no pros anywhere else, and the pro-side
@@ -169,8 +225,12 @@ export async function lookupParcelAction(
   // fallback path (JS disabled, a modified client, or a direct call), so it
   // still logs the lead to the waitlist rather than silently dropping it.
   if (!isLaunchZip(zip.trim())) {
-    await joinMarketWaitlistAction(zip.trim());
-    throw new Error(LAUNCH_ONLY_MESSAGE);
+    const waitlist = await joinMarketWaitlistAction(zip.trim());
+    return {
+      ok: false,
+      error: LAUNCH_ONLY_MESSAGE,
+      waitlisted: waitlist.ok,
+    };
   }
 
   // Each lookup can make up to 2 billed RentCast calls, so gate abuse per user
@@ -184,7 +244,10 @@ export async function lookupParcelAction(
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    throw new Error("Too many address lookups. Please try again in a bit.");
+    return {
+      ok: false,
+      error: "Too many address lookups. Please try again in a bit.",
+    };
   }
   // Daily ceiling on top of the hourly one (security audit finding #6): the
   // hourly limiter alone still lets one account burn 10 * 24 = 240 lookups a
@@ -200,9 +263,10 @@ export async function lookupParcelAction(
     p_window_seconds: 86400,
   });
   if (allowedDay === false) {
-    throw new Error(
-      "Too many address lookups today. Please try again tomorrow."
-    );
+    return {
+      ok: false,
+      error: "Too many address lookups today. Please try again tomorrow.",
+    };
   }
 
   // Strip the county assessor's owner-of-record before returning to the
@@ -213,8 +277,14 @@ export async function lookupParcelAction(
   // re-fetches the full ParcelFacts server-side via lookupParcel, so nothing
   // that legitimately needs them loses access.
   const { owner_names, owner_type, owner_occupied, ...publicFacts } =
-    await lookupParcel(street.trim(), zip.trim());
-  return publicFacts;
+    await lookupParcel(
+      street.trim(),
+      zip.trim(),
+      // Capped here as well as on the claim: a server action takes whatever
+      // it is handed, and this value reaches an outbound request URL.
+      (unit ?? "").trim().slice(0, MAX_UNIT) || null
+    );
+  return { ok: true, facts: publicFacts };
 }
 
 // Step 2: create the property (self-attested ownership for MVP).
@@ -236,7 +306,8 @@ export async function claimPropertyAction(
   if (!user) redirect("/signin");
 
   // Free vs Plus home limits: a free homeowner may claim 1 home; Plus unlocks
-  // up to 5 so a landlord/multi-property owner can track them all in one place,
+  // PLUS_INCLUDED_HOMES (src/lib/constants.ts, the same number the /plus card
+  // advertises) so a landlord/multi-property owner can track them all at once,
   // plus any paid extra-home slots the member bought on top (the Plus-only
   // pay-per-extra-home add-on, see setExtraHomesAction/getExtraHomeSlots).
   // Homes merely shared with the user as a household member do not count
@@ -253,12 +324,16 @@ export async function claimPropertyAction(
   const ownedHomes = existingHomes.filter((h) => !h.isShared);
   // getExtraHomeSlots already returns 0 unless Plus is live, so the free-tier
   // cap of 1 can never be inflated by a stale slot count.
-  const cap = plus ? 5 + extraSlots : 1;
+  const cap = plus ? PLUS_INCLUDED_HOMES + extraSlots : 1;
   if (ownedHomes.length >= cap) {
     if (!plus) {
       redirect("/plus?reason=home_limit");
     }
-    setFlash(
+    // Awaited: setFlash writes a cookie through the async cookies() store, and
+    // redirect() throws immediately. Without the await the redirect unwound the
+    // action before the cookie was ever set, so the toast explaining WHY they
+    // landed on /plus was a coin flip.
+    await setFlash(
       `You're using all ${cap} of your homes. You can add more homes anytime from the Plus page.`,
       "error"
     );
@@ -271,7 +346,7 @@ export async function claimPropertyAction(
   // all the way into a claimed home. The matching check in OnboardingForm.tsx
   // is only there for faster client-side feedback - this one is what actually
   // guards the insert below.
-  const addressLine1 = ((formData.get("address_line1") as string) ?? "").trim();
+  const addressLine1 = cappedField(formData, "address_line1", MAX_ADDRESS_LENGTH);
   if (addressLine1.length < MIN_ADDRESS_LENGTH) {
     return err("Enter your home's address before claiming it.");
   }
@@ -287,6 +362,125 @@ export async function claimPropertyAction(
     await joinMarketWaitlistAction(claimZip);
     return err(LAUNCH_ONLY_MESSAGE);
   }
+
+  // The condo/townhome unit (migration 0127), kept in its own column rather
+  // than folded into address_line1: address_line1 is the street line the
+  // parcel lookup and the assessor ownership match run against, and the unit
+  // is appended for display by formatAddressLine (src/lib/property.ts).
+  // Empty means single-family, which is null, not "".
+  // Read early because the ownership decision below turns on it.
+  const unit = cappedFieldOrNull(formData, "unit", MAX_UNIT);
+
+  // =========================================================================
+  // DID THE HOMEOWNER EDIT THE ADDRESS AFTER THE LOOKUP?
+  //
+  // The confirm step's street box is a real, editable input (OnboardingForm.tsx)
+  // - a homeowner who can see the county has their street wrong is meant to fix
+  // it there. But every parcel-derived fact on that screen rides along in HIDDEN
+  // fields captured from the ORIGINAL lookup: the APN, the coordinates, the
+  // county, the assessed value and year, the last sale, the tax history, the
+  // AVM. Correcting the street and pressing claim therefore wrote a home whose
+  // address says one property and whose parcel facts describe another - and the
+  // coordinates in particular are what /value, the weather alerts, and the pro
+  // matching all key off, so this is not a cosmetic mismatch.
+  //
+  // So the claim compares the submitted street against the line the lookup
+  // actually returned (`looked_up_address`, a hidden field). Same normalization
+  // parcelCacheKey uses, so a whitespace or casing difference is not an edit.
+  // When they differ, every frozen fact is re-derived from a fresh lookup of
+  // the address being claimed and the posted hidden fields are ignored outright
+  // - they describe a property this claim is no longer about.
+  //
+  // A missing looked_up_address counts as edited. A browser always sends it
+  // whenever those hidden fields exist, so its absence means a hand-made post,
+  // and re-deriving is the safe reading of one.
+  //
+  // Only the FROZEN facts are re-derived. The fields the confirm step puts on
+  // screen - city, state, year built, size, beds, baths, lot size, property
+  // type - keep whatever was submitted either way, because the person who
+  // lives there is the authority on those and overwriting their typing with a
+  // records value is the bug this whole screen exists to avoid. The ZIP is
+  // locked on the ready step, so the re-lookup runs against the same ZIP the
+  // original one did.
+  // =========================================================================
+  const normalizeStreet = (s: string) =>
+    s.trim().replace(/\s+/g, " ").toLowerCase();
+  const lookedUpAddress = cappedField(
+    formData,
+    "looked_up_address",
+    MAX_ADDRESS_LENGTH
+  );
+  const addressEdited =
+    !lookedUpAddress ||
+    normalizeStreet(lookedUpAddress) !== normalizeStreet(addressLine1);
+
+  // The fresh facts for an edited address. Null means "no facts to use": either
+  // the re-lookup was refused by the rate limiter or it failed outright, in
+  // which case every frozen field below lands as null. That is the deliberate
+  // choice - a claim with no assessed value is a gap the owner can fill in from
+  // Home Profile, while a claim carrying another address's assessed value is
+  // wrong data that nothing downstream can tell apart from real data.
+  let relookupFacts: ParcelFacts | null = null;
+  if (addressEdited) {
+    // The same per-user buckets lookupParcelAction spends (migration 0068),
+    // because this is the same thing: a lookup of an address nothing has
+    // fetched yet, which costs a billed RentCast call. An unedited claim keeps
+    // hitting the cache row the lookup just wrote and still spends nothing, so
+    // only the edited path is metered. Fail-open on a limiter hiccup, same as
+    // every other rate_limit_hit call in this file.
+    const limiter = createAdminClient();
+    const { data: allowedHour } = await limiter.rpc("rate_limit_hit", {
+      p_bucket: `parcel:${user.id}`,
+      p_limit: 10,
+      p_window_seconds: 3600,
+    });
+    const { data: allowedDay } = await limiter.rpc("rate_limit_hit", {
+      p_bucket: `parcel-day:${user.id}`,
+      p_limit: 25,
+      p_window_seconds: 86400,
+    });
+    if (allowedHour !== false && allowedDay !== false) {
+      try {
+        relookupFacts = await lookupParcel(addressLine1, claimZip);
+      } catch (err) {
+        // Never fatal. The home is still theirs to claim; it just arrives
+        // without the county's numbers on it.
+        console.error("Corrected-address parcel lookup failed:", err);
+      }
+    }
+  }
+
+  // A parcel-derived field: from the fresh lookup when the address was edited,
+  // from the posted hidden field when it was not. Three shapes, because the
+  // columns are numeric, integer and text respectively.
+  const factString = (v: number | string | null | undefined): string | null =>
+    v === null || v === undefined ? null : String(v);
+  const parcelNum = (
+    key: string,
+    value: number | null | undefined,
+    min: number,
+    max: number
+  ) =>
+    boundedNumber(
+      addressEdited ? factString(value) : formData.get(key),
+      min,
+      max
+    );
+  const parcelInt = (
+    key: string,
+    value: number | null | undefined,
+    min: number,
+    max: number
+  ) =>
+    boundedInt(addressEdited ? factString(value) : formData.get(key), min, max);
+  const parcelText = (
+    key: string,
+    value: string | null | undefined,
+    max: number
+  ) =>
+    addressEdited
+      ? (value ?? "").trim().slice(0, max) || null
+      : cappedFieldOrNull(formData, key, max);
 
   // Every number on the claim is client input (the confirm step posts the
   // RentCast figures as hidden fields, and the owner can edit the visible
@@ -319,19 +513,29 @@ export async function claimPropertyAction(
     if (typeof raw !== "string" || !raw) return null;
     return raw.length > MAX_ENRICHMENT_JSON_CHARS ? null : raw;
   };
+  // Both blobs are parcel-derived, so an edited address takes them from the
+  // fresh lookup and never parses the posted copy at all.
   let propertyTaxHistory: { year: number; amount: number }[] | null = null;
-  try {
-    const raw = enrichmentJson("property_tax_history");
-    propertyTaxHistory = raw ? JSON.parse(raw) : null;
-  } catch {
-    propertyTaxHistory = null;
+  if (addressEdited) {
+    propertyTaxHistory = relookupFacts?.property_tax_history ?? null;
+  } else {
+    try {
+      const raw = enrichmentJson("property_tax_history");
+      propertyTaxHistory = raw ? JSON.parse(raw) : null;
+    } catch {
+      propertyTaxHistory = null;
+    }
   }
   let systemFacts: Record<string, string> | null = null;
-  try {
-    const raw = enrichmentJson("system_facts");
-    systemFacts = raw ? JSON.parse(raw) : {};
-  } catch {
-    systemFacts = {};
+  if (addressEdited) {
+    systemFacts = relookupFacts?.system_facts ?? {};
+  } else {
+    try {
+      const raw = enrichmentJson("system_facts");
+      systemFacts = raw ? JSON.parse(raw) : {};
+    } catch {
+      systemFacts = {};
+    }
   }
 
   // baseRow: the columns this insert has always written, guaranteed to exist
@@ -352,7 +556,10 @@ export async function claimPropertyAction(
 
   const baseRow = {
     user_id: user.id,
-    parcel_id: (formData.get("parcel_id") as string) || null,
+    // Frozen fact: the assessor's parcel number belongs to whichever address
+    // the lookup actually resolved, so it is re-derived when the street was
+    // corrected rather than carried over from the old one.
+    parcel_id: parcelText("parcel_id", relookupFacts?.parcel_id, MAX_PARCEL_ID),
     address_line1: addressLine1,
     city: cappedFieldOrNull(formData, "city", MAX_CITY),
     state: cappedFieldOrNull(formData, "state", MAX_STATE),
@@ -374,26 +581,72 @@ export async function claimPropertyAction(
     // server-locked to false by migration 0093's trigger regardless of what
     // this insert asks for. ownership_status (set below, after the insert,
     // via the server-side assessor-record check) supersedes it.
+    // Frozen facts, all four: the last recorded sale and the county
+    // assessment are statements about a specific parcel, not about whatever
+    // street line the form happens to be carrying.
     purchase_date: validPurchaseDate(
-      (formData.get("purchase_date") as string) || null
+      addressEdited
+        ? (relookupFacts?.purchase_date ?? null)
+        : (formData.get("purchase_date") as string) || null
     ),
-    purchase_price: num("purchase_price", 0, 1_000_000_000),
-    assessed_value: num("assessed_value", 0, 1_000_000_000),
-    assessed_year: int("assessed_year", 1700, 2100),
+    purchase_price: parcelNum(
+      "purchase_price",
+      relookupFacts?.purchase_price,
+      0,
+      1_000_000_000
+    ),
+    assessed_value: parcelNum(
+      "assessed_value",
+      relookupFacts?.assessed_value,
+      0,
+      1_000_000_000
+    ),
+    assessed_year: parcelInt(
+      "assessed_year",
+      relookupFacts?.assessed_year,
+      1700,
+      2100
+    ),
   };
+  // Written as a spread-in delta, not a field on the row, so a single-family
+  // claim (by far the common case) posts exactly the same shape it always has
+  // and can never take the missing-column retry path below.
+  const unitWrite = unit ? { unit } : {};
+
   // extendedRow: baseRow plus the columns migration 0066 actually adds.
   // Attempted first, with baseRow as the fallback below if the live DB
   // hasn't run 0066 yet.
+  //
+  // Every field here is parcel-derived and none of them is on screen, so all of
+  // them are frozen facts (see the addressEdited block above). The coordinates
+  // matter most: /value, the weather alerts and the pro matching all key off
+  // them, so a corrected street line with the old address's latitude on it
+  // would quietly point the whole product at the wrong house.
   const extendedRow = {
     ...baseRow,
-    latitude: num("latitude", -90, 90),
-    longitude: num("longitude", -180, 180),
-    hoa_fee: num("hoa_fee", 0, 100_000),
-    county: cappedFieldOrNull(formData, "county", MAX_COUNTY),
+    latitude: parcelNum("latitude", relookupFacts?.latitude, -90, 90),
+    longitude: parcelNum("longitude", relookupFacts?.longitude, -180, 180),
+    hoa_fee: parcelNum("hoa_fee", relookupFacts?.hoa_fee, 0, 100_000),
+    county: parcelText("county", relookupFacts?.county, MAX_COUNTY),
     property_tax_history: propertyTaxHistory,
-    market_value: num("market_value", 0, 1_000_000_000),
-    market_value_low: num("market_value_low", 0, 1_000_000_000),
-    market_value_high: num("market_value_high", 0, 1_000_000_000),
+    market_value: parcelNum(
+      "market_value",
+      relookupFacts?.market_value,
+      0,
+      1_000_000_000
+    ),
+    market_value_low: parcelNum(
+      "market_value_low",
+      relookupFacts?.market_value_low,
+      0,
+      1_000_000_000
+    ),
+    market_value_high: parcelNum(
+      "market_value_high",
+      relookupFacts?.market_value_high,
+      0,
+      1_000_000_000
+    ),
   };
 
   // extendedRow's enrichment fields (everything migration 0066 adds) aren't
@@ -402,9 +655,40 @@ export async function claimPropertyAction(
   // saveTaxAssessmentAction (taxes/actions.ts) for their own not-yet-typed
   // columns, rather than widening the generated types by hand.
   let { data: created, error } = await (supabase.from("properties") as any)
-    .insert(extendedRow)
+    .insert({ ...extendedRow, ...unitWrite })
     .select("id")
     .single();
+
+  // Set when the claim went through but the unit did not, so the homeowner is
+  // told rather than left to notice on their own that the number they typed
+  // vanished. Raised after the redirect target is decided, at the end.
+  let unitDropped = false;
+
+  if (error && unit && isMissingSchemaError(error)) {
+    // Live DB hasn't run migration 0127 yet, so `unit` is not a column.
+    // Retry without it: a condo owner still gets their home, just filed under
+    // the street line until the migration is applied. Same missing-column-safe
+    // convention as the contractor signup insert (src/app/pro/actions.ts).
+    // Logged rather than silent - this is the signal that 0127 is still
+    // pending on the live DB, and the unit the homeowner typed is being
+    // dropped.
+    console.error(
+      "properties insert: `unit` column missing (run migration 0127); retrying without it:",
+      error.message
+    );
+    ({ data: created, error } = await (supabase.from("properties") as any)
+      .insert(extendedRow)
+      .select("id")
+      .single());
+    if (!error) {
+      // The insert failed WITH `unit` and succeeded WITHOUT it, which is proof
+      // the column is missing rather than a guess. Tell src/lib/property.ts so
+      // getProperties stops paying a doomed select plus a retry on every
+      // request for the rest of this process's life.
+      noteUnitColumnMissing();
+      unitDropped = true;
+    }
+  }
 
   if (error && isMissingSchemaError(error)) {
     // Live DB hasn't run migration 0066 yet (one of the enrichment columns
@@ -417,6 +701,11 @@ export async function claimPropertyAction(
       .insert(baseRow)
       .select("id")
       .single());
+    // baseRow carries no unit either, so a condo claim that lands here loses
+    // it the same way. Worth the same warning, but NOT worth marking the
+    // column missing: what failed here was a 0066 column, and `unit` was
+    // never separately proven absent.
+    if (!error && unit) unitDropped = true;
   }
 
   if (error || !created) {
@@ -427,11 +716,18 @@ export async function claimPropertyAction(
     return err("We couldn't claim your home just now. Please try again.");
   }
 
-  // Ownership verification (migration 0093): re-run the same street/zip
-  // lookup lookupParcelAction just did moments ago, which hits the fresh
-  // parcel_cache row it wrote (0069) instead of billing RentCast again, and
-  // match the county assessor's owner-of-record against the account
-  // holder's own name (src/lib/ownershipMatch.ts). This is the ONLY place
+  // Homeowner terms, recorded at the moment a home is actually claimed. The
+  // signup pages and /auth/callback already record this for anyone who came
+  // through the homeowner door, and recordTermsAcceptance is idempotent, so
+  // for them this is a no-op existence check. It matters for the account that
+  // reached here another way: a pro adding a home is agreeing to the homeowner
+  // terms now, and before this there was no row saying so.
+  await recordTermsAcceptance(user.id, "terms");
+
+  // Ownership verification (migration 0093): match the county assessor's
+  // owner-of-record for this address against the account holder's own name
+  // (src/lib/ownershipMatch.ts). A claim that carries a unit skips the match
+  // entirely and records an honest "unverified" instead - see below. This is the ONLY place
   // owner data is read - the client-submitted parcel JSON above never
   // carried it (OnboardingForm.tsx only forwards a fixed, named set of
   // hidden fields, none of them owner_names/owner_type), so there is
@@ -443,7 +739,14 @@ export async function claimPropertyAction(
     // to whatever is already on the account (a Google user's backfilled
     // metadata, or a name set in account settings) if the field somehow came
     // through empty.
-    const submittedName = ((formData.get("full_name") as string) ?? "").trim();
+    // Capped like every other stored string: this one is written to
+    // users.full_name AND to the auth metadata, so an unbounded value would
+    // land in two places at once.
+    const submittedName = cappedFieldOrNull(
+      formData,
+      "full_name",
+      FIELD_MAX.name
+    );
     const fullName =
       submittedName ||
       (user.user_metadata?.full_name as string | undefined)?.trim() ||
@@ -462,15 +765,68 @@ export async function claimPropertyAction(
         await supabase.auth.updateUser({ data: { full_name: fullName } });
       }
     }
-    const facts = await lookupParcel(addressLine1, claimZip);
-    const status = deriveOwnershipStatus(fullName, facts);
-    await createAdminClient().rpc("record_ownership_check", {
-      p_property_id: created.id,
-      p_status: status,
-      p_owner_names: facts.owner_names,
-      p_owner_type: facts.owner_type,
-      p_owner_occupied: facts.owner_occupied,
-    });
+    if (unit) {
+      // A UNIT HAS NO OWNER OF RECORD HERE, so nothing is matched against.
+      //
+      // RentCast matches /v1/properties on the street and hands back the
+      // BUILDING's record whichever unit rides along (see parcelCacheKey in
+      // src/lib/parcel.ts). For a condo or townhome that record's owner of
+      // record is the developer, the HOA, or whoever holds the master parcel -
+      // it is not unit 4B's owner, and it is not evidence about the person
+      // claiming 4B either way. Matching against it was wrong in both
+      // directions: a "verified" from a lucky surname collision with the
+      // building's owner, and a silent non-match for the honest owner of a unit
+      // the county files separately.
+      //
+      // So the check is recorded as explicitly UNVERIFIED with its reason,
+      // rather than skipped. Skipping would leave ownership_checked_at null,
+      // and a null is what the lazy re-check in
+      // src/app/(app)/contractors/actions.ts treats as "never checked" - it
+      // would run the very building-level match this is refusing, on the first
+      // job post.
+      //
+      // 'unverified' is one of the two statuses record_ownership_check accepts
+      // (migration 0095); there is no third value and no reason column, so the
+      // reason goes in p_owner_names, the one jsonb slot the RPC exposes. No
+      // read path consults that column today (src/lib/property.ts deliberately
+      // leaves it out of every select), so this stores the WHY for a human
+      // reading the row without misleading anything that runs. A real
+      // ownership_unverified_reason column is the proper home for it whenever
+      // the next migration touches this table.
+      await createAdminClient().rpc("record_ownership_check", {
+        p_property_id: created.id,
+        p_status: "unverified",
+        p_owner_names: { reason: "unit-level records not available" },
+        p_owner_type: null,
+        p_owner_occupied: null,
+      });
+    } else {
+      // Single-family: the street address IS the parcel, so the county's owner
+      // of record is a real statement about this home.
+      //
+      // relookupFacts when the street was corrected above - the same fresh
+      // lookup, so the name is matched against the address actually being
+      // claimed and no second billed call is spent. Otherwise the same street
+      // and ZIP the confirm step looked up, which hits the parcel_cache row it
+      // just wrote (migration 0069) rather than billing RentCast again.
+      const facts = addressEdited
+        ? relookupFacts
+        : await lookupParcel(addressLine1, claimZip);
+      // Null only when a corrected-address lookup was rate-limited or failed.
+      // Leave the property unchecked rather than guessing: ownership_checked_at
+      // stays null, which is exactly the state the lazy re-check on first job
+      // post is built to pick up.
+      if (facts) {
+        const status = deriveOwnershipStatus(fullName, facts);
+        await createAdminClient().rpc("record_ownership_check", {
+          p_property_id: created.id,
+          p_status: status,
+          p_owner_names: facts.owner_names,
+          p_owner_type: facts.owner_type,
+          p_owner_occupied: facts.owner_occupied,
+        });
+      }
+    }
   } catch (err) {
     console.error("Ownership verification check failed:", err);
   }
@@ -564,6 +920,22 @@ export async function claimPropertyAction(
     };
   });
   await supabase.from("home_systems").insert(starterRows);
+
+  // The home is claimed, but the unit number never made it onto the row (the
+  // live DB has not run 0127). Say so plainly instead of letting a condo owner
+  // discover their address reads as the whole building.
+  //
+  // The old wording ended "add it later from Household", which was an
+  // instruction to do something impossible: Household has no unit field, and
+  // could not have one until the column exists - which is the very thing that
+  // is missing here. Sending someone hunting for a box that isn't there is
+  // worse than saying nothing, so the message now stops at the honest half.
+  if (unitDropped) {
+    await setFlash(
+      "Your home is saved. We couldn't save the unit number yet.",
+      "warning"
+    );
+  }
 
   revalidatePath("/", "layout");
   // Send them where they were originally headed (?next=, carried here from

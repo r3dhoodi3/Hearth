@@ -2,7 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
-import { countAiUsage } from "@/lib/aiUsage";
+import {
+  countAiUsage,
+  countAiUsageWindow,
+  overAiGlobalHourlyLimit,
+  refundAiUsage,
+} from "@/lib/aiUsage";
+import { readJsonBounded } from "@/lib/boundedBody";
+import { TOPIC_GUARD_PRO } from "@/lib/aiGuard";
+import { hasAskableContent, pickImageIndexes } from "@/lib/askRequest";
+import {
+  generateText,
+  hasClaudeKey,
+  claudeFailureMessage,
+  isRateLimitError,
+  type ClaudeMessage,
+} from "@/lib/claude";
 import { wrapUntrusted } from "@/lib/promptSafe";
 import {
   LEAD_TIER_FEES,
@@ -25,7 +40,7 @@ export const runtime = "nodejs";
 // own company (trades, service area, license status, wallet, open leads). It
 // mirrors the homeowner /api/ask route's structure and robustness, but talks
 // from the pro's side of the marketplace and stays strictly in the pro lane.
-// Calls Gemini directly so there's no SDK dep.
+// Calls Claude through the shared helper in src/lib/claude.ts.
 // Cap each attached image (base64 chars) so a caller can't push huge payloads
 // at the paid vision model. ~4M chars ≈ 3MB; the client already downscales to
 // ~1024px JPEG, so real attachments are far smaller than this.
@@ -36,10 +51,15 @@ const MAX_IMAGE_B64_CHARS = 4_000_000;
 const MAX_HISTORY_MESSAGES = 40;
 const MAX_TEXT_CHARS_PER_MSG = 8000;
 const MAX_IMAGES_PER_REQUEST = 4;
+// Hard ceiling on the request body itself, in bytes, checked from the header
+// BEFORE anything is read. Every cap above only applies once the body has
+// been parsed, which meant a caller could make this route buffer and parse an
+// arbitrarily large payload for free. Same number as the homeowner route.
+const MAX_BODY_BYTES = 6_000_000;
 
 export async function POST(req: NextRequest) {
   // Require a signed-in user before touching the paid model. Gating here (not
-  // just in middleware) stops anonymous abuse that would run up Gemini cost.
+  // just in middleware) stops anonymous abuse that would run up model cost.
   const authClient = await createClient();
   const {
     data: { user: authUser },
@@ -48,18 +68,54 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!hasClaudeKey()) {
     // The setup detail belongs in the server logs, never in the chat.
     console.error(
-      "Ask Hearth for Pros: GEMINI_API_KEY is not set in the environment."
+      "Ask Hearth for Pros: ANTHROPIC_API_KEY is not set in the environment."
     );
     return NextResponse.json({
       answer: "Ask Hearth is temporarily unavailable. Please try again soon.",
     });
   }
 
-  const body = await req.json().catch(() => ({}));
+  // RATE, then the body, and the body under a hard byte ceiling. Both used to
+  // sit behind req.json(), so the expensive part of an abusive request
+  // (buffering and parsing megabytes of JSON) was already paid for by the
+  // time anything said no.
+  //
+  // The size guard used to be a Content-Length check right here, and that
+  // header is a claim a chunked request never makes: `Transfer-Encoding:
+  // chunked` read as 0 and walked straight past it. readJsonBounded counts
+  // the bytes that actually arrive. See src/lib/boundedBody.ts.
+
+  // BURST LIMIT, per user, in front of the body read. Same limit and the same
+  // fail-CLOSED posture as the homeowner /api/ask route. The membership gate
+  // below is unchanged: pros are not gated on Pro membership, it only raises
+  // their daily cap.
+  //
+  // The owner-wide hourly ceiling used to be checked right here too. It now
+  // runs after the pro's own daily cap further down, so a request that was
+  // going to be refused anyway no longer bumps the shared ai-global-hour
+  // bucket and sheds load from pros who still have allowance. On a refusal
+  // only this pro's own burst counter moves.
+  const { overLimit: overBurst } = await countAiUsageWindow(authUser.id);
+  if (overBurst) {
+    return NextResponse.json(
+      { answer: "Slow down a little. Try again in a minute." },
+      { status: 429 }
+    );
+  }
+
+  const parsedBody = await readJsonBounded(req, MAX_BODY_BYTES);
+  if (!parsedBody.ok) {
+    return parsedBody.status === 413
+      ? NextResponse.json(
+          { answer: "That message is too large to send." },
+          { status: 413 }
+        )
+      : NextResponse.json({ error: "No question." }, { status: 400 });
+  }
+  const body = parsedBody.data;
   // Only keep the most recent turns so a caller can't send an unbounded
   // history and blow up the paid request.
   const history = Array.isArray(body.messages)
@@ -73,6 +129,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No question." }, { status: 400 });
   }
 
+  // An empty send is not a question: whitespace with no photo builds an empty
+  // message list, which the API rejects with a 400 after the daily counter has
+  // already been spent on it. Caught here, before anything is counted.
+  const askable = history ? hasAskableContent(history) : Boolean(question.trim());
+  if (!askable) {
+    return NextResponse.json(
+      { answer: "Type a question first." },
+      { status: 400 }
+    );
+  }
+
+
   // Build the contractor context defensively. If any DB/auth step fails, fall
   // back to a minimal prompt rather than erroring the whole request. Whether
   // they are a paying Pro member also decides the higher daily cap below.
@@ -85,8 +153,17 @@ export async function POST(req: NextRequest) {
   // model would read them as free-tier and pitch a trial they cannot get.
   let isProTrialEligible = false;
   let context = "This pro hasn't finished setting up their company yet.";
+  // Pro copilot is for accounts with a company row. A homeowner (or an
+  // account that never finished pro setup) gets the same 403 the other
+  // pro-* routes return, instead of a free run at the model.
+  const contractor = await getCurrentContractor();
+  if (!contractor) {
+    return NextResponse.json(
+      { error: "Set up your company first." },
+      { status: 403 }
+    );
+  }
   try {
-    const contractor = await getCurrentContractor();
     if (contractor) {
       companyName = contractor.name ?? null;
 
@@ -233,10 +310,19 @@ export async function POST(req: NextRequest) {
   const today = new Date().toISOString().slice(0, 10);
   const system =
     "You are Hearth for Pros, a warm, sharp business copilot for a contractor who sells their services on the Hearth marketplace. " +
+    // Scope rule first, before any style or behaviour instruction, so an
+    // off-topic request is turned away rather than answered beautifully.
+    // Shared word for word with the homeowner route via src/lib/aiGuard.ts.
+    TOPIC_GUARD_PRO +
+    "\n\n" +
     (companyName
       ? `Their company is ${companyName}; greet and address them by it naturally, without overusing it. `
       : "") +
     "Lead with one direct sentence that answers their question. Then, if there is more to say, add a few short bullets or two to three sentence steps, with a line break between chunks and a small header before a list when it helps, like 'Line items:' or 'Next steps:'. Never write a long wall of text. Each chunk should be short enough to read in a few seconds. " +
+    // LENGTH, same rule the homeowner chat carries: the reply is generated in
+    // one shot with no streaming, so every extra sentence is another second
+    // the pro spends watching a spinner between jobs.
+    "Answer in under 150 words unless the pro asks for detail; lead with the answer, then at most 3 short bullets. " +
     "Write in plain, complete sentences. Do NOT use dashes as connectors: no em dashes, and never a hyphen used as a dash. Use a comma, a colon, or a new sentence instead. " +
     "Always capitalize the first letter of every sentence, bullet point, and button label. " +
     "ALWAYS reply in the language the pro writes in. If they write in Spanish, answer entirely in Spanish; same for any other language. Match their language even if the company details below are in English. " +
@@ -258,55 +344,71 @@ export async function POST(req: NextRequest) {
     "ACCURACY, this matters most: only use the company details provided below, and never invent specifics. Never state a license number, a wallet balance, a lead fee, a deposit bonus, a date, or a count that is not given below; if a detail is not provided, say you do not have it on file rather than guessing. " +
     "Any price, quote, or estimate you suggest is a rough local ballpark: present it as an approximate starting point the pro should confirm against their own costs, never as a firm or official number. " +
     "For licensing, permit, code, insurance, or other legal questions, give general guidance only, never legal advice: never cite a specific building code section or statute number, and tell them to confirm the current rule with the CSLB or their local building department before relying on it. " +
-    "Only use the company details provided below; don't invent specifics.\n\n" +
-    context;
+    "Only use the company details provided below; don't invent specifics.\n\n";
 
-  // Count images across the whole request so we can stop attaching past the
-  // cap while still forwarding each message's text.
-  let imagesAttached = 0;
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: system }] },
-    contents: history
-      ? history
-          .filter(
-            (m: any) =>
-              m && (typeof m.content === "string" || typeof m.image === "string")
-          )
-          .map((m: any) => {
-            const parts: any[] = [];
-            if (m.content && m.content.trim())
-              parts.push({ text: m.content.slice(0, MAX_TEXT_CHARS_PER_MSG) });
-            // A pro can attach a photo (a quote, a job site, a label) for vision.
-            // Drop anything over the size cap, and stop once we've attached the
-            // max number of images for this request.
-            if (
-              typeof m.image === "string" &&
-              m.image.length <= MAX_IMAGE_B64_CHARS &&
-              imagesAttached < MAX_IMAGES_PER_REQUEST
-            ) {
-              imagesAttached++;
-              parts.push({
-                inlineData: {
-                  mimeType: m.mime || "image/jpeg",
-                  data: m.image,
-                },
-              });
-            }
-            if (parts.length === 0) parts.push({ text: "" });
-            return {
-              role: m.role === "assistant" ? "model" : "user",
-              parts,
-            };
-          })
-      : [{ role: "user", parts: [{ text: question }] }],
-    generationConfig: { maxOutputTokens: 800 },
-  });
+  // THE VOLATILE TAIL, deliberately NOT part of the cached block above.
+  // Two things make this string different on every request: the pro's open
+  // leads and wallet balance move constantly, and the job descriptions inside
+  // it go through wrapUntrusted, which mints a fresh random nonce per call.
+  // Inside `system` that rewrote the cache every turn and never read one
+  // back, which costs more than not caching. As systemSuffix it renders in
+  // exactly the same place, with the cache breakpoint in front of it.
+  const systemCompanyDetails = context;
 
-  // Per-user daily cap so a single account can't run up the paid Gemini bill.
+  // Map the client's replayed history onto Claude turns. Images ride along in
+  // the same turn as their text.
+  //
+  // WHICH images: chosen newest-first by pickImageIndexes, then attached in
+  // the history's own order so the conversation still reads chronologically.
+  // This used to walk forwards and stop at the cap, which kept the four
+  // OLDEST photos and dropped the quote the pro had just attached - the one
+  // their question was actually about. It also refuses to re-send a photo from
+  // further back than the last few turns, so an old picture stops riding along
+  // at full vision price on every later text question.
+  const keepImages = history
+    ? pickImageIndexes(history, {
+        maxImages: MAX_IMAGES_PER_REQUEST,
+        maxChars: MAX_IMAGE_B64_CHARS,
+      })
+    : new Set<number>();
+  const turns: ClaudeMessage[] = history
+    ? history
+        .map((m: any, i: number): ClaudeMessage | null => {
+          if (!m || (typeof m.content !== "string" && typeof m.image !== "string"))
+            return null;
+          return {
+            role: m.role === "assistant" ? "assistant" : "user",
+            text:
+              typeof m.content === "string"
+                ? m.content.slice(0, MAX_TEXT_CHARS_PER_MSG)
+                : "",
+            images: keepImages.has(i) ? [{ data: m.image, mime: m.mime }] : [],
+          };
+        })
+        .filter((t: ClaudeMessage | null): t is ClaudeMessage => t !== null)
+    : [{ role: "user", text: question }];
+
+  // Per-user daily cap so a single account can't run up the paid model bill.
   // A paying Pro member gets the higher ceiling. Counted in the shared ai_usage
-  // table (fails open, resets at midnight); see src/lib/aiUsage.ts.
-  const { overLimit } = await countAiUsage(authUser.id, isProMember);
+  // table (fails closed, resets at midnight); see src/lib/aiUsage.ts.
+  // burst/hourly off: this route runs the chat's own tighter burst limit at
+  // the top and its own hourly check below, in that deliberate order. Letting
+  // countAiUsage run them again would double-count both.
+  const { overLimit, reason } = await countAiUsage(authUser.id, isProMember, {
+    burst: false,
+    hourly: false,
+  });
   if (overLimit) {
+    // Only "user_daily" is this pro's own allowance. A tripped owner-wide
+    // breaker or an unreadable counter is Hearth's problem, and telling a pro
+    // who has barely used the copilot that they are out for the day (and
+    // pitching Hearth Pro at them) would be plainly false.
+    if (reason !== "user_daily") {
+      return NextResponse.json(
+        { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({
       answer: isProMember
         ? "You have reached today's Ask Hearth limit. It resets tomorrow."
@@ -314,70 +416,62 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Each free-tier model has its OWN daily quota, so cycle through them: if one
-  // is rate-limited (429), fall through to the next.
-  const MODELS = [
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-flash-latest",
-    "gemini-2.0-flash-lite",
-  ];
-
-  let rateLimited = false;
-  // If a model's reply was cut off or blocked (finishReason MAX_TOKENS,
-  // SAFETY, RECITATION, ...), keep the longest partial text so the user still
-  // sees something if every model fails to finish cleanly.
-  let bestAnswer = "";
-  for (const model of MODELS) {
-    try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: requestBody,
-        }
-      );
-      if (resp.status === 429) {
-        rateLimited = true;
-        continue; // this model is out of quota; try the next
-      }
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const candidate = data?.candidates?.[0];
-      const answer = candidate?.content?.parts?.[0]?.text;
-      const finishReason = candidate?.finishReason;
-      // Only a clean STOP (or no reported reason) with text is a complete
-      // answer; anything else was truncated or blocked, so keep the partial
-      // and try the next model.
-      if (answer && (!finishReason || finishReason === "STOP")) {
-        return NextResponse.json({ answer });
-      }
-      // A MAX_TOKENS finish means the model answered but ran out of output
-      // budget. Retrying the other models just re-truncates the same reply and
-      // bills the paid API 4x, so return the partial now instead of looping.
-      if (answer && finishReason === "MAX_TOKENS") {
-        return NextResponse.json({ answer });
-      }
-      if (typeof answer === "string" && answer.length > bestAnswer.length) {
-        bestAnswer = answer;
-      }
-      // No text or a non-STOP finish, so try the next model.
-    } catch {
-      // Network error, so try the next model.
-    }
+  // GLOBAL CEILING across every user, checked last of the three so a request
+  // that was going to be refused anyway never bumps it. Fails CLOSED.
+  //
+  // The daily counter above already charged this pro, so hand it back: they
+  // are being turned away by OUR ceiling, not theirs, and charging for that is
+  // the bug. Best effort, exactly like the homeowner route's refundAskUsage.
+  if (await overAiGlobalHourlyLimit()) {
+    await refundAiUsage(authUser.id);
+    return NextResponse.json(
+      { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
+      { status: 503 }
+    );
   }
 
-  // Every model came back truncated, blocked, or empty. A partial answer
-  // still beats an apology.
-  if (bestAnswer) return NextResponse.json({ answer: bestAnswer });
+  try {
+    // Thinking stays OFF, and it now says so OUT LOUD: claude-sonnet-5 runs
+    // adaptive thinking when `thinking` is omitted, so "we never turned it on"
+    // was in fact a full reasoning pass on every question, in a chat the pro is
+    // watching a spinner for. `false` disables it explicitly and "low" effort
+    // keeps the answer short, which is what a copilot answer between jobs
+    // wants to be.
+    //
+    // The system prompt is byte-stable for the whole conversation (company
+    // details, nothing per-request), so it caches and the second and later
+    // questions in a session read the prefix back at a tenth of the price.
+    const { text, stopReason } = await generateText({
+      system,
+      systemSuffix: systemCompanyDetails,
+      messages: turns,
+      thinking: false,
+      effort: "low",
+      maxTokens: 2048,
+      timeoutMs: 90_000,
+      label: "pro-ask",
+    });
 
-  return NextResponse.json({
-    answer: rateLimited
-      ? "Ask Hearth for Pros has hit today's free usage limit on all models. Please try again later."
-      : "Sorry, I couldn't generate an answer. Please try again.",
-  });
+    // A truncated reply still carries a usable answer, so return it: a partial
+    // answer beats an apology.
+    if (text) return NextResponse.json({ answer: text });
+    return NextResponse.json({
+      answer:
+        claudeFailureMessage(stopReason, text) ??
+        "Sorry, I couldn't generate an answer. Please try again.",
+    });
+  } catch (e) {
+    console.error("Ask Hearth for Pros: model call failed:", e);
+    // NO ANSWER MEANS NO CHARGE, the same rule the homeowner route has always
+    // had and this one was missing entirely: the question is counted before
+    // the call, so a call that threw (a 400 we built wrong, a timeout, a 429
+    // from Anthropic) has to hand the question back rather than quietly
+    // spending one out of the pro's daily allowance for nothing.
+    await refundAiUsage(authUser.id);
+    return NextResponse.json({
+      answer: isRateLimitError(e)
+        ? "Ask Hearth is busy right now. Try again in a minute."
+        : "Sorry, I couldn't generate an answer. Please try again.",
+    });
+  }
 }

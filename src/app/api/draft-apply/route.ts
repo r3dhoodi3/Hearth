@@ -3,13 +3,21 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasPlus, hasProPlan } from "@/lib/subscription";
-import { countAiUsage } from "@/lib/aiUsage";
+import { countAiUsage, overToolBurst } from "@/lib/aiUsage";
+import { reasonToClientPayload } from "@/lib/aiReason";
+import { readJsonBounded } from "@/lib/boundedBody";
 import { wrapUntrusted } from "@/lib/promptSafe";
 import { labelFor, JOB_CATEGORIES, TIMING_OPTIONS } from "@/lib/constants";
+import { generateText, hasClaudeKey, isRateLimitError } from "@/lib/claude";
 
 export const runtime = "nodejs";
 
-// Apply-message drafter for pros: given an open job, Gemini writes a short
+// Hard ceiling on the request body, in bytes. This route's body is one job
+// id; the cap only has to be far enough above that to never bother a real
+// client while still bounding what an abusive one can make us buffer.
+const MAX_BODY_BYTES = 512_000;
+
+// Apply-message drafter for pros: given an open job, Claude writes a short
 // first-pass apply message from the posting's details plus the contractor's
 // own company profile. The pro edits it before sending - it fills the
 // textarea, it doesn't send anything.
@@ -18,7 +26,7 @@ export const runtime = "nodejs";
 // Output: { message } | { message: null, reason: "no_key" | "rate_limited" | "failed" }
 export async function POST(req: NextRequest) {
   // Require a signed-in user before touching the paid model. Gating here (not
-  // just in middleware) stops anonymous abuse that would run up Gemini cost.
+  // just in middleware) stops anonymous abuse that would run up model cost.
   const authClient = await createClient();
   const {
     data: { user: authUser },
@@ -34,12 +42,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not a contractor" }, { status: 403 });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  // BURST PRE-CHECK, in front of the body read. The authoritative burst check
+  // lives inside countAiUsage below and only runs after the body has been
+  // parsed and the job loaded, so nothing rate limited this route before it
+  // did that work. One indexed row read on the same window countAiUsage will
+  // bump, so nothing is double counted, and the refusal is the same one.
+  if (await overToolBurst(authUser.id)) {
+    return NextResponse.json({
+      message: null,
+      ...reasonToClientPayload("user_burst"),
+    });
+  }
+
+  if (!hasClaudeKey()) {
     return NextResponse.json({ message: null, reason: "no_key" });
   }
 
-  const body = await req.json().catch(() => ({}));
+  // This body is a single job id. Half a megabyte is already absurdly
+  // generous, and it is counted on the bytes that actually arrive rather than
+  // trusted from Content-Length. See src/lib/boundedBody.ts.
+  const parsedBody = await readJsonBounded(req, MAX_BODY_BYTES);
+  if (!parsedBody.ok) {
+    return parsedBody.status === 413
+      ? NextResponse.json({ error: "That request is too large." }, { status: 413 })
+      : NextResponse.json({ error: "No job given." }, { status: 400 });
+  }
+  const body = parsedBody.data;
   const leadId = typeof body.leadId === "string" ? body.leadId : "";
   if (!leadId) {
     return NextResponse.json({ error: "No job given." }, { status: 400 });
@@ -72,15 +100,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Per-user daily cap so a single account can't run up the paid Gemini bill.
+  // Per-user daily cap so a single account can't run up the paid model bill.
   // Shares the ai_usage counter (and the Plus ceiling) with Ask Hearth, so it
   // resets cleanly at midnight and one pro can't farm drafts all day. An
   // active Pro membership counts as the higher tier here: a paying pro who
   // already used the AI back office shouldn't hit the free ceiling on drafts.
   const higherTier = (await hasPlus()) || (await hasProPlan());
-  const { overLimit } = await countAiUsage(authUser.id, higherTier);
+  // "rate_limited" is reserved for a REAL limit (this pro's daily cap, or the
+  // owner-wide spend breaker). A counter that could not be read is a bug, not
+  // a limit, and telling a pro they hit a usage limit they never touched
+  // sends them to the billing page for nothing. One mapping for all four
+  // reasons lives in src/lib/aiReason.ts.
+  const { overLimit, reason } = await countAiUsage(authUser.id, higherTier);
   if (overLimit) {
-    return NextResponse.json({ message: null, reason: "rate_limited" });
+    return NextResponse.json({
+      message: null,
+      ...reasonToClientPayload(reason),
+    });
   }
 
   const system =
@@ -116,81 +152,43 @@ export async function POST(req: NextRequest) {
     contractor.license_number ? "License on file: yes" : "",
   ].filter(Boolean);
 
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: system }] },
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text:
-              `The job posting:\n${jobLines.join("\n")}\n\n` +
-              `The company applying:\n${companyLines.join("\n")}\n\n` +
-              "Draft the apply message.",
-          },
-        ],
-      },
-    ],
-    generationConfig: { maxOutputTokens: 400 },
-  });
-
-  // Each free-tier model has its OWN daily quota, so cycle through them: if one
-  // is rate-limited (429), fall through to the next.
-  const MODELS = [
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-flash-latest",
-    "gemini-2.0-flash-lite",
-  ];
-
-  let rateLimited = false;
-  // If a model's reply was cut off or blocked (finishReason MAX_TOKENS,
-  // SAFETY, RECITATION, ...), keep the longest partial text so the pro still
-  // gets something editable if every model fails to finish cleanly.
-  let bestMessage = "";
-  for (const model of MODELS) {
-    try {
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey,
-          },
-          body: requestBody,
-        }
-      );
-      if (resp.status === 429) {
-        rateLimited = true;
-        continue; // this model is out of quota; try the next
-      }
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const candidate = data?.candidates?.[0];
-      const message = candidate?.content?.parts?.[0]?.text;
-      const finishReason = candidate?.finishReason;
-      // Only a clean STOP (or no reported reason) with text is a complete
-      // draft; anything else was truncated or blocked, so keep the partial
-      // and try the next model.
-      if (message && (!finishReason || finishReason === "STOP")) {
-        return NextResponse.json({ message: message.trim() });
-      }
-      if (typeof message === "string" && message.length > bestMessage.length) {
-        bestMessage = message;
-      }
-      // No text or a non-STOP finish - try the next model.
-    } catch {
-      // Network error - try the next model.
+  try {
+    // A short first-pass message from two lists of facts: no reasoning to buy
+    // here, so run it at low effort.
+    const { text, stopReason } = await generateText({
+      system,
+      prompt:
+        `The job posting:\n${jobLines.join("\n")}\n\n` +
+        `The company applying:\n${companyLines.join("\n")}\n\n` +
+        "Draft the apply message.",
+      maxTokens: 1024,
+      effort: "low",
+      // A pro clicking "draft" is waiting on this with the apply modal open.
+      // An explicit ceiling, like the other model routes, so a hung call
+      // fails on our clock rather than the platform's.
+      timeoutMs: 60_000,
+      label: "draft-apply",
+    });
+    // TRUNCATED IS NOT DONE. This text lands straight in the apply box, and a
+    // pro skimming it will send a message that stops mid-sentence to a
+    // homeowner deciding who to hire. A 3-to-5 sentence message hitting 1024
+    // tokens means something went wrong; say so rather than shipping the
+    // stump.
+    if (stopReason === "max_tokens") {
+      return NextResponse.json({
+        message: null,
+        reason: "too_long",
+        error:
+          "That draft ran long and got cut off. Try again, or write the message yourself.",
+      });
     }
+    if (text) return NextResponse.json({ message: text.trim() });
+    // Empty or refused: the pro writes it themselves.
+    return NextResponse.json({ message: null, reason: "failed" });
+  } catch (e) {
+    return NextResponse.json({
+      message: null,
+      reason: isRateLimitError(e) ? "rate_limited" : "failed",
+    });
   }
-
-  // Every model came back truncated, blocked, or empty. A partial draft the
-  // pro can finish still beats an error.
-  if (bestMessage) return NextResponse.json({ message: bestMessage.trim() });
-
-  return NextResponse.json({
-    message: null,
-    reason: rateLimited ? "rate_limited" : "failed",
-  });
 }

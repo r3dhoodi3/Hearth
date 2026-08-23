@@ -104,11 +104,17 @@ const GUIDES = [
   },
 ];
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
   // The root layout's title template appends "| Hearth"; don't repeat it here.
   title: "Home maintenance guides",
   description:
     "Plain-English guides to common home maintenance questions: replacement costs, slab leak warning signs, maintenance schedules, and how to read a contractor's quote.",
+  alternates: {
+    canonical: `${SITE_URL}/guides`,
+  },
 };
 
 export default function GuidesIndex() {

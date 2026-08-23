@@ -11,7 +11,7 @@ import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 const APPEAL_STAGES = ["Gathering your home's facts", "Drafting the letter"];
 
 // The "give me a head start" button on the "looks high" state. Plus members
-// get a Gemini-drafted appeal letter they can adapt and file themselves; free
+// get an AI-drafted appeal letter they can adapt and file themselves; free
 // users see what they'd get and a path to Plus. The letter is rendered in a
 // copyable block because the whole point is taking it OUT of Hearth and into
 // the county's appeal form or mailbox.

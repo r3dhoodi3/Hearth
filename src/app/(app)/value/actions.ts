@@ -125,7 +125,9 @@ export async function fetchAndSaveMarketValueAction(): Promise<{
     const zip = property.zip || null;
     if (!street || !zip) return { ok: false };
 
-    const facts = await lookupMarketValue(street, zip);
+    // The unit rides along (migration 0127): an AVM run on the bare street
+    // values the building, not this condo.
+    const facts = await lookupMarketValue(street, zip, property.unit);
     if (facts.market_value == null) return { ok: false };
 
     const supabase = await createClient();

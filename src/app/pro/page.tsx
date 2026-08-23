@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentContractor, getRole } from "@/lib/contractor";
+import { getCurrentContractor } from "@/lib/contractor";
 import {
   labelFor,
   JOB_CATEGORIES,
@@ -10,6 +10,7 @@ import {
   MAX_APPLICANTS_PER_JOB,
   COLD_START_FREE_ALERTS,
   MAJOR_INTRO_FEE,
+  LEAD_TIER_FEES,
   isMajorCategory,
 } from "@/lib/constants";
 import { Check } from "lucide-react";
@@ -22,6 +23,7 @@ import DirectRequestActions from "./DirectRequestActions";
 import JobStatusSelect from "./JobStatusSelect";
 import JobPhotoStrip from "./JobPhotoStrip";
 import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist";
+import ClearOnboardingDraft from "./ClearOnboardingDraft";
 import { agingLeadFee } from "@/lib/leadPricing";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
@@ -125,13 +127,11 @@ export default async function ProDashboard(
 ) {
   const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
-  if (!contractor) {
-    // No company yet: a user who chose the contractor role finishes company
-    // setup; one with no chosen role at all picks a side first instead of
-    // being funneled into either onboarding flow.
-    if ((await getRole()) === null) redirect("/get-started");
-    redirect("/pro/onboarding");
-  }
+  // No company yet: finish company setup. Whatever user_metadata.role says is
+  // beside the point - anyone who reached this URL is asking for the pro side,
+  // and building a company is how you get one. (A homeowner who never wanted
+  // it can leave from the bare shell's sign-out or their own nav.)
+  if (!contractor) redirect("/pro/onboarding");
 
   const supabase = await createClient();
 
@@ -357,6 +357,20 @@ export default async function ProDashboard(
   const logoDone = Boolean((contractor as any).logo_url);
   const canUploadLogo = logoDone ? true : await hasProPlan();
 
+  // License state, as the checklist below reads it: a number alone is not the
+  // finish line, the CSLB saying yes is (license_verified_status, 0037/0055).
+  const licenseStatus = contractor.license_verified_status ?? "unverified";
+  const licenseFailed =
+    Boolean(contractor.license_number) && licenseStatus === "failed";
+  // A number on file that is neither confirmed nor refused is waiting on a
+  // check this pro cannot hurry along, so it stays visible and unticked but
+  // does not hold the whole card open forever (same reasoning as `optional`
+  // on the members-only logo step).
+  const licenseAwaitingCheck =
+    Boolean(contractor.license_number) &&
+    licenseStatus !== "verified" &&
+    licenseStatus !== "failed";
+
   // First-session setup checklist. Every item comes from data this page
   // already loads (the contractor row, the wallet, my_applications), so it
   // costs nothing extra and hides itself once every step is done.
@@ -367,11 +381,31 @@ export default async function ProDashboard(
       href: "/pro/profile",
       linkLabel: "Complete profile",
     },
+    // Only a CSLB-verified license counts as done. A number that the CSLB
+    // refused used to tick this box, which told a pro their license was
+    // handled while /pro/profile showed "Not confirmed" on the same row - and
+    // left the one step they had to act on looking finished.
     {
-      label: "Put your license on file",
-      done: Boolean(contractor.license_number),
+      label: licenseFailed
+        ? "License not confirmed"
+        : "Put your license on file",
+      done: licenseStatus === "verified",
       href: "/pro/profile",
-      linkLabel: "Add license",
+      linkLabel: licenseFailed ? "Fix license" : "Add license",
+      optional: licenseAwaitingCheck,
+    },
+    // Plain outbound links only (0110). Done as soon as either is on file;
+    // no reason to require both. Pros with review links get more quotes
+    // accepted, so this comes right after license, ahead of the members-only
+    // logo step.
+    {
+      label:
+        "Add your Yelp or Google reviews link",
+      hint: "Pros with review links get more quotes accepted.",
+      done:
+        Boolean(contractor.yelp_url) || Boolean(contractor.google_reviews_url),
+      href: "/pro/profile#reviews",
+      linkLabel: "Add reviews link",
     },
     // Marked optional for non-members so the card can still reach its
     // done-state (and disappear) without it: nagging someone forever about a
@@ -428,6 +462,15 @@ export default async function ProDashboard(
 
       {/* The one true page heading; the sections below step down to h2. */}
       <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Your leads</h1>
+
+      {/* Reaching this page means a contractors row exists, which is the only
+          honest proof the signup wizard's save actually landed - so this is
+          where its localStorage draft finally gets dropped. The wizard itself
+          deliberately keeps the draft through a submit, because a refused save
+          sends the pro straight back to that form (see the draft-lifetime
+          comment in pro/onboarding/OnboardingCompanyForm.tsx). Renders
+          nothing. */}
+      <ClearOnboardingDraft userId={contractor.user_id ?? ""} />
 
       <SetupChecklist items={setupItems} />
 
@@ -663,6 +706,23 @@ export default async function ProDashboard(
             <p className="text-sm text-stone-500 dark:text-stone-400">
               Jobs homeowners posted in your categories. Apply to one and the
               homeowner reviews you. If they pick you, you get their contact.
+            </p>
+            {/* The price of applying belonged on the board itself, not only on
+                Billing: a pro should never have to leave the inbox to find out
+                what a tap costs. Both numbers come from LEAD_TIER_FEES, the
+                one place the tiers live, so this line cannot drift from the
+                per-card fee shown below. */}
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              Applying costs ${LEAD_TIER_FEES.light} to ${LEAD_TIER_FEES.major}{" "}
+              per lead depending on the trade, returned as wallet credit if the
+              homeowner picks someone else.{" "}
+              <Link
+                href="/pro/billing"
+                className="underline hover:text-stone-600 dark:hover:text-stone-300"
+              >
+                Details on Billing
+              </Link>
+              .
             </p>
           </div>
           {open.length > 1 && (

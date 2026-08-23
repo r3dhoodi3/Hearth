@@ -87,8 +87,15 @@ export default function PublicPageCard({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <code className="min-w-0 flex-1 truncate rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
-            {fullUrl}
+          {/* On a phone the field is narrower than the URL, and truncating
+              from the left spent every visible character on "https://hearth…"
+              - the part that is the same for every pro. Below sm it shows the
+              path instead, which is the half that identifies the page. The
+              Copy button still copies the full URL, and sm and up still show
+              it in full. */}
+          <code className="min-w-0 flex-1 truncate rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600 max-sm:basis-full max-sm:text-xs dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
+            <span className="sm:hidden">{path}</span>
+            <span className="max-sm:hidden">{fullUrl}</span>
           </code>
           <button
             type="button"

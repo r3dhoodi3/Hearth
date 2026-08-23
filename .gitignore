@@ -62,3 +62,9 @@ yarn-error.log*
 
 # Claude Code agent worktrees and session files
 .claude/
+
+# local dev server logs and isolated dist dirs used by agents
+.dev-*.log
+.next-*/
+lh.json
+.build-check.log

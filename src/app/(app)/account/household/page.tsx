@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getProperties } from "@/lib/property";
+import { formatAddressLine, getProperties } from "@/lib/property";
 import type { HouseholdMember } from "@/lib/database.types";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import SubmitButton from "@/components/SubmitButton";
@@ -130,7 +130,7 @@ export default async function HouseholdPage() {
             className="card p-6"
           >
             <h2 className="break-words text-base font-semibold text-stone-900 dark:text-stone-100">
-              {home.address_line1}
+              {formatAddressLine(home)}
             </h2>
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               Up to {MAX_MEMBERS_PER_HOME} members per home.
@@ -228,7 +228,7 @@ export default async function HouseholdPage() {
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="break-words text-base font-semibold text-stone-900 dark:text-stone-100">
-                  {home.address_line1}
+                  {formatAddressLine(home)}
                 </h2>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">Shared with you.</p>
               </div>
@@ -238,7 +238,7 @@ export default async function HouseholdPage() {
                   <ConfirmSubmit
                     subtle
                     label="Leave"
-                    note={`Leave ${home.address_line1}? You'll lose access to its systems, tasks, issues, photos, and documents.`}
+                    note={`Leave ${formatAddressLine(home)}? You'll lose access to its systems, tasks, issues, photos, and documents.`}
                     yesLabel="Yes, leave"
                   />
                 </form>

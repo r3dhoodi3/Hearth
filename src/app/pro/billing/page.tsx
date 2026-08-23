@@ -11,6 +11,7 @@ import {
   GHOST_PROTECTION_DAYS,
   isMajorCategory,
 } from "@/lib/constants";
+import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 import DepositForm from "./DepositForm";
 import FadingBanner from "@/components/FadingBanner";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
@@ -146,21 +147,69 @@ export default async function ProBillingPage(props: {
     ? labelFor(JOB_CATEGORIES, searchParams.category)
     : null;
 
+  // Ascending by days so the aging bullet reads "15% after 3 days, 30% after
+  // 7" rather than the module's own newest-first order.
+  const agingTiers = [...AGING_LEAD_TIERS].sort((a, b) => a.days - b.days);
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Billing</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Deposit credit, then spend it unlocking leads. Lead prices vary by
-          service: ${LEAD_TIER_FEES.light} for lighter jobs like cleaning and
-          handyman work, ${LEAD_TIER_FEES.skilled} for skilled trades like
-          plumbing and HVAC, ${LEAD_TIER_FEES.major} for big-ticket work like
-          roofing and remodels.
-          {!hasPaidMajor &&
-            ` Your first big-ticket lead is $${MAJOR_INTRO_FEE}, after that big-ticket leads are the normal $${LEAD_TIER_FEES.major}.`}{" "}
-          Jobs that sit unclaimed get cheaper: 15% off after 3 days, 30% off
-          after 7. The discounted price is what your wallet is charged.
+          You pay per lead you apply to. If the homeowner picks someone else,
+          the fee comes back as wallet credit.
         </p>
+        <table className="mt-3 w-full max-w-md text-sm">
+          <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
+            <tr>
+              <td className="py-1.5 pr-3 font-medium text-stone-700 dark:text-stone-300">
+                Light jobs
+              </td>
+              <td className="py-1.5 pr-3 font-semibold text-stone-900 dark:text-stone-100">
+                ${LEAD_TIER_FEES.light}
+              </td>
+              <td className="py-1.5 text-xs text-stone-500 dark:text-stone-400">
+                cleaning, landscaping, painting, handyman
+              </td>
+            </tr>
+            <tr>
+              <td className="py-1.5 pr-3 font-medium text-stone-700 dark:text-stone-300">
+                Skilled trades
+              </td>
+              <td className="py-1.5 pr-3 font-semibold text-stone-900 dark:text-stone-100">
+                ${LEAD_TIER_FEES.skilled}
+              </td>
+              <td className="py-1.5 text-xs text-stone-500 dark:text-stone-400">
+                plumbing, electrical, HVAC, windows
+              </td>
+            </tr>
+            <tr>
+              <td className="py-1.5 pr-3 font-medium text-stone-700 dark:text-stone-300">
+                Big-ticket
+              </td>
+              <td className="py-1.5 pr-3 font-semibold text-stone-900 dark:text-stone-100">
+                ${LEAD_TIER_FEES.major}
+              </td>
+              <td className="py-1.5 text-xs text-stone-500 dark:text-stone-400">
+                roofing, structural, remodeling
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <ul className="mt-2 space-y-1 text-xs text-stone-500 dark:text-stone-400">
+          {!hasPaidMajor && (
+            <li>
+              Your first big-ticket lead is ${MAJOR_INTRO_FEE}, after that
+              big-ticket leads are the normal ${LEAD_TIER_FEES.major}.
+            </li>
+          )}
+          <li>
+            Jobs that sit unclaimed get cheaper: {agingTiers[0].off}% off
+            after {agingTiers[0].days} days, {agingTiers[1].off}% off after{" "}
+            {agingTiers[1].days}. The discounted price is what your wallet is
+            charged.
+          </li>
+        </ul>
       </div>
 
       {need !== null && (

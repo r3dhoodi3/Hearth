@@ -5,12 +5,13 @@ import Link from "next/link";
 // Public top-level page, same pattern as src/app/terms/page.tsx and
 // src/app/privacy/page.tsx: see src/lib/supabase/middleware.ts for the
 // allowlist entry and src/app/sitemap.ts for the sitemap entry. Content is
-// derived from the actual code paths (the /api/ask, /api/pro-ask,
-// /api/analyze-quote, /api/pro-tools, /api/pro-past-jobs,
+// derived from the actual code paths rather than a generic template: /api/ask,
+// /api/pro-ask, /api/analyze-quote, /api/pro-tools, /api/pro-past-jobs,
 // /api/ingest-inspection, /api/extract-document, /api/confirm-system,
-// /api/tax-appeal, /api/insurance-packet, /api/pro-compliance,
-// /api/draft-apply, /api/transcribe routes all call Google's Gemini Flash
-// models) rather than a generic template. The inline label under AI output
+// /api/tax-appeal, /api/insurance-packet, /api/pro-compliance and
+// /api/draft-apply all call Anthropic's Claude Sonnet models on Anthropic's
+// paid API. Voice input is on-device browser speech recognition and sends no
+// audio anywhere. The inline label under AI output
 // (src/components/AiNotice.tsx) links here.
 
 const SITE_URL =
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
   // The root layout's title template appends "| Hearth"; don't repeat it here.
   title: "How Hearth Uses AI",
   description:
-    "Which parts of Hearth are AI-generated, which model runs them, what the output is and isn't good for, how we review it, and how to use Hearth without AI.",
+    "Which parts of Hearth are AI-generated, which models run them, what the output is and isn't good for, how we review it, and how to use Hearth without AI.",
   alternates: {
     canonical: `${SITE_URL}/ai-disclosure`,
   },
@@ -42,7 +43,7 @@ export default function AiDisclosurePage() {
         How Hearth Uses AI
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-        Last updated July 2026. Plain English, and specific about what the
+        Last updated August 2026. Plain English, and specific about what the
         software actually does.
       </p>
 
@@ -66,24 +67,26 @@ export default function AiDisclosurePage() {
             Which features use AI, and which model
           </h2>
           <p className="mt-2 leading-relaxed">
-            Every AI feature in Hearth runs on Google&apos;s Gemini API, on the
-            Flash tier of models (currently the Gemini 2.x Flash family,
-            including the smaller Flash-Lite variants for lighter tasks). We do
-            not train our own model, and we do not fine-tune one on your data.
+            There is one AI vendor. Every AI feature in Hearth runs on
+            Anthropic&apos;s Claude, on the Claude Sonnet model family,
+            through Anthropic&apos;s paid API. We do not train our own model,
+            and we do not fine-tune one on your data.
           </p>
           <p className="mt-3 leading-relaxed">
-            Hearth currently uses Google&apos;s free-tier Gemini API quota.
-            Under Google&apos;s terms for that tier, Google may use what you
-            submit, and Gemini&apos;s responses, to improve Google&apos;s own
-            products, and human reviewers at Google may read and annotate
-            that content (Google disconnects it from your account and API
-            key first). This is Google&apos;s policy for the free tier, not
-            Hearth&apos;s choice, and it is separate from whether Hearth
-            trains its own model, which it does not. We plan to move to
-            Google&apos;s paid tier; Google states that under that billing
-            arrangement it does not use your prompts or responses to improve
-            its products. When we move to that tier, this paragraph will be
-            updated to reflect it.
+            Because it is the paid API, what you send is not training data.
+            Under Anthropic&apos;s{" "}
+            <a
+              href="https://www.anthropic.com/legal/commercial-terms"
+              className="text-bark-700 hover:underline dark:text-stone-300"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              commercial terms
+            </a>
+            , API inputs and outputs are not used to train Anthropic&apos;s
+            models by default. Anthropic retains API data for up to 30 days
+            for trust and safety purposes. Nothing you send is used to build
+            an advertising profile of you, by us or by Anthropic.
           </p>
           <p className="mt-3 leading-relaxed">The features that call it are:</p>
           <ul className="mt-3 list-disc space-y-2 pl-5 leading-relaxed">
@@ -134,13 +137,21 @@ export default function AiDisclosurePage() {
               </span>
               : the property-tax appeal letter and the insurance requote packet.
             </li>
-            <li>
-              <span className="font-medium text-stone-900 dark:text-stone-100">
-                Voice input
-              </span>
-              : turning what you say into text you can edit before sending.
-            </li>
           </ul>
+          <p className="mt-4 leading-relaxed">
+            Voice input is not on that list any more. Dictation uses the
+            speech recognition already built into your phone or browser, on
+            the device itself, and only the text it produces reaches Hearth.
+            No audio is sent to us or to any AI vendor.
+          </p>
+          <p className="mt-4 leading-relaxed">
+            Ask Hearth has daily caps, because each question costs us money at
+            the vendor and we would rather it stay up for everyone. On the free
+            plan you get 3 text questions a day. On Hearth Plus you get 15 a
+            day, and photo answers. There is also a short burst limit on both
+            plans, so a script can&apos;t fire hundreds of questions in a row.
+            When you hit a cap, the assistant tells you so.
+          </p>
         </section>
 
         <section>
@@ -216,8 +227,8 @@ export default function AiDisclosurePage() {
           </h2>
           <p className="mt-2 leading-relaxed">
             The AI features are optional and opt-in by use: nothing is sent to a
-            model unless you ask a question, upload a quote or document, press a
-            generate or draft button, or use voice input. If you never touch
+            model unless you ask a question, upload a quote or document, or
+            press a generate or draft button. If you never touch
             those, the rest of Hearth still works, you can add your home,
             systems, ages, and maintenance history by hand, get reminders, browse
             and contact contractors, and manage jobs and messages, with no AI
@@ -234,12 +245,12 @@ export default function AiDisclosurePage() {
           <p className="mt-2 leading-relaxed">
             When you use one of these features, your request and the relevant
             context (for example your systems, their ages, open issues, or the
-            file you uploaded) are sent to Google&apos;s Gemini API to generate
-            the response.
+            file you uploaded) are sent to Anthropic&apos;s API to generate the
+            response.
           </p>
           <p className="mt-3 leading-relaxed">
             For contractors, Ask Hearth for Pros and the pro back office send
-            Gemini the contractor&apos;s own account context too: their
+            Anthropic the contractor&apos;s own account context too: their
             wallet balance, license number and verification status, and
             background-check status when they use Ask Hearth for Pros, and
             their own past-job dollar totals, and the full image of an

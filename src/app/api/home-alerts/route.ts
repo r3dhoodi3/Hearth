@@ -4,6 +4,7 @@ import { getActiveProperty } from "@/lib/property";
 import { SYSTEM_TYPES, labelFor } from "@/lib/constants";
 import { assessSystem } from "@/lib/health";
 import { STATE_NAMES } from "@/lib/forecast";
+import { launchCityForZip } from "@/lib/serviceArea";
 
 export const runtime = "nodejs";
 
@@ -25,14 +26,44 @@ type Alert = {
 // Small "weather app" snapshot for the dashboard's always-on strip. Rides on
 // the SAME Open-Meteo forecast call the freeze/heat alerts already make (the
 // `current=` params below), so it costs zero extra upstream requests. Null
-// whenever anything about the lookup fails - the strip renders nothing then.
+// whenever the lookup fails or the property has no resolvable location - the
+// strip tells those two apart via the response's `hasLocation` flag (see
+// fetchWeather): nothing for the latter, a quiet "Weather unavailable" for
+// the former.
+// Every field but `date` is nullable, and that is the fix for a real bug: the
+// row list used to DROP any day whose numbers were incomplete, which shifted
+// every later row up one position. The panel labelled rows by position, so a
+// single missing day made it call tomorrow's forecast "Today". Rows now keep
+// their place and render "--" for whatever is missing.
+type DailyForecast = {
+  date: string;
+  code: number | null;
+  highF: number | null;
+  lowF: number | null;
+  rainPct: number | null;
+};
+
 type CurrentWeather = {
   tempF: number;
   code: number;
+  isDay: boolean;
   highF: number;
   lowF: number;
   city: string;
+  // The home's OWN current calendar date (from Open-Meteo's current.time,
+  // which comes back in the home's timezone thanks to timezone=auto). The
+  // strip labels its rows by comparing dates against this, never by row
+  // position - see dayLabel in src/lib/weatherLabels.ts.
+  today: string;
+  daily: DailyForecast[];
 };
+
+// The freeze/heat alerts only ever spoke about the next few days ("in 3 days"
+// is already a stretch for "drip your faucets tonight"), and their thresholds
+// were tuned against that window. The forecast call now asks for 7 days to
+// feed the strip's expandable panel, so the alert scan is pinned back to the
+// first 4 rows rather than silently widening to a week.
+const ALERT_DAYS = 4;
 
 // revalidateSec, when given, lets Next's fetch data cache serve repeat calls
 // to the SAME upstream URL without re-hitting the third-party API - this is
@@ -95,7 +126,17 @@ function whenLabel(i: number): string {
 // brand lookups inside the recalls leg via their own Promise.all) so a slow
 // upstream costs latency once, not once per call.
 export async function GET() {
-  const empty = NextResponse.json({ weather: [], recalls: [], current: null });
+  // hasLocation: false here is correct, not just a placeholder - with no
+  // property (or a DB error before we can even read one), there is nothing
+  // to derive a location from. The client strip uses this to decide between
+  // showing nothing (no location) and "Weather unavailable" (location known,
+  // upstream lookup failed) once weather/current comes back null.
+  const empty = NextResponse.json({
+    weather: [],
+    recalls: [],
+    current: null,
+    hasLocation: false,
+  });
   let property: any = null;
   let systems: any[] = [];
   try {
@@ -111,23 +152,33 @@ export async function GET() {
     return empty;
   }
 
-  const [{ alerts: weather, current }, recalls] = await Promise.all([
+  const [{ alerts: weather, current, hasLocation }, recalls] = await Promise.all([
     fetchWeather(property, systems),
     fetchRecalls(systems),
   ]);
 
-  return NextResponse.json({ weather, recalls, current });
+  return NextResponse.json({ weather, recalls, current, hasLocation });
 }
 
 // --- Weather (Open-Meteo, no key) ---
 async function fetchWeather(
   property: any,
   systems: any[]
-): Promise<{ alerts: Alert[]; current: CurrentWeather | null }> {
+): Promise<{ alerts: Alert[]; current: CurrentWeather | null; hasLocation: boolean }> {
   const weather: Alert[] = [];
   let current: CurrentWeather | null = null;
+  // Quick-claimed / test homes can end up with a zip but no city (the
+  // onboarding form's city field is separate from the zip used for the
+  // launch-area gate, and can be left blank). Falling back to the launch
+  // city map means a real launch-area home always gets weather instead of
+  // silently going blank just because city/state weren't typed in. State is
+  // always CA here: every launch-area zip is in Orange County, California.
+  const city = property.city || (property.zip ? launchCityForZip(property.zip) : null);
+  const state = property.state || (city ? "CA" : null);
+  let hasLocation = false;
   try {
-    const place = [property.city, property.state].filter(Boolean).join(", ");
+    const place = [city, state].filter(Boolean).join(", ");
+    hasLocation = Boolean(place);
     if (place) {
       // Geocoding: an address string always resolves to the same coordinates,
       // so this is cached for a full day. But Open-Meteo's geocoder ranks
@@ -136,7 +187,7 @@ async function fetchWeather(
       // NOT understand a comma-separated "City, State" in the name param
       // (verified live: that query returns zero results), so the state can't
       // be folded into `name` to disambiguate. Instead: ask for several US
-      // candidates and pick the one whose admin1 matches property.state.
+      // candidates and pick the one whose admin1 matches state.
       // Next's fetch cache is keyed on the request URL, so without the state
       // somewhere in that URL, Springfield-IL and Springfield-MO homes would
       // still collide on the SAME cached (wrong-for-one-of-them) top match for
@@ -144,12 +195,12 @@ async function fetchWeather(
       // real Open-Meteo parameter - the API ignores it (verified live: adding
       // it returns identical results) - it exists purely to partition the
       // cache key per state so each state gets its own cached response.
-      const stateParam = property.state
-        ? `&hearthState=${encodeURIComponent(property.state)}`
+      const stateParam = state
+        ? `&hearthState=${encodeURIComponent(state)}`
         : "";
       const geo = await fetchJson(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-          property.city
+          city ?? ""
         )}&count=10&language=en&format=json&countryCode=US${stateParam}`,
         4000,
         86400 // 24h: address -> coords never changes
@@ -157,33 +208,76 @@ async function fetchWeather(
       const usResults: any[] = Array.isArray(geo?.results)
         ? geo.results.filter((r: any) => r?.country_code === "US")
         : [];
-      const loc = property.state
-        ? usResults.find((r) => matchesState(r, property.state))
+      const loc = state
+        ? usResults.find((r) => matchesState(r, state))
         : usResults[0];
       if (loc) {
         // Forecast: cached 30 min. Keyed on lat/lon straight from the geocode
         // result (already quantized by Open-Meteo's geocoder, so this doesn't
         // fragment the cache across near-identical coordinates for the same
         // city), so two homeowners in the same city share one upstream call.
-        // `current=temperature_2m,weather_code` piggybacks the dashboard's
-        // weather strip onto this same request: one upstream call feeds both
-        // the freeze/heat alerts (daily arrays) and the current-conditions
-        // snapshot. The 30 min cache means "current" can lag by up to that
-        // much, which is fine for a glanceable temperature.
+        // `current=` piggybacks the dashboard's weather strip onto this same
+        // request: one upstream call feeds the freeze/heat alerts (daily
+        // arrays), the current-conditions snapshot, and the strip's 7-day
+        // panel. `is_day` is what lets the strip say "Clear" instead of
+        // "Sunny" after dark. The 30 min cache means "current" can lag by up
+        // to that much, which is fine for a glanceable temperature.
         const fc = await fetchJson(
           `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}` +
-            `&daily=temperature_2m_min,temperature_2m_max&current=temperature_2m,weather_code` +
-            `&forecast_days=4&temperature_unit=fahrenheit&timezone=auto`,
+            `&daily=temperature_2m_min,temperature_2m_max,weather_code,precipitation_probability_max` +
+            `&current=temperature_2m,weather_code,is_day` +
+            `&forecast_days=7&temperature_unit=fahrenheit&timezone=auto`,
           4000,
           1800 // 30 min
         );
         const mins: number[] = fc?.daily?.temperature_2m_min ?? [];
         const maxs: number[] = fc?.daily?.temperature_2m_max ?? [];
+        const days: string[] = fc?.daily?.time ?? [];
+        const codes: number[] = fc?.daily?.weather_code ?? [];
+        const rains: (number | null)[] =
+          fc?.daily?.precipitation_probability_max ?? [];
+
+        // The week ahead, for the panel the strip expands into. A row is kept
+        // whenever it has a usable DATE, with nulls for any number that is
+        // missing; the strip renders those as "--". Dropping incomplete rows
+        // (what this did before) silently renumbered every row after the gap,
+        // and since the panel named rows by position, one missing Tuesday was
+        // enough to label Wednesday "Today".
+        const daily: DailyForecast[] = days.flatMap((date, i) =>
+          typeof date === "string" && date
+            ? [
+                {
+                  date,
+                  code: typeof codes[i] === "number" ? codes[i] : null,
+                  highF:
+                    typeof maxs[i] === "number" ? Math.round(maxs[i]) : null,
+                  lowF:
+                    typeof mins[i] === "number" ? Math.round(mins[i]) : null,
+                  rainPct:
+                    typeof rains[i] === "number"
+                      ? Math.round(rains[i] as number)
+                      : null,
+                },
+              ]
+            : []
+        );
 
         // Today's snapshot for the strip. Only assembled when every piece is
         // a real number - a partial reading renders as nothing, not as NaN.
         const nowTemp = fc?.current?.temperature_2m;
         const nowCode = fc?.current?.weather_code;
+        const nowIsDay = fc?.current?.is_day;
+        // current.time is an ISO local timestamp in the HOME's timezone
+        // ("2026-08-22T14:00"), so its date part is the home's own calendar
+        // day. That is what the strip compares each row's date against, so a
+        // cached payload that rolls past midnight, or a gap in the daily
+        // array, can never make it call the wrong row "Today". Falls back to
+        // the first daily row, which is what Open-Meteo means by row 0.
+        const nowTime = fc?.current?.time;
+        const homeToday =
+          typeof nowTime === "string" && /^\d{4}-\d{2}-\d{2}/.test(nowTime)
+            ? nowTime.slice(0, 10)
+            : (daily[0]?.date ?? "");
         if (
           typeof nowTemp === "number" &&
           typeof nowCode === "number" &&
@@ -193,9 +287,15 @@ async function fetchWeather(
           current = {
             tempF: Math.round(nowTemp),
             code: nowCode,
+            // Open-Meteo sends 1/0. A missing flag falls back to daytime,
+            // which is the pre-existing behavior rather than a wrong "Clear"
+            // in broad daylight.
+            isDay: nowIsDay === undefined || nowIsDay === null ? true : !!nowIsDay,
             highF: Math.round(maxs[0]),
             lowF: Math.round(mins[0]),
-            city: property.city ?? loc.name ?? "",
+            city: city ?? loc.name ?? "",
+            today: homeToday,
+            daily,
           };
         }
 
@@ -207,12 +307,17 @@ async function fetchWeather(
         const plumbingAge = plumbing ? assessSystem(plumbing).age : null;
         const hvacAge = hvac ? assessSystem(hvac).age : null;
 
-        // Earliest freeze in the window.
-        const fi = mins.findIndex((t) => t != null && t <= 32);
+        // Earliest freeze in the window. Sliced, not scanned over all 7 days:
+        // see ALERT_DAYS.
+        const alertMins = mins.slice(0, ALERT_DAYS);
+        const alertMaxs = maxs.slice(0, ALERT_DAYS);
+        const fi = alertMins.findIndex((t) => t != null && t <= 32);
         if (fi !== -1) {
           weather.push({
             kind: "freeze",
-            title: `Freeze coming ${whenLabel(fi)} (${Math.round(mins[fi])}°F)`,
+            title: `Freeze coming ${whenLabel(fi)} (${Math.round(
+              alertMins[fi]
+            )}°F)`,
             detail:
               "Let indoor faucets drip overnight, disconnect garden hoses, and open cabinet doors under sinks." +
               (plumbingAge && plumbingAge >= 40
@@ -222,11 +327,13 @@ async function fetchWeather(
         }
 
         // Earliest serious heat in the window.
-        const hi = maxs.findIndex((t) => t != null && t >= 95);
+        const hi = alertMaxs.findIndex((t) => t != null && t >= 95);
         if (hi !== -1) {
           weather.push({
             kind: "heat",
-            title: `Heat wave ${whenLabel(hi)} (${Math.round(maxs[hi])}°F)`,
+            title: `Heat wave ${whenLabel(hi)} (${Math.round(
+              alertMaxs[hi]
+            )}°F)`,
             detail:
               "Change your AC filter, keep blinds closed during the day, and don't set the thermostat too low (it overworks the unit)." +
               (hvacAge && hvacAge >= 15
@@ -239,7 +346,7 @@ async function fetchWeather(
   } catch {
     /* leave weather empty */
   }
-  return { alerts: weather, current };
+  return { alerts: weather, current, hasLocation };
 }
 
 // --- Recalls (CPSC SaferProducts, no key) ---

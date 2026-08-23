@@ -5,6 +5,7 @@ import { sendNotification } from "@/lib/notify";
 import { estimateHomeValue, calculateEquity } from "@/lib/homeValue";
 import { assessSystem, scoreBreakdown, scoreBand } from "@/lib/health";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
+import { formatAddressLine } from "@/lib/addressLine";
 import type { HomeSystem, Issue, Property } from "@/lib/database.types";
 
 export const runtime = "nodejs";
@@ -357,8 +358,16 @@ async function runCron(req: NextRequest) {
         // Multi-property owner: one email, one short section per property
         // (address as the header) so it reads as a portfolio check-in
         // instead of a wall of undifferentiated sentences.
+        //
+        // formatAddressLine, not address_line1: the header is the ONE thing
+        // telling these sections apart, and a landlord with two units in the
+        // same building would otherwise get the identical street line twice
+        // with no way to tell which home each block is about. Safe on a DB
+        // that has not run 0127 - a row with no unit key formats as the plain
+        // street line.
         const sections = propertyParts.map(
-          ({ property, parts }) => `${property.address_line1}: ${parts.join(" ")}`
+          ({ property, parts }) =>
+            `${formatAddressLine(property)}: ${parts.join(" ")}`
         );
         if (NEIGHBOR_LINE) sections.push(NEIGHBOR_LINE);
         body = sections.join("\n\n");

@@ -30,6 +30,18 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  // Nothing in the app tree serves this path, so there is no private data
+  // behind it and no reason to demand a session for it: the only thing at the
+  // end of the request is Next's 404. Before this, "/some-missing-page" (a
+  // typo, a stale bookmark, an old marketing link) bounced a signed-out
+  // visitor to /signin?next=/some-missing-page, so they logged in only to be
+  // dropped on a 404 - the site looked like it was hiding the page behind an
+  // account. Reads only: an unsafe method aimed at an unrouted path is never
+  // something we want to wave through, and it costs a real user nothing.
+  if (isReadMethod(request.method) && !isGuardedPath(path)) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
@@ -75,14 +87,13 @@ export async function updateSession(request: NextRequest) {
   // a forged/expired cookie during an outage must not get that far. Unsafe
   // methods keep the strict behavior and bounce to /signin; the user retries
   // the write once auth is back.
-  const isReadMethod = request.method === "GET" || request.method === "HEAD";
   const authUnreachable =
     authError != null &&
     (authError.name === "AuthRetryableFetchError" || authError.status === 0);
   const hasAuthCookies = request.cookies
     .getAll()
     .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
-  if (authUnreachable && hasAuthCookies && isReadMethod) {
+  if (authUnreachable && hasAuthCookies && isReadMethod(request.method)) {
     return response;
   }
 
@@ -105,10 +116,68 @@ export async function updateSession(request: NextRequest) {
   return response;
 }
 
+export function isReadMethod(method: string): boolean {
+  return method === "GET" || method === "HEAD";
+}
+
+// Every top-level route segment in src/app that serves something private:
+// the (app) group's pages plus the signed-in-only pages that sit at the root.
+// A path under one of these keeps the sign-in redirect even when the exact
+// route does not exist (a bad id under /chats/ still means "you need an
+// account here"); anything outside them is unrouted, so the request is let
+// through to Next's 404 instead.
+//
+// KEEP THIS IN SYNC WITH src/app. Adding a new signed-in section means adding
+// its segment here - the middleware has no access to Next's route table, so
+// this list is the only thing that tells it the difference between "private"
+// and "does not exist". The bias is deliberately toward over-listing: a
+// segment named here that has no routes just 307s to /signin as it did
+// before, while one missing from here would render a page to a stranger only
+// if the page itself also skipped its own auth check.
+const GUARDED_SEGMENTS = new Set([
+  // src/app/(app)
+  "account",
+  "ask",
+  "chats",
+  "contractors",
+  "dashboard",
+  "documents",
+  "emergency",
+  "forecast",
+  "home-report",
+  "inspection",
+  "issues",
+  "learn",
+  "plus",
+  "profile",
+  "quote-check",
+  "search",
+  "taxes",
+  "value",
+  "walkthrough",
+  // Signed-in-only routes at the root of src/app.
+  "onboarding",
+  "pro",
+  "welcome",
+  "join",
+  // Everything not already named in isPublicPath: an unmatched API route must
+  // 401/redirect, never fall through to an HTML 404.
+  "api",
+  "auth",
+]);
+
+// Does this path sit under a section that requires a session? First segment
+// only: routing in Next is by segment, and a deeper miss (e.g. /account/nope)
+// is still inside private territory.
+export function isGuardedPath(path: string): boolean {
+  const first = path.split("/")[1] ?? "";
+  return GUARDED_SEGMENTS.has(first);
+}
+
 // Paths readable with no session. Hoisted out of updateSession so the check
 // can run BEFORE any Supabase client is built: everything in this list is
 // answered without an auth round trip.
-function isPublicPath(path: string): boolean {
+export function isPublicPath(path: string): boolean {
   return (
     path === "/" ||
     // The root social-preview image (src/app/opengraph-image.tsx). Link

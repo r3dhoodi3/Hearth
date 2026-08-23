@@ -5,6 +5,8 @@ export type SetupItem = {
   done: boolean;
   href: string;
   linkLabel: string;
+  // Optional one-line reason shown under the label in smaller text.
+  hint?: string;
   // A step this pro's account cannot actually complete right now (today: the
   // logo, which is a Pro-member cosmetic). It still shows, so the pro knows
   // the step exists and where it leads, but it is left OUT of the progress
@@ -70,7 +72,14 @@ export default function SetupChecklist({ items }: { items: SetupItem[] }) {
               >
                 ✓
               </span>
-              {item.label}
+              <span className="flex flex-col">
+                <span>{item.label}</span>
+                {item.hint && !item.done && (
+                  <span className="text-xs text-stone-500 dark:text-stone-400">
+                    {item.hint}
+                  </span>
+                )}
+              </span>
             </span>
             {!item.done && (
               <Link
