@@ -10,6 +10,8 @@ import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import MarkChatsSeen from "@/components/MarkChatsSeen";
 import AskHearth from "@/components/AskHearth";
+import AskHearthRow from "@/components/AskHearthRow";
+import { getUser } from "@/lib/auth";
 import { getProactiveGreeting } from "@/lib/greeting";
 import ReviewButton from "@/app/(app)/contractors/ReviewButton";
 import { saveReviewAction } from "@/app/(app)/contractors/actions";
@@ -73,9 +75,13 @@ export default async function HomeownerChatsPage(
   // getProactiveGreeting doesn't depend on the property lookup (or anything
   // else on this page) - run it alongside getActiveProperty instead of
   // stacking a round trip after the redirect check.
-  const [property, greeting] = await Promise.all([
+  // `user` is only here to namespace the pinned Ask Hearth row's localStorage
+  // lookup (the assistant's conversation is browser-local, keyed by user id).
+  // getUser reads the already-validated session cookie, so it costs nothing.
+  const [property, greeting, user] = await Promise.all([
     getActiveProperty(),
     getProactiveGreeting(),
+    getUser(),
   ]);
   if (!property) redirect("/onboarding");
   const supabase = await createClient();
@@ -358,24 +364,21 @@ export default async function HomeownerChatsPage(
             threadOpenOnMobile ? "hidden md:block" : ""
           } max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)] md:max-h-none`}
         >
-          {/* Pinned assistant */}
-          <li>
-            <Link
-              href="/chats?lead=ask-hearth"
-              className={`block border-l-4 px-4 py-3 transition ${
-                askSelected
-                  ? "border-bark-600 bg-bark-50 dark:bg-bark-700/40"
-                  : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
-              }`}
-            >
-              <span className="truncate font-medium text-stone-900 dark:text-stone-100">
-                Ask Hearth
-              </span>
-              <p className="truncate text-xs text-stone-500 dark:text-stone-400">
-                Your home assistant
-              </p>
-            </Link>
-          </li>
+          {/* Pinned assistant, always first. On a phone this is the only way
+              in (the bottom bar is back to four tabs and the floating pill is
+              desktop-only), so it opens the full-screen /ask view. Desktop
+              keeps selecting the in-page pane below instead, so the two-pane
+              inbox doesn't disappear under someone who just wanted a
+              question answered. */}
+          <AskHearthRow
+            href="/ask"
+            desktopHref="/chats?lead=ask-hearth"
+            subtitle="Your home assistant"
+            storageKeyBase="hearth_ask_chat"
+            retentionKeyBase="hearth_ask_retention"
+            userId={user?.id ?? null}
+            active={askSelected}
+          />
 
           {convos.map((l) => {
               const last = lastByLead.get(l.id);

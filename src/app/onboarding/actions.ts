@@ -56,6 +56,23 @@ const STARTER_SYSTEMS = [
 ];
 const CURRENT_YEAR = new Date().getFullYear();
 
+// What a homeowner is told when the records source ran and came back with
+// nothing for the address they typed. Names the two things that actually fix
+// it - a typo, or the suggestion list under the street box - rather than
+// blaming them or pretending it might work on a retry.
+const ADDRESS_NOT_FOUND_MESSAGE =
+  "We couldn't find that address. Check the spelling or pick a suggestion.";
+
+// Is a real property-records source configured at all? source: "none" in
+// ParcelFacts covers both "the county has no record of this address" and "no
+// lookup happened because there is no API key" (see blankFacts in
+// src/lib/parcel.ts), and only the first of those may refuse a claim. Without
+// this distinction an environment with no RENTCAST_API_KEY would reject every
+// address in the launch area, which is the opposite of degrading gracefully.
+function hasRecordsSource(): boolean {
+  return Boolean(process.env.RENTCAST_API_KEY);
+}
+
 // A trimmed length floor for "this is actually an address." An <input
 // required> is not enough on its own: browsers treat a single space as a
 // non-empty value, so a hasty Enter press (or a stray keystroke) could
@@ -195,7 +212,7 @@ export async function lookupParcelAction(
   unit?: string | null
 ): Promise<
   | { ok: true; facts: PublicParcelFacts }
-  | { ok: false; error: string; waitlisted?: boolean }
+  | { ok: false; error: string; waitlisted?: boolean; notFound?: boolean }
 > {
   const supabase = await createClient();
   const {
@@ -284,6 +301,24 @@ export async function lookupParcelAction(
       // it is handed, and this value reaches an outbound request URL.
       (unit ?? "").trim().slice(0, MAX_UNIT) || null
     );
+
+  // The records source ran and knows nothing about this address. Refuse it
+  // rather than walking on to the confirm step with an empty form, which is
+  // what "123 Fake St, 92648" used to do: every fact blank, the address
+  // echoed back as if it had been found, and a home created for a house that
+  // does not exist. Everything downstream - the ownership match, the pro
+  // matching, the health score, the alerts - is about a real parcel, so the
+  // honest answer here is no.
+  //
+  // Guarded on hasRecordsSource() because source "none" has two meanings (see
+  // blankFacts in src/lib/parcel.ts): "the county has no such address" and
+  // "no RENTCAST_API_KEY is configured, so nothing was looked up". Only the
+  // first is a refusal. Without the guard, an environment with no key would
+  // reject every address in Orange County.
+  if (publicFacts.source === "none" && hasRecordsSource()) {
+    return { ok: false, error: ADDRESS_NOT_FOUND_MESSAGE, notFound: true };
+  }
+
   return { ok: true, facts: publicFacts };
 }
 
@@ -447,6 +482,43 @@ export async function claimPropertyAction(
         // without the county's numbers on it.
         console.error("Corrected-address parcel lookup failed:", err);
       }
+    }
+  }
+
+  // =========================================================================
+  // GATE: the records source has to actually know this address.
+  //
+  // lookupParcelAction already refuses a miss on the Continue step, so the
+  // form never reaches the claim with an unknown address. This is the copy of
+  // that rule that holds against a hand-made POST, which is the only way to
+  // get here otherwise - a server action takes whatever FormData it is
+  // handed, and a forged post can set looked_up_address to match address_line1
+  // and skip the lookup step entirely. Without this, "123 Fake St" still
+  // creates a real home row.
+  //
+  // The lookup itself is nearly free either way: an edited address already
+  // paid for relookupFacts above, and an unedited one hits the parcel_cache
+  // row (migration 0069) the Continue step just wrote - the same cached read
+  // the ownership check further down already makes.
+  //
+  // Only an explicit `source: "none"` from a CONFIGURED source refuses. A
+  // lookup that threw, or one the rate limiter skipped (relookupFacts null),
+  // keeps the pre-existing tolerant behavior: "we couldn't check" is not
+  // "this address does not exist", and failing a real homeowner's claim on a
+  // network blip would be a worse bug than the one this closes.
+  // =========================================================================
+  if (hasRecordsSource()) {
+    let verifyFacts: ParcelFacts | null = relookupFacts;
+    if (!addressEdited) {
+      try {
+        verifyFacts = await lookupParcel(addressLine1, claimZip);
+      } catch (err) {
+        console.error("Claim-time address verification lookup failed:", err);
+        verifyFacts = null;
+      }
+    }
+    if (verifyFacts && verifyFacts.source === "none") {
+      return err(ADDRESS_NOT_FOUND_MESSAGE);
     }
   }
 
@@ -919,7 +991,28 @@ export async function claimPropertyAction(
       material_or_model: systemFacts?.[system_type] ?? null,
     };
   });
-  await supabase.from("home_systems").insert(starterRows);
+  // A silent failure here is the difference between a dashboard that shows
+  // seven systems and their first issues on day one and one that shows an
+  // empty inventory with no explanation - and this insert used to swallow its
+  // error entirely. It still must never fail the claim (the home is already
+  // saved), so the fallback is a second, narrower insert with only the columns
+  // that have existed since 0001, then a logged give-up.
+  const { error: seedError } = await supabase
+    .from("home_systems")
+    .insert(starterRows);
+  if (seedError) {
+    console.error("Starter system seed failed, retrying minimal:", seedError);
+    const { error: retryError } = await supabase.from("home_systems").insert(
+      starterRows.map((row) => ({
+        property_id: row.property_id,
+        system_type: row.system_type,
+        install_year: row.install_year,
+      }))
+    );
+    if (retryError) {
+      console.error("Starter system seed failed outright:", retryError);
+    }
+  }
 
   // The home is claimed, but the unit number never made it onto the row (the
   // live DB has not run 0127). Say so plainly instead of letting a condo owner

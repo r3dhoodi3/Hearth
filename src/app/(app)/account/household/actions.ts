@@ -304,7 +304,7 @@ export async function mintHouseholdQrTokenAction(
     // whatever host this request actually came in on (localhost while
     // developing, the LAN IP, a tunnel, or the real domain in prod) - same
     // reasoning as requestOrigin() itself.
-    const origin = requestOriginFromHeaders();
+    const origin = await requestOriginFromHeaders();
     return ok({
       token: inserted.token,
       joinUrl: `${origin}/join/household/${inserted.token}`,

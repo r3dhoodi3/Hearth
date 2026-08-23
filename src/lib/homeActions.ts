@@ -34,27 +34,56 @@ export async function setActiveHomeAction(formData: FormData) {
   redirect("/dashboard");
 }
 
-// Remove a home (cascades to its systems, issues, leads, etc. via the schema).
+// Landen's call: self-serve home deletion is OFF. A free account gets one
+// home, and letting someone delete-and-recreate a home is a way to cycle the
+// free-home cap between neighbours (delete, hand the address to a friend,
+// they sign up fresh). Deletion now goes through support instead - see the
+// "Need to remove a home?" line in HomeSwitcher, which links to /contact.
+//
+// This action is kept, and still wired to the old <form action={...}>
+// shape, specifically so a replayed/forged form post can't fall through to
+// a route that no longer exists and 404 into something worse. It always
+// refuses and logs; it never touches the properties table. If a future
+// admin tool needs real deletion, build a separate admin-only action (with
+// its own auth check against an admin role, not this one) rather than
+// re-enabling this path for ordinary users.
 export async function removeHomeAction(formData: FormData) {
   const id = formData.get("id") as string;
   const supabase = await createClient();
-  // RLS guarantees the row belongs to the caller.
-  const { error } = await supabase.from("properties").delete().eq("id", id);
-  if (error) throw new Error(error.message);
-  await setFlash("Home deleted", "info");
-
-  const remaining = await getProperties();
-  if (remaining.length === 0) {
-    (await cookies()).delete(ACTIVE_HOME_COOKIE);
-    revalidatePath("/", "layout");
-    redirect("/onboarding");
-  }
-
-  // Keep the current active home unless it was the one just removed.
-  const current = (await cookies()).get(ACTIVE_HOME_COOKIE)?.value;
-  if (!current || !remaining.some((p) => p.id === current)) {
-    (await cookies()).set(ACTIVE_HOME_COOKIE, remaining[0].id, COOKIE_OPTS);
-  }
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  console.error(
+    "removeHomeAction: self-serve home deletion is disabled",
+    { propertyId: id, userId: user?.id ?? null }
+  );
+  await setFlash(
+    "We don't delete homes automatically. Contact us and we'll take care of it.",
+    "error"
+  );
   revalidatePath("/", "layout");
   redirect("/dashboard");
+
+  // --- Former deletion logic, preserved for reference only. Do not restore
+  // --- for a user-facing action; RLS alone is not the control that stops
+  // --- the free-home-cycling abuse described above.
+  //
+  // const { error } = await supabase.from("properties").delete().eq("id", id);
+  // if (error) throw new Error(error.message);
+  // await setFlash("Home deleted", "info");
+  //
+  // const remaining = await getProperties();
+  // if (remaining.length === 0) {
+  //   (await cookies()).delete(ACTIVE_HOME_COOKIE);
+  //   revalidatePath("/", "layout");
+  //   redirect("/onboarding");
+  // }
+  //
+  // // Keep the current active home unless it was the one just removed.
+  // const current = (await cookies()).get(ACTIVE_HOME_COOKIE)?.value;
+  // if (!current || !remaining.some((p) => p.id === current)) {
+  //   (await cookies()).set(ACTIVE_HOME_COOKIE, remaining[0].id, COOKIE_OPTS);
+  // }
+  // revalidatePath("/", "layout");
+  // redirect("/dashboard");
 }

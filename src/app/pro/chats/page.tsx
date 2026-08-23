@@ -7,6 +7,7 @@ import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
+import AskHearthRow from "@/components/AskHearthRow";
 import {
   sendQuoteAction,
   withdrawQuoteAction,
@@ -122,29 +123,48 @@ export default async function ProChatsPage(props: {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Chats</h1>
+      <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Messages</h1>
 
       {/* Mark the open conversation as read. */}
       {selected && (
         <MarkChatSeen leadId={selected.id} action={markChatSeenAction} />
       )}
 
-      {convos.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
-          No conversations yet. Apply to jobs on the{" "}
-          <Link href="/pro" className="font-medium text-hearth-700 underline dark:text-hearth-300">
-            Leads
-          </Link>{" "}
-          page, and when a homeowner picks you, your chat opens here.
-        </p>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-[280px_1fr]">
+      {/* The list always renders, even with no homeowner conversations yet:
+          the pinned copilot row lives at the top of it, and on a phone that
+          row is the only way into Ask Hearth for Pros (the bottom bar is back
+          to four tabs and the floating pill is desktop-only). The old
+          "no conversations yet" card is a row inside the list now. */}
+      <div className="grid gap-4 md:grid-cols-[280px_1fr]">
           {/* ---- Conversation list (hidden on phones while a thread is open) ---- */}
           <ul
             className={`${
               threadOpenOnMobile ? "hidden md:block" : ""
             } max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)] md:max-h-none`}
           >
+            {/* Pinned copilot, always first. */}
+            <AskHearthRow
+              href="/pro/ask"
+              subtitle="Your business copilot"
+              storageKeyBase="hearth_pro_ask_chat"
+              retentionKeyBase="hearth_pro_ask_retention"
+              userId={contractor.user_id ?? null}
+              accent="hearth"
+            />
+
+            {convos.length === 0 && (
+              <li className="px-4 py-6 text-sm text-stone-500 dark:text-stone-400">
+                No conversations yet. Apply to jobs on the{" "}
+                <Link
+                  href="/pro"
+                  className="font-medium text-hearth-700 underline dark:text-hearth-300"
+                >
+                  Leads
+                </Link>{" "}
+                page, and when a homeowner picks you, your chat opens here.
+              </li>
+            )}
+
             {convos.map((l) => {
               const last = lastByLead.get(l.id);
               const isActive = selected?.id === l.id;
@@ -248,8 +268,7 @@ export default async function ProChatsPage(props: {
               </Link>
             </div>
           )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

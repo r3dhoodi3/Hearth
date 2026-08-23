@@ -16,6 +16,11 @@ import {
   LAUNCH_AREA_LABEL,
   LAUNCH_ONLY_MESSAGE,
 } from "@/lib/serviceArea";
+import {
+  MIN_SUGGEST_QUERY,
+  SUGGEST_LIMIT,
+  type AddressSuggestion,
+} from "@/lib/addressSuggest";
 import { Hammer, Bell, FileText } from "lucide-react";
 
 // LAUNCH_ONLY_MESSAGE used to be duplicated here by hand, because ./actions.ts
@@ -41,6 +46,11 @@ const MAX_ADDRESS_LENGTH = 200;
 // "Apt 12", "Ste 300" - and matched by MAX_UNIT in ./actions.ts, which is the
 // ceiling that actually holds.
 const MAX_UNIT_LENGTH = 20;
+
+// How long the street box has to sit still before it asks for suggestions.
+// Long enough that a normal typing burst is one request instead of a dozen,
+// short enough that the list arrives while the finger is still on the phone.
+const SUGGEST_DEBOUNCE_MS = 250;
 
 // The optional facts behind the "know more details" disclosure are all plain
 // number fields. An empty one means "I don't know," which is null, not 0.
@@ -91,6 +101,28 @@ export default function OnboardingForm({
   const [facts, setFacts] = useState<PublicParcelFacts | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The records source ran and knows nothing about the typed address. A
+  // separate flag from `error` because this one refusal gets an escape hatch
+  // under it ("Try another address") - every other error is something a retry
+  // or a correction fixes in place.
+  const [notFound, setNotFound] = useState(false);
+  // Suggestions for the street box (/api/address-suggest, backed by Photon).
+  // Purely a typing aid: the list being empty - Photon down, rate limited,
+  // nothing matched - changes nothing about how the form works.
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  // Which suggestion the arrow keys have landed on, -1 for none. Drives
+  // aria-activedescendant, so a screen reader announces the option the sighted
+  // user sees highlighted.
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  // The city from a picked suggestion, used only as the fallback default for
+  // the optional City box on the ready step when the records lookup didn't
+  // return one. The lookup's city wins whenever it has one.
+  const [pickedCity, setPickedCity] = useState<string | null>(null);
+  // Set right before the street box is changed by something other than a
+  // keystroke - picking a suggestion, or the lookup writing back the county's
+  // canonical line. Without it, filling the box would immediately fire a
+  // search for the value just filled in and re-open the list under it.
+  const suppressSuggestRef = useRef(false);
   // Whether the out-of-area waitlist save actually went through - drives the
   // honest vs. "we couldn't save you" copy on the out_of_area panel below.
   const [waitlistSaved, setWaitlistSaved] = useState(true);
@@ -225,6 +257,91 @@ export default function OnboardingForm({
     [persist]
   );
 
+  // Ask for suggestions once the street box has been still for a moment.
+  //
+  // Only while the address fields are actually editable (step "address") -
+  // after the lookup the street box is a correction field for a line the
+  // county already returned, and dropping an autocomplete list over it there
+  // would invite re-picking a different house than the one on screen.
+  //
+  // Every failure path lands on an empty list, never an error: this is a
+  // convenience over a free third-party geocoder, and the address has always
+  // been typeable by hand.
+  useEffect(() => {
+    if (step !== "address") {
+      setSuggestions([]);
+      setActiveSuggestion(-1);
+      return;
+    }
+    // The box was filled in programmatically. Consume the flag and stay quiet
+    // for this one change; the next real keystroke searches normally.
+    if (suppressSuggestRef.current) {
+      suppressSuggestRef.current = false;
+      setSuggestions([]);
+      setActiveSuggestion(-1);
+      return;
+    }
+    const q = street.trim();
+    if (q.length < MIN_SUGGEST_QUERY) {
+      setSuggestions([]);
+      setActiveSuggestion(-1);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ q });
+        // The ZIP is often typed before the street is finished, and it is what
+        // lets the route name a city in the Photon query - which is the
+        // difference between "9832 Bol" matching nothing and matching Bolsa
+        // Avenue. Sent when present, never required.
+        const z = zip.trim();
+        if (z) params.set("zip", z);
+        const res = await fetch(`/api/address-suggest?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          setSuggestions([]);
+          return;
+        }
+        const body = await res.json();
+        setSuggestions(
+          Array.isArray(body?.suggestions)
+            ? body.suggestions.slice(0, SUGGEST_LIMIT)
+            : []
+        );
+        setActiveSuggestion(-1);
+      } catch {
+        // Aborted by the next keystroke, or the network failed. Either way
+        // there is nothing to show and nothing to say about it.
+        setSuggestions([]);
+      }
+    }, SUGGEST_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [street, zip, step]);
+
+  // Fill the street, ZIP and city from a chosen suggestion. The lookup is NOT
+  // run here: Continue still does that, so picking a suggestion is exactly as
+  // reversible as typing one.
+  const pickSuggestion = useCallback((s: AddressSuggestion) => {
+    suppressSuggestRef.current = true;
+    setStreet(s.line1);
+    setZip(s.zip);
+    setPickedCity(s.city);
+    setSuggestions([]);
+    setActiveSuggestion(-1);
+    setError(null);
+    setNotFound(false);
+  }, []);
+
+  const closeSuggestions = useCallback(() => {
+    setSuggestions([]);
+    setActiveSuggestion(-1);
+  }, []);
+
   // "Start over": drop the saved draft and every field with it, back to a
   // blank address entry.
   const startOver = useCallback(() => {
@@ -245,6 +362,10 @@ export default function OnboardingForm({
     setZip("");
     setFacts(null);
     setError(null);
+    setNotFound(false);
+    setPickedCity(null);
+    setSuggestions([]);
+    setActiveSuggestion(-1);
     setStep("address");
   }, []);
 
@@ -254,6 +375,11 @@ export default function OnboardingForm({
   // re-expands with everything still in place.
   const handleEdit = useCallback(() => {
     setError(null);
+    setNotFound(false);
+    // Coming back from the ready step, the street box already holds the
+    // county's canonical line. Don't drop a list of alternatives over it the
+    // instant the fields unlock - the next keystroke opens one normally.
+    suppressSuggestRef.current = true;
     persist({ step: "address" });
     setStep("address");
   }, [persist]);
@@ -270,6 +396,8 @@ export default function OnboardingForm({
 
   async function runLookup() {
     setError(null);
+    setNotFound(false);
+    closeSuggestions();
 
     // Catch the "just whitespace" / "a few stray characters" case here before
     // it ever reaches the expanded, claim-ready section.
@@ -335,11 +463,19 @@ export default function OnboardingForm({
           setStep("out_of_area");
           return;
         }
+        // The records source ran and has no such address. Keep the fields
+        // exactly as typed - the fix is usually one character - and mark it so
+        // the message can offer a clean way out. Deliberately NOT advanced to
+        // the ready step: an address nothing can find must not become a home.
+        if (result.notFound) setNotFound(true);
         setError(result.error);
         return;
       }
       const nextFacts = result.facts;
       setFacts(nextFacts);
+      // The line below is set programmatically, so don't let it re-trigger a
+      // suggestion search for the value that was just filled in.
+      suppressSuggestRef.current = true;
       // Show the county's canonical street line in the (still editable) street
       // box, rather than only in a read-only summary. RentCast normalizes
       // "17361 ash street" to "17361 Ash St", which is usually an improvement
@@ -438,6 +574,11 @@ export default function OnboardingForm({
   // unverified rather than matching against the building's owner of record.
   const hasUnit = unit.trim().length > 0;
 
+  // The list only ever exists over the editable address phase. Guarded on the
+  // step as well as on the array so nothing can leave a stale list rendered
+  // over the locked fields of the ready step.
+  const suggestOpen = step === "address" && suggestions.length > 0;
+
   return (
     <div className="card">
       {step !== "out_of_area" && (
@@ -517,7 +658,7 @@ export default function OnboardingForm({
               by a second copy of the address on a confirm step. Street and
               unit stay EDITABLE there; only the ZIP locks (see below). */}
           <div className="grid grid-cols-12 items-end gap-3">
-            <div className="col-span-12 sm:col-span-6">
+            <div className="relative col-span-12 sm:col-span-6">
               <label className="label" htmlFor="street">
                 Street address
               </label>
@@ -533,12 +674,96 @@ export default function OnboardingForm({
                 name="address_line1"
                 className="input"
                 placeholder="123 Oak St"
-                autoComplete="address-line1"
+                // "off", not "address-line1": the browser's own address
+                // autofill panel and this suggestion list would otherwise
+                // stack on top of each other over the same box, and only one
+                // of them knows which addresses Hearth can actually serve.
+                autoComplete="off"
                 maxLength={MAX_ADDRESS_LENGTH}
                 value={street}
                 onChange={(e) => setStreet(e.target.value)}
                 required
+                // Combobox pattern: the input keeps focus and the arrow keys
+                // move a highlight through the list, which is what makes this
+                // usable without a mouse and announceable by a screen reader.
+                role="combobox"
+                aria-expanded={suggestOpen}
+                aria-controls="street-suggestions"
+                aria-autocomplete="list"
+                aria-activedescendant={
+                  suggestOpen && activeSuggestion >= 0
+                    ? `street-suggestion-${activeSuggestion}`
+                    : undefined
+                }
+                onKeyDown={(e) => {
+                  if (!suggestOpen) return;
+                  // stopPropagation on every key this list owns: the FORM's
+                  // own onKeyDown treats Enter in the address phase as "run
+                  // the lookup", which would fire instead of choosing the
+                  // highlighted suggestion. Enter with nothing highlighted is
+                  // deliberately left to bubble, so Enter still means
+                  // Continue when the list is only sitting there.
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setActiveSuggestion((i) => (i + 1) % suggestions.length);
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setActiveSuggestion((i) =>
+                      i <= 0 ? suggestions.length - 1 : i - 1
+                    );
+                  } else if (e.key === "Enter" && activeSuggestion >= 0) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    pickSuggestion(suggestions[activeSuggestion]);
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeSuggestions();
+                  }
+                }}
+                // Tabbing away closes the list. A tap on an option can't lose
+                // it: the option's onMouseDown cancels the blur (see below).
+                onBlur={closeSuggestions}
               />
+              {suggestOpen && (
+                <ul
+                  id="street-suggestions"
+                  role="listbox"
+                  aria-label="Address suggestions"
+                  // Absolutely positioned so the fields below don't jump every
+                  // time the list opens and closes mid-typing. z-20 clears the
+                  // unit and ZIP boxes it overlaps on a phone.
+                  className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-lg dark:border-stone-700 dark:bg-stone-800"
+                >
+                  {suggestions.map((s, i) => (
+                    <li
+                      key={`${s.line1}-${s.zip}`}
+                      id={`street-suggestion-${i}`}
+                      role="option"
+                      aria-selected={i === activeSuggestion}
+                      // Keep focus in the input so the blur above doesn't tear
+                      // the list down before the click lands.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pickSuggestion(s)}
+                      onMouseEnter={() => setActiveSuggestion(i)}
+                      className={`cursor-pointer px-3 py-2.5 text-sm ${
+                        i === activeSuggestion
+                          ? "bg-bark-50 dark:bg-bark-700/40"
+                          : ""
+                      }`}
+                    >
+                      <span className="block font-medium text-stone-900 dark:text-stone-100">
+                        {s.line1}
+                      </span>
+                      <span className="block text-xs text-stone-500 dark:text-stone-400">
+                        {s.city}, {s.state} {s.zip}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             {/* Condos and townhomes. Without this the address model had no
                 unit at all, so "123 Main St Unit 4" read as the whole
@@ -627,12 +852,26 @@ export default function OnboardingForm({
           )}
 
           {step === "address" && error && (
-            <p
+            <div
               role="alert"
               className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
             >
-              {error}
-            </p>
+              <p>{error}</p>
+              {/* The address stays in the box on a miss, because a typo is
+                  usually one character from right. This is the other half of
+                  that: a way to wipe it and start clean without hunting for
+                  the select-all. Only on the not-found refusal - the other
+                  errors here are fixed in place, not by clearing. */}
+              {notFound && (
+                <button
+                  type="button"
+                  onClick={startOver}
+                  className="mt-2 font-medium underline"
+                >
+                  Try another address
+                </button>
+              )}
+            </div>
           )}
 
           {/* RentCast IS wired up as the parcel source (src/lib/parcel.ts) -
@@ -840,7 +1079,15 @@ export default function OnboardingForm({
                     </div>
                     <div>
                       <label className="label">City</label>
-                      <input name="city" className="input" defaultValue={facts.city ?? ""} />
+                      {/* pickedCity is the fallback for a records lookup that
+                          returned no city: the suggestion the homeowner
+                          tapped already named one, and re-typing it would be
+                          busywork. The lookup's own value always wins. */}
+                      <input
+                        name="city"
+                        className="input"
+                        defaultValue={facts.city ?? pickedCity ?? ""}
+                      />
                     </div>
                     <div>
                       <label className="label">ZIP</label>

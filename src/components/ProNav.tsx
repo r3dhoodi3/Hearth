@@ -35,18 +35,13 @@ export default function ProNav({
     },
   ];
 
-  // Phone bottom bar only, mirroring what the homeowner Nav did with Ask
-  // Hearth. The pro copilot used to be reachable only from the floating pill,
-  // which on a 390px screen sat on top of whatever was in the bottom-right
-  // corner (the /pro/tools cards, the /pro/profile fields, a client's notes).
-  // It is a tab now, third of five so a thumb reaches it, and the pill is
-  // desktop-only (see pro/layout.tsx). The desktop top strip keeps rendering
-  // LINKS above, untouched, because it still has the pill.
-  const BOTTOM_LINKS = [
-    ...LINKS.slice(0, 2),
-    { href: "/pro/ask", label: "Ask Hearth", shortLabel: "Ask", icon: "ask" },
-    ...LINKS.slice(2),
-  ];
+  // Phone bottom bar: the same four destinations as the top strip, mirroring
+  // the homeowner Nav. The copilot briefly had a tab of its own here; it lives
+  // inside Messages now, as a pinned conversation at the top of /pro/chats
+  // that opens the full-screen /pro/ask view (see AskHearthRow), with NavLinks
+  // treating /pro/ask as a child of Messages so the tab stays lit while you're
+  // in there. The floating pill remains desktop-only (see pro/layout.tsx).
+  const BOTTOM_LINKS = LINKS;
 
   return (
     <>

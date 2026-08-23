@@ -47,17 +47,14 @@ export default function Nav({
     },
   ];
 
-  // Phone bottom bar only. Ask Hearth used to be a floating pill on top of the
-  // page, which on a 390px screen kept landing on whatever control sat in the
-  // bottom-right corner (the Post a Job phone field, the Quote check photo
-  // picker). It is a tab instead, in the middle where a thumb reaches it, and
-  // the pill is desktop-only (see AskHearthDock). The desktop top strip keeps
-  // rendering LINKS above, untouched, because it still has the pill.
-  const BOTTOM_LINKS = [
-    ...LINKS.slice(0, 2),
-    { href: "/ask", label: "Ask Hearth", shortLabel: "Ask", icon: "ask" },
-    ...LINKS.slice(2),
-  ];
+  // Phone bottom bar: the same four destinations as the top strip. Ask Hearth
+  // briefly had a tab of its own here, which made five tabs on a 390px screen
+  // and gave the assistant a top-level home it doesn't need. It lives inside
+  // Messages instead - a pinned conversation at the top of /chats that opens
+  // the full-screen /ask view (see AskHearthRow), with NavLinks treating /ask
+  // as a child of Messages so the tab stays lit while you're in there. The
+  // floating pill remains desktop-only (see AskHearthDock).
+  const BOTTOM_LINKS = LINKS;
 
   return (
     <>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getProactiveGreeting } from "@/lib/greeting";
 import AskHearth from "@/components/AskHearth";
 
@@ -33,10 +34,24 @@ export default async function AskPage(props: {
           conversation on a phone. The h1 stays for structure and screen
           readers. */}
       <h1 className="sr-only">Ask Hearth</h1>
+      {/* Phone-only way back. This screen is opened from the pinned Ask Hearth
+          row at the top of Messages, and the bottom bar shows Messages as the
+          active tab while you're here, so the trip back has to be one tap -
+          the same "All conversations" link every open thread in /chats
+          carries. Desktop reaches Ask Hearth through the dock and the in-page
+          pane instead, and is left exactly as it was (the frame's sm: height
+          included). */}
+      <Link
+        href="/chats"
+        className="mb-2 inline-flex w-fit items-center gap-1 text-sm font-medium text-bark-700 hover:underline sm:hidden dark:text-stone-300"
+      >
+        <span aria-hidden="true">←</span> All conversations
+      </Link>
       {/* Same frame the Messages screen puts its Ask Hearth pane in, so the
           two entry points look like one feature. dvh on phones so the browser
-          chrome collapsing doesn't leave the composer under the fold. */}
-      <div className="flex h-[calc(100dvh-12rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 sm:h-[calc(100vh-12rem)]">
+          chrome collapsing doesn't leave the composer under the fold; the
+          phone height gives back the 2rem the link above takes. */}
+      <div className="flex h-[calc(100dvh-14rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 sm:h-[calc(100vh-12rem)]">
         <div className="min-h-0 flex-1">
           {/* replaceUrlAfterInitial drops the ?q= from the address bar once
               the question has been handled, so a reload or a Back into this

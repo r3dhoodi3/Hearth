@@ -353,10 +353,11 @@ export default async function PlusPage(
   }
 
   return (
-    // One column, one card. The pitch is a single Plus card with a cadence
-    // toggle, so the page is as wide as that card and nothing else competes
-    // with it for the reader's attention.
-    <div className="mx-auto max-w-md space-y-6">
+    // Wider than the other branches of this URL (max-w-md): the pitch is three
+    // plan columns side by side, and they need the room from sm up. On a phone
+    // the viewport is narrower than either measure, so the columns sit shoulder
+    // to shoulder there either way.
+    <div className="mx-auto max-w-md space-y-4 sm:max-w-2xl sm:space-y-6">
       {/* COLD START: the posting cap is off while COLD_START_FREE_POSTING is
           on, so this banner must not show even if the URL is hit directly.
           Keep it for when the flag flips back. */}
@@ -447,23 +448,24 @@ export default async function PlusPage(
         {/* Money protection, not job-posting speed: the paid tier's real value
             is knowing what's coming (forecast, quote check, plan) before it
             hits the wallet. The reason banners above add the specific pitch. */}
-        <h1 className="text-2xl font-semibold text-stone-900 sm:text-3xl dark:text-stone-100">
+        <h1 className="text-xl font-semibold text-stone-900 sm:text-3xl dark:text-stone-100">
           Know what&apos;s coming before it costs you
         </h1>
-        {/* The page's ONE trial-and-price line. Prices are computed from
-            PLUS_PLAN, never typed in, so it can never quote something the card
-            isn't charged. Yearly leads because it is the plan the card
-            preselects. The card below states the selected price once; the
-            auto-renewal disclosure inside the checkout form restates the
-            step-up and the recurring terms, which is deliberate - that
-            disclosure has to stand on its own next to the consent button
-            whether or not anyone read this line. */}
-        <p className="mt-2 text-sm font-medium text-bark-700 dark:text-stone-300">
+        {/* One short line above the columns, because the columns themselves now
+            carry every price. Prices are never restated here: the three columns
+            state each one once, and the auto-renewal disclosure inside the
+            checkout form restates the selected plan's terms next to the button
+            that starts the charge. The trial belongs to Monthly only, so this
+            line names the plan it belongs to rather than implying both. */}
+        <p className="mt-1 text-sm font-medium text-bark-700 sm:mt-2 dark:text-stone-300">
           {trialEligible
-            ? `Free for ${PLUS_PLAN.trialDays} days, then ${formatUsd(PLUS_PLAN.yearly)}/year or ${formatUsd(PLUS_PLAN.monthly)}/month. Cancel anytime.`
-            : `${formatUsd(PLUS_PLAN.yearly)}/year or ${formatUsd(PLUS_PLAN.monthly)}/month. Cancel anytime.`}
+            ? `Monthly starts with ${PLUS_PLAN.trialDays} free days. Cancel anytime.`
+            : "Cancel anytime."}
         </p>
-        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
+        {/* Desktop only: on a phone this paragraph is the thing standing
+            between the reader and the three buttons, and the columns say the
+            same thing in fewer words. */}
+        <p className="mt-2 hidden text-sm text-stone-500 sm:block dark:text-stone-400">
           {COLD_START_FREE_POSTING
             ? // COLD START: posting is uncapped for everyone right now, so the
               // pitch leans on the perks that stay exclusive.

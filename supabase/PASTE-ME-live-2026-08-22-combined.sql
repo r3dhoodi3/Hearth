@@ -71,3 +71,11 @@ alter table public.properties validate constraint properties_address_line1_len;
 select conname, convalidated from pg_constraint
 where conrelid = 'public.properties'::regclass
   and conname = 'properties_address_line1_len';
+
+-- Cleanup: the four throwaway audit accounts used on 08-21/22 (hearth-audit-p1..p4@example.com).
+-- Deleting the auth users cascades to their public rows (properties, home_systems,
+-- contractors "Luis Plumbing Co" and "Mia Fixes Things", clients, leads) where FKs cascade.
+-- Run AFTER you are done testing with them. Expect: DELETE 4.
+delete from auth.users where email like 'hearth-audit-p%@example.com' or email like 'hearth-audit-suggest%@mailinator.com';
+-- Verify: expect 0 rows
+select email from auth.users where email like 'hearth-audit-p%@example.com';

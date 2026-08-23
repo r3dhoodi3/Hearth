@@ -187,13 +187,13 @@ export default async function Home(props: {
     },
     {
       q: "What does Plus cost?",
-      a: "Hearth itself stays free for your first home. Hearth Plus is optional: new subscribers get a free 3-day trial, then it's $4.99/mo or $39.99/yr (about $3.33/mo), whichever you pick. After the free trial we charge your card automatically unless you cancel, and you can cancel anytime.",
+      a: "Hearth itself stays free for your first home. Hearth Plus is optional: $4.99/mo with your first 3 days free, or $39.99/yr (about $3.33/mo), whichever you pick. After the free days on monthly we charge your card automatically unless you cancel, and you can cancel anytime.",
       node: (
         <>
           Hearth itself stays free for your first home. Hearth Plus is
-          optional: new subscribers get a free 3-day trial, then it&apos;s
-          $4.99/mo or $39.99/yr (about $3.33/mo), whichever you pick. After the
-          free trial we charge your card automatically unless you cancel, and
+          optional: $4.99/mo with your first 3 days free, or $39.99/yr (about
+          $3.33/mo) billed today, whichever you pick. After the free days on
+          monthly we charge your card automatically unless you cancel, and
           you can cancel anytime.{" "}
           <Link
             href="/pricing"

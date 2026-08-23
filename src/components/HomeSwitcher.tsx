@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { setActiveHomeAction } from "@/lib/homeActions";
-import RemoveHomeButton from "@/components/RemoveHomeButton";
 import SubmitButton from "@/components/SubmitButton";
 import type { HomeSummary } from "@/lib/property";
 
-// Dropdown of the user's homes: switch, remove, or add. Closes on outside
-// click or Escape (no need to click the toggle again).
+// Dropdown of the user's homes: switch or add (no self-serve delete; see the
+// "Need to remove a home?" line below). Closes on outside click or Escape (no
+// need to click the toggle again).
 export default function HomeSwitcher({
   homes,
   activeId,
@@ -105,8 +105,6 @@ export default function HomeSwitcher({
                   </SubmitButton>
                 </form>
               )}
-
-              {!h.isShared && <RemoveHomeButton id={h.id} label={h.address_line1} />}
             </div>
           ))}
 
@@ -121,6 +119,16 @@ export default function HomeSwitcher({
               Free includes 1 home. Hearth Plus unlocks up to 5.
             </p>
           )}
+          {/* No self-serve delete (see homeActions.ts removeHomeAction): a
+              free-tier delete-and-recreate loop is how the one-home cap gets
+              cycled between neighbours, so removal goes through support. */}
+          <p className="px-2 pb-1 text-xs text-stone-500 dark:text-stone-400">
+            Need to remove a home?{" "}
+            <Link href="/contact" className="underline hover:text-stone-700 dark:hover:text-stone-300">
+              Contact us
+            </Link>{" "}
+            and we will take care of it.
+          </p>
         </div>
       )}
     </div>

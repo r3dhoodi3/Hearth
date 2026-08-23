@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const lookupParcelAction = vi.fn();
 const claimPropertyAction = vi.fn();
@@ -65,10 +65,24 @@ async function toReadyStep() {
   return view;
 }
 
+// The street box asks /api/address-suggest for suggestions as it is typed
+// (OnboardingForm.tsx). Stubbed to "nothing found" by default so the existing
+// tests below exercise the form exactly as they did before autocomplete
+// existed; the suggestion tests further down replace it per-case.
+const fetchMock = vi.fn();
+beforeEach(() => {
+  fetchMock.mockResolvedValue({
+    ok: true,
+    json: async () => ({ suggestions: [] }),
+  });
+  vi.stubGlobal("fetch", fetchMock);
+});
+
 afterEach(() => {
   cleanup();
   localStorage.clear();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("OnboardingForm ready step", () => {
@@ -247,5 +261,229 @@ describe("OnboardingForm ownership copy", () => {
     expect(
       screen.getByText(/Public records only go down to the building/i)
     ).toBeInTheDocument();
+  });
+});
+
+// The street box suggests real addresses in the launch area as it is typed
+// (/api/address-suggest, backed by Photon). Everything here is a convenience
+// over a free third-party geocoder, so the load-bearing case is the one where
+// it fails: the field has to keep behaving exactly like a plain text box.
+describe("OnboardingForm address suggestions", () => {
+  const SUGGESTIONS = [
+    {
+      line1: "9842 Bolsa Avenue",
+      city: "Westminster",
+      state: "CA" as const,
+      zip: "92844",
+    },
+    {
+      line1: "9938 Bolsa Avenue",
+      city: "Westminster",
+      state: "CA" as const,
+      zip: "92683",
+    },
+  ];
+
+  function withSuggestions(suggestions = SUGGESTIONS) {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ suggestions }),
+    });
+  }
+
+  async function typeStreet(value: string) {
+    render(<OnboardingForm />);
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value },
+    });
+    return screen.getByLabelText("Street address") as HTMLInputElement;
+  }
+
+  it("lists suggestions under the street field", async () => {
+    withSuggestions();
+    await typeStreet("9832 Bol");
+
+    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    expect(screen.getByText("9842 Bolsa Avenue")).toBeInTheDocument();
+    expect(screen.getByText("Westminster, CA 92844")).toBeInTheDocument();
+  });
+
+  it("sends the ZIP along so the query can name a city", async () => {
+    withSuggestions();
+    render(<OnboardingForm />);
+    fireEvent.change(screen.getByLabelText("ZIP code"), {
+      target: { value: "92683" },
+    });
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value: "9832 Bol" },
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const url = String(fetchMock.mock.calls.at(-1)?.[0]);
+    expect(url).toContain("q=9832+Bol");
+    expect(url).toContain("zip=92683");
+  });
+
+  it("asks for nothing until the query is long enough to be a search", async () => {
+    withSuggestions();
+    await typeStreet("98");
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("fills street and ZIP when a suggestion is tapped, without running the lookup", async () => {
+    withSuggestions();
+    const street = await typeStreet("9832 Bol");
+
+    fireEvent.click(await screen.findByText("9938 Bolsa Avenue"));
+
+    expect(street.value).toBe("9938 Bolsa Avenue");
+    expect((screen.getByLabelText("ZIP code") as HTMLInputElement).value).toBe(
+      "92683"
+    );
+    // Picking is not confirming. Continue is still what runs the lookup, so a
+    // mis-tap costs nothing.
+    expect(lookupParcelAction).not.toHaveBeenCalled();
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("is drivable from the keyboard", async () => {
+    withSuggestions();
+    const street = await typeStreet("9832 Bol");
+    await screen.findByRole("listbox");
+
+    // Nothing highlighted yet, so Enter still belongs to Continue.
+    expect(street.getAttribute("aria-activedescendant")).toBeNull();
+
+    fireEvent.keyDown(street, { key: "ArrowDown" });
+    fireEvent.keyDown(street, { key: "ArrowDown" });
+    expect(street.getAttribute("aria-activedescendant")).toBe(
+      "street-suggestion-1"
+    );
+    expect(screen.getAllByRole("option")[1]).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+
+    fireEvent.keyDown(street, { key: "ArrowUp" });
+    expect(street.getAttribute("aria-activedescendant")).toBe(
+      "street-suggestion-0"
+    );
+
+    fireEvent.keyDown(street, { key: "Enter" });
+    expect(street.value).toBe("9842 Bolsa Avenue");
+    // Enter chose the suggestion; it must NOT also have fired the lookup that
+    // the form's own Enter handler runs during the address phase.
+    expect(lookupParcelAction).not.toHaveBeenCalled();
+  });
+
+  it("closes on Escape and leaves what was typed alone", async () => {
+    withSuggestions();
+    const street = await typeStreet("9832 Bol");
+    await screen.findByRole("listbox");
+
+    fireEvent.keyDown(street, { key: "Escape" });
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(street.value).toBe("9832 Bol");
+  });
+
+  it("keeps the field working when the suggest route is down", async () => {
+    fetchMock.mockRejectedValue(new Error("network"));
+    const street = await typeStreet("9871 Kings Canyon Dr");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(street.value).toBe("9871 Kings Canyon Dr");
+
+    // And Continue still runs the lookup on what was typed by hand.
+    lookupParcelAction.mockResolvedValue({ ok: true, facts: FACTS });
+    fireEvent.change(screen.getByLabelText("ZIP code"), {
+      target: { value: "92646" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Your full name")).toBeInTheDocument()
+    );
+  });
+});
+
+// An address the records source has never heard of must not become a home.
+// lookupParcelAction refuses it (./actions.ts) and the form has to stop there
+// rather than expanding into the claim section with an empty form.
+describe("OnboardingForm not-found address", () => {
+  const NOT_FOUND =
+    "We couldn't find that address. Check the spelling or pick a suggestion.";
+
+  async function submitFake() {
+    lookupParcelAction.mockResolvedValue({
+      ok: false,
+      error: NOT_FOUND,
+      notFound: true,
+    });
+    render(<OnboardingForm />);
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value: "123 Fake St" },
+    });
+    fireEvent.change(screen.getByLabelText("ZIP code"), {
+      target: { value: "92648" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  }
+
+  it("refuses to expand into the claim section", async () => {
+    await submitFake();
+
+    expect(await screen.findByText(NOT_FOUND)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Your full name")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Claim my home" })).toBeNull();
+  });
+
+  it("keeps the typed address so a one-character typo can be fixed in place", async () => {
+    await submitFake();
+    await screen.findByText(NOT_FOUND);
+
+    expect(
+      (screen.getByLabelText("Street address") as HTMLInputElement).value
+    ).toBe("123 Fake St");
+    expect((screen.getByLabelText("ZIP code") as HTMLInputElement).value).toBe(
+      "92648"
+    );
+  });
+
+  it("offers a way to clear it and start clean", async () => {
+    await submitFake();
+    await screen.findByText(NOT_FOUND);
+
+    fireEvent.click(screen.getByRole("button", { name: "Try another address" }));
+
+    expect(
+      (screen.getByLabelText("Street address") as HTMLInputElement).value
+    ).toBe("");
+    expect((screen.getByLabelText("ZIP code") as HTMLInputElement).value).toBe(
+      ""
+    );
+    expect(screen.queryByText(NOT_FOUND)).toBeNull();
+  });
+
+  it("does not offer it for an ordinary error, which is fixed in place", async () => {
+    lookupParcelAction.mockResolvedValue({
+      ok: false,
+      error: "Too many address lookups. Please try again in a bit.",
+    });
+    render(<OnboardingForm />);
+    fireEvent.change(screen.getByLabelText("Street address"), {
+      target: { value: "9871 Kings Canyon Dr" },
+    });
+    fireEvent.change(screen.getByLabelText("ZIP code"), {
+      target: { value: "92646" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await screen.findByText(/Too many address lookups/);
+    expect(
+      screen.queryByRole("button", { name: "Try another address" })
+    ).toBeNull();
   });
 });

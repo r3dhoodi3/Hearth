@@ -37,6 +37,12 @@ export type BillingTerms = {
   // Present only when the first period costs less than every period after it
   // (free month, intro month). Spells out the step-up in dollars.
   stepUp: string | null;
+  // The whole commitment in ONE sentence, always present. It is `stepUp` when
+  // this signup carries an intro period, and the "charged today, renews every
+  // X until you cancel" sentence when it does not. The pre-checkout block
+  // leads with it so the reader gets the material terms in the first line they
+  // read, whichever plan they picked.
+  summary: string;
   // How to cancel, in the same medium the purchase happened in.
   cancel: string;
   // Where that cancel control lives, for links.
@@ -45,6 +51,23 @@ export type BillingTerms = {
 
 function money(amount: number): string {
   return `$${amount.toFixed(2)}`;
+}
+
+// Does THIS checkout actually carry the free trial?
+//
+// On Hearth Plus the 3 free days are part of the MONTHLY plan and nothing
+// else: annual is billed at signup ($39.99 today), so it never quotes trial
+// copy and startPlusCheckoutAction never sends trial_period_days for it. Pro
+// is untouched - both Pro cadences still trial.
+//
+// It lives here, next to the disclosure it governs, because four surfaces have
+// to agree on the answer: the copy on /plus, the Stripe trial itself, the
+// consent record written into session metadata, and the acknowledgment sent
+// afterwards. One exported predicate is the only way they cannot drift.
+export function trialApplies(plan: PaidPlan, introEligible: boolean): boolean {
+  if (!introEligible) return false;
+  if (plan === "pro_monthly" || plan === "pro_yearly") return true;
+  return plan === "monthly";
 }
 
 // Terms for a specific plan. `introEligible` must mirror the exact signal the
@@ -81,12 +104,14 @@ export function billingTerms(
     const perCadence = yearly ? price : `${price} a month`;
     const trialDays = PRO_PLAN.trialDays;
 
-    if (introEligible) {
+    if (trialApplies(plan, introEligible)) {
+      const stepUp = `Free for ${trialDays} days. After that it is ${perCadence}, and it renews ${recurEvery} until you cancel.`;
       return {
         product,
         chargedToday: `Nothing today. Your first ${trialDays} days are free.`,
         recurring: `After the ${trialDays}-day free trial, ${perCadence} is automatically charged to the payment method you enter now, and it renews ${recurEvery} until you cancel.`,
-        stepUp: `Free for ${trialDays} days. After that it is ${perCadence}, and it renews ${recurEvery} until you cancel.`,
+        stepUp,
+        summary: stepUp,
         cancel: `${cancel} If you cancel before the ${trialDays}-day trial ends, you will not be charged anything.`,
         cancelPath,
       };
@@ -97,17 +122,18 @@ export function billingTerms(
       chargedToday: `${price} today.`,
       recurring: `After that, ${price} is automatically charged to the same payment method ${recurEvery} until you cancel.`,
       stepUp: null,
+      summary: `${price} today, and it renews ${recurEvery} until you cancel.`,
       cancel,
       cancelPath,
     };
   }
 
-  // Hearth Plus: weekly, monthly, or yearly. Every brand-new subscriber gets
-  // the same free trial (a Stripe trial, so nothing is charged until it
-  // ends) no matter which cadence they pick - `introEligible` mirrors the
-  // exact "no existing Plus subscription" signal startPlusCheckoutAction
+  // Hearth Plus: weekly, monthly, or yearly. The free trial is part of the
+  // MONTHLY plan only (see trialApplies above): annual is billed at signup, so
+  // it always takes the "charged today" branch below. `introEligible` mirrors
+  // the exact "no existing Plus subscription" signal startPlusCheckoutAction
   // uses, so a returning subscriber never sees trial copy for a trial they
-  // will not get.
+  // will not get either.
   const cadenceNoun =
     plan === "weekly" ? "week" : plan === "yearly" ? "year" : "month";
   // Yearly is billed on a 12-month cycle, not a calendar year, so the
@@ -126,12 +152,14 @@ export function billingTerms(
   // since recurEvery already spells out "every 12 months" right after it.
   const perCadence = plan === "yearly" ? price : `${price} a ${cadenceNoun}`;
 
-  if (introEligible) {
+  if (trialApplies(plan, introEligible)) {
+    const stepUp = `Free for ${trialDays} days. After that it is ${perCadence}, and it renews ${recurEvery} until you cancel.`;
     return {
       product,
       chargedToday: `Nothing today. Your first ${trialDays} days are free.`,
       recurring: `After the ${trialDays}-day free trial, ${perCadence} is automatically charged to your payment method, and it renews ${recurEvery} until you cancel.`,
-      stepUp: `Free for ${trialDays} days. After that it is ${perCadence}, and it renews ${recurEvery} until you cancel.`,
+      stepUp,
+      summary: stepUp,
       cancel: `${cancel} If you cancel before the ${trialDays}-day trial ends, you will not be charged anything.`,
       cancelPath,
     };
@@ -142,6 +170,9 @@ export function billingTerms(
     chargedToday: `${price} today.`,
     recurring: `After that, ${price} is automatically charged to the same payment method ${recurEvery} until you cancel.`,
     stepUp: null,
+    // Annual reads "$39.99 today, and it renews every 12 months until you
+    // cancel." - the whole commitment in one sentence, no trial promised.
+    summary: `${price} today, and it renews ${recurEvery} until you cancel.`,
     cancel,
     cancelPath,
   };

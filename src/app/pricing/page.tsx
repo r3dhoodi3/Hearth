@@ -170,8 +170,12 @@ export default function PricingPage() {
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               About {YEARLY_PER_MONTH} a month, billed once a year.
             </p>
+            {/* The trial belongs to the monthly plan only, so this card says
+                plainly what yearly does instead: it charges at signup. Saying
+                nothing here would leave the trial line on the monthly card to
+                be read as covering both. */}
             <p className="mt-3 text-sm font-medium text-bark-700 dark:text-stone-300">
-              Starts with a free {TRIAL_DAYS}-day trial.
+              {YEARLY} today, then every 12 months. No trial on yearly.
             </p>
           </div>
           <ul className="mt-5 space-y-2">
@@ -211,7 +215,7 @@ export default function PricingPage() {
               The same Plus, month to month.
             </p>
             <p className="mt-3 text-sm font-medium text-bark-700 dark:text-stone-300">
-              Starts with a free {TRIAL_DAYS}-day trial.
+              Your first {TRIAL_DAYS} days are free, then {MONTHLY} a month.
             </p>
           </div>
           {/* The page's one loss-framed line, and the loss is real today: the
@@ -242,16 +246,20 @@ export default function PricingPage() {
           How the Plus trial and billing work
         </h2>
         <p className="mt-2 text-base leading-relaxed text-stone-700 dark:text-stone-300">
-          If you start Plus, your first {TRIAL_DAYS} days are free and nothing is
-          charged. After the {TRIAL_DAYS}-day trial, it renews automatically at
-          the price you picked ({MONTHLY} a month or {YEARLY} a year) unless you
-          cancel.
+          The free trial is part of the monthly plan. If you start Plus monthly,
+          your first {TRIAL_DAYS} days are free and nothing is charged, then it
+          renews automatically at {MONTHLY} a month until you cancel.
+        </p>
+        <p className="mt-2 text-base leading-relaxed text-stone-700 dark:text-stone-300">
+          The yearly plan has no trial: it charges {YEARLY} today and renews
+          every 12 months until you cancel.
         </p>
         <p className="mt-2 text-base leading-relaxed text-stone-700 dark:text-stone-300">
           You can cancel anytime from your account with one button. There is
-          nothing to call or email. If you cancel during the {TRIAL_DAYS}-day
-          trial, you are never charged, and if you cancel later you keep Plus
-          until the end of the period you already paid for.
+          nothing to call or email. If you cancel during the monthly plan&apos;s
+          {" "}
+          {TRIAL_DAYS}-day trial, you are never charged, and if you cancel later
+          you keep Plus until the end of the period you already paid for.
         </p>
       </div>
 

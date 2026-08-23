@@ -37,17 +37,18 @@ export default function AutoRenewalTerms({
           ? `Your ${terms.product} renewal terms`
           : "This subscription renews automatically"}
       </p>
-      {/* `terms.stepUp` is the one-line "free for N days, then $X a
-          <cadence>, renews every <cadence> until you cancel" summary, present
-          only when this signup carries the trial. Leading with it, before the
-          itemized list below, puts the step-up (the fact ROSCA and the
-          California Automatic Renewal Law most want up front) in the first
-          sentence a buyer reads rather than buried in a bullet. */}
-      {terms.stepUp && (
-        <p className="mt-2 text-xs font-medium text-stone-900 dark:text-stone-100">
-          {terms.stepUp}
-        </p>
-      )}
+      {/* `terms.summary` is the whole commitment in one sentence: "Free for N
+          days. After that it is $X a <cadence>, and it renews every <cadence>
+          until you cancel." on a plan that carries the trial, and "$X today,
+          and it renews every <cadence> until you cancel." on one that bills at
+          signup. Leading with it, before the itemized list below, puts the
+          fact ROSCA and the California Automatic Renewal Law most want up
+          front in the first sentence a buyer reads rather than buried in a
+          bullet - and it says it for the plan actually selected, so the
+          monthly-only trial never leaks onto an annual checkout. */}
+      <p className="mt-2 text-xs font-medium text-stone-900 dark:text-stone-100">
+        {terms.summary}
+      </p>
       <ul className="mt-2 space-y-1 text-xs text-stone-600 dark:text-stone-300">
         <li>
           <span className="font-medium text-stone-900 dark:text-stone-100">

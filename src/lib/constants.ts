@@ -413,7 +413,7 @@ export const PRO_PLAN = {
 // the /plus page, the checkout action, the auto-renewal disclosure in
 // src/lib/billingTerms.ts, and the renewal-reminder cron can never quote a
 // price the card isn't actually charged. Every brand-new subscriber, on any
-// cadence, gets a 3-day free trial (a Stripe trial, so nothing is charged
+// cadence (MONTHLY only since 2026-08-23), gets a 3-day free trial (a Stripe trial, so nothing is charged
 // until it ends); yearly is also discounted on top of that.
 export const PLUS_PLAN = {
   // GRANDFATHERED ONLY, no longer sold. Weekly was retired as a new-checkout

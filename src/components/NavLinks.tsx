@@ -31,6 +31,16 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   business: Building2,
 };
 
+// Routes that belong to a tab without living under its path. Ask Hearth is
+// reached from a pinned conversation at the top of the Messages list, so
+// /ask (and /pro/ask) are children of Messages as far as anyone tapping
+// around is concerned - without this the whole bar goes dark the moment the
+// assistant opens and there is nothing on screen saying where you are.
+const CHILD_ROUTES: Record<string, string[]> = {
+  "/chats": ["/ask"],
+  "/pro/chats": ["/pro/ask"],
+};
+
 type NavLink = {
   href: string;
   label: string;
@@ -75,7 +85,10 @@ export default function NavLinks({
           pathname === l.href ||
           (l.href !== "/pro" &&
             l.href !== "/contractors" &&
-            pathname.startsWith(l.href + "/"));
+            pathname.startsWith(l.href + "/")) ||
+          (CHILD_ROUTES[l.href] ?? []).some(
+            (c) => pathname === c || pathname.startsWith(c + "/")
+          );
 
         if (variant === "bottom") {
           const Icon = l.icon ? NAV_ICONS[l.icon] : undefined;

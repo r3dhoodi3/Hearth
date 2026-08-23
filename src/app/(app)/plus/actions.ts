@@ -8,7 +8,7 @@ import { getUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSubscription, getProSubscription } from "@/lib/subscription";
-import { billingTermsText } from "@/lib/billingTerms";
+import { billingTermsText, trialApplies } from "@/lib/billingTerms";
 import {
   checkoutCadence,
   subscriptionCheckoutData,
@@ -146,11 +146,14 @@ export async function startPlusCheckoutAction(formData: FormData) {
     }
   }
 
-  // Every brand-new subscriber gets a free trial (PLUS_PLAN.trialDays), on
-  // either cadence they can pick (monthly or yearly). `existing` already scopes
-  // to a homeowner-side Plus subscription, so a returning subscriber switching
-  // cadence never gets a second trial.
-  const freeTrial = !existing;
+  // The free trial (PLUS_PLAN.trialDays) belongs to the MONTHLY plan only:
+  // annual is billed at signup, which is what the /plus columns and the
+  // disclosure both say. trialApplies() is the one predicate all of that reads,
+  // so the Stripe trial below, the disclosure the buyer saw, and the consent
+  // record stored two blocks down cannot disagree. `existing` already scopes to
+  // a homeowner-side Plus subscription, so a returning subscriber switching
+  // cadence never gets a second trial either.
+  const freeTrial = trialApplies(plan, !existing);
 
   // Consent record. California's Automatic Renewal Law requires keeping proof
   // of what the subscriber agreed to (Bus. & Prof. Code 17602(b)(2): at least
