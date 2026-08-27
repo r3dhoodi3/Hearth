@@ -134,12 +134,21 @@ export default function DescriptionField({
         <label className="label" htmlFor="job-details">
           Details about your project
         </label>
-        {offerDraft && (
+        {/* Mounted for as long as a photo is attached (a deliberate, rare
+            action), never unmounted just because handTyped flips mid-typing.
+            Typing only toggles `invisible` + disabled, so this row can never
+            change height while the owner is typing and about to tap Post -
+            see the comment on PostJobButton's check() for why that matters. */}
+        {photoUrl && (
           <button
             type="button"
             onClick={draftFromPhoto}
-            disabled={drafting}
-            className="shrink-0 text-xs font-medium text-bark-700 hover:underline disabled:opacity-60 dark:text-stone-300"
+            disabled={drafting || handTyped}
+            aria-hidden={handTyped}
+            tabIndex={handTyped ? -1 : 0}
+            className={`shrink-0 text-xs font-medium text-bark-700 hover:underline disabled:opacity-60 dark:text-stone-300 ${
+              handTyped ? "invisible pointer-events-none" : ""
+            }`}
           >
             {drafting ? "Drafting…" : "Draft it for me from the photo"}
           </button>
@@ -189,7 +198,19 @@ export default function DescriptionField({
       )}
       <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
         A sentence or two helps pros quote accurately (20 characters minimum).
-        {offerDraft ? " Or let Hearth draft it from your photo, then edit." : ""}
+        {/* Same stability rule as the header button above: mounted whenever a
+            photo is attached, so this line's height is reserved for the
+            whole time a photo could be drafted from, and typing (handTyped)
+            only toggles invisible instead of removing the text. Removing it
+            outright on the first keystroke is what used to make this
+            paragraph drop from two lines to one right as the owner kept
+            typing, shifting the strong-post meter and Post button up from
+            under a tap that started on the button (see PostJobButton). */}
+        {photoUrl && (
+          <span className={handTyped ? "invisible" : ""} aria-hidden={handTyped}>
+            {" "}Or let Hearth draft it from your photo, then edit.
+          </span>
+        )}
       </p>
     </div>
   );

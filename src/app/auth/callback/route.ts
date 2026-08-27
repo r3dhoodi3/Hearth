@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { safeNextPath } from "@/lib/safeNext";
 import { requestOrigin } from "@/lib/requestOrigin";
+import {
+  PW_RECOVERY_COOKIE,
+  passwordRecoveryCookieOptions,
+} from "@/lib/passwordRecovery";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import {
   contractorRowExists,
@@ -21,6 +25,44 @@ export async function GET(request: NextRequest) {
   // ?next= is attacker-influenceable (e.g. via resetPasswordForEmail's
   // redirectTo), so only follow it when it's a same-origin relative path.
   const next = safeNextPath(searchParams.get("next")) ?? "/dashboard";
+
+  // Is this the password-recovery flow? ONE signal only: ?type=recovery, the
+  // parameter Supabase stamps on the link it emails.
+  //
+  // A draft also accepted "next points at /reset-password", on the reasoning
+  // that ResetPasswordForm always builds redirectTo that way. That was wrong.
+  // ?next= is caller-supplied on EVERY route through here - a Google sign-in
+  // started from anywhere can carry next=/reset-password?step=update - so the
+  // cookie would have been mintable by completing an ordinary sign-in with a
+  // chosen query string, which is precisely the walk-up it exists to stop.
+  // safeNextPath only proves the value is a relative path of ours; it says
+  // nothing about who chose it.
+  //
+  // This decides ONE thing: whether to hand back the short-lived
+  // hearth_pwrecovery cookie that /reset-password requires before it will
+  // render the "set a new password" form. It grants nothing else, and a forged
+  // ?type=recovery on a link with no valid code never reaches the set, because
+  // everything below is inside `if (code)` and the exchange has to succeed.
+  //
+  // OPERATOR NOTE (docs/SECURITY-OPS.md): this depends on the reset link
+  // carrying type=recovery all the way to this route. If password reset ever
+  // stops advancing past step one, that is the thing to check first - the
+  // supported fix is to point the "Reset Password" email template at
+  // /auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=... , which
+  // carries the parameter by construction.
+  const isRecovery = searchParams.get("type") === "recovery";
+
+  // Attach the cookie to whichever redirect this route ends up returning.
+  const withRecoveryCookie = (response: NextResponse): NextResponse => {
+    if (isRecovery) {
+      response.cookies.set(
+        PW_RECOVERY_COOKIE,
+        "1",
+        passwordRecoveryCookieOptions()
+      );
+    }
+    return response;
+  };
 
   if (code) {
     const supabase = await createClient();
@@ -162,10 +204,12 @@ export async function GET(request: NextRequest) {
         // decision.redirect covers all three cases: the role picker for
         // someone we know nothing about, the corrected side of the app for a
         // role/destination mismatch, and plain `next` for everyone else.
-        return NextResponse.redirect(new URL(decision.redirect, origin));
+        return withRecoveryCookie(
+          NextResponse.redirect(new URL(decision.redirect, origin))
+        );
       }
 
-      return NextResponse.redirect(new URL(next, origin));
+      return withRecoveryCookie(NextResponse.redirect(new URL(next, origin)));
     }
   }
 

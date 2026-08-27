@@ -183,7 +183,7 @@ export default async function Home(props: {
     },
     {
       q: "Where is Hearth available?",
-      a: "We're serving Huntington Beach, Fountain Valley, Seal Beach, Westminster, Midway City, Garden Grove, Santa Ana, Costa Mesa, and Newport Beach right now, with local pros there. Don't see your city yet? You will soon. If you're outside those cities you can still sign up and join the waitlist, which is how we decide where Hearth goes next.",
+      a: "We're serving all of Orange County, California right now, with local pros across the county. If you're outside Orange County you can still sign up and join the waitlist, which is how we decide where Hearth goes next.",
     },
     {
       q: "What does Plus cost?",
@@ -393,7 +393,7 @@ export default async function Home(props: {
                 Serving {LAUNCH_AREA_LABEL}
               </p>
               <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-                Don&apos;t see your city yet? You will soon.
+                Outside the county? Join the waitlist and we&apos;ll tell you when we expand.
               </p>
               <div className="mt-4 flex justify-center text-sm lg:justify-start">
                 <Link href="/signin" className="text-bark-700 hover:underline dark:text-stone-300">
@@ -541,8 +541,7 @@ export default async function Home(props: {
           >
             Huntington Beach
           </Link>
-          , and nearby Orange County homeowners. Don&apos;t see your city yet?
-          You will soon.
+          , and homeowners across all of Orange County.
         </p>
         {/* Contact form works with no session and no owner-fillable fields,
             unlike the old mailto/tel here, so it's always shown - see

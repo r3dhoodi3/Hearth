@@ -55,7 +55,23 @@ export interface ParcelFacts {
   owner_names: string[] | null;
   owner_type: "individual" | "organization" | null;
   owner_occupied: boolean | null;
-  source: "rentcast" | "none";
+  // Three states, and the difference between the last two is the whole reason
+  // this union has three members:
+  //   "rentcast"    - the records source answered and knows this address.
+  //   "none"        - the records source answered and has NO such address (a
+  //                   true miss), or no RENTCAST_API_KEY is configured so
+  //                   nothing was looked up at all.
+  //   "unavailable" - we could not ask: a non-ok HTTP status (a bad or expired
+  //                   key returns 401, an exhausted quota 429, an outage 5xx),
+  //                   a timeout/abort, a network error, or a body we couldn't
+  //                   parse. This is NOT evidence about the address, so it must
+  //                   never be treated as "this home does not exist" and must
+  //                   never be cached - see lookupParcel below and the refusal
+  //                   gates in src/app/onboarding/actions.ts. On 2026-08-24 a
+  //                   bad key on the host turned every real address into a
+  //                   refusal for a day, because this used to collapse into
+  //                   "none".
+  source: "rentcast" | "none" | "unavailable";
 }
 
 // The client-safe subset of ParcelFacts. lookupParcelAction returns this, not
@@ -152,20 +168,27 @@ export async function lookupParcel(
 
   const facts = await fetchParcelFacts(street, zip);
 
-  try {
-    // Cache the "none" result too: a miss is worth remembering for a day so a
-    // retype of the same unknown address doesn't re-bill RentCast.
-    await admin.from("parcel_cache").upsert(
-      {
-        cache_key: cacheKey,
-        facts: facts as unknown as Json,
-        source: facts.source,
-        fetched_at: new Date().toISOString(),
-      },
-      { onConflict: "cache_key" }
-    );
-  } catch (err) {
-    console.error("Parcel cache write failed:", err);
+  // NEVER cache an "unavailable" result, under this key or the canonical one
+  // below. A 401 from a bad key, a 429, a 5xx or a timeout says nothing about
+  // the address, and writing it would freeze that non-answer in front of the
+  // home for a whole cache window - which is how one bad key on the host
+  // turned into a day of rejected signups. A miss ("none") is still cached for
+  // a day: that IS an answer, and remembering it keeps a retype of the same
+  // unknown address from re-billing RentCast.
+  if (facts.source !== "unavailable") {
+    try {
+      await admin.from("parcel_cache").upsert(
+        {
+          cache_key: cacheKey,
+          facts: facts as unknown as Json,
+          source: facts.source,
+          fetched_at: new Date().toISOString(),
+        },
+        { onConflict: "cache_key" }
+      );
+    } catch (err) {
+      console.error("Parcel cache write failed:", err);
+    }
   }
 
   // Dual-write under RentCast's own canonical address+ZIP too (read-through
@@ -212,10 +235,16 @@ async function fetchParcelFacts(
       // Single call: the property record only. The AVM market-value lookup
       // was removed, so market_value fields stay null (home value can be
       // entered manually later on the value page).
+      // Either a real record, blank facts marked "unavailable" (we couldn't
+      // ask), or null for a true miss. Only null falls through to blankFacts.
       const record = await fetchFromRentcast(street.trim(), zip.trim(), key);
       if (record) return record;
     } catch (err) {
+      // fetchFromRentcast catches its own failures, so this is a belt-and-
+      // braces path (an unexpected throw). It is still a "couldn't ask", not
+      // a "no such address".
       console.error("RentCast lookup failed:", err);
+      return unavailableFacts(street, zip);
     }
   }
   // address_line1 is the street line; the unit lives in its own column and is
@@ -398,9 +427,15 @@ function deriveSystemFacts(
 }
 
 // Fetches property facts from RentCast's /v1/properties endpoint, which
-// matches a single address against county assessor records. Returns null on
-// any miss or failure so the caller falls back to blankFacts(): a lookup
-// hiccup must degrade to "type it yourself", never block onboarding.
+// matches a single address against county assessor records. Three outcomes,
+// and they are deliberately not the same thing:
+//   - a ParcelFacts with source "rentcast": the record was found.
+//   - null: RentCast answered and has no such address (empty array, or a
+//     record shape with no address echo). A TRUE miss, safe to cache and safe
+//     to refuse an onboarding claim on.
+//   - a ParcelFacts with source "unavailable": we never got an answer -
+//     non-ok HTTP (401 bad key, 429 quota, 5xx outage), an abort/timeout, a
+//     network error, or an unparseable body. Not evidence about the address.
 async function fetchFromRentcast(
   street: string,
   zip: string,
@@ -416,8 +451,10 @@ async function fetchFromRentcast(
       signal: controller.signal,
     });
     if (!res.ok) {
+      // 401 (bad/expired key), 429 (quota), 5xx (outage): we could not ask, so
+      // the answer is "unavailable", never "no such address".
       console.error(`RentCast returned HTTP ${res.status} for address lookup`);
-      return null;
+      return unavailableFacts(street, zip);
     }
     const body: unknown = await res.json();
     const record: RentcastRecord | undefined = Array.isArray(body)
@@ -472,9 +509,12 @@ async function fetchFromRentcast(
         typeof record.ownerOccupied === "boolean" ? record.ownerOccupied : null,
       source: "rentcast",
     };
-  } catch {
-    // AbortError (timeout), DNS/network failure: degrade to manual entry.
-    return null;
+  } catch (err) {
+    // AbortError (the 8s timeout), DNS/network failure, or a body that isn't
+    // JSON: degrade to manual entry, marked "unavailable" so onboarding lets
+    // the homeowner through instead of telling them their house isn't real.
+    console.error("RentCast address lookup could not complete:", err);
+    return unavailableFacts(street, zip);
   } finally {
     clearTimeout(timeout);
   }
@@ -490,12 +530,25 @@ export interface MarketValueFacts {
   market_value: number | null;
   market_value_low: number | null;
   market_value_high: number | null;
+  // Same three-state meaning as ParcelFacts.source above. "unavailable" (a
+  // 401/429/5xx, a timeout, a network error, an unparseable body) is never
+  // cached, so a bad key can't pin a null estimate in front of a home for 24
+  // hours.
+  source: "rentcast" | "none" | "unavailable";
 }
 
 const BLANK_MARKET_VALUE: MarketValueFacts = {
   market_value: null,
   market_value_low: null,
   market_value_high: null,
+  source: "none",
+};
+
+const UNAVAILABLE_MARKET_VALUE: MarketValueFacts = {
+  market_value: null,
+  market_value_low: null,
+  market_value_high: null,
+  source: "unavailable",
 };
 
 // Lazy AVM (estimated market value) lookup for the /value page. Mirrors
@@ -534,7 +587,17 @@ export async function lookupMarketValue(
       const fresh =
         (row.source === "rentcast" && ageMs < 30 * 24 * 60 * 60 * 1000) ||
         (row.source === "none" && ageMs < 24 * 60 * 60 * 1000);
-      if (fresh) return row.facts as unknown as MarketValueFacts;
+      // The row's own `source` column is authoritative: rows written before
+      // MarketValueFacts gained a source field have none inside the jsonb.
+      if (fresh) {
+        const cached = row.facts as unknown as MarketValueFacts;
+        return {
+          market_value: cached?.market_value ?? null,
+          market_value_low: cached?.market_value_low ?? null,
+          market_value_high: cached?.market_value_high ?? null,
+          source: row.source === "rentcast" ? "rentcast" : "none",
+        };
+      }
     }
   } catch (err) {
     console.error("Market value cache read failed:", err);
@@ -542,20 +605,24 @@ export async function lookupMarketValue(
 
   const facts = await fetchMarketValueFacts(street, zip, unit);
 
-  try {
-    // Cache a miss too (source "none"), same reasoning as lookupParcel: a
-    // retype/reload of the same address within a day shouldn't re-bill.
-    await admin.from("parcel_cache").upsert(
-      {
-        cache_key: cacheKey,
-        facts: facts as unknown as Json,
-        source: facts.market_value != null ? "rentcast" : "none",
-        fetched_at: new Date().toISOString(),
-      },
-      { onConflict: "cache_key" }
-    );
-  } catch (err) {
-    console.error("Market value cache write failed:", err);
+  // Never cache "unavailable", same rule as lookupParcel: an outage or a bad
+  // key is not an answer about this address, and freezing it would keep the
+  // estimate blank long after the key was fixed. A real miss (source "none")
+  // is still cached for a day so a reload doesn't re-bill.
+  if (facts.source !== "unavailable") {
+    try {
+      await admin.from("parcel_cache").upsert(
+        {
+          cache_key: cacheKey,
+          facts: facts as unknown as Json,
+          source: facts.market_value != null ? "rentcast" : "none",
+          fetched_at: new Date().toISOString(),
+        },
+        { onConflict: "cache_key" }
+      );
+    } catch (err) {
+      console.error("Market value cache write failed:", err);
+    }
   }
 
   return facts;
@@ -583,15 +650,21 @@ async function fetchMarketValueFacts(
     });
     if (!res.ok) {
       console.error(`RentCast returned HTTP ${res.status} for AVM lookup`);
-      return BLANK_MARKET_VALUE;
+      return UNAVAILABLE_MARKET_VALUE;
     }
     const body: unknown = await res.json();
-    if (!body || typeof body !== "object") return BLANK_MARKET_VALUE;
+    // A 200 that isn't even an object is a shape we don't recognize, not an
+    // answer about this address - same call the property-record path makes on
+    // an unparseable body, and it must not be cached either.
+    if (!body || typeof body !== "object") return UNAVAILABLE_MARKET_VALUE;
     const rec = body as {
       price?: number;
       priceRangeLow?: number;
       priceRangeHigh?: number;
     };
+    // A well-formed object with no price IS an answer: RentCast has no
+    // estimate for this address. That is a real miss, so it stays "none" and
+    // is cached for a day like any other.
     if (typeof rec.price !== "number") return BLANK_MARKET_VALUE;
     return {
       market_value: rec.price,
@@ -599,10 +672,14 @@ async function fetchMarketValueFacts(
         typeof rec.priceRangeLow === "number" ? rec.priceRangeLow : null,
       market_value_high:
         typeof rec.priceRangeHigh === "number" ? rec.priceRangeHigh : null,
+      source: "rentcast",
     };
-  } catch {
-    // AbortError (timeout), DNS/network failure: degrade to null, never throw.
-    return BLANK_MARKET_VALUE;
+  } catch (err) {
+    // AbortError (the 8s timeout), DNS/network failure, unparseable body:
+    // degrade to null, never throw - but marked "unavailable" so it isn't
+    // cached as if RentCast had said "no estimate for this address".
+    console.error("RentCast AVM lookup could not complete:", err);
+    return UNAVAILABLE_MARKET_VALUE;
   } finally {
     clearTimeout(timeout);
   }
@@ -645,4 +722,12 @@ function blankFacts(street: string, zip: string): ParcelFacts {
     owner_occupied: null,
     source: "none",
   };
+}
+
+// Same blank shape as blankFacts, but marked "unavailable": we could not reach
+// the records source, so nothing here is a statement about the address. Kept
+// as a sibling of blankFacts rather than a flag on it so every call site has
+// to pick one on purpose.
+function unavailableFacts(street: string, zip: string): ParcelFacts {
+  return { ...blankFacts(street, zip), source: "unavailable" };
 }

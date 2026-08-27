@@ -108,9 +108,9 @@ export default async function HouseholdPage() {
                 </form>
                 <form action={declineInviteAction}>
                   <input type="hidden" name="id" value={invite.id} />
-                  <button type="submit" className="btn-secondary">
+                  <SubmitButton className="btn-secondary" pendingLabel="Declining…">
                     Decline
-                  </button>
+                  </SubmitButton>
                 </form>
               </div>
             </div>

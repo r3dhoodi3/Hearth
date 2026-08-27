@@ -1151,6 +1151,91 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["quote_analyses"]["Insert"]>;
         Relationships: [];
       };
+      // Trial-abuse risk scoring (migration 0130). All three tables are
+      // SERVICE ROLE ONLY: RLS is on with no policies for anon/authenticated,
+      // and their privileges are revoked on top of that. They are typed here for
+      // reference and for anyone who drops the untyped admin client in
+      // src/lib/risk/*, not because any user-scoped client can reach them.
+      //
+      // account_signals stores only SALTED HASHES (see src/lib/risk/hash.ts).
+      // No raw IP, device id, card fingerprint, phone, parcel or email is ever
+      // written to it.
+      account_signals: {
+        Row: {
+          user_id: string;
+          kind: string;
+          value_hash: string;
+          first_seen: string;
+          last_seen: string;
+          context: string | null;
+          salt_version: number;
+        };
+        Insert: {
+          user_id: string;
+          kind: string;
+          value_hash: string;
+          first_seen?: string;
+          last_seen?: string;
+          context?: string | null;
+          salt_version?: number;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["account_signals"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      account_risk: {
+        Row: {
+          user_id: string;
+          score: number;
+          level: string;
+          reasons: Json;
+          computed_at: string;
+        };
+        Insert: {
+          user_id: string;
+          score?: number;
+          level?: string;
+          reasons?: Json;
+          computed_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["account_risk"]["Insert"]>;
+        Relationships: [];
+      };
+      abuse_flags: {
+        Row: {
+          user_id: string;
+          kind: string;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          kind: string;
+          note?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["abuse_flags"]["Insert"]>;
+        Relationships: [];
+      };
+      risk_overrides: {
+        Row: {
+          user_id: string;
+          allow_trial: boolean;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          allow_trial: boolean;
+          note?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["risk_overrides"]["Insert"]
+        >;
+        Relationships: [];
+      };
     };
     Views: {
       lead_previews: {
@@ -1325,6 +1410,17 @@ export interface Database {
         Returns: {
           user_id: string;
           matched_via: "email" | "phone" | "both";
+        }[];
+      };
+      // Migration 0130, service_role only. Every OTHER account sharing any
+      // non-email_domain signal value with p_user, and the kind of signal that
+      // links them. A shared email DOMAIN is excluded on purpose: joining on it
+      // would link every gmail.com account to every other one.
+      linked_accounts: {
+        Args: { p_user: string };
+        Returns: {
+          user_id: string;
+          kind: string;
         }[];
       };
       redeem_household_invite_token: {

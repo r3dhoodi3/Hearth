@@ -218,7 +218,7 @@ export default async function ProsLanding(props: {
               Serving {LAUNCH_AREA_LABEL}
             </p>
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-              Don&apos;t see your city yet? You will soon.
+              Cover the whole county or just the cities you work in.
             </p>
           </div>
         </div>

@@ -15,6 +15,8 @@ import {
 } from "@/lib/checkoutSubscriptionData";
 import { PLUS_PLAN, EXTRA_HOME, extraHomeUnitPrice } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
+import { trialDecision, RISK_BLOCK_MESSAGE } from "@/lib/risk/decision";
+import { recordRequestSignals } from "@/lib/risk/signals";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -146,6 +148,37 @@ export async function startPlusCheckoutAction(formData: FormData) {
     }
   }
 
+  // Trial-abuse check (src/lib/risk). This is the moment the account is about to
+  // be handed 3 free days, so it is the moment to ask whether we have met this
+  // person before under another email.
+  //
+  // THE ORDER MATTERS, and it is decide-then-record. The /plus page computes the
+  // SAME decision with persist:false to choose which auto-renewal disclosure to
+  // render, and it records nothing. If this action recorded first, it would be
+  // deciding over a strictly larger set of stored signals than the page saw, and
+  // the two could disagree about the same checkout: somebody who signed up on
+  // their phone and bought on the household iPad would read "free for 3 days" on
+  // the page and be charged today by the action, because the action had just
+  // written the device signal the page never saw. The disclosure they consented
+  // to would be the wrong one, in the direction ROSCA and California's Automatic
+  // Renewal Law actually care about.
+  //
+  // So: decide over exactly the state the page decided over, then record the
+  // signals for NEXT time. Both calls are best-effort and neither can throw.
+  const risk = await trialDecision(user.id, {
+    accountCreatedAt: user.created_at ?? null,
+  });
+  await recordRequestSignals(user.id, "plus_checkout");
+  if (!risk.allowCheckout) {
+    // Reachable only from a hand-written 'manual' abuse flag today: the score
+    // itself never refuses a sale (see the decision table in
+    // src/lib/risk/decision.ts). Deliberately vague, and deliberately routed to
+    // a human - naming the signal both teaches a farmer how to route around it
+    // and states a judgement call as if it were a fact.
+    await setFlash(RISK_BLOCK_MESSAGE, "error");
+    redirect("/plus");
+  }
+
   // The free trial (PLUS_PLAN.trialDays) belongs to the MONTHLY plan only:
   // annual is billed at signup, which is what the /plus columns and the
   // disclosure both say. trialApplies() is the one predicate all of that reads,
@@ -153,7 +186,15 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // record stored two blocks down cannot disagree. `existing` already scopes to
   // a homeowner-side Plus subscription, so a returning subscriber switching
   // cadence never gets a second trial either.
-  const freeTrial = trialApplies(plan, !existing);
+  //
+  // risk.allowTrial is ANDed into the same `introEligible` input rather than
+  // bolted on afterwards, so the removal flows through every surface that reads
+  // it at once: the Stripe trial_period_days below, the consent record, and the
+  // acknowledgment email. A medium-risk buyer is charged today and the terms
+  // they consent to say exactly that - billingTerms() takes the "charged today"
+  // branch, so nothing on screen or in the record promises free days that are
+  // not coming. /plus's own copy is gated on the same decision (page.tsx).
+  const freeTrial = trialApplies(plan, !existing && risk.allowTrial);
 
   // Consent record. California's Automatic Renewal Law requires keeping proof
   // of what the subscriber agreed to (Bus. & Prof. Code 17602(b)(2): at least

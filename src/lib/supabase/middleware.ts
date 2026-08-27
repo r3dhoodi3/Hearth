@@ -48,6 +48,11 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Secure in production, same reasoning (and the same conditional) as
+      // src/lib/supabase/server.ts. This is the client that rotates the
+      // session cookie on every guarded request, so it writes the auth cookie
+      // more often than either of the other two.
+      cookieOptions: { secure: process.env.NODE_ENV === "production" },
       cookies: {
         getAll() {
           return request.cookies.getAll();

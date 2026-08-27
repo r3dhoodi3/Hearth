@@ -48,6 +48,22 @@ exists; "Open" means nothing exists yet.
 10. **CCPA/CPRA**: under the revenue/volume thresholds, but notice at
     collection and the privacy policy apply anyway and exist. Re-check the
     activity-based triggers (selling/sharing, sensitive PI) as features grow.
+10b. **Trial-abuse risk score (migration 0130, `src/lib/risk`)**: Hearth now
+    stores salted one-way hashes of device, network, browser-fingerprint,
+    payment-method and normalized-email identifiers, used only to stop the same
+    person farming the 3-day free trial with new accounts. Three things to
+    confirm with counsel: (a) the CCPA notice at collection and the
+    "Abuse-prevention identifiers" row in `src/lib/privacy.ts` CATEGORIES cover
+    it, and the `/privacy` copy is accurate; (b) whether a hashed IP or device
+    id counts as an identifier requiring anything beyond that notice under
+    CPRA's "sharing" and ADMT rules (it is never sold, shared, or used for
+    profiling, and it drives no automated decision other than declining a free
+    trial and declining a sale); (c) whether the fraud-prevention exception
+    (Cal. Civ. Code 1798.105(d)(2)) should be used to RETAIN abuse flags through
+    an account deletion. Today it is not: the tables cascade on
+    `auth.users` delete, so deleting an account wipes its signals and flags,
+    which means account deletion is itself a way to reset the score. That is
+    the privacy-friendly default and a real hole. Open decision.
 11. **FTC Fake Reviews Rule (16 CFR Part 465)**: applies to the planned
     reviews feature and to showing Yelp/Google links. No fabricated or
     incentivized reviews; disclose insider reviews.

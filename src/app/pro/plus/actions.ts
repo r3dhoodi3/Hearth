@@ -20,6 +20,8 @@ import {
   subscriptionCheckoutData,
 } from "@/lib/checkoutSubscriptionData";
 import { setFlash } from "@/lib/flash";
+import { trialDecision, RISK_BLOCK_MESSAGE } from "@/lib/risk/decision";
+import { recordRequestSignals } from "@/lib/risk/signals";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -173,7 +175,41 @@ export async function startProCheckoutAction(formData: FormData) {
   // so it fails CLOSED: if the subscriptions read errored (transient/RLS),
   // `existing` would be null and `!existing` would wrongly grant a repeat
   // trial. isProTrialEligible returns false on an errored read.
-  const freeTrial = await isProTrialEligible();
+  //
+  // Trial-abuse check (src/lib/risk). This is the moment the account is about to
+  // be handed 3 free days, so it is the moment to ask whether we have met this
+  // person before under another email.
+  //
+  // THE ORDER MATTERS, and it is decide-then-record. The /pro/plus page computes the
+  // SAME decision with persist:false to choose which auto-renewal disclosure to
+  // render, and it records nothing. If this action recorded first, it would be
+  // deciding over a strictly larger set of stored signals than the page saw, and
+  // the two could disagree about the same checkout: somebody who signed up on
+  // their phone and bought on the household iPad would read "free for 3 days" on
+  // the page and be charged today by the action, because the action had just
+  // written the device signal the page never saw. The disclosure they consented
+  // to would be the wrong one, in the direction ROSCA and California's Automatic
+  // Renewal Law actually care about.
+  //
+  // So: decide over exactly the state the page decided over, then record the
+  // signals for NEXT time. Both calls are best-effort and neither can throw.
+  //
+  // risk.allowTrial is ANDed onto the same `freeTrial` so every surface reading
+  // it stays in agreement: the Stripe trial below, the consent record, the
+  // acknowledgment email, and the copy on /pro/plus. A medium-risk pro can still
+  // buy - they are simply charged from day one, and billingTerms() then quotes
+  // the immediate charge instead of the free days.
+  const risk = await trialDecision(user.id, {
+    accountCreatedAt: user.created_at ?? null,
+  });
+  await recordRequestSignals(user.id, "pro_checkout");
+  if (!risk.allowCheckout) {
+    // Reachable only from a hand-written 'manual' abuse flag today: the score
+    // itself never refuses a sale (see src/lib/risk/decision.ts).
+    await setFlash(RISK_BLOCK_MESSAGE, "error");
+    redirect("/pro/plus");
+  }
+  const freeTrial = (await isProTrialEligible()) && risk.allowTrial;
 
   // Brand-new Pro subscribers on the monthly plan get an intro month: $9.99
   // for the first month via a one-time coupon, then full price. Yearly is
@@ -375,7 +411,20 @@ export async function startProCheckoutAction(formData: FormData) {
         );
       }
     }
-    throw err;
+
+    // Then behave the way the homeowner side already does
+    // (startPlusCheckoutAction): tell the pro in plain language and put them
+    // back on /pro/plus. Rethrowing here surfaced as a 500 and the generic
+    // error boundary, which reads as "the whole site is broken" for what is
+    // usually a transient Stripe hiccup or a misconfigured price id.
+    //
+    // The real Stripe message is logged first, deliberately: this catch now
+    // swallows the exception, so without this line a genuinely broken
+    // configuration would be invisible in the Vercel logs. It is logged, never
+    // shown - a Stripe error string is not copy for a buyer.
+    console.error("Pro checkout session create failed:", err);
+    await setFlash("We couldn't start checkout. Please try again.", "error");
+    redirect("/pro/plus");
   }
 
   if (session.url) redirect(session.url);

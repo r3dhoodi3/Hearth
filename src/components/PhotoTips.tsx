@@ -20,13 +20,43 @@ export default function PhotoTips() {
     const read = () => {
       const sel = form.elements.namedItem(
         "category"
-      ) as HTMLSelectElement | null;
+      ) as HTMLInputElement | HTMLSelectElement | null;
       setCategory(sel?.value ?? "");
     };
 
+    // On the post-a-job form, `name="category"` is a hidden <input> that
+    // CategoryFilter writes via React state (its own visible <select> has no
+    // `name`), not a field the browser itself changes - so React setting it
+    // fires no native DOM event at all. A "change" bubbling up from that
+    // visible <select> reaches this form-level listener BEFORE React's own
+    // onChange runs (this listener sits on the form, closer to the target
+    // than React's root listener, so it's earlier in the bubble order),
+    // which means a synchronous read here always sees last event's value,
+    // never the one that just happened. It would only ever catch up whenever
+    // some OTHER field later fired its own change/input - e.g. the
+    // description textarea's blur - which is what used to mount this ~130px
+    // block late, right as a tap on Post job was already in flight (see
+    // PostJobButton). Deferring the read past the current tick lets React's
+    // setState from that same event commit first, so it reads the fresh
+    // value instead of the stale one.
+    const readSoon = () => setTimeout(read, 0);
+    // Typing elsewhere in the form (the description) also re-triggers a
+    // read, debounced, so this settles while the owner is still typing
+    // instead of only when they blur out to tap Post.
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const readDebounced = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(read, 300);
+    };
+
     read();
-    form.addEventListener("change", read);
-    return () => form.removeEventListener("change", read);
+    form.addEventListener("change", readSoon);
+    form.addEventListener("input", readDebounced);
+    return () => {
+      form.removeEventListener("change", readSoon);
+      form.removeEventListener("input", readDebounced);
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
   }, []);
 
   const tips = category ? photoTipsFor(category) : [];

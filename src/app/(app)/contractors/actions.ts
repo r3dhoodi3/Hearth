@@ -6,7 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatAddressLine, getActiveProperty } from "@/lib/property";
 import { lookupParcel } from "@/lib/parcel";
-import { deriveOwnershipStatus } from "@/lib/ownershipMatch";
+import {
+  deriveOwnershipStatus,
+  shouldRecordOwnershipCheck,
+} from "@/lib/ownershipMatch";
 import {
   leadFeeFor,
   labelFor,
@@ -29,6 +32,7 @@ import {
   OUT_OF_AREA_POST_MESSAGE,
 } from "@/lib/serviceArea";
 import { isAllowedValue } from "@/lib/formFields";
+import { isOwnedStoragePath } from "@/lib/ownedStoragePath";
 import type { Json } from "@/lib/database.types";
 
 // Server-side counterpart to src/lib/analytics.ts's track(): that helper
@@ -71,12 +75,25 @@ function formatFeeCents(cents: number): string {
   return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
 }
 
-// Photo URLs come from our own upload component (PhotoUpload), so anything
-// oversized is not a real URL; drop it quietly instead of storing a broken
-// link. Same rule as the issue tracker's photo handling.
-function validPhotoUrls(formData: FormData): string[] {
+// Photo URLs come from our own upload component (PhotoUpload), but they arrive
+// as a plain hidden form field, so they are forgeable like anything else in
+// FormData. The key has to sit under THIS property's folder, which is exactly
+// what the uploader produces - the same rule, and the same shared guard, the
+// issue tracker already applies (src/app/(app)/issues/actions.ts).
+//
+// This is not cosmetic here. These urls land in photos.url tagged
+// related_type 'issue' against the posted lead's issue, and migration 0104's
+// can_view_job_photo_full/can_preview_job_photo bind a signed url to the lead
+// purely by matching photos.url. Storing another property's object key would
+// hand this account (and every board-eligible pro) that property's private
+// photos through /api/job-photo, which signs with the admin client.
+function validPhotoUrls(formData: FormData, propertyId: string): string[] {
   return (formData.getAll("photo_urls") as string[]).filter(
-    (u) => typeof u === "string" && u.length > 0 && u.length <= 1000
+    (u) =>
+      typeof u === "string" &&
+      u.length > 0 &&
+      u.length <= 1000 &&
+      isOwnedStoragePath(u, propertyId)
   );
 }
 
@@ -87,13 +104,14 @@ export async function postJobAction(formData: FormData) {
   const property = await getActiveProperty();
   if (!property) throw new Error("No active property");
 
-  // Launch-area gate (0124, widened to nine cities by 0126). Onboarding only
-  // accepts launch-city ZIPs now, but homes claimed before that change can
-  // carry any Orange County ZIP. open_jobs_for_me and apply_to_lead both
-  // refuse jobs outside the launch cities, so a post from such a home would
-  // succeed, notify nobody, and sit invisible forever - the homeowner deserves
-  // the honest answer at post time instead. The message is the shared one in
-  // src/lib/serviceArea.ts, so the city list only has to change in one place.
+  // Launch-area gate (0124, widened to nine cities by 0126 and to all of
+  // Orange County by 0129). Onboarding only accepts launch-area ZIPs now, but
+  // homes claimed before that gate existed can carry any ZIP at all.
+  // open_jobs_for_me and apply_to_lead both refuse jobs outside the launch
+  // area, so a post from such a home would succeed, notify nobody, and sit
+  // invisible forever - the homeowner deserves the honest answer at post time
+  // instead. The message is the shared one in src/lib/serviceArea.ts, so the
+  // area only has to change in one place.
   if (!launchCityForZip(property.zip ?? "")) {
     setFlash(OUT_OF_AREA_POST_MESSAGE, "error");
     redirect("/contractors");
@@ -189,15 +207,59 @@ export async function postJobAction(formData: FormData) {
           p_owner_occupied: null,
         });
       } else {
-        const facts = await lookupParcel(property.address_line1, property.zip);
-        ownershipStatus = deriveOwnershipStatus(fullName, facts);
-        await admin.rpc("record_ownership_check", {
-          p_property_id: property.id,
-          p_status: ownershipStatus,
-          p_owner_names: facts.owner_names,
-          p_owner_type: facts.owner_type,
-          p_owner_occupied: facts.owner_occupied,
+        // METERED, through the same per-user buckets onboarding's parcel
+        // lookups spend (src/app/onboarding/actions.ts, migration 0068).
+        //
+        // WHY IT HAS TO BE. This lookup is a billed RentCast call, and the
+        // "record nothing when the source was unreachable" rule below is what
+        // makes it repeatable: while RentCast is down or over quota, every
+        // single job post from this account re-runs it, forever, because
+        // ownership_checked_at is deliberately left null. The post limiter
+        // above allows 8 an hour and 20 a day, so an outage at the provider
+        // turned into 20 unmetered billed calls a day per account with nothing
+        // counting them. The parcel buckets are the thing that counts them,
+        // and they are the right ones: this is the same lookup, on the same
+        // provider, out of the same quota.
+        //
+        // It gates the LOOKUP, never the POST. A blocked lookup just leaves
+        // ownership unchecked for now (exactly the state a failed lookup
+        // leaves it in), and the fan-out gate below then behaves as it does
+        // for any unverified property. Fail-open on a limiter hiccup, like
+        // every other rate_limit_hit call in this file.
+        const { data: allowedParcelHour } = await admin.rpc("rate_limit_hit", {
+          p_bucket: `parcel:${user.id}`,
+          p_limit: 10,
+          p_window_seconds: 3600,
         });
+        const { data: allowedParcelDay } = await admin.rpc("rate_limit_hit", {
+          p_bucket: `parcel-day:${user.id}`,
+          p_limit: 25,
+          p_window_seconds: 86400,
+        });
+        if (allowedParcelHour === false || allowedParcelDay === false) {
+          console.warn(
+            "Lazy ownership verification skipped: parcel lookup rate limit reached for",
+            user.id
+          );
+        } else {
+          const facts = await lookupParcel(property.address_line1, property.zip);
+          // Same shared rule the claim path uses (shouldRecordOwnershipCheck in
+          // src/lib/ownershipMatch.ts): a records source we could not reach is
+          // temporary, so record NOTHING. Leaving ownership_checked_at null is
+          // exactly what keeps this lazy check eligible to run again on the next
+          // job post once the source is back; writing "unverified" would burn
+          // the only retry.
+          if (shouldRecordOwnershipCheck(facts)) {
+            ownershipStatus = deriveOwnershipStatus(fullName, facts);
+            await admin.rpc("record_ownership_check", {
+              p_property_id: property.id,
+              p_status: ownershipStatus,
+              p_owner_names: facts.owner_names,
+              p_owner_type: facts.owner_type,
+              p_owner_occupied: facts.owner_occupied,
+            });
+          }
+        }
       }
     } catch (err) {
       console.error("Lazy ownership verification check failed:", err);
@@ -205,7 +267,33 @@ export async function postJobAction(formData: FormData) {
   }
 
   const category = formData.get("category") as string;
-  const issueId = (formData.get("issue_id") as string) || null;
+  const issueIdRaw = (formData.get("issue_id") as string) || null;
+  // The issue id rides in on the form, so it is as forgeable as every other
+  // field, and NOTHING downstream re-derives it: it is written straight onto
+  // the lead as issue_id (see leadRow below), and that column is what
+  // open_jobs_for_me aggregates photo_urls by and what
+  // can_view_job_photo_full / can_preview_job_photo (migration 0104) bind a
+  // signed url to. A post pointed at somebody else's issue id would therefore
+  // publish that property's photo keys to the job board AND let this account
+  // pull them full resolution through /api/job-photo, since the gate only asks
+  // whether the caller owns the LEAD. So the id is verified against this home
+  // before it is used anywhere.
+  //
+  // Scoped by property_id as well as id: RLS on issues already limits the read
+  // to homes this account owns or is a household member of, but a person can
+  // hold several homes, and photos are attached under THIS property's id.
+  // Dropped rather than rejected, so a stale id from an old tab just posts a
+  // plain job instead of failing in the owner's face.
+  const issueId = await (async () => {
+    if (!issueIdRaw) return null;
+    const { data } = await supabase
+      .from("issues")
+      .select("id")
+      .eq("id", issueIdRaw)
+      .eq("property_id", property.id)
+      .maybeSingle();
+    return data?.id ?? null;
+  })();
   const timing = (formData.get("timing") as string) || null;
   const message = ((formData.get("message") as string) || "").trim() || null;
 
@@ -271,7 +359,7 @@ export async function postJobAction(formData: FormData) {
   // the question was never asked there.
   const hasPlansPermits = isMajor ? formData.has("has_plans_permits") : null;
 
-  const photoUrls = validPhotoUrls(formData);
+  const photoUrls = validPhotoUrls(formData, property.id);
 
   // Contact details are captured on the form and snapshotted onto the job,
   // since a lead is a frozen packet: pros read only contractor_leads, never the

@@ -472,7 +472,10 @@ export default async function HomeownerChatsPage(
               {/* A pro is assigned on every thread here, so a review is always
                   allowed (leave_review only requires an assigned pro, not a
                   closed conversation): "Leave a review" while working
-                  together, or a quiet "You reviewed this pro" once done. */}
+                  together, or a quiet "You reviewed this pro" once done.
+                  Migration 0132 deliberately did NOT add a "job must be
+                  closed" requirement - only the pro can set that status, so it
+                  would have let the reviewed party veto their own reviews. */}
               <div className="mb-2 flex flex-wrap shrink-0 items-center justify-between gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-white/10 dark:bg-stone-900">
                 {existingReview ? (
                   <div className="flex items-center gap-2">

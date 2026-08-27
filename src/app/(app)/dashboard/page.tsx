@@ -42,7 +42,8 @@ import {
   CalendarDays,
   ChevronRight,
 } from "lucide-react";
-import { estimateHomeValue, calculateEquity } from "@/lib/homeValue";
+import { calculateEquity, headlineHomeValue } from "@/lib/homeValue";
+import HomeValueAutoFetch from "../value/ValueAutoFetch";
 import {
   estimateSeasonalEnergyCost,
   estimateUpgradeSavings,
@@ -447,47 +448,46 @@ export default async function HomePage(
     : null;
   const hasHomeValueData =
     homeValuePurchasePrice != null && homeValuePurchaseYear != null;
-  // Prefer the stored RentCast AVM, exactly like /value does (see that page's
-  // comment): it reflects actual comparable sales. The purchase-price
-  // compounding model is only the fallback while no AVM is on file - left as
-  // the headline it could drift absurdly far from reality (a decades-old
-  // purchase year compounds a real price into eight figures) and contradict
-  // the /value page's "Estimated value today" on the same day.
+  // The headline number comes from the SAME shared chooser the /value page
+  // uses (headlineHomeValue in src/lib/homeValue.ts): the stored RentCast AVM
+  // when we have one, otherwise the capped purchase-price model. Both screens
+  // calling one helper is what stops the tile and the page disagreeing on the
+  // same day, and the cap is what stops a decades-old purchase compounding
+  // into eight figures.
   const homeMarketValue: number | null =
     typeof rawProperty.market_value === "number" ? rawProperty.market_value : null;
-  const homeEstimatedValue =
-    homeMarketValue != null
-      ? homeMarketValue
-      : hasHomeValueData
-      ? estimateHomeValue(
-          homeValuePurchasePrice!,
-          homeValuePurchaseYear!,
-          property.state,
-          now.getFullYear()
-        )
-      : null;
+  const homeHeadline = headlineHomeValue({
+    marketValue: homeMarketValue,
+    marketValueLow:
+      typeof rawProperty.market_value_low === "number"
+        ? rawProperty.market_value_low
+        : null,
+    marketValueHigh:
+      typeof rawProperty.market_value_high === "number"
+        ? rawProperty.market_value_high
+        : null,
+    purchasePrice: homeValuePurchasePrice,
+    purchaseYear: homeValuePurchaseYear,
+    state: property.state,
+    currentYear: now.getFullYear(),
+  });
+  const homeEstimatedValue = homeHeadline?.value ?? null;
   const homeEquity =
     homeEstimatedValue != null
       ? calculateEquity(homeEstimatedValue, homeValueMortgageBalance)
       : null;
-  // Year-over-year movement: same estimate run for last year, so the tile can
-  // say how much the ballpark moved. Only shown in fallback (model) mode - the
-  // AVM is a point-in-time number from a different source, and subtracting a
-  // modeled last-year figure from it would manufacture a delta no source ever
-  // claimed.
-  const homeValueLastYear =
-    homeMarketValue == null && hasHomeValueData
-      ? estimateHomeValue(
-          homeValuePurchasePrice!,
-          homeValuePurchaseYear!,
-          property.state,
-          now.getFullYear() - 1
-        )
-      : null;
-  const homeValueDelta =
-    homeEstimatedValue != null && homeValueLastYear != null
-      ? homeEstimatedValue - homeValueLastYear
-      : null;
+  // How much the number moved, and over what period - both decided by the
+  // shared helper. The model compares this year to last year; the AVM compares
+  // itself to what was actually paid, because it has no history of its own to
+  // difference against. Null when neither comparison is available, in which
+  // case the tile simply doesn't claim a movement.
+  const homeValueDelta = homeHeadline?.change ?? null;
+  const homeValueDeltaSince = homeHeadline?.changeSince ?? null;
+  // Kick the lazy AVM lookup off the FIRST time an address-holding home is
+  // seen with no value on file, exactly as /value does. Client-side and
+  // once-per-home (see HomeValueAutoFetch): this render never calls RentCast.
+  const homeValueNeedsFetch =
+    homeMarketValue == null && !!property.address_line1 && !!property.zip;
 
   // Energy-this-season tile. Reuses data already on the page (property +
   // home_systems), no extra queries. Fall points at the coming winter and
@@ -760,6 +760,16 @@ export default async function HomePage(
             </>
           )}
         </div>
+        {/* Renders nothing: it exists to fire the one-per-home AVM lookup
+            client-side, so the dashboard shows the real estimate instead of
+            waiting for someone to open /value first. Cached 30 days in
+            parcel_cache, so this costs at most one RentCast call per home per
+            month, and none at all during this render. */}
+        <HomeValueAutoFetch
+          needsFetch={homeValueNeedsFetch}
+          propertyId={property.id}
+          silent
+        />
         <Link
           href="/value"
           className="card-link"
@@ -781,11 +791,22 @@ export default async function HomePage(
                     homeValueDelta > 0 ? "text-green-700 dark:text-green-400" : "text-stone-500 dark:text-stone-400"
                   }`}
                 >
-                  {homeValueDelta > 0
-                    ? `Up $${Math.round(homeValueDelta).toLocaleString()} this year`
-                    : `Down $${Math.round(Math.abs(homeValueDelta)).toLocaleString()} this year`}
+                  {/* The period has to match what was actually compared:
+                      "this year" on an AVM would be a made-up figure, since
+                      the only real comparison it supports is against the
+                      purchase price. Both directions are reachable - an AVM
+                      can land below what someone paid. */}
+                  {homeValueDelta > 0 ? "Up" : "Down"} $
+                  {Math.round(Math.abs(homeValueDelta)).toLocaleString()}
+                  {homeValueDeltaSince === "purchase"
+                    ? " since you bought it"
+                    : " this year"}
                 </p>
               )}
+              {/* Where the number came from, in the same words /value uses. */}
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                {homeHeadline?.sourceLabel}
+              </p>
             </>
           ) : (
             <>

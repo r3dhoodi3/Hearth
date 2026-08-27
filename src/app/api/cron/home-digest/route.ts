@@ -2,7 +2,7 @@ import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
-import { estimateHomeValue, calculateEquity } from "@/lib/homeValue";
+import { headlineHomeValue, calculateEquity } from "@/lib/homeValue";
 import { assessSystem, scoreBreakdown, scoreBand } from "@/lib/health";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 import { formatAddressLine } from "@/lib/addressLine";
@@ -293,12 +293,31 @@ async function runCron(req: NextRequest) {
         // equity number is real but a one-line digest is the wrong place to
         // break it, so the equity clause only appears when it is positive.
         if (purchasePrice && purchaseYear) {
-          const value = estimateHomeValue(
+          // The same shared chooser the dashboard tile, /value and /taxes use
+          // (headlineHomeValue in src/lib/homeValue.ts): the stored RentCast
+          // AVM when one has landed for this address, otherwise the capped
+          // purchase-price model. This job used to call estimateHomeValue
+          // directly, so a monthly email could quote a number the owner would
+          // not find anywhere in the app when they clicked through.
+          //
+          // Non-null by construction: both purchasePrice and purchaseYear are
+          // truthy here, which is the fallback's only requirement.
+          const value = headlineHomeValue({
+            marketValue:
+              typeof raw.market_value === "number" ? raw.market_value : null,
+            marketValueLow:
+              typeof raw.market_value_low === "number"
+                ? raw.market_value_low
+                : null,
+            marketValueHigh:
+              typeof raw.market_value_high === "number"
+                ? raw.market_value_high
+                : null,
             purchasePrice,
             purchaseYear,
-            property.state,
-            currentYear
-          );
+            state: property.state,
+            currentYear,
+          })!.value;
           const equity = calculateEquity(value, mortgageBalance);
           parts.push(
             mortgageBalance !== null && equity > 0

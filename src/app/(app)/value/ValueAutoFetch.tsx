@@ -22,9 +22,16 @@ function money(n: number): string {
 export default function ValueAutoFetch({
   needsFetch,
   propertyId,
+  silent = false,
 }: {
   needsFetch: boolean;
   propertyId: string;
+  // The dashboard mounts this inside its home-value tile purely to trigger the
+  // lookup; the refreshed tile is the feedback, so it renders nothing of its
+  // own. The localStorage flag below is keyed on the property, not the page,
+  // so whichever screen the owner opens first spends the one attempt and the
+  // other never repeats it.
+  silent?: boolean;
 }) {
   const router = useRouter();
   const firedRef = useRef(false);
@@ -67,7 +74,7 @@ export default function ValueAutoFetch({
       });
   }, [needsFetch, propertyId, router]);
 
-  if (fetched == null || !needsFetch) return null;
+  if (silent || fetched == null || !needsFetch) return null;
 
   return (
     <p className="mb-4 rounded-lg border border-bark-100 bg-bark-50 px-3 py-2 text-center text-sm font-medium text-bark-700 dark:border-bark-700/40 dark:bg-bark-700/20 dark:text-stone-300">

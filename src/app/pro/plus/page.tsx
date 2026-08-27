@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import { Gift, DollarSign, Bot, Globe, BarChart3, Zap } from "lucide-react";
 import { getCurrentContractor } from "@/lib/contractor";
+import { getUser } from "@/lib/auth";
+import { trialDecision } from "@/lib/risk/decision";
 import {
   hasProPlan,
   getProSubscription,
@@ -360,7 +362,27 @@ export default async function ProPlusPage(
   // for brand-new members, and the Pro-side row survives cancellation (it lands
   // on "canceled", it is not deleted), so a member who churned and came back
   // must not be shown trial copy for a trial they will not get.
-  const trialEligible = !sub;
+  //
+  // The trial-abuse decision is ANDed in for the same reason (src/lib/risk):
+  // startProCheckoutAction drops the trial for a medium-risk account, and this
+  // flag feeds the auto-renewal disclosure the pro consents to before any
+  // billing information is collected. Promising free days that Stripe is not
+  // going to give is exactly the mismatch ROSCA and California's Automatic
+  // Renewal Law police. Everything else on the page is unchanged.
+  //
+  // getUser (cached, cookie-read), not getVerifiedUser: this decides COPY, not
+  // money. startProCheckoutAction re-verifies and re-runs the same decision
+  // before anything is charged.
+  const viewer = await getUser();
+  const risk = viewer
+    ? await trialDecision(viewer.id, {
+        accountCreatedAt: viewer.created_at ?? null,
+        // A page render is a GET: compute, do not write. The checkout action
+        // re-runs the same decision and records it there.
+        persist: false,
+      })
+    : null;
+  const trialEligible = !sub && (risk?.allowTrial ?? true);
 
   return (
     // Wider than the other branches of this page: the pricing block below is

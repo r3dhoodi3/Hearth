@@ -11,6 +11,12 @@ import {
   isPlusGatedKind,
   shouldSendOutboundChannels,
 } from "@/lib/notifyGating";
+import {
+  allowOutboundSend,
+  outboundDisabled,
+  stripControlChars,
+  toUsE164,
+} from "@/lib/outboundGuards";
 
 // Single entry point for notifying a homeowner. Always writes the in-app
 // notification row (what the bell in the nav shows), then tries the email and
@@ -115,6 +121,23 @@ export async function sendOutboundChannels(
   // spares the Plus lookup below from running once per recipient on crons
   // that only write in-app rows.
   if (!input.email && !input.phone) return;
+
+  // THE KILL SWITCH. OUTBOUND_DISABLED=1 stops every email and SMS here, at
+  // the one door all of them go through, without touching the in-app rows
+  // (already written by the time this runs) or any caller. See
+  // docs/GO-LIVE-WIRING.md.
+  if (outboundDisabled()) {
+    console.warn(
+      `sendOutboundChannels: OUTBOUND_DISABLED is set, skipping email/SMS for kind ${input.kind}`
+    );
+    return;
+  }
+
+  // THE BRAKE. A per-process ceiling on outbound sends per minute, so a
+  // looping cron or a misfiring fan-out costs a few hundred messages rather
+  // than a few hundred thousand. Counted per recipient-notification, before
+  // the Plus lookup below so a runaway does not also hammer the database.
+  if (!allowOutboundSend()) return;
 
   // Hearth Plus gate on the OUTBOUND channels only (see src/lib/notifyGating.ts
   // for the kind list and the reasoning). Enforced here, at the one door every
@@ -312,9 +335,14 @@ async function sendEmail(
     const unsubscribeUrl = `${siteUrl}/unsubscribe?uid=${encodeURIComponent(
       input.userId
     )}&token=${signUnsubscribeToken(input.userId)}`;
-    const bodyText = input.body
-      ? `${input.title}\n\n${input.body}`
-      : input.title;
+    // The title becomes the SUBJECT, and the pieces it is built from are not
+    // ours: a pro's business name, a homeowner's job title, a custom category.
+    // A CR/LF in a subject line is header injection, so control characters are
+    // stripped at the boundary rather than trusted upstream (see
+    // stripControlChars in src/lib/outboundGuards.ts). The body is a plain-text
+    // field and keeps its newlines - that is what makes it readable.
+    const subject = stripControlChars(input.title);
+    const bodyText = input.body ? `${subject}\n\n${input.body}` : subject;
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -324,7 +352,7 @@ async function sendEmail(
       body: JSON.stringify({
         from: process.env.RESEND_FROM || "Hearth <onboarding@resend.dev>",
         to: input.email,
-        subject: input.title,
+        subject,
         text: `${bodyText}\n${emailFooter(unsubscribeUrl)}`,
       }),
     });
@@ -362,6 +390,23 @@ async function sendSms(input: NotificationInput): Promise<void> {
   if (!sid || !token || !from || !input.phone) return;
   if (input.smsConsent !== true) return;
 
+  // DESTINATION VALIDATION, ENFORCED HERE BECAUSE THIS IS THE ONE DOOR.
+  //
+  // The number a pro alert is aimed at comes from contractors.contact_phone,
+  // and `authenticated` holds a direct column UPDATE on that table (migration
+  // 0085) - so the destination is a string the recipient's own account can
+  // write to freely, with no server action in between to validate it. Every
+  // other Twilio path in the app is this function, so validating the "To"
+  // field here validates all of them: a value that is not a plain US number
+  // (an international one, a premium-rate one, or something with a field
+  // separator in it) never reaches Twilio at all.
+  //
+  // Skipped, not failed: an unusable number is the same non-event as an
+  // unconfigured Twilio account, and the in-app notification row is already
+  // written either way.
+  const to = toUsE164(input.phone);
+  if (!to) return;
+
   // TCPA quiet hours: no marketing/informational texts before 8am or after
   // 9pm in the recipient's local time. Crons can fire at any hour, so gate it
   // here rather than trusting each caller. Single-metro launch, so the metro's
@@ -384,7 +429,12 @@ async function sendSms(input: NotificationInput): Promise<void> {
   }
 
   try {
-    const body = input.body ? `${input.title} ${input.body}` : input.title;
+    // Same reasoning as the email subject: the title and body are assembled
+    // from names and titles other people typed, and a control character in a
+    // one-line message body is never anything but noise or an attempt at one.
+    const body = stripControlChars(
+      input.body ? `${input.title} ${input.body}` : input.title
+    );
     const response = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
       {
@@ -396,7 +446,7 @@ async function sendSms(input: NotificationInput): Promise<void> {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          To: input.phone,
+          To: to,
           From: from,
           // "Reply STOP to opt out." is appended to every SMS (never the
           // email body) so each text carries its own opt-out instruction,

@@ -39,6 +39,11 @@ import { isMissingSchemaError } from "@/lib/dbErrors";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
 import { validateYelpUrl, validateGoogleReviewsUrl } from "@/lib/reviewLinks";
 import {
+  isAcceptablePublicText,
+  COMPANY_NAME_REJECTED,
+} from "@/lib/publicText";
+import { recordSignal } from "@/lib/risk/signals";
+import {
   isAcceptableCustomCategory,
   CUSTOM_CATEGORY_REJECTED,
 } from "@/lib/customCategory";
@@ -437,14 +442,16 @@ export async function saveCompanyAction(formData: FormData) {
     serviceStateEntry !== null ? { service_state: serviceState } : {};
   const hasStateWrite = serviceStateEntry !== null;
 
-  // Service area: the nine launch cities, as checkboxes. Posted by BOTH the
-  // signup form and the profile editor (LaunchCityCheckboxes, same field
-  // names), and one answer feeds three stored fields (see
-  // ./onboarding/launchCities.ts) - service_area gets the canonical
-  // comma-separated string the rest of the app already renders, 0074's
-  // serves_orange_county attestation stays truthful because every launch city
-  // is in Orange County, and 0124's launch_cities (widened to nine by 0126)
-  // carries the per-city pick the job board and apply gate actually filter on.
+  // Service area: the launch cities (all of Orange County since 0129), as
+  // checkboxes. Posted by BOTH the signup form and the profile editor
+  // (LaunchCityCheckboxes, same field names), and one answer feeds three
+  // stored fields (see ./onboarding/launchCities.ts) - service_area gets the
+  // canonical comma-separated string the rest of the app already renders,
+  // 0074's serves_orange_county attestation stays truthful because every
+  // launch city is in Orange County, and 0124's launch_cities (widened to nine
+  // by 0126 and to the whole county by 0129) carries the per-city pick the job
+  // board and apply gate actually filter on. The "All of Orange County" box on
+  // the form is not a value: it posts every city, so nothing here sees it.
   //
   // Same missing-field-safe discipline as service_state above, with the hidden
   // `service_cities_present` marker doing the work `formData.get` can't:
@@ -509,6 +516,47 @@ export async function saveCompanyAction(formData: FormData) {
     await setFlash("Enter your company name.", "error");
     redirect(existing ? "/pro/profile" : "/pro/onboarding");
   }
+
+  // MODERATION: the business name is unreviewed free text rendered verbatim on
+  // the public /p/<slug> page, the browse cards, the job board and every share
+  // card, and a pro can rewrite it at any time. It gets the same gate the
+  // custom-service box has had since it shipped - profanity/slurs and
+  // off-platform contact routes, both read off the Unicode fold so a
+  // zero-width space or a Cyrillic look-alike does not walk past.
+  //
+  // ONLY WHEN THE NAME ACTUALLY CHANGED. This check is fatal to the whole save
+  // (the name is required, so there is nothing to fall back to), and this
+  // action saves the entire profile form - categories, licence, service area,
+  // review links, every field on the page. An unconditional check would mean
+  // that a pro whose STORED name the filter dislikes could never save anything
+  // again: they would open their profile, change their service area, hit save,
+  // and be bounced with a message about a name they did not touch, forever,
+  // with no way to fix it because the fix is also a save. isAcceptablePublicText
+  // is deliberately forgiving about surnames, but no filter is perfect, and
+  // "never able to edit your own profile" is not a failure mode worth risking
+  // for a name that is already live. So the gate applies to the value being
+  // introduced, not to the value already stored.
+  const nameChanged = fields.name !== (existing?.name ?? null);
+  if (nameChanged && !isAcceptablePublicText(fields.name)) {
+    await setFlash(COMPANY_NAME_REJECTED, "error");
+    redirect(existing ? "/pro/profile" : "/pro/onboarding");
+  }
+
+  // Trial-abuse signals (src/lib/risk, migration 0130). A pro who burned a free
+  // Hearth Pro trial and came back under a new email usually brings the same
+  // two things with them: the company's phone number and the company's name.
+  // Both are normalized before hashing (digits only for the phone, punctuation
+  // and legal suffixes stripped for the name, see normalizeSignalValue), so
+  // "Ramirez Plumbing, Inc." and "ramirez plumbing llc" land on one value.
+  //
+  // Worth 20 and 15 points respectively, which is nowhere near a block on its
+  // own - two brothers running separate companies off one shop line is a real
+  // thing, and so is a common trade name. It takes a pile of other signals to
+  // matter. Best-effort: neither call can throw or fail a profile save.
+  await Promise.all([
+    recordSignal(user.id, "company_name", fields.name, "save_company"),
+    recordSignal(user.id, "phone", fields.contact_phone, "save_company"),
+  ]);
 
   // Optional outbound review-page links (0110). Same missing-column-safe
   // pattern as service_state / serves_orange_county above: only write a field

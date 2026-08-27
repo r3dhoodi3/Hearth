@@ -102,7 +102,74 @@ are not used to train its models by default, and Anthropic retains API data for 
 to 30 days for trust and safety. That is what `/privacy` and `/ai-disclosure` state,
 so if the plan or vendor ever changes, those two pages have to change with it.
 
-## 7. Security audit follow-ups
+## 7. Trial-abuse risk score (RISK_HASH_SALT, RISK_ENFORCE)
+
+Both memberships give away a 3-day free trial with a card on file, and the only
+thing stopping one person farming that forever with new emails is the score in
+`src/lib/risk` (migration 0130). It stores nothing raw: every identifier is
+salted and hashed first.
+
+**`RISK_HASH_SALT` is a hard go-live blocker.** There is no fallback. Without
+it the app records no signals at all, logs an error at boot and on first use,
+and every account scores as clean forever.
+
+1. Generate a long random string (`openssl rand -hex 32` or any password
+   manager, 16+ characters) and add it to Vercel as `RISK_HASH_SALT` for
+   Production, Preview and Development.
+2. Run `supabase/PASTE-ME-live-2026-08-26-account-risk.sql` against the live
+   database (creates `account_signals`, `account_risk`, `abuse_flags`,
+   `risk_overrides` and `linked_accounts`, all service-role only). Its verify
+   queries confirm RLS is on with no policies for `authenticated`.
+3. NEVER change `RISK_HASH_SALT` after launch. The hashes are salted with it, so
+   changing it makes every signal recorded before the change stop matching, and
+   every repeat offender looks brand new again. `account_signals.salt_version`
+   exists so that if it ever truly has to change, the rotation can be a
+   migration rather than silent amnesia.
+
+### Run it in log-only mode for the first week
+
+`RISK_ENFORCE` defaults to **off**, and it should stay off at launch. Leave it
+unset (or set it to anything other than `true`).
+
+While it is off, every checkout still computes and STORES a score in
+`account_risk`, but the free trial is always granted and nothing is refused. The
+point is to find out what the score would have done to real customers before it
+is allowed to do it. The saved queries at the bottom of the PASTE-ME file are
+how you read that:
+
+- **Query A (level distribution)** - run it daily. You want `low` overwhelmingly
+  dominant and `medium` in the low single-digit percentages. If `medium` is over
+  about 5% of scored checkouts, the weights are too hot for the real customer
+  base and enforcement should stay off until they are retuned.
+- **Query B (top reasons)** - tells you WHY. If `parcel_shared` or `ip_cluster`
+  tops that list, the score is finding households and carrier NAT, not farmers.
+- **Query C (the high list)** - short enough to read by hand. Every row is
+  somebody who would not have got a free trial they asked for.
+
+Once that looks sane, set `RISK_ENFORCE=true` in Vercel and redeploy.
+
+### What it does when enforcement is on
+
+Nothing refuses a sale. `medium` and `high` both mean only "no free trial,
+billed from day one", and the auto-renewal disclosure the buyer consents to
+states the immediate charge, so nothing they were shown is untrue. `high` is
+additionally logged to the Vercel logs with the user id and the reasons.
+
+The one thing that DOES refuse a sale is a hand-written `manual` row in
+`abuse_flags`, which only a human can create.
+
+### The admin surface is a SQL snippet, not a page
+
+There is no admin UI on purpose. To give somebody their trial back (or take it
+away), insert a `risk_overrides` row - statement D in the PASTE-ME file.
+`trialDecision()` checks that table before it computes anything, so an override
+is absolute in both directions. Always fill in the `note`.
+
+Until step 2 is run, the whole system is inert by design: recording a signal is
+a no-op and `trialDecision()` returns allow/allow, exactly the behaviour that
+shipped before it existed.
+
+## 8. Security audit follow-ups
 
 The 2026-07-19 red-team blockers were remediated in the waves committed on this branch
 (re-verified 2026-08-09 by a fresh security sweep: webhook signatures, cron auth, RLS on new
@@ -111,6 +178,65 @@ tables, and ownership checks on ~20 API routes all pass). Remaining operational 
 1. Live DB must be at migration 0113 (it was as of 2026-07-22; probe before launch).
 2. After setting the env vars above, re-check the abuse limits still hold in production
    (email fan-out caps, rate limits) by skimming the first week of cron logs.
+
+## 9. The outbound kill switch and the per-process cap
+
+Two brakes sit in front of every outgoing email and SMS, at the one door all of
+them go through (`sendOutboundChannels` in `src/lib/notify.ts`). Neither touches
+the in-app notification row, which is written before either runs, so nothing a
+recipient needs to know is ever lost - only the push is held back.
+
+### `OUTBOUND_DISABLED` - the lever to pull at 3am
+
+Set `OUTBOUND_DISABLED=1` (or `true`) in Vercel and redeploy the env var. From
+that moment no email and no SMS leaves the process: each call logs one line and
+returns.
+
+Pull it when:
+
+- a cron is looping and texting the same people repeatedly,
+- a job-post fan-out is firing at the wrong audience,
+- a preview or staging deploy turns out to be pointed at the live Resend or
+  Twilio credentials.
+
+It is read on every send, not cached at cold start, so it takes effect on the
+next message rather than the next deploy cycle. Unset it (or set it to anything
+else) to resume. There is no queue behind it: messages suppressed while it is on
+are not sent later.
+
+### The per-process cap - the brake that works while nobody is watching
+
+`OUTBOUND_PER_MINUTE` in `src/lib/outboundGuards.ts` caps outbound
+notifications at 600 per minute per server process. Beyond that they are
+dropped, and the log carries the greppable prefix:
+
+```
+[ALERT] outbound per-process cap tripped (600/minute) - dropping sends
+[ALERT] outbound cap dropped N sends in the last minute (cap 600)
+```
+
+600 is far above anything real - the largest single fan-out is a job post to
+about 200 pros, and those arrive minutes apart - and a runaway loop reaches it in
+seconds. It is deliberately per PROCESS, so it costs no database round trip in
+the hot path; a serverless deployment runs several in parallel, which makes this
+a blast-radius limiter rather than an exact quota. The database-backed limits
+upstream (`post:`, `post-day:` in `src/app/(app)/contractors/actions.ts`) are
+what bound the true total.
+
+If a real launch-day fan-out ever trips it, raise the constant deliberately in
+one commit rather than letting it throttle silently.
+
+### Log prefixes worth a saved Vercel search
+
+`[ALERT]` marks the owner-wide ceilings tripping - the ones that mean Hearth is
+refusing its own customers rather than an individual abusing their allowance:
+
+- `[ALERT] AI global spend breaker tripped ...` (`src/lib/aiUsage.ts`)
+- `[ALERT] AI global hourly ceiling tripped ...` (`src/lib/aiUsage.ts`)
+- `[ALERT] address-suggest global ceiling tripped ...`
+- `[ALERT] outbound ...` (above)
+
+Nothing pages a human on these yet. Saving the search is the interim answer.
 
 ## Not covered here
 

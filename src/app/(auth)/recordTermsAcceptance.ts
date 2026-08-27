@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { recordRequestSignals, recordEmailSignals } from "@/lib/risk/signals";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,6 +62,10 @@ export async function recordTermsAcceptance(
   } = await authClient.auth.getUser();
 
   let verifiedUserId = userId;
+  // Carried alongside the id for the trial-abuse signals at the bottom of this
+  // function. Read off the same verified source the id is, never off the
+  // caller's argument.
+  let verifiedEmail: string | null = null;
   if (sessionUser) {
     if (sessionUser.id !== userId) {
       console.error("recordTermsAcceptance: userId mismatch with session", {
@@ -71,6 +76,7 @@ export async function recordTermsAcceptance(
       return;
     }
     verifiedUserId = sessionUser.id;
+    verifiedEmail = sessionUser.email ?? null;
   } else {
     // No session yet - the browser's new session cookie hasn't propagated
     // back to this server-side request. This is an unauthenticated call
@@ -120,7 +126,27 @@ export async function recordTermsAcceptance(
       return;
     }
     verifiedUserId = lookup.user.id;
+    verifiedEmail = lookup.user.email ?? null;
   }
+
+  // Trial-abuse signals (src/lib/risk, migration 0130). This runs at the one
+  // moment a brand-new account exists and its browser is right there: the
+  // network it signed up from, the first-party device cookie the middleware
+  // planted, the browser fingerprint the sign-up page wrote, and the email
+  // address with gmail dots and +tags removed so a farmer's fifth variant of
+  // one inbox is visibly the same inbox.
+  //
+  // Placed BEFORE the terms-row idempotency guard below on purpose: that guard
+  // exists to keep the legal audit trail free of duplicates, and it would also
+  // skip this capture on the second entry point for the same signup (the signup
+  // page and /auth/callback both call this function). The signal writes are
+  // upserts, so running twice costs nothing.
+  //
+  // Nothing here can throw and nothing here can block a signup.
+  await Promise.all([
+    recordRequestSignals(verifiedUserId, "signup"),
+    recordEmailSignals(verifiedUserId, verifiedEmail, "signup"),
+  ]);
 
   // Idempotency guard: skip the insert if this user already has a row for
   // this doc, regardless of version. Without this, a second call for the

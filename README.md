@@ -131,6 +131,12 @@ Optional, each turns on one feature and is skipped when missing:
 
 ### 3. Database
 
+`supabase/migrations/` is the only source of truth for the schema. Nothing else
+in this repo may be run against a database. (A generated `setup.sql` used to sit
+at the repo root telling you to "run this whole file"; it stopped at migration
+0026 and running it would have rolled every hardened function, grant, and RLS
+policy back by a hundred migrations. It was deleted rather than regenerated.)
+
 The live project is on Supabase. Schema changes are written as numbered files
 in `supabase/migrations/` and applied to the live project by pasting the
 matching `supabase/PASTE-ME-*.sql` file into the SQL editor, then verified

@@ -1,8 +1,21 @@
 import { type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { attachDeviceCookie } from "@/lib/risk/cookies";
 
 export async function middleware(request: NextRequest) {
-  return await updateSession(request);
+  // updateSession owns the auth decision, exactly as before: it decides whether
+  // this path is public, whether to refresh the session, and whether to bounce
+  // to /signin. Nothing below reads or changes that.
+  const response = await updateSession(request);
+
+  // Plant the first-party device cookie if the browser has not got one yet
+  // (src/lib/risk/cookies.ts). It is used for one thing only - noticing that
+  // several accounts were created or paid for from the same browser, so the
+  // 3-day free trial cannot be farmed forever - and it is applied to whatever
+  // updateSession returned, including a redirect. See the matcher note below:
+  // this does not change which paths are guarded, only what rides along on the
+  // response.
+  return attachDeviceCookie(request, response);
 }
 
 export const config = {

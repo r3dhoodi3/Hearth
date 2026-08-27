@@ -250,8 +250,7 @@ function WaitlistedPanel({ userId }: { userId: string }) {
       </p>
       <p className="text-sm text-stone-500 dark:text-stone-400">
         There&apos;s nothing else to set up here yet since Hearth covers{" "}
-        {LAUNCH_AREA_LABEL} right now. Don&apos;t see your city yet? You will
-        soon.
+        {LAUNCH_AREA_LABEL} right now. We&apos;ll reach out when that changes.
       </p>
       <form action="/auth/signout" method="post">
         <button
@@ -590,9 +589,9 @@ function OnboardingCompanyFormInner({
             />
           </fieldset>
           <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-            These are the cities Hearth is matching pros in right now, so at
-            least one is required. You can add more from your profile once we
-            open in them.
+            Hearth matches pros across all of Orange County. Keep the whole
+            county, or narrow it to the cities you actually drive to. You can
+            change this from your profile any time.
           </p>
         </div>
 

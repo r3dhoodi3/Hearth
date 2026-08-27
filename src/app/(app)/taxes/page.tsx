@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import { stateName } from "@/lib/forecast";
-import { estimateHomeValue } from "@/lib/homeValue";
+import { headlineHomeValue } from "@/lib/homeValue";
 import TaxForm from "./TaxForm";
 import AppealLetter from "./AppealLetter";
 
@@ -48,9 +48,28 @@ export default async function TaxesPage() {
   const hasPurchaseData = purchasePrice != null && purchaseYear != null;
   const region = stateName(property.state);
 
-  const estimatedValue = hasPurchaseData
-    ? estimateHomeValue(purchasePrice!, purchaseYear!, property.state, currentYear)
-    : null;
+  // The same shared chooser the dashboard tile and /value use
+  // (headlineHomeValue in src/lib/homeValue.ts): the stored RentCast AVM when
+  // one has landed for this address, otherwise the capped purchase-price
+  // model. This page used to call estimateHomeValue directly, which meant it
+  // could judge a county assessment against a different number than the one
+  // the owner was reading on the dashboard the same day.
+  //
+  // Still gated on hasPurchaseData, exactly as before: the sections below
+  // branch on it, and an owner with an AVM but no purchase price on file is
+  // sent to /value first, same as they always were.
+  const headline = headlineHomeValue({
+    marketValue: typeof raw.market_value === "number" ? raw.market_value : null,
+    marketValueLow:
+      typeof raw.market_value_low === "number" ? raw.market_value_low : null,
+    marketValueHigh:
+      typeof raw.market_value_high === "number" ? raw.market_value_high : null,
+    purchasePrice,
+    purchaseYear,
+    state: property.state,
+    currentYear,
+  });
+  const estimatedValue = hasPurchaseData ? (headline?.value ?? null) : null;
 
   // CALIFORNIA (Prop 13): assessed values are capped at roughly 2% growth a
   // year from the purchase price, so market value is the wrong yardstick
@@ -148,9 +167,8 @@ export default async function TaxesPage() {
               what kind of number they're about to see before the colored
               card makes its call. */}
           <p className="mb-4 text-xs text-stone-500 dark:text-stone-400">
-            Hearth&apos;s number is an estimate from statewide average price
-            trends, not an appraisal, and this page is not tax or legal
-            advice. Assessment rules, ratios, and appeal processes vary a lot
+            Hearth&apos;s number is an estimate: RentCast&apos;s automated valuation when one exists for your address, otherwise statewide price trends applied to your purchase price. It is not
+            an appraisal, and this page is not tax or legal advice. Assessment rules, ratios, and appeal processes vary a lot
             by county, and some counties assess at a fraction of market value
             by design, so a gap here doesn&apos;t always mean something is
             wrong. Appeals are decided by your county and outcomes are never
@@ -242,9 +260,19 @@ export default async function TaxesPage() {
                 <p className="stat-number text-2xl">
                   {money(estimatedValue)}
                 </p>
+                {/* Say where the number actually came from. The caption used
+                    to always claim state price trends since the purchase,
+                    which is a false description of a RentCast AVM. */}
                 <p className="text-xs text-stone-500 dark:text-stone-400">
-                  Based on {region ? `${region} price trends` : "statewide price trends"}{" "}
-                  since you bought in {purchaseYear}.
+                  {headline?.source === "avm" ? (
+                    `${headline.sourceLabel}, priced off recent sales near you.`
+                  ) : (
+                    <>
+                      Based on{" "}
+                      {region ? `${region} price trends` : "statewide price trends"}{" "}
+                      since you bought in {purchaseYear}.
+                    </>
+                  )}
                 </p>
               </div>
             )}

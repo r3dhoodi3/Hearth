@@ -7,6 +7,8 @@ import {
   getExtraHomeSlots,
 } from "@/lib/subscription";
 import { getProperties } from "@/lib/property";
+import { getUser } from "@/lib/auth";
+import { trialDecision } from "@/lib/risk/decision";
 import {
   manageBillingAction,
   upgradeToYearlyAction,
@@ -326,7 +328,30 @@ export default async function PlusPage(
   // The 3-day trial is granted only when there's no existing homeowner
   // subscription row (the same signal startPlusCheckoutAction checks), so a
   // returning subscriber never sees trial copy they wouldn't get.
-  const trialEligible = !sub;
+  //
+  // The trial-abuse decision is ANDed in for the same reason (src/lib/risk):
+  // startPlusCheckoutAction drops the trial for a medium-risk account, and the
+  // auto-renewal disclosure this flag feeds is the sentence the buyer consents
+  // to before any billing information is collected. If the page promised "free
+  // for 3 days" and Stripe charged on day one, the disclosure would be wrong in
+  // the one direction ROSCA and California's Automatic Renewal Law actually
+  // care about. Nothing else on the page changes: the plans, the prices and the
+  // buttons are identical, the copy simply states the immediate charge.
+  // getUser (the cached, cookie-read one), not getVerifiedUser: this decides
+  // COPY, not money. startPlusCheckoutAction re-verifies against Supabase's auth
+  // server and re-runs the same decision before anything is charged, so a
+  // cookie-edited id here could only ever mislead the person holding the
+  // cookie about their own screen.
+  const viewer = await getUser();
+  const risk = viewer
+    ? await trialDecision(viewer.id, {
+        accountCreatedAt: viewer.created_at ?? null,
+        // A page render is a GET: compute, do not write. The checkout action
+        // re-runs the same decision and records it there.
+        persist: false,
+      })
+    : null;
+  const trialEligible = !sub && (risk?.allowTrial ?? true);
 
   // Free-taste credit for the quote analyzer, read from the SAME column the
   // tool itself claims against (users.free_quote_used_at - see

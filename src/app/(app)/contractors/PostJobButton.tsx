@@ -14,6 +14,22 @@ const MIN_DESCRIPTION = 20;
 // flight so a double-click can't post the same job twice, and blocks submit
 // with an inline message when the description is too short (mirroring the
 // server), so nothing the homeowner typed or uploaded gets lost.
+//
+// IMPORTANT - the form region above this button (DescriptionField,
+// StrongPostMeter) must never change height while the description textarea
+// is focused. A tap on this button first fires mousedown/touchstart at the
+// button's on-screen position, then blurs the textarea (which had focus),
+// then fires mouseup/click at that SAME position. If anything above this
+// button grows or shrinks in that window, the button's screen position
+// moves and mouseup lands on whatever slid into its place instead - the
+// browser then dispatches click to the nearest common ancestor (the form),
+// and this onClick handler never runs. That's exactly what used to happen:
+// DescriptionField conditionally mounted/unmounted a helper sentence based
+// on whether the owner had typed by hand, which could add or remove a
+// wrapped line right as they tapped Post. The fix lives in DescriptionField
+// (keep the helper mounted, toggle `invisible` instead of unmounting) -
+// don't "fix" this by switching to pointerdown-based submission; that
+// papers over layout instability instead of removing it.
 export default function PostJobButton() {
   const { pending } = useFormStatus();
   const [error, setError] = useState<string | null>(null);

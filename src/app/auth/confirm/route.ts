@@ -3,6 +3,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/safeNext";
 import { requestOrigin } from "@/lib/requestOrigin";
+import {
+  PW_RECOVERY_COOKIE,
+  passwordRecoveryCookieOptions,
+} from "@/lib/passwordRecovery";
 
 // Handles the magic-link click: ?token_hash=...&type=email
 // Configure your Supabase email template's confirmation URL to point here:
@@ -22,7 +26,24 @@ export async function GET(request: NextRequest) {
     if (!error) {
       // requestOrigin, not request.url: request.url carries the dev server's
       // bind address (`-H 0.0.0.0`) and would strand the browser there.
-      return NextResponse.redirect(new URL(next, requestOrigin(request)));
+      const response = NextResponse.redirect(
+        new URL(next, requestOrigin(request))
+      );
+      // Same recovery cookie /auth/callback hands out, for the same reason.
+      // Which of the two routes a reset link lands on is decided by the
+      // Supabase email template (token_hash lands here, a PKCE code lands
+      // there), so the guard on /reset-password?step=update has to be fed from
+      // both or turning a template into its other form silently locks people
+      // out of their own reset. Only ever set after verifyOtp has SUCCEEDED,
+      // so a made-up ?type=recovery with no valid token gets nothing.
+      if (type === "recovery") {
+        response.cookies.set(
+          PW_RECOVERY_COOKIE,
+          "1",
+          passwordRecoveryCookieOptions()
+        );
+      }
+      return response;
     }
   }
 

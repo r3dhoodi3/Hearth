@@ -85,27 +85,38 @@ function providerFor(user: User): string | null {
   );
 }
 
-// The old OAuth-identity guess, kept ONLY as a fallback for when the real
-// read below can't run (e.g. migration 0118 not yet applied to this database).
-// It errs toward "yes, they have one" - a wrong yes just shows today's form,
-// while a wrong no would hide the password form from someone who needs it -
-// EXCEPT for the ghost-password case (H3) it can't see: an OAuth-only user who
-// set a password through the recovery flow gets the password stored but NO
-// "email" identity added, so identities alone read false. The user_metadata
-// .password_set flag was a partial patch (the reset page stamps it), but it
-// only covers accounts that set a password AFTER that stamp existed, which is
-// exactly why hasPassword has to come from the real column now.
-function heuristicHasPassword(user: User): boolean {
-  const identities = user.identities ?? [];
-  const providers = Array.isArray(user.app_metadata?.providers)
-    ? (user.app_metadata.providers as string[])
-    : [];
-  return (
-    identities.some((i) => i.provider === "email") ||
-    providers.includes("email") ||
-    user.app_metadata?.provider === "email" ||
-    user.user_metadata?.password_set === true
-  );
+// The fallback for when the real read below can't run (a database where
+// migration 0120 hasn't been applied, a missing EXECUTE grant, a network
+// blip). It is now a flat "yes, assume there is a password", and both halves
+// of that are deliberate.
+//
+// WHY NOT user_metadata.password_set ANY MORE. That term used to be part of
+// this OR. user_metadata is writable by the account's own browser - one
+// supabase.auth.updateUser({ data: ... }) call replaces the whole object - so
+// it was a security answer read out of a field the caller controls. It could
+// not be forged INTO a wrong yes that mattered, but it could be wiped, and
+// wiping it is the dangerous direction: an OAuth-only account that set a
+// password through the recovery flow has the password stored and NO "email"
+// identity added, so with the flag gone every remaining signal here reads
+// false. hasPassword false is what lets deleteAccountAction and
+// updateEmailAction accept "type your email address" INSTEAD of the current
+// password (src/app/(app)/account/actions.ts:335, src/app/pro/profile/
+// actions.ts:405). A borrowed session that can clear one metadata field could
+// then delete the account without ever proving it knew the password.
+//
+// WHY THE UNKNOWN CASE IS "YES". A wrong yes costs someone a confusing form
+// (they are asked for a password they may not have, and the account page
+// offers "change" where it should offer "set"). A wrong no drops the proof of
+// identity in front of account deletion and email change. Those are not
+// comparable, so the unknown case fails closed: require the password.
+//
+// The identity signals are gone rather than kept as an early "yes", because
+// they can only ever agree with this answer - there is no input for which they
+// would return false and this function would still return true. The real
+// answer, when it can be had, comes from realHasPassword() below reading
+// auth.users.encrypted_password.
+function heuristicHasPassword(): boolean {
+  return true;
 }
 
 // current_user_has_password() (migration 0118) isn't in the generated types,
@@ -155,7 +166,10 @@ export async function passwordStatusFor(
 
   const provider = providerFor(user);
   const real = await realHasPassword();
-  const hasPassword = real ?? heuristicHasPassword(user);
+  // ?? and not ||: realHasPassword returns a real `false` for an account that
+  // genuinely has no password, and that answer must stand. Only null - "the
+  // read could not answer" - falls through to the fail-closed default.
+  const hasPassword = real ?? heuristicHasPassword();
 
   return { hasPassword, provider };
 }

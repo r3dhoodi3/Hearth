@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
 import { setFlash } from "@/lib/flash";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
@@ -124,6 +125,35 @@ export async function fetchAndSaveMarketValueAction(): Promise<{
     const street = property.address_line1 || null;
     const zip = property.zip || null;
     if (!street || !zip) return { ok: false };
+
+    // METERED, because this action can reach RentCast. The parcel_cache row
+    // (30 days for a hit, 1 day for a miss) absorbs the normal case, but an
+    // "unavailable" result is deliberately never cached (see lookupMarketValue
+    // in src/lib/parcel.ts), so during an outage every call goes out to the
+    // network - and this action is callable in a loop by anything holding a
+    // session, not just by the component that normally fires it once.
+    //
+    // Its own buckets, not the parcel: ones onboarding spends: an AVM refresh
+    // must not be able to eat the address-lookup budget a new home needs to
+    // get claimed. Same limits, same fixed-window RPC, same fail-open posture
+    // as every other rate_limit_hit call in this codebase - a limiter hiccup
+    // must not break a background refresh.
+    const {
+      data: { user },
+    } = await (await createClient()).auth.getUser();
+    if (!user) return { ok: false };
+    const limiter = createAdminClient();
+    const { data: allowedHour } = await limiter.rpc("rate_limit_hit", {
+      p_bucket: `avm:${user.id}`,
+      p_limit: 10,
+      p_window_seconds: 3600,
+    });
+    const { data: allowedDay } = await limiter.rpc("rate_limit_hit", {
+      p_bucket: `avm-day:${user.id}`,
+      p_limit: 25,
+      p_window_seconds: 86400,
+    });
+    if (allowedHour === false || allowedDay === false) return { ok: false };
 
     // The unit rides along (migration 0127): an AVM run on the bare street
     // values the building, not this condo.

@@ -311,12 +311,12 @@ export default async function ProCrmPage(
                       value={suggestedName}
                     />
                     <input type="hidden" name="stage" value={suggestedStage} />
-                    <button
-                      type="submit"
+                    <SubmitButton
                       className="btn-secondary shrink-0 text-sm"
+                      pendingLabel="Tracking…"
                     >
                       Track
-                    </button>
+                    </SubmitButton>
                   </form>
                 </li>
               );

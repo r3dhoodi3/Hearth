@@ -3,6 +3,7 @@ import Logo from "@/components/Logo";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
 import NotificationBell from "@/components/NotificationBell";
+import SidePill from "@/components/SidePill";
 import { setPreferredSideAction } from "@/lib/sideActions";
 
 export default function ProNav({
@@ -62,6 +63,12 @@ export default function ProNav({
               </span>
             </span>
           </Link>
+          {/* Which side of the account you're on. Only for accounts that
+              hold both sides (hasHome) - a pro-only account sees no pill.
+              Desktop only here; the max-sm twin lives just below the header
+              row so it can't push this line into two rows next to the bell
+              and avatar. */}
+          {hasHome && <SidePill label="Business" accent="hearth" className="hidden sm:inline-block" />}
         </div>
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {/* Primary destinations. Desktop/tablet (sm and up) keep this exact
@@ -103,6 +110,14 @@ export default function ProNav({
           />
         </div>
       </div>
+      {/* Phone twin of the desktop SidePill above. Mirrors Nav.tsx: its own
+          quiet line under the logo instead of risking a wrap on an already
+          tight phone header. */}
+      {hasHome && (
+        <div className="px-4 pb-1.5 sm:hidden">
+          <SidePill label="Business" accent="hearth" />
+        </div>
+      )}
     </header>
     {/* Phone-only bottom tab bar, mirroring the homeowner Nav (see
         Nav.tsx for the full rationale). Kept to <=48px tall so it fits

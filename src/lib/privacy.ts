@@ -734,6 +734,15 @@ export const CATEGORIES: Category[] = [
     source: "You, and your use of Hearth.",
     purpose: "Running the marketplace and your subscription.",
   },
+  {
+    category: "Abuse-prevention identifiers",
+    examples:
+      "Scrambled (one-way hashed) versions of your IP address, a first-party device cookie, a coarse browser fingerprint, your payment method's Stripe reference, your email address with dots and +tags removed, and (when you provide them) your phone number, your company name, and your home's county parcel number. The original values are never stored, and the scrambled ones cannot be turned back into them.",
+    sensitive: false,
+    source: "Your browser and Stripe when you sign up or start a membership, and the details you enter when you claim a home or set up a business.",
+    purpose:
+      "One thing only: stopping the same person from claiming the free trial over and over with new accounts. Never used for advertising, never profiled, never shared, and never used to follow you to another company's site.",
+  },
 ];
 
 export type ThirdParty = {

@@ -139,8 +139,26 @@ function absoluteLogoUrl(value: string | null): string | null {
 async function logoDataUri(value: string | null): Promise<string | null> {
   const url = absoluteLogoUrl(value);
   if (!url) return null;
+  // Belt and braces around absoluteLogoUrl's own origin check. That function
+  // returns a string it BUILT in the relative-path branch, so its output is
+  // only ever as trustworthy as that construction; re-deriving the origin from
+  // the exact string that is about to be fetched means the one line here that
+  // reaches the network is guarded by a check on that line's own argument.
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
   try {
-    const resp = await fetch(url);
+    if (new URL(url).origin !== new URL(base).origin) return null;
+  } catch {
+    return null;
+  }
+  try {
+    // redirect: "error" is the other half of the same fix. Without it a 3xx
+    // out of the Supabase Storage origin (a signed-URL rewrite, a proxy in
+    // front of the project, a future storage feature) sends this fetch on to
+    // whatever host the Location header names, and the origin check above only
+    // ever saw the first URL. Following a redirect is not something rendering
+    // a logo needs, so refusing one costs nothing.
+    const resp = await fetch(url, { redirect: "error" });
     if (!resp.ok) return null;
     const type = resp.headers.get("content-type") || "image/png";
     if (!type.startsWith("image/")) return null;

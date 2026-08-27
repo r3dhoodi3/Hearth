@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PRO_DEPOSIT_BOOST_PTS } from "@/lib/constants";
+import { PRO_DEPOSIT_BOOST_PTS, MAX_DEPOSIT_CENTS } from "@/lib/constants";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { sendNotification } from "@/lib/notify";
 import { isLiveProPlanRow } from "@/lib/subscription";
+import { recordCardSignal, flagAbuse } from "@/lib/risk/signals";
+import { computeRisk } from "@/lib/risk/facts";
+import { riskEnforcementEnabled } from "@/lib/risk/decision";
 import {
   billingTerms,
   billingTermsText,
@@ -166,6 +169,23 @@ async function applyDepositOnce(
   return { retry: false }; // unreachable: the loop always returns
 }
 
+// How many cents a wallet-deposit checkout session is worth, or null if it is
+// not an amount this system will act on.
+//
+// THE ONE PREDICATE, used by BOTH ends: the credit path and the reversal path.
+// They must never disagree. A session this refuses is never credited, so a
+// later dispute or refund on it must reverse nothing either - if the reversal
+// side had its own, looser rule (clamping an over-cap amount down to the cap,
+// say), a refund on a session that was never credited would debit $2,000 out
+// of a balance the pro put there legitimately.
+function acceptedDepositCents(session: any): number | null {
+  const cents = Number(session?.amount_total);
+  if (!Number.isFinite(cents) || cents <= 0 || cents > MAX_DEPOSIT_CENTS) {
+    return null;
+  }
+  return cents;
+}
+
 // Credit a deposit checkout session: look up the Pro boost, then apply the
 // deposit exactly once. Shared by checkout.session.completed (instant
 // methods) and checkout.session.async_payment_succeeded (delayed methods);
@@ -186,8 +206,33 @@ async function creditDepositSession(
   // payment_status "paid" once it has.
   if (session.payment_status !== "paid") return { retry: false };
 
-  const cents = Number(meta.deposit_cents) || 0;
-  if (cents <= 0) return { retry: false };
+  // THE AMOUNT COMES OFF THE SESSION, NEVER OFF METADATA.
+  //
+  // amount_total is what Stripe actually charged the card. metadata is a
+  // free-text bag that merely rides along with the session, and it is not the
+  // money that moved: any path that can produce a session with a chosen
+  // metadata blob could otherwise mint wallet cash at a price it also chose.
+  // depositAction writes both today and they agree, so this changes nothing
+  // about a normal deposit - it just removes the only number in the credit
+  // path that was not Stripe's own. Metadata still says WHICH contractor to
+  // credit; it no longer says how much.
+  //
+  // Bounded on both ends, and the upper bound is the same MAX_DEPOSIT_CENTS
+  // depositAction refuses to exceed when it creates the session. A session
+  // outside the band is not credited and not retried: a redelivery would carry
+  // the same out-of-band amount, so 500ing would only loop forever.
+  const cents = acceptedDepositCents(session);
+  if (cents === null) {
+    console.error(
+      "deposit credit refused: amount_total out of band for contractor",
+      meta.contractor_id,
+      "session",
+      session.id,
+      "amount_total",
+      session.amount_total
+    );
+    return { retry: false };
+  }
   const admin = createAdminClient();
 
   // Hearth Pro members earn extra points on the deposit bonus. The
@@ -313,10 +358,27 @@ async function resolveDepositSession(
     const session = sessions.data[0] as any;
     const meta = session?.metadata ?? {};
     if (meta.type !== "deposit" || !meta.contractor_id) return null;
-    return {
-      contractorId: meta.contractor_id,
-      depositCents: Number(meta.deposit_cents) || 0,
-    };
+    // THE SAME predicate the credit path uses, not a clamped version of it.
+    // This number is the CAP reverse_deposit reverses up to, so it has to be
+    // the number that was actually credited. A session the credit path refused
+    // (over the cap, zero, unreadable) put NOTHING in the wallet, so there is
+    // nothing to claw back and the cap is 0 - clamping an over-cap amount down
+    // to MAX_DEPOSIT_CENTS instead would take $2,000 of somebody else's money
+    // out of the balance on a refund of a deposit that never landed.
+    const cents = acceptedDepositCents(session);
+    if (cents === null) {
+      console.error(
+        "deposit reversal target is 0: this session was never credited",
+        "(contractor",
+        meta.contractor_id,
+        "session",
+        session.id,
+        "amount_total",
+        session.amount_total,
+        ")"
+      );
+    }
+    return { contractorId: meta.contractor_id, depositCents: cents ?? 0 };
   } catch (err) {
     console.error(
       "resolveDepositSession failed for payment_intent",
@@ -646,17 +708,261 @@ async function releaseIntroReservationIfUnused(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Trial-abuse signals (src/lib/risk, migration 0130)
+// ---------------------------------------------------------------------------
+// The card is the strongest anti-farming signal there is, because it is the one
+// identifier a farmer cannot mint for free. Stripe's card.fingerprint is a
+// stable opaque id for the underlying card number - the SAME card added to two
+// different customers produces the same fingerprint - which is exactly the
+// question we need answered, and it is not a PAN, so nothing sensitive travels.
+// We hash it again on our side before storing it (src/lib/risk/hash.ts).
+//
+// Everything below is BEST EFFORT and silent on failure. A missing payment
+// method, an older API shape, a Stripe hiccup, a live database without 0130:
+// all of them mean "no signal recorded", never a failed webhook. A membership
+// must never be lost over abuse bookkeeping.
+
+// Claim a Stripe event id for a specific side effect, exactly once, ever.
+//
+// Same processed_stripe_events table (migration 0060) the money paths use, but
+// with a NAMESPACED key so it can never collide with their claims: the deposit
+// and reversal RPCs claim the bare event id, and this claims
+// "risk:<event id>". A duplicate delivery of the same checkout - Stripe retries,
+// and it does redeliver - therefore ends a trial at most once and sends at most
+// one "billing starts today" notice.
+//
+// Returns true when THIS call won the claim. Fails CLOSED on any error: if we
+// cannot prove we have not already done it, we do not do it again. The cost of
+// being wrong that way is a farmer keeping a trial we could have ended; the cost
+// of the other way is telling a paying customer twice that their billing changed.
+async function claimRiskEvent(
+  admin: any,
+  eventId: string,
+  kind: string
+): Promise<boolean> {
+  try {
+    const { error } = await admin
+      .from("processed_stripe_events")
+      .insert({ event_id: `risk:${eventId}`, kind });
+    if (!error) return true;
+    // 23505 is the duplicate-key claim losing the race, which is the normal
+    // outcome on a redelivery and not worth logging as an error.
+    if (error.code !== "23505") {
+      console.error("claimRiskEvent failed:", error.message ?? error);
+    }
+    return false;
+  } catch (err) {
+    console.error("claimRiskEvent threw:", err);
+    return false;
+  }
+}
+
+// THE FIX FOR THE ONE HOLE THAT MATTERED.
+//
+// The card fingerprint is the strongest signal the score has, and until this
+// existed it could never reach the decision it was written for. Stripe only
+// tells us the card AFTER checkout completes, and the trial was granted before
+// the checkout session was even created. So on the FIRST checkout of any account
+// - the only one that can hand over a free trial - the card was necessarily
+// unknown. A farmer with a fresh email, a cleared cookie jar and a phone hotspot
+// got trial after trial on the same physical card, and the 60-point weight sat
+// there doing nothing.
+//
+// This closes it at the first moment the evidence exists. Re-run the score now
+// that the card is recorded; if the subscription is still trialing and the card
+// links it to somebody we have met, end the trial immediately
+// (trial_end: "now") and tell the buyer their billing starts today. That is the
+// same outcome `medium` produces at checkout, applied three seconds later
+// instead of never.
+//
+// The buyer is TOLD, in the same words the checkout would have used, built from
+// the same billingTerms source. Silently converting somebody's free trial to a
+// charge would be the one genuinely indefensible thing this system could do.
+//
+// Respects RISK_ENFORCE like everything else: while it is off, this logs what it
+// would have done and changes nothing.
+async function endTrialIfRisky(
+  admin: any,
+  userId: string,
+  subscription: any,
+  plan: PaidPlan,
+  eventId: string
+): Promise<void> {
+  try {
+    if (subscription?.status !== "trialing" || !subscription?.id) return;
+
+    const { score, level, reasons } = await computeRisk(userId);
+    if (level === "low") return;
+
+    const summary = JSON.stringify({
+      userId,
+      subscriptionId: subscription.id,
+      score,
+      level,
+      enforcing: riskEnforcementEnabled(),
+      reasons: reasons.map((r) => `${r.code}:${r.points}`),
+    });
+
+    if (!riskEnforcementEnabled()) {
+      // Log-only week: this is the line that tells the operator the card signal
+      // is working before it is allowed to charge anybody.
+      console.error("[risk] would end trial (log-only mode)", summary);
+      return;
+    }
+
+    // Claim AFTER the cheap checks so a low-risk checkout never burns a row.
+    if (!(await claimRiskEvent(admin, eventId, "risk_trial_end"))) return;
+
+    console.error("[risk] ending trial early", summary);
+    await stripe.subscriptions.update(subscription.id, { trial_end: "now" });
+
+    // The corrective notice. billingTermsText(plan, false) is the "charged
+    // today" wording - the exact sentences the checkout would have shown had the
+    // card been known in time - so what they are told now cannot drift from what
+    // they would have been told then.
+    try {
+      const { data: user } = await admin
+        .from("users")
+        .select("email")
+        .eq("id", userId)
+        .maybeSingle();
+      const terms = billingTerms(plan, false);
+      await sendNotification(admin, {
+        userId,
+        kind: ACK_KIND,
+        title: `Your ${terms.product} membership starts today`,
+        body:
+          "Your free trial could not be applied to this account, so your membership starts now instead. " +
+          billingTermsText(plan, false),
+        url: `${terms.cancelPath}?ack=${subscription.id}`,
+        email: user?.email ?? null,
+        phone: null,
+      });
+    } catch (err) {
+      console.error("[risk] trial-end notification failed:", err);
+    }
+  } catch (err) {
+    // Never fail the webhook over this. A membership is worth more than a trial.
+    console.error("[risk] endTrialIfRisky failed:", err);
+  }
+}
+
+// Pull the card fingerprint off a subscription and record it against the user.
+// Looks at the subscription's default_payment_method first (what Checkout sets
+// when it collects a card up front, which is every trial signup here), then the
+// setup intent Stripe attaches when the card was collected without an immediate
+// charge.
+async function recordSubscriptionCard(
+  userId: string,
+  subscription: any,
+  context: string
+): Promise<void> {
+  try {
+    const fromSubscription =
+      subscription?.default_payment_method ??
+      subscription?.pending_setup_intent?.payment_method ??
+      null;
+    let paymentMethodId =
+      typeof fromSubscription === "string"
+        ? fromSubscription
+        : fromSubscription?.id ?? null;
+
+    // The setup intent can arrive as a bare id, in which case its payment
+    // method needs one more lookup.
+    if (!paymentMethodId && typeof subscription?.pending_setup_intent === "string") {
+      const intent = await stripe.setupIntents.retrieve(
+        subscription.pending_setup_intent
+      );
+      const pm = (intent as any)?.payment_method;
+      paymentMethodId = typeof pm === "string" ? pm : pm?.id ?? null;
+    }
+    if (!paymentMethodId) return;
+
+    const method = await stripe.paymentMethods.retrieve(paymentMethodId);
+    const fingerprint = (method as any)?.card?.fingerprint ?? null;
+    if (fingerprint) await recordCardSignal(userId, fingerprint, context);
+  } catch {
+    // No card signal this time. Skip silently, as designed.
+  }
+}
+
+// Same, starting from a subscription id (the invoice path, which does not carry
+// the subscription object).
+async function recordCardFromSubscriptionId(
+  userId: string,
+  subscriptionId: string,
+  context: string
+): Promise<void> {
+  try {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    await recordSubscriptionCard(userId, subscription, context);
+  } catch {
+    // Skip silently.
+  }
+}
+
+// A chargeback is the clearest confirmed-abuse event Stripe ever hands us, so
+// it becomes a sticky abuse_flags row: from then on, any OTHER account sharing
+// a card, device or network with this one carries the weight of it (see
+// src/lib/risk/score.ts). Resolved through the PaymentIntent's customer, which
+// is the one link that works for both a membership invoice and a wallet
+// deposit.
+async function flagChargebackForCharge(
+  paymentIntentId: string | null,
+  disputeId: string
+): Promise<void> {
+  if (!paymentIntentId) return;
+  try {
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const customer = (intent as any)?.customer;
+    const customerId =
+      typeof customer === "string" ? customer : customer?.id ?? null;
+    if (!customerId) return;
+
+    const admin = createAdminClient();
+    const { data } = await (admin as any)
+      .from("subscriptions")
+      .select("user_id")
+      .eq("stripe_customer_id", customerId)
+      .limit(1)
+      .maybeSingle();
+    if (data?.user_id) {
+      await flagAbuse(data.user_id, "chargeback", `Stripe dispute ${disputeId}`);
+    }
+  } catch (err) {
+    console.error("flagChargebackForCharge failed:", err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig = req.headers.get("stripe-signature") ?? "";
 
+  // FAIL CLOSED ON A MISSING SECRET, BEFORE constructEvent EVER RUNS.
+  //
+  // stripe-node does not object to an empty signing secret: it happily computes
+  // HMAC-SHA256 of the payload keyed by the empty string and compares. Anyone
+  // can compute that same value, so an unconfigured deployment does not reject
+  // forged webhooks - it accepts them, and every money path below (deposit
+  // credits, membership rows, wallet reversals) runs on attacker-chosen JSON.
+  // A deployment with no secret must be dead to this route, not open to it.
+  //
+  // 500, not 400: this is Hearth's own misconfiguration, and a 5xx makes Stripe
+  // keep the event queued and redeliver once the secret is set, instead of
+  // marking real events permanently failed.
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error(
+      "STRIPE_WEBHOOK_SECRET is not set - refusing every Stripe webhook. " +
+        "An empty secret verifies nothing (see docs/GO-LIVE-WIRING.md)."
+    );
+    return new NextResponse("Webhook not configured", { status: 500 });
+  }
+
   let event;
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET ?? ""
-    );
+    event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch {
     return new NextResponse("Bad signature", { status: 400 });
   }
@@ -758,6 +1064,12 @@ export async function POST(req: NextRequest) {
         console.error("grant_membership_credit failed:", err);
       }
 
+      // Card fingerprint, for the trial-abuse score. This is the first moment
+      // Hearth ever learns which physical card is behind an account, so it is
+      // the moment to record it: a farmer's fifth throwaway email paying with
+      // the same card as the first is exactly what this catches.
+      await recordSubscriptionCard(meta.user_id, subscription, "pro_checkout");
+
       // Retainable acknowledgment of the auto-renewal terms. The step-up
       // signal is read off the SUBSCRIPTION Stripe actually created, never the
       // plan name or our own checkout intent, so an offer that failed to
@@ -765,14 +1077,30 @@ export async function POST(req: NextRequest) {
       // billed. Two shapes count: a Stripe trial ("trialing", what every new
       // Pro signup gets today) and a discount (the retired intro coupon, still
       // read for any legacy subscription that carries one).
+      const proPlan: PaidPlan =
+        interval === "yearly" || meta.plan === "pro_yearly"
+          ? "pro_yearly"
+          : "pro_monthly";
       await sendRenewalAcknowledgment(
         admin,
         meta.user_id,
-        interval === "yearly" || meta.plan === "pro_yearly"
-          ? "pro_yearly"
-          : "pro_monthly",
+        proPlan,
         subscription.status === "trialing" || hasIntroDiscount(subscription),
         subscription.id
+      );
+
+      // Now that the card is known, re-run the score and end the trial if it
+      // says so (see endTrialIfRisky above: the card is the signal that could
+      // never reach the checkout decision, and this is the first moment it
+      // exists). Runs AFTER the acknowledgment on purpose, so a buyer whose
+      // trial is ended reads the correction second and it is the one that
+      // stands.
+      await endTrialIfRisky(
+        admin,
+        meta.user_id,
+        subscription,
+        proPlan,
+        event.id
       );
 
       // Record the one-time intro claim so it can never be farmed again, even
@@ -827,14 +1155,34 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "subscription upsert failed" }, { status: 500 });
       }
 
+      // Card fingerprint, for the trial-abuse score. Same reasoning as the pro
+      // branch above; the two sides share one signals table on purpose, so a
+      // card that burned a Plus trial is also known to the Pro checkout.
+      await recordSubscriptionCard(meta.user_id, subscription, "plus_checkout");
+
       // Retainable acknowledgment of the auto-renewal terms. The free first
       // month is a Stripe trial, so "trialing" is the step-up signal here.
+      const plusPlan: PaidPlan =
+        planFromItems(subscription) === "yearly" || meta.plan === "yearly"
+          ? "yearly"
+          : "monthly";
       await sendRenewalAcknowledgment(
         admin,
         meta.user_id,
-        planFromItems(subscription) === "yearly" || meta.plan === "yearly" ? "yearly" : "monthly",
+        plusPlan,
         subscription.status === "trialing",
         subscription.id
+      );
+
+      // Same card re-check as the Pro branch above. Plus only trials on the
+      // monthly plan, so on yearly this is a no-op (the subscription is never
+      // "trialing"), which is correct and costs one status comparison.
+      await endTrialIfRisky(
+        admin,
+        meta.user_id,
+        subscription,
+        plusPlan,
+        event.id
       );
     }
   }
@@ -907,6 +1255,19 @@ export async function POST(req: NextRequest) {
       typeof dispute.payment_intent === "string"
         ? dispute.payment_intent
         : dispute.payment_intent?.id ?? null;
+    // Sticky abuse flag, on dispute.created ONLY (not funds_withdrawn, which is
+    // the same dispute reported twice). A chargeback is the clearest confirmed
+    // abuse signal Stripe hands us, and flagging the account makes every future
+    // account sharing its card, device or network carry the weight of it.
+    // Best-effort and before the money paths, which own their own retry
+    // contract and must not be perturbed by this.
+    if (event.type === "charge.dispute.created") {
+      await flagChargebackForCharge(
+        paymentIntentId,
+        String(dispute.id ?? "unknown")
+      );
+    }
+
     const { retry } = await handleDepositReversal(
       paymentIntentId,
       event.id,
@@ -1034,6 +1395,61 @@ export async function POST(req: NextRequest) {
       ) {
         await releaseIntroReservationIfUnused(admin, existing.user_id);
       }
+
+      // Cancelled while still inside the free trial. This is the shape of trial
+      // farming: three days of perks, cancel on day two, nothing ever paid. It
+      // is ALSO the shape of an honest "I tried it and it is not for me", which
+      // is why it is a 25-point signal on LINKED accounts rather than a block on
+      // this one - this account keeps every right it had, and nothing about its
+      // own next checkout changes. What it does is make the NEXT account on the
+      // same card or device look less new than it claims.
+      //
+      // Two ways to recognise it: our stored status was still "trialing" when
+      // the cancellation landed (the normal case, since the webhook keeps that
+      // column in step with Stripe), or Stripe's own trial_end is still in the
+      // future. Either is enough.
+      const trialEndMs = Number(subscription.trial_end) * 1000;
+      const cancelledInTrial =
+        status === "canceled" &&
+        (existing?.status === "trialing" ||
+          (Number.isFinite(trialEndMs) && trialEndMs > Date.now()));
+
+      // CORROBORATION IS REQUIRED before a flag is written. Cancelling inside
+      // the trial is not abuse on its own - it is exactly what the product tells
+      // people they may do, in those words ("cancelling before then costs
+      // nothing"), and it is also what happens when a card expires and Stripe
+      // cancels rather than leaving the subscription past_due. Flagging on
+      // status alone marked every honest three-day tyre-kicker forever, and the
+      // mark then followed anybody who shared a house or a router with them.
+      //
+      // So the cancel has to land on an account that ALREADY looked like a
+      // farm for some other reason. computeRisk is the cheapest way to ask that
+      // question, because it is the same question the score already answers:
+      // anything above `low` means at least one real signal is on this account.
+      // A clean account that simply changed its mind is not flagged at all.
+      if (cancelledInTrial && existing?.user_id) {
+        try {
+          const { level, score } = await computeRisk(existing.user_id, {
+            persist: false,
+          });
+          if (level === "low") {
+            console.log(
+              "[risk] trial cancelled with no corroborating signal, not flagging",
+              existing.user_id
+            );
+          } else {
+            await flagAbuse(
+              existing.user_id,
+              "trial_abuse",
+              `Cancelled during free trial (${subscription.id ?? "unknown"}), risk ${level}/${score}`
+            );
+          }
+        } catch (err) {
+          // Fail CLOSED on the FLAG, which here means "do not flag": an
+          // unreadable score is not evidence of anything.
+          console.error("[risk] trial-cancel corroboration check failed:", err);
+        }
+      }
     }
     // Paid extra-home slots are the source-of-truth here: derived from the
     // add-on item's quantity, and forced to 0 on deletion/cancellation so the
@@ -1140,6 +1556,18 @@ export async function POST(req: NextRequest) {
             "invoice.payment_succeeded: no subscriptions row for",
             subscriptionId,
             "- skipping membership credit"
+          );
+        }
+
+        // Card fingerprint, for the trial-abuse score. Recorded on BOTH sides
+        // (homeowner and pro, unlike the credit below) and on every paid cycle,
+        // not only the first: a card swapped at renewal is a new link, and the
+        // upsert makes a repeat sighting free.
+        if (subRow?.user_id) {
+          await recordCardFromSubscriptionId(
+            subRow.user_id,
+            subscriptionId,
+            "invoice_paid"
           );
         }
         if (subRow?.user_id && subRow?.plan?.startsWith("pro_")) {

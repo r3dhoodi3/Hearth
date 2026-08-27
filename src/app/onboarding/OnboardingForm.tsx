@@ -412,8 +412,8 @@ export default function OnboardingForm({
       return;
     }
     // Fast client-side feedback for the launch restriction - the launch
-    // cities only (isLaunchZip), not all of Orange County - so an out-of-area
-    // ZIP never even reaches the server lookup. lookupParcelAction enforces
+    // area only (isLaunchZip), which since 0129 is all of Orange County - so
+    // an out-of-area ZIP never even reaches the server lookup. lookupParcelAction enforces
     // the same check server-side (before its RentCast call) - that's the
     // real gate, this is just quicker, kinder feedback. Because this check
     // short-circuits BEFORE lookupParcelAction ever runs, the waitlist save
@@ -898,22 +898,34 @@ export default function OnboardingForm({
           {step === "ready" && facts && (
             <>
               <div>
-                {/* source === "none" means no records lookup happened (see
-                    src/lib/parcel.ts): the form only echoed the typed address,
-                    so don't present it as a found result. The "Does this look
-                    right?" copy is reserved for when a real source returns
-                    data. */}
+                {/* Anything other than "rentcast" means no records data came
+                    back (see ParcelFacts in src/lib/parcel.ts): "none" is no
+                    lookup or no such record, "unavailable" is a source we
+                    couldn't reach. Either way the form only echoed the typed
+                    address, so don't present it as a found result - the "Does
+                    this look right?" copy is reserved for real returned data. */}
                 <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-                  {facts.source === "none"
+                  {facts.source !== "rentcast"
                     ? "Tell us about your home"
                     : "Does this look right?"}
                 </h2>
                 <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-                  {facts.source === "none"
+                  {facts.source !== "rentcast"
                     ? "Fill in what you know. Everything is optional."
                     : "Fill in what you know. Anything you skip you can add later."}
                 </p>
               </div>
+
+              {/* The records source was unreachable (bad key, quota, outage,
+                  timeout). Say so plainly instead of silently showing an empty
+                  form: nothing is wrong with their address, they just have to
+                  type the details themselves this time. */}
+              {facts.source === "unavailable" && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                  We couldn&apos;t reach the county records right now. You can
+                  fill in the details yourself.
+                </p>
+              )}
 
               {/* ADVISORY, not the value being claimed. This is what the
                   county record says; the fields above are what actually gets
@@ -1240,8 +1252,8 @@ export default function OnboardingForm({
           </p>
           <p className="text-sm text-stone-500 dark:text-stone-400">
             There&apos;s nothing else to set up here yet since Hearth covers{" "}
-            {LAUNCH_AREA_LABEL} right now. Don&apos;t see your city yet? You
-            will soon.
+            {LAUNCH_AREA_LABEL} right now. We&apos;ll email you when that
+            changes.
           </p>
           <button
             type="button"

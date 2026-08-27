@@ -4,7 +4,7 @@ import { hasPlus } from "@/lib/subscription";
 import { countAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { getActiveProperty } from "@/lib/property";
-import { estimateHomeValue } from "@/lib/homeValue";
+import { headlineHomeValue } from "@/lib/homeValue";
 import { generateText, hasClaudeKey, isRateLimitError } from "@/lib/claude";
 
 export const runtime = "nodejs";
@@ -90,12 +90,27 @@ export async function POST() {
   }
 
   const currentYear = new Date().getFullYear();
-  const estimatedValue = estimateHomeValue(
+  // The same shared chooser the dashboard tile, /value and /taxes use
+  // (headlineHomeValue in src/lib/homeValue.ts): the stored RentCast AVM when
+  // one has landed for this address, otherwise the capped purchase-price
+  // model. This route used to call estimateHomeValue directly, so the letter
+  // could cite a different market figure than the verdict on /taxes that sent
+  // the owner here.
+  //
+  // Non-null by construction: purchasePrice and purchaseYear are both
+  // confirmed above, which is the fallback's only requirement.
+  const headline = headlineHomeValue({
+    marketValue: typeof raw.market_value === "number" ? raw.market_value : null,
+    marketValueLow:
+      typeof raw.market_value_low === "number" ? raw.market_value_low : null,
+    marketValueHigh:
+      typeof raw.market_value_high === "number" ? raw.market_value_high : null,
     purchasePrice,
     purchaseYear,
-    property.state,
-    currentYear
-  );
+    state: property.state,
+    currentYear,
+  })!;
+  const estimatedValue = headline.value;
 
   // CALIFORNIA (Prop 13): the /taxes page judges a CA assessment against the
   // purchase price compounded at the 2%/yr Prop 13 cap, NOT against market
@@ -147,8 +162,15 @@ export async function POST() {
       `Proposition 13 factored base year trajectory: about $${prop13Baseline.toLocaleString()} for tax year ${assessedYear} (the ${purchaseYear} purchase price grown at the 2% annual cap Proposition 13 allows; the owner's own calculation, not a county record)`
     );
   } else {
+    // Describe the estimate the way it was actually produced. This letter
+    // gets signed and filed with a county assessor, so a parenthetical
+    // claiming statewide-average math for what is really an automated
+    // valuation off nearby sales would be a false statement about the
+    // owner's own evidence.
     facts.push(
-      `Hearth's estimated market value: $${estimatedValue.toLocaleString()} (a ballpark from statewide average appreciation applied to the owner's purchase price, not an appraisal)`
+      headline.source === "avm"
+        ? `Hearth's estimated market value: $${estimatedValue.toLocaleString()} (an automated valuation from RentCast based on recent sales of comparable homes nearby, not an appraisal)`
+        : `Hearth's estimated market value: $${estimatedValue.toLocaleString()} (a ballpark from statewide average appreciation applied to the owner's purchase price, not an appraisal)`
     );
   }
   facts.push(`Purchased in ${purchaseYear} for $${purchasePrice.toLocaleString()}`);

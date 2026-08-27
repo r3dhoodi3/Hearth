@@ -34,6 +34,22 @@ export const AI_GLOBAL_DAILY_LIMIT = 5000;
 export const AI_GLOBAL_BUCKET = "ai-global-day";
 
 // =============================================================================
+// WALLET DEPOSIT CEILING: the most a single wallet deposit may ever credit,
+// in cents. Two places read it and they must never disagree:
+//
+//   - depositAction (src/app/pro/billing/actions.ts) refuses to CREATE a
+//     checkout session above it.
+//   - the Stripe webhook (src/app/api/stripe/webhook/route.ts) refuses to
+//     CREDIT a session above it, reading Stripe's own amount_total.
+//
+// The second one is the real guard. The first can only bound what our own form
+// asks for; the second bounds what the ledger will accept no matter where the
+// session came from, so a session created by any other path (a hand-made one,
+// a future code path, a mistake) still cannot mint more than this.
+// =============================================================================
+export const MAX_DEPOSIT_CENTS = 200_000; // $2,000 per deposit
+
+// =============================================================================
 // FOUNDER: owner-fillable identity for the /pros landing page's "Who's behind
 // this" section. Left blank on purpose: fill these in with real details, do
 // not invent a name, city, or phone number. When name is blank the page falls

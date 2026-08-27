@@ -1,15 +1,30 @@
 import { getActiveProperty } from "@/lib/property";
 import { stateName } from "@/lib/forecast";
 import {
-  estimateHomeValue,
   estimateValueTimeline,
+  anchorTimelineTo,
   calculateEquity,
+  headlineHomeValue,
 } from "@/lib/homeValue";
 import ValueForm from "./ValueForm";
 import ValueAutoFetch from "./ValueAutoFetch";
 
 function money(n: number): string {
   return `${n < 0 ? "-" : ""}$${Math.round(Math.abs(n)).toLocaleString()}`;
+}
+
+// Short form for the AVM range under the headline ($1.1M, $940k). The full
+// form is two 7-digit numbers plus a dash, which is what makes that line wrap
+// or overflow on a 390px phone; this keeps it on one line at any value.
+function moneyCompact(n: number): string {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1_000_000) {
+    const m = abs / 1_000_000;
+    return `${sign}$${m >= 10 ? m.toFixed(0) : m.toFixed(1)}M`;
+  }
+  if (abs >= 1000) return `${sign}$${Math.round(abs / 1000)}k`;
+  return `${sign}$${Math.round(abs)}`;
 }
 
 // Compact form for the bar chart labels ($1.2k instead of $1,200), matching
@@ -39,6 +54,10 @@ export default async function ValuePage() {
     typeof raw.mortgage_balance === "number" ? raw.mortgage_balance : null;
   const marketValue: number | null =
     typeof raw.market_value === "number" ? raw.market_value : null;
+  const marketValueLow: number | null =
+    typeof raw.market_value_low === "number" ? raw.market_value_low : null;
+  const marketValueHigh: number | null =
+    typeof raw.market_value_high === "number" ? raw.market_value_high : null;
 
   // purchase_date already exists on properties (since migration 0001); only
   // the year matters here, so it is stored as YYYY-01-01 and parsed back out.
@@ -50,27 +69,41 @@ export default async function ValuePage() {
   const hasPurchaseData = purchasePrice != null && purchaseYear != null;
   const region = stateName(property.state);
 
-  // The stored RentCast AVM (fetched lazily below, or already on file from
-  // onboarding) is the better number when we have it: it reflects actual
-  // recent comparable sales rather than a statewide average trend. Fall back
-  // to the purchase-price model only when no AVM has landed yet.
-  const usingMarketValue = marketValue != null;
-  const estimatedValue = usingMarketValue
-    ? marketValue
-    : hasPurchaseData
-    ? estimateHomeValue(purchasePrice!, purchaseYear!, property.state, currentYear)
-    : null;
+  // One shared chooser (src/lib/homeValue.ts) picks the headline: the stored
+  // RentCast AVM when we have one (real comparable sales for this address),
+  // otherwise the capped purchase-price model. The dashboard tile calls the
+  // same helper, so the two can never disagree on the same day.
+  const headline = headlineHomeValue({
+    marketValue,
+    marketValueLow,
+    marketValueHigh,
+    purchasePrice,
+    purchaseYear,
+    state: property.state,
+    currentYear,
+  });
+  const usingMarketValue = headline?.source === "avm";
+  const estimatedValue = headline?.value ?? null;
 
   const appreciationGained =
     hasPurchaseData && estimatedValue != null ? estimatedValue - purchasePrice! : null;
   const equity =
     estimatedValue != null ? calculateEquity(estimatedValue, mortgageBalance) : null;
   // The timeline chart models the purchase-price trend year by year; it only
-  // makes sense once we have a purchase price and year to start from, whether
-  // or not the headline number above is coming from the AVM instead.
-  const timeline = hasPurchaseData
+  // makes sense once we have a purchase price and year to start from.
+  //
+  // When the headline is the AVM, the raw model would put a $2.1M current-year
+  // bar directly under an $890k headline on the same screen. So the whole
+  // curve is rescaled to land on the headline (anchorTimelineTo), and the
+  // chart says so in its title: it is the shape of the trend, anchored to the
+  // estimate, not a second competing set of values.
+  const modeledTimeline = hasPurchaseData
     ? estimateValueTimeline(purchasePrice!, purchaseYear!, property.state, currentYear)
     : [];
+  const timeline =
+    usingMarketValue && estimatedValue != null
+      ? anchorTimelineTo(modeledTimeline, estimatedValue)
+      : modeledTimeline;
   // Tallest bar in the chart, computed once rather than per bar.
   const timelineMax = Math.max(...timeline.map((x) => x.value), 1);
 
@@ -126,6 +159,14 @@ export default async function ValuePage() {
                 Estimate
               </span>
             </p>
+            {/* RentCast's own confidence range, when it gave one. Compact
+                form so "$1.1M - $1.4M" stays on one line on a phone. */}
+            {headline?.low != null && headline.high != null && (
+              <p className="text-xs tabular-nums text-bark-600 dark:text-stone-400">
+                Likely between {moneyCompact(headline.low)} and{" "}
+                {moneyCompact(headline.high)}
+              </p>
+            )}
             {hasPurchaseData ? (
               <p className="text-xs text-bark-700 dark:text-stone-300">
                 Bought for {money(purchasePrice!)} in {purchaseYear}
@@ -152,7 +193,11 @@ export default async function ValuePage() {
                 bought it.
               </p>
             )}
+            {/* Where the number came from, said plainly. The label itself is
+                the shared one from homeValue.ts, so the dashboard tile says
+                the same thing about the same number. */}
             <p className="text-xs text-bark-600 dark:text-stone-400">
+              {headline?.sourceLabel}.{" "}
               {usingMarketValue
                 ? "Based on recent comparable sales near you, not a full appraisal."
                 : region
@@ -191,7 +236,9 @@ export default async function ValuePage() {
           {hasPurchaseData && timeline.length > 1 && (
             <div className="card mt-6 space-y-3">
               <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
-                Estimated value over time
+                {usingMarketValue
+                  ? "Value trend, anchored to the RentCast estimate"
+                  : "Estimated value over time"}
               </h2>
               <div className="overflow-x-auto pb-1">
                 <div className="flex items-end gap-2 border-b border-stone-200 dark:border-white/10">

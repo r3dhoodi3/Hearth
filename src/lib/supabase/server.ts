@@ -24,6 +24,18 @@ export async function createClient(): Promise<SupabaseClient<Database>> {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Every auth cookie this client writes is marked Secure in production,
+      // so it is never sent over plain http. @supabase/ssr does not set this
+      // by default, which left the session cookie eligible for an http
+      // request - a downgrade on any link, redirect, or captive portal that
+      // lands on http://, and the one request that leaks it is enough. Only
+      // `secure` is set: name, sameSite, path and httpOnly keep their
+      // defaults, so nothing about how the session is stored changes.
+      //
+      // Conditional on production because a Secure cookie is dropped by the
+      // browser on http://localhost, which would make it impossible to stay
+      // signed in during local development.
+      cookieOptions: { secure: process.env.NODE_ENV === "production" },
       cookies: {
         getAll() {
           return cookieStore.getAll();

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSides, landingFor } from "@/lib/contractor";
 import { safeNextPath } from "@/lib/safeNext";
 import SignInForm from "./SignInForm";
+import DeviceFingerprint from "@/components/DeviceFingerprint";
 
 // Server wrapper for sign-in: an already-signed-in user visiting /signin is
 // sent straight to where they were headed (?next=) or to their side of the
@@ -31,6 +32,14 @@ export default async function SignInPage(
   // link couldn't be exchanged for a session (expired or already used), so
   // the form can explain instead of showing a blank sign-in.
   return (
-    <SignInForm next={next} authFailed={searchParams?.error === "auth_failed"} />
+    <>
+      {/* Renders nothing. See the note on the homeowner sign-up page: a coarse
+          browser fingerprint written to a first-party cookie, for the
+          free-trial abuse score, on the account doors only. It is here as well
+          as on the sign-up pages because a farmer's second account is often
+          created in a browser that has signed in before. */}
+      <DeviceFingerprint />
+      <SignInForm next={next} authFailed={searchParams?.error === "auth_failed"} />
+    </>
   );
 }

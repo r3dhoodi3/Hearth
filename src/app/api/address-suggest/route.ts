@@ -68,6 +68,28 @@ function cacheSet(key: string, suggestions: AddressSuggestion[]): void {
   }
 }
 
+// The owner-wide outbound ceiling on Photon: one shared bucket across every
+// account, so no number of signups can add up to a flood from Hearth's egress
+// IPs. See the reasoning at the call site below.
+const SUGGEST_GLOBAL_BUCKET = "suggest-global-min";
+const SUGGEST_GLOBAL_PER_MINUTE = 600;
+
+// The last minute-window this process logged the trip in. A tripped ceiling
+// means every keystroke from every signed-in account arrives here, so logging
+// each one turns one flood into two: the second one is the Vercel log bill.
+// One line per window is enough to see it happened and how long it lasted.
+// Same shape as the outbound cap's own log-once (src/lib/outboundGuards.ts).
+let suggestTripLoggedWindow = 0;
+
+function logSuggestTripOnce(): void {
+  const window = Math.floor(Date.now() / 60_000);
+  if (window === suggestTripLoggedWindow) return;
+  suggestTripLoggedWindow = window;
+  console.error(
+    `[ALERT] address-suggest global ceiling tripped (${SUGGEST_GLOBAL_BUCKET} over ${SUGGEST_GLOBAL_PER_MINUTE}/min) - not calling Photon`
+  );
+}
+
 const EMPTY = { suggestions: [] as AddressSuggestion[] };
 
 export async function GET(req: NextRequest) {
@@ -119,7 +141,35 @@ export async function GET(req: NextRequest) {
     // either way. A 429 would only give the client an error state to render
     // for something that is not the homeowner's problem.
     if (allowed === false) return NextResponse.json(EMPTY);
+
+    // OWNER-WIDE CEILING, on top of the per-user one.
+    //
+    // The per-user limit bounds one account. It does not bound N accounts, and
+    // what is on the other end of this is not our own infrastructure: Photon is
+    // a free community service run by Komoot, with no contract behind it and no
+    // per-key quota to hide behind. The thing they can do about a flood is
+    // block the source, and the source is Hearth's Vercel egress IPs - which
+    // are shared, so the punishment lands on the whole deployment and lasts as
+    // long as they decide it does. 60 a minute times enough signups is an
+    // outage we cannot appeal.
+    //
+    // 600 a minute owner-wide is ten simultaneous people typing at full tilt,
+    // which the launch metro will not produce for years, and it is a hard stop
+    // well below anything Komoot would notice as abuse. Same failure mode as
+    // everything else here: an empty list, and the typed address still goes
+    // through untouched.
+    const { data: allowedGlobal } = await admin.rpc("rate_limit_hit", {
+      p_bucket: SUGGEST_GLOBAL_BUCKET,
+      p_limit: SUGGEST_GLOBAL_PER_MINUTE,
+      p_window_seconds: 60,
+    });
+    if (allowedGlobal === false) {
+      logSuggestTripOnce();
+      return NextResponse.json(EMPTY);
+    }
   } catch (err) {
+    // FAIL OPEN, both buckets: see above. A limiter outage must not cost a
+    // real homeowner their address suggestions.
     console.error("address-suggest rate_limit_hit failed - allowing:", err);
   }
 

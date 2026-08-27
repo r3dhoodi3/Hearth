@@ -55,20 +55,31 @@ const RAIN_FLOOR = 10;
 // HomeSwitcher soft-redirects here without remounting, so the effect below
 // keys on it to refetch for the new home instead of showing stale weather.
 //
-// HARD_DEADLINE_MS backstops the skeleton against the case that actually
-// produced a permanently-stuck skeleton in the wild: `pageLoaded` never
-// flips because window's "load" event never fires (a slow or hung resource
-// elsewhere on the page), which alone would leave `loading && !pageLoaded`
-// true forever regardless of how fast fetchHomeAlerts resolves. fetchHomeAlerts
+// HARD_DEADLINE_MS is the sole ceiling on the skeleton: fetchHomeAlerts
 // already caps itself at 6s, so 8s here is purely a second, independent
-// ceiling - ending the skeleton on its own even if something upstream of
-// that promise (hydration, the load listener, anything) never settles.
+// backstop - ending the skeleton on its own even if something upstream of
+// that promise (hydration, anything) never settles.
+//
+// This used to also be gated on a `pageLoaded` flag (true once
+// document.readyState / window's "load" fired), meant to give up on the
+// skeleton once the page had visibly finished loading. That flag is a
+// per-DOCUMENT signal, not a per-NAVIGATION one: after the first hard load
+// of the session it stays true for good, so every later client-side
+// navigation back to /dashboard (including the redirect from the profile
+// menu's side switcher) mounted a fresh WeatherStrip with `pageLoaded`
+// already true - collapsing the skeleton before fetchHomeAlerts had any
+// realistic chance to resolve, and falling straight through to "no weather
+// yet" (rendered as nothing). A hard load rarely hit this because window's
+// "load" event fires late enough that the fetch had usually already
+// finished by then; a soft navigation always started from "already loaded",
+// so the strip skipped straight past the skeleton and could sit empty for
+// the length of the fetch. Simply keying the skeleton on `loading` alone -
+// with HARD_DEADLINE_MS as the only ceiling - fixes that for both cases.
 const HARD_DEADLINE_MS = 8_000;
 
 export default function WeatherStrip({ propertyId }: { propertyId: string }) {
   const [weather, setWeather] = useState<CurrentWeather | null>(null);
   const [loading, setLoading] = useState(true);
-  const [pageLoaded, setPageLoaded] = useState(false);
   const [open, setOpen] = useState(false);
   // Whether the active property has a resolvable location at all, per the
   // route's own hasLocation flag - independent of whether the weather lookup
@@ -79,16 +90,6 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
   // payload to read a real value from: rendering nothing is the safe choice
   // when the strip can't tell the two cases apart.
   const [hasLocation, setHasLocation] = useState(false);
-
-  useEffect(() => {
-    if (document.readyState === "complete") {
-      setPageLoaded(true);
-      return;
-    }
-    const onLoad = () => setPageLoaded(true);
-    window.addEventListener("load", onLoad);
-    return () => window.removeEventListener("load", onLoad);
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -115,7 +116,7 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
     };
   }, [propertyId]);
 
-  if (loading && !pageLoaded) {
+  if (loading) {
     return (
       <div
         className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 shadow-card dark:border-white/10 dark:bg-stone-800"

@@ -5,8 +5,11 @@
 // the whole field. Kept here (not in the pro form files) so the forms only
 // need a light wire-up; see src/components/ServiceAreaInput.tsx.
 
-// All 34 incorporated Orange County cities.
-export const OC_INCORPORATED_CITIES: readonly string[] = [
+// All 34 incorporated Orange County cities. `as const` (not `readonly
+// string[]`) because src/lib/serviceArea.ts builds LAUNCH_CITY_NAMES and the
+// LaunchCityName union from these two arrays: since the launch area became all
+// of Orange County there is exactly one city list, and it lives here.
+export const OC_INCORPORATED_CITIES = [
   "Aliso Viejo",
   "Anaheim",
   "Brea",
@@ -41,21 +44,23 @@ export const OC_INCORPORATED_CITIES: readonly string[] = [
   "Villa Park",
   "Westminster",
   "Yorba Linda",
-];
+] as const;
 
 // Well-known unincorporated communities pros routinely list as service areas.
-export const OC_COMMUNITIES: readonly string[] = [
+export const OC_COMMUNITIES = [
   "Ladera Ranch",
   "Coto de Caza",
   "North Tustin",
   "Midway City",
   "Rossmoor",
-];
+] as const;
 
-export const OC_CITIES: readonly string[] = [
+// Incorporated cities first, then the communities. This order is the canonical
+// one everywhere a city list is stored or compared (see LAUNCH_CITY_NAMES).
+export const OC_CITIES = [
   ...OC_INCORPORATED_CITIES,
   ...OC_COMMUNITIES,
-];
+] as const;
 
 // Shorthand the generated initials and name prefixes don't cover. Initials
 // ("fv" for Fountain Valley, "rsm" for Rancho Santa Margarita) are derived

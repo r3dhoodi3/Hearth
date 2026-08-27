@@ -12,19 +12,6 @@ vi.mock("@/lib/homeAlertsClient", () => ({
 
 import WeatherStrip from "./WeatherStrip";
 
-// document.readyState is "complete" by default in jsdom, which would make
-// pageLoaded flip true on mount and mask the exact bug this component was
-// fixed for (a permanently-stuck skeleton when window's "load" event never
-// fires). Force it back to "loading" for every test and restore afterward,
-// so `loading && !pageLoaded` behaves the way it does on a real cold
-// navigation unless a test explicitly fires "load" itself.
-function setReadyState(value: DocumentReadyState) {
-  Object.defineProperty(document, "readyState", {
-    value,
-    configurable: true,
-  });
-}
-
 const realWeather = {
   tempF: 72,
   code: 1,
@@ -36,18 +23,16 @@ const realWeather = {
 };
 
 beforeEach(() => {
-  setReadyState("loading");
   fetchHomeAlerts.mockReset();
 });
 
 afterEach(() => {
   cleanup();
-  setReadyState("complete");
   vi.useRealTimers();
 });
 
 describe("WeatherStrip", () => {
-  it("shows a skeleton while both the page and the fetch are still pending", () => {
+  it("shows a skeleton while the fetch is still pending", () => {
     fetchHomeAlerts.mockReturnValue(new Promise(() => {})); // never resolves
     const { container } = render(<WeatherStrip propertyId="p1" />);
     // The skeleton row is the only aria-hidden wrapper rendered up front.
@@ -100,13 +85,10 @@ describe("WeatherStrip", () => {
     expect(await screen.findByText("Weather unavailable")).toBeInTheDocument();
   });
 
-  // The bug: on a cold navigation, window's "load" event can be delayed or
-  // never fire (a slow/hung resource elsewhere on the page), which alone
-  // would leave `loading && !pageLoaded` true forever regardless of how
-  // fast the fetch itself resolves. The hard client deadline must end the
-  // skeleton on its own even when "load" never comes and the fetch never
-  // settles either.
-  it("clears the skeleton on its own after the hard deadline even if load never fires and the fetch hangs", () => {
+  // The fetch itself can hang (a stuck upstream call, a dropped connection).
+  // The hard client deadline must end the skeleton on its own even when the
+  // fetch never settles, so the strip doesn't get stuck loading forever.
+  it("clears the skeleton on its own after the hard deadline even if the fetch hangs", () => {
     vi.useFakeTimers();
     fetchHomeAlerts.mockReturnValue(new Promise(() => {})); // hangs forever
     const { container } = render(<WeatherStrip propertyId="p1" />);
@@ -126,10 +108,23 @@ describe("WeatherStrip", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("skips the skeleton once the page has already finished loading, even before the fetch resolves", () => {
-    setReadyState("complete");
-    fetchHomeAlerts.mockReturnValue(new Promise(() => {}));
+  // The bug this fixes: the skeleton used to also require
+  // document.readyState/window's "load" to not have fired yet, a per-
+  // document signal that is already permanently true for the rest of an SPA
+  // session after the very first hard load. That made every later
+  // client-side navigation back to /dashboard - including the redirect from
+  // the profile menu's side switcher - skip the skeleton entirely and render
+  // nothing for as long as the fetch took, which on a slow request read as
+  // "the weather strip is missing". The skeleton must show regardless of
+  // whether the document has already finished loading, for exactly as long
+  // as the fetch is genuinely still pending.
+  it("still shows the skeleton on a soft navigation, where the document already finished loading before this mount", () => {
+    Object.defineProperty(document, "readyState", {
+      value: "complete",
+      configurable: true,
+    });
+    fetchHomeAlerts.mockReturnValue(new Promise(() => {})); // never resolves
     const { container } = render(<WeatherStrip propertyId="p1" />);
-    expect(container).toBeEmptyDOMElement();
+    expect(container.querySelector(".motion-safe\\:animate-pulse")).toBeTruthy();
   });
 });

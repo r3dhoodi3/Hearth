@@ -13,6 +13,7 @@ import {
   cappedFieldOrNull,
   isAllowedValue,
 } from "@/lib/formFields";
+import { isOwnedStoragePath } from "@/lib/ownedStoragePath";
 
 // Server-side ceilings for the free-text columns on home_systems. The form's
 // maxLength is a hint; a server action takes whatever FormData it is handed,
@@ -119,12 +120,21 @@ function modelCapacityFields(
 // Save any photos the owner uploaded (the PhotoUpload component already pushed
 // them to storage and put the public URLs in the form as `photo_urls`). Photos
 // are polymorphic, so we tag them with related_type "system".
+//
+// `photo_urls` is a hidden form field, so the key is client-chosen and nothing
+// downstream re-derives it: the stored string is handed straight to /api/img
+// to be signed. isOwnedStoragePath is the shared guard the issue tracker and
+// the job poster already use, and it says the key must sit under this
+// property's own folder - exactly what the uploader writes, so no legitimate
+// save changes.
 async function attachPhotos(
   formData: FormData,
   propertyId: string,
   systemId: string
 ) {
-  const urls = (formData.getAll("photo_urls") as string[]).filter(Boolean);
+  const urls = (formData.getAll("photo_urls") as string[]).filter((u) =>
+    isOwnedStoragePath(u, propertyId)
+  );
   if (!urls.length) return;
   const supabase = await createClient();
   await supabase.from("photos").insert(
@@ -292,6 +302,29 @@ export async function updateSystemAction(
   const id = formData.get("id") as string;
   const supabase = await createClient();
 
+  // The system id is a hidden form field, so it is whatever the caller sends.
+  // RLS ("home_systems owner all", 0002) already keeps the update below inside
+  // homes this account can reach, but an account can hold SEVERAL homes and
+  // attachPhotos at the end of this action tags its rows with the ACTIVE
+  // home's id - so an id belonging to a different home would file that home's
+  // photos under this one, and an id belonging to nobody would sail through
+  // the update as a silent zero-row no-op under a "System updated" toast.
+  // Pin the row to the active home first. A miss gets the same answer a
+  // deleted row gets, so this never reports whether some other id exists.
+  const property = await getActiveProperty();
+  if (!property) {
+    return err("Couldn't find that system. Please refresh and try again.");
+  }
+  const { data: ownedSystem } = await supabase
+    .from("home_systems")
+    .select("id")
+    .eq("id", id)
+    .eq("property_id", property.id)
+    .maybeSingle();
+  if (!ownedSystem) {
+    return err("Couldn't find that system. Please refresh and try again.");
+  }
+
   // Edit-specific guard against a silent field wipe. On an EDIT the owner
   // usually already has a good value in these fields, so a non-empty entry
   // that fails validation - an out-of-range install year, or a bad month like
@@ -380,8 +413,7 @@ export async function updateSystemAction(
     return err("Couldn't save those changes just now. Please try again.");
   }
 
-  const property = await getActiveProperty();
-  if (property) await attachPhotos(formData, property.id, id);
+  await attachPhotos(formData, property.id, id);
   setFlash("System updated");
   revalidatePath("/dashboard");
   revalidatePath("/home-report");

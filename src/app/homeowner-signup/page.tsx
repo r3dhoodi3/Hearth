@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import NoticeAtCollection from "@/components/NoticeAtCollection";
+import DeviceFingerprint from "@/components/DeviceFingerprint";
 import { useState, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
-import { friendlyAuthError } from "@/lib/friendlyAuthError";
+import {
+  friendlyAuthError,
+  SIGNUP_EMAIL_NEUTRAL,
+} from "@/lib/friendlyAuthError";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import { track } from "@/lib/analytics";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
@@ -148,11 +152,16 @@ export default function HomeownerSignUpPage(props: {
 
     // With confirmations ON, signUp for an already-confirmed email does NOT
     // error (enumeration protection): it returns success with an obfuscated
-    // user whose identities array is empty, and sends no email. Don't promise
-    // an inbox message that will never arrive; point them at sign-in instead.
+    // user whose identities array is empty, and sends no email.
+    //
+    // What we say back is deliberately the SAME sentence either way. Saying
+    // "an account with this email already exists" undid Supabase's own
+    // enumeration protection in one line: anybody could type an address here
+    // and read off whether that person is a Hearth customer. See
+    // SIGNUP_EMAIL_NEUTRAL for the reasoning and the wording.
     if (data.user && data.user.identities && data.user.identities.length === 0) {
       setBusy(false);
-      setError("An account with this email already exists. Try signing in instead.");
+      setNotice(SIGNUP_EMAIL_NEUTRAL);
       return;
     }
 
@@ -246,6 +255,11 @@ export default function HomeownerSignUpPage(props: {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
+      {/* Renders nothing. Writes a coarse browser fingerprint to a first-party
+          cookie so the free-trial abuse score can tell a private window apart
+          from a genuinely new person. Only on the account doors (this page, the
+          contractor sign-up, and sign-in), never inside the app. */}
+      <DeviceFingerprint />
       <div className="card">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">

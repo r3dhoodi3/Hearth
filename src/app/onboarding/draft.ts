@@ -120,7 +120,16 @@ function parseFacts(value: unknown): PublicParcelFacts | null {
     market_value_low: num(f.market_value_low),
     market_value_high: num(f.market_value_high),
     system_facts: systemFacts(f.system_facts),
-    source: f.source === "rentcast" ? "rentcast" : "none",
+    // Three-state (see ParcelFacts in src/lib/parcel.ts). "unavailable" is
+    // preserved so a restored draft still shows the manual-entry note instead
+    // of pretending the county answered; anything unrecognized collapses to
+    // "none", the safe default.
+    source:
+      f.source === "rentcast"
+        ? "rentcast"
+        : f.source === "unavailable"
+        ? "unavailable"
+        : "none",
   };
 }
 

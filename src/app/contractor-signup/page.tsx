@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import NoticeAtCollection from "@/components/NoticeAtCollection";
+import DeviceFingerprint from "@/components/DeviceFingerprint";
 import { useState, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
@@ -12,6 +13,7 @@ import AppleSignInButton, {
 } from "@/components/AppleSignInButton";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
 import { LEAD_TIER_FEES, MAJOR_INTRO_FEE } from "@/lib/constants";
+import { SIGNUP_EMAIL_NEUTRAL } from "@/lib/friendlyAuthError";
 import { Eye, EyeOff } from "lucide-react";
 
 // Real per-user contractor sign-up. Creates a Supabase Auth account tagged with
@@ -119,7 +121,7 @@ export default function ContractorSignUpPage(props: {
       setBusy(false);
       setError(
         /registered|exists/i.test(error.message)
-          ? "An account with this email already exists. Try signing in instead."
+          ? SIGNUP_EMAIL_NEUTRAL
           : error.message
       );
       return;
@@ -140,11 +142,16 @@ export default function ContractorSignUpPage(props: {
 
     // With confirmations ON, signUp for an already-confirmed email does NOT
     // error (enumeration protection): it returns success with an obfuscated
-    // user whose identities array is empty, and sends no email. Don't promise
-    // an inbox message that will never arrive; point them at sign-in instead.
+    // user whose identities array is empty, and sends no email.
+    //
+    // What we say back is deliberately the SAME sentence either way. Saying
+    // "an account with this email already exists" undid Supabase's own
+    // enumeration protection in one line, and on this side of the app the
+    // answer also maps which local contractors are on the platform. See
+    // SIGNUP_EMAIL_NEUTRAL for the reasoning and the wording.
     if (data.user && data.user.identities && data.user.identities.length === 0) {
       setBusy(false);
-      setError("An account with this email already exists. Try signing in instead.");
+      setNotice(SIGNUP_EMAIL_NEUTRAL);
       return;
     }
 
@@ -237,6 +244,10 @@ export default function ContractorSignUpPage(props: {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
+      {/* Renders nothing. See the note on the homeowner sign-up page: a coarse
+          browser fingerprint written to a first-party cookie, for the
+          free-trial abuse score, on the account doors only. */}
+      <DeviceFingerprint />
       <div className="card">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">

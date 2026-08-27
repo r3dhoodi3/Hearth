@@ -231,8 +231,8 @@ export default function PublicProfileForm({
                   }
                 />
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  These are the cities Hearth serves right now. You only see -
-                  and only pay for - jobs in the cities you check here.
+                  Hearth serves all of Orange County. You only see, and only
+                  pay for, jobs in the cities you keep checked here.
                 </p>
               </div>
 

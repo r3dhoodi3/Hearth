@@ -210,9 +210,12 @@ export default function PrivacyPage() {
               What is not here:
             </span>{" "}
             there is no advertising SDK, no third-party analytics or session
-            recorder, and no ad pixel anywhere in Hearth. We do not store your
-            IP address or browser fingerprint in our own database, and we do
-            not build an advertising profile or sell your data to anyone.
+            recorder, and no ad pixel anywhere in Hearth. We do not build an
+            advertising profile or sell your data to anyone. The one thing we do
+            keep is a set of scrambled (hashed) identifiers for your device,
+            network, and payment method, used only to stop the same person
+            farming free trials with new accounts. See &ldquo;What we don&apos;t
+            do&rdquo; below for exactly what that means.
           </p>
         </section>
 
@@ -443,8 +446,7 @@ export default function PrivacyPage() {
             third-party analytics service, no advertising SDK, no ad pixel or
             retargeting tag, no session recorder or heatmap tool, and no data
             broker receiving anything about you. We do not build an
-            advertising profile of you, and we do not store your IP address
-            or a browser fingerprint in our database. This is unusual, so it
+            advertising profile of you. This is unusual, so it
             is worth saying plainly: the companies listed on this page get
             your data because they perform a job you asked for, not because
             they are watching you use the app. That includes Anthropic, the
@@ -468,6 +470,18 @@ export default function PrivacyPage() {
             Hearth&apos;s own database, linked to your account when you&apos;re
             signed in, and are never sold or shared with any third-party ad or
             analytics company.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            The other honest exception is free-trial abuse. Hearth stores
+            scrambled (hashed) identifiers for your device, your network, your
+            payment method, and, when you provide them, your phone number,
+            company name, and home parcel number, so the same person can&apos;t keep claiming a
+            new free trial by making new accounts. The scrambling is one-way and
+            uses a secret key, so the stored value can&apos;t be turned back into
+            your IP address, your card, or anything else about you. It is only
+            ever compared against other accounts&apos; scrambled values, it is
+            never used for advertising or shared with anyone, and it never
+            follows you to another company&apos;s website.
           </p>
         </section>
 

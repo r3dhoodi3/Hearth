@@ -15,7 +15,11 @@ import {
   type ParcelFacts,
   type PublicParcelFacts,
 } from "@/lib/parcel";
-import { deriveOwnershipStatus } from "@/lib/ownershipMatch";
+import {
+  deriveOwnershipStatus,
+  shouldRecordOwnershipCheck,
+} from "@/lib/ownershipMatch";
+import { claimAddressGate } from "@/lib/parcelGate";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { ownsPlus, getExtraHomeSlots } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
@@ -25,6 +29,7 @@ import { isLaunchZip, LAUNCH_ONLY_MESSAGE } from "@/lib/serviceArea";
 import { PROPERTY_TYPES, PLUS_INCLUDED_HOMES } from "@/lib/constants";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
+import { recordSignal } from "@/lib/risk/signals";
 import {
   boundedNumber,
   boundedInt,
@@ -231,11 +236,11 @@ export async function lookupParcelAction(
   if (!/^\d{5}(-\d{4})?$/.test(zip.trim())) {
     return { ok: false, error: "Enter a valid 5-digit ZIP code." };
   }
-  // Launch-restriction gate: the launch cities only (isLaunchZip), not
-  // all of Orange County - Hearth has no pros anywhere else, and the pro-side
-  // gates (open_jobs_for_me / apply_to_lead, migrations 0124/0126) refuse those
-  // jobs too, so accepting the address here would strand the homeowner with a
-  // job no pro can ever see. Checked before the rate limiter/RentCast call
+  // Launch-restriction gate: the launch area only (isLaunchZip), which since
+  // 0129 is all of Orange County - Hearth has no pros anywhere else, and the
+  // pro-side gates (open_jobs_for_me / apply_to_lead, migrations 0124/0126/
+  // 0129) refuse those jobs too, so accepting the address here would strand
+  // the homeowner with a job no pro can ever see. Checked before the rate limiter/RentCast call
   // below so an out-of-area address never spends a billed RentCast lookup.
   // OnboardingForm.tsx runs the same check client-side first and normally
   // never lets a rejected ZIP reach this action at all - this is the
@@ -315,6 +320,14 @@ export async function lookupParcelAction(
   // "no RENTCAST_API_KEY is configured, so nothing was looked up". Only the
   // first is a refusal. Without the guard, an environment with no key would
   // reject every address in Orange County.
+  //
+  // Written as an explicit `=== "none"` on purpose, NOT as "anything that
+  // isn't rentcast". source "unavailable" (a 401 from a bad key, a 429, a 5xx,
+  // a timeout - see ParcelFacts in src/lib/parcel.ts) means we never got an
+  // answer, and on 2026-08-24 a bad key on the host turned that into a day of
+  // real homeowners being told their address does not exist. An "unavailable"
+  // now walks on to the confirm step with blank facts and a plain note, which
+  // is the manual-entry fallback parcel.ts has always promised.
   if (publicFacts.source === "none" && hasRecordsSource()) {
     return { ok: false, error: ADDRESS_NOT_FOUND_MESSAGE, notFound: true };
   }
@@ -387,7 +400,7 @@ export async function claimPropertyAction(
   }
 
   // Launch-restriction gate: the authoritative one, since this is the step
-  // that actually commits the address to a claimed home. Launch cities only
+  // that actually commits the address to a claimed home. Launch area only
   // (isLaunchZip), same reasoning as lookupParcelAction above. Log the lead to the
   // waitlist (joinMarketWaitlistAction above) before rejecting - a failed
   // save (e.g. live DB hasn't run 0074 yet) must never block the message
@@ -456,6 +469,10 @@ export async function claimPropertyAction(
   // Home Profile, while a claim carrying another address's assessed value is
   // wrong data that nothing downstream can tell apart from real data.
   let relookupFacts: ParcelFacts | null = null;
+  // Distinguished from "the lookup ran and failed": a limiter refusal means
+  // nothing has EVER looked at this street, and the gate below turns that into
+  // a refusal rather than storing an unchecked address.
+  let relookupBlocked = false;
   if (addressEdited) {
     // The same per-user buckets lookupParcelAction spends (migration 0068),
     // because this is the same thing: a lookup of an address nothing has
@@ -482,6 +499,8 @@ export async function claimPropertyAction(
         // without the county's numbers on it.
         console.error("Corrected-address parcel lookup failed:", err);
       }
+    } else {
+      relookupBlocked = true;
     }
   }
 
@@ -501,24 +520,44 @@ export async function claimPropertyAction(
   // row (migration 0069) the Continue step just wrote - the same cached read
   // the ownership check further down already makes.
   //
-  // Only an explicit `source: "none"` from a CONFIGURED source refuses. A
-  // lookup that threw, or one the rate limiter skipped (relookupFacts null),
-  // keeps the pre-existing tolerant behavior: "we couldn't check" is not
-  // "this address does not exist", and failing a real homeowner's claim on a
-  // network blip would be a worse bug than the one this closes.
+  // The decision itself is claimAddressGate (src/lib/parcelGate.ts), which is
+  // where its reasoning and its tests live. In short: only an explicit
+  // `source: "none"` from a CONFIGURED source refuses as "no such address". A
+  // lookup that threw, or one that came back "unavailable" (401/429/5xx/
+  // timeout - see ParcelFacts in src/lib/parcel.ts) keeps the tolerant
+  // behavior, because "we couldn't check" is not "this address does not
+  // exist" - that conflation is what refused every real address for a day on
+  // 2026-08-24. The one intolerant case is an EDITED street whose re-lookup
+  // the rate limiter refused: nothing has ever looked at that string, so
+  // storing it would create a home from unverified typing.
+  //
+  // claimFacts is also what the ownership check at the end of this action
+  // uses, instead of a third lookupParcel with identical arguments. Each call
+  // waits out its own 8s timeout when the source is down, and three of them
+  // meant up to 24 seconds on the claim button.
   // =========================================================================
+  let claimFacts: ParcelFacts | null = relookupFacts;
   if (hasRecordsSource()) {
-    let verifyFacts: ParcelFacts | null = relookupFacts;
     if (!addressEdited) {
       try {
-        verifyFacts = await lookupParcel(addressLine1, claimZip);
+        claimFacts = await lookupParcel(addressLine1, claimZip);
       } catch (err) {
         console.error("Claim-time address verification lookup failed:", err);
-        verifyFacts = null;
+        claimFacts = null;
       }
     }
-    if (verifyFacts && verifyFacts.source === "none") {
-      return err(ADDRESS_NOT_FOUND_MESSAGE);
+    const gate = claimAddressGate({
+      hasRecordsSource: true,
+      addressEdited,
+      relookupBlocked,
+      facts: claimFacts,
+    });
+    if (gate.action === "refuse") {
+      return err(
+        gate.reason === "lookup_blocked"
+          ? "Too many address lookups right now. Please try again in a bit."
+          : ADDRESS_NOT_FOUND_MESSAGE
+      );
     }
   }
 
@@ -796,6 +835,17 @@ export async function claimPropertyAction(
   // terms now, and before this there was no row saying so.
   await recordTermsAcceptance(user.id, "terms");
 
+  // Trial-abuse signals (src/lib/risk, migration 0130). Two accounts claiming
+  // the SAME county parcel is one of the more telling links there is: a house
+  // has one owner, and a second account on it is either the same person or
+  // somebody who should be joining the household instead. Worth 20 points, not
+  // a block - a genuine sale, a divorce, or a landlord and a tenant all produce
+  // it honestly.
+  //
+  // The parcel id is hashed with the server salt before storage, like every
+  // other signal. Best-effort: it cannot throw and cannot fail a claim.
+  await recordSignal(user.id, "parcel", baseRow.parcel_id, "claim_property");
+
   // Ownership verification (migration 0093): match the county assessor's
   // owner-of-record for this address against the account holder's own name
   // (src/lib/ownershipMatch.ts). A claim that carries a unit skips the match
@@ -876,19 +926,19 @@ export async function claimPropertyAction(
       // Single-family: the street address IS the parcel, so the county's owner
       // of record is a real statement about this home.
       //
-      // relookupFacts when the street was corrected above - the same fresh
-      // lookup, so the name is matched against the address actually being
-      // claimed and no second billed call is spent. Otherwise the same street
-      // and ZIP the confirm step looked up, which hits the parcel_cache row it
-      // just wrote (migration 0069) rather than billing RentCast again.
-      const facts = addressEdited
-        ? relookupFacts
-        : await lookupParcel(addressLine1, claimZip);
-      // Null only when a corrected-address lookup was rate-limited or failed.
-      // Leave the property unchecked rather than guessing: ownership_checked_at
-      // stays null, which is exactly the state the lazy re-check on first job
-      // post is built to pick up.
-      if (facts) {
+      // The very same facts the gate above already verified, rather than a
+      // third lookupParcel call with identical arguments: the gate ran either
+      // the corrected-address lookup or the cached re-check, and both of them
+      // answered this exact question already.
+      const facts = claimFacts;
+      // Record nothing unless there is a verdict worth keeping.
+      // shouldRecordOwnershipCheck (src/lib/ownershipMatch.ts) says no for a
+      // null lookup AND for source "unavailable", because
+      // record_ownership_check stamps ownership_checked_at and a null
+      // ownership_checked_at is the only thing that keeps the lazy re-check on
+      // first job post eligible to run. Writing "unverified" during an outage
+      // would burn that retry and leave the home permanently unverified.
+      if (shouldRecordOwnershipCheck(facts) && facts) {
         const status = deriveOwnershipStatus(fullName, facts);
         await createAdminClient().rpc("record_ownership_check", {
           p_property_id: created.id,

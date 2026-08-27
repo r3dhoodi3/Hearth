@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -18,6 +19,69 @@ type MenuLink = {
   action?: (formData: FormData) => void | Promise<void>;
   side?: "homeowner" | "contractor";
 };
+
+// "Switch to your business" -> "Switching to your business...". Used while
+// that row's own submission is in flight.
+function pendingLabelFor(label: string): string {
+  return `${label.replace(/^Switch\b/, "Switching")}...`;
+}
+
+// A quiet spinner for the pending states below - a plain stroked circle, no
+// gradient/shimmer, matching the flat-color design rule.
+function Spinner({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg
+      className={`motion-safe:animate-spin ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4z"
+      />
+    </svg>
+  );
+}
+
+// The row for a side-switch action item (an `l.action` + `l.side` MenuLink).
+// Split out so it can call useFormStatus - that hook only reports the status
+// of the nearest enclosing <form>, and must run in a component rendered
+// inside it, not in ProfileMenu itself. Reports its own pending flag up via
+// onPendingChange so the panel around it can react (see the `switching`
+// state below) without either component reaching into the other's internals.
+function SwitchSideButton({
+  label,
+  rowClass,
+  onPendingChange,
+}: {
+  label: string;
+  rowClass: string;
+  onPendingChange: (pending: boolean) => void;
+}) {
+  const { pending } = useFormStatus();
+  useEffect(() => {
+    onPendingChange(pending);
+  }, [pending, onPendingChange]);
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className={`${rowClass} w-[calc(100%-0.5rem)] text-left disabled:cursor-default disabled:opacity-70`}
+    >
+      {pending ? (
+        <span className="flex items-center gap-2">
+          <Spinner />
+          {pendingLabelFor(label)}
+        </span>
+      ) : (
+        label
+      )}
+    </button>
+  );
+}
 
 // Avatar + dropdown shown in the top-right of both navs. Account-scoped only:
 // profile/settings/help links and Log out. Navigation destinations belong in
@@ -48,6 +112,19 @@ export default function ProfileMenu({
   // closed transition the panel stays mounted for one more tick with
   // fade-scale-out, then drops.
   const [closing, setClosing] = useState(false);
+  // Label of the side-switch row currently mid-submission, or null. Set by
+  // SwitchSideButton's own useFormStatus, one render after the tap (React
+  // flips `pending` synchronously with the click; this only lags by the
+  // effect that reports it up, imperceptible in practice).
+  //
+  // While this is set, the panel below collapses everything except a single
+  // "Switching..." status row - reading as "the menu closed" the instant you
+  // tap, with feedback in its place, without literally unmounting the
+  // <form> that is mid-submission. An actual unmount here would cancel it:
+  // native form actions abort if their DOM node is removed before the
+  // browser finishes submitting (see the comment on the form below). CSS
+  // (`hidden`) keeps everything visually gone while staying connected.
+  const [switching, setSwitching] = useState<string | null>(null);
   const wasOpen = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -61,7 +138,7 @@ export default function ProfileMenu({
     }
     wasOpen.current = open;
   }, [open]);
-  const shouldRender = open || closing;
+  const shouldRender = open || closing || switching !== null;
 
   // Close on outside click or Escape. Escape hands focus back to the trigger
   // so keyboard users aren't dropped at the top of the page.
@@ -89,8 +166,14 @@ export default function ProfileMenu({
       <button
         ref={btnRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          // A tap here while a side switch is in flight would just reopen
+          // the (now hidden) stale list for a moment; ignore it instead.
+          if (switching !== null) return;
+          setOpen((v) => !v);
+        }}
         aria-expanded={open}
+        aria-busy={switching !== null || undefined}
         aria-label={name ? `Account menu for ${name}` : "Account menu"}
         className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-bark-50 dark:text-stone-200 dark:hover:bg-stone-800"
       >
@@ -144,79 +227,106 @@ export default function ProfileMenu({
           claim the role either. Tab + Escape work as expected. */}
       {shouldRender && (
         <div
+          role={switching !== null ? "status" : undefined}
           className={`absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1.5 shadow-menu dark:border-white/10 dark:bg-stone-700 ${
-            open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
+            open || switching !== null
+              ? "motion-safe:animate-fade-scale"
+              : "motion-safe:animate-fade-scale-out"
           }`}
         >
-          {hasPlus !== undefined && (
-            <Link
-              href="/plus"
-              onClick={() => setOpen(false)}
-              className={
-                hasPlus
-                  ? "block border-b border-stone-100 px-4 py-2 text-sm text-stone-500 dark:border-white/10 dark:text-stone-400"
-                  : "block border-b border-stone-100 bg-bark-50 px-4 py-2 text-sm font-medium text-bark-700 hover:bg-bark-100 dark:border-white/10 dark:bg-bark-700/40 dark:text-stone-300 dark:hover:bg-bark-700/60"
-              }
-            >
-              {hasPlus ? "Hearth Plus ✓" : "Upgrade to Hearth Plus"}
-            </Link>
-          )}
-          <div>
-            {linksLabel && (
-              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                {linksLabel}
-              </p>
-            )}
-            {links.map((l) => {
-              const rowClass =
-                l.accent === "red"
-                  ? "mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/15"
-                  : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600";
-              if (l.action) {
-                return (
-                  <form key={l.href} action={l.action}>
-                    {l.side && (
-                      <input type="hidden" name="side" value={l.side} />
-                    )}
-                    {/* No onClick close here: closing the menu on click
-                        unmounts this form before the browser submits it
-                        ("Form submission canceled because the form is not
-                        connected"). The action redirects, which closes the
-                        menu by navigating away. */}
-                    <button
-                      type="submit"
-                      className={`${rowClass} w-[calc(100%-0.5rem)] text-left`}
-                    >
-                      {l.label}
-                    </button>
-                  </form>
-                );
-              }
-              return (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  onClick={() => setOpen(false)}
-                  className={rowClass}
-                >
-                  {l.label}
-                </Link>
-              );
-            })}
-          </div>
-          {themeToggle && <ThemeToggle variant="row" />}
-          <form
-            action="/auth/signout"
-            method="post"
-            className="border-t border-stone-100 dark:border-white/10"
+          {/* Pending-switch status row. Always mounted - never conditionally
+              added or removed - so toggling it can never shift the position
+              of the content below and risk remounting the side-switch
+              <form> mid-submission (see the comment on that form). Only
+              `hidden` (display: none, not a DOM removal) changes. */}
+          <div
+            aria-live="polite"
+            className={`items-center gap-2 border-b border-stone-100 px-4 py-2 text-sm font-medium text-bark-700 dark:border-white/10 dark:text-stone-300 ${
+              switching !== null ? "flex" : "hidden"
+            }`}
           >
-            <button
-              type="submit"
-              className="block w-full px-4 py-2 text-left text-sm font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-stone-400 dark:hover:bg-red-500/15 dark:hover:text-red-400"
+            <Spinner />
+            {switching !== null ? pendingLabelFor(switching) : ""}
+          </div>
+          {/* The rest of the panel. Hidden - not unmounted - the instant a
+              switch starts, so tapping "Switch to..." reads as the menu
+              closing right away (the status row above takes its place)
+              instead of sitting open on the stale side, which is what
+              invited a second tap before this fix. */}
+          <div className={switching !== null ? "hidden" : ""}>
+            {hasPlus !== undefined && (
+              <Link
+                href="/plus"
+                onClick={() => setOpen(false)}
+                className={
+                  hasPlus
+                    ? "block border-b border-stone-100 px-4 py-2 text-sm text-stone-500 dark:border-white/10 dark:text-stone-400"
+                    : "block border-b border-stone-100 bg-bark-50 px-4 py-2 text-sm font-medium text-bark-700 hover:bg-bark-100 dark:border-white/10 dark:bg-bark-700/40 dark:text-stone-300 dark:hover:bg-bark-700/60"
+                }
+              >
+                {hasPlus ? "Hearth Plus ✓" : "Upgrade to Hearth Plus"}
+              </Link>
+            )}
+            <div>
+              {linksLabel && (
+                <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                  {linksLabel}
+                </p>
+              )}
+              {links.map((l) => {
+                const rowClass =
+                  l.accent === "red"
+                    ? "mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/15"
+                    : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600";
+                if (l.action) {
+                  return (
+                    <form key={l.href} action={l.action}>
+                      {l.side && (
+                        <input type="hidden" name="side" value={l.side} />
+                      )}
+                      {/* No onClick close here: closing the menu on click
+                          would unmount this form before the browser submits
+                          it ("Form submission canceled because the form is
+                          not connected"). SwitchSideButton's own
+                          useFormStatus reports pending up to `switching`
+                          instead, which hides (not unmounts) everything
+                          around this form via CSS and shows the status row
+                          above in its place. The action's redirect finishes
+                          the job by navigating away entirely. */}
+                      <SwitchSideButton
+                        label={l.label}
+                        rowClass={rowClass}
+                        onPendingChange={(p) => setSwitching(p ? l.label : null)}
+                      />
+                    </form>
+                  );
+                }
+                return (
+                  <Link
+                    key={l.href}
+                    href={l.href}
+                    onClick={() => setOpen(false)}
+                    className={rowClass}
+                  >
+                    {l.label}
+                  </Link>
+                );
+              })}
+            </div>
+            {themeToggle && <ThemeToggle variant="row" />}
+            <form
+              action="/auth/signout"
+              method="post"
+              className="border-t border-stone-100 dark:border-white/10"
             >
-              Log out
-            </button>
-          </form>
+              <button
+                type="submit"
+                className="block w-full px-4 py-2 text-left text-sm font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-stone-400 dark:hover:bg-red-500/15 dark:hover:text-red-400"
+              >
+                Log out
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>

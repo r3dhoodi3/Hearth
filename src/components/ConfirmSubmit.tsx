@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 // Both armed-state buttons, split into their own component because
@@ -21,9 +21,39 @@ function ConfirmSubmitButtons({
   onCancel: () => void;
 }) {
   const { pending } = useFormStatus();
+  // Same synchronous double-submit guard as SubmitButton.tsx: `pending` lags
+  // a click by a render, so two fast taps on "Yes" both read pending as false
+  // and both submit (a plan switch or a cancellation fired twice). The ref
+  // flips on the first click, before React re-renders, and resets once
+  // pending drops back to false so a failed submit can be retried.
+  const submittedRef = useRef(false);
+
+  useEffect(() => {
+    if (!pending) submittedRef.current = false;
+  }, [pending]);
+
+  function handleYesClick(e: React.MouseEvent<HTMLButtonElement>) {
+    if (submittedRef.current) {
+      e.preventDefault();
+      return;
+    }
+    // Only latch when a submit will actually start. A form that fails the
+    // browser's own constraint validation (required, minLength, type=email)
+    // never runs the action, so `pending` never flips and the effect above
+    // would never release the latch: the button would be dead until reload.
+    const form = e.currentTarget.form;
+    if (form && !form.noValidate && !form.checkValidity()) return;
+    submittedRef.current = true;
+  }
+
   return (
     <>
-      <button type="submit" className="btn-primary" disabled={pending}>
+      <button
+        type="submit"
+        className="btn-primary"
+        disabled={pending}
+        onClick={handleYesClick}
+      >
         {pending ? `${yesLabel}…` : yesLabel}
       </button>
       <button

@@ -14,6 +14,7 @@ import { stripe } from "@/lib/stripe";
 import { eraseUserData, type EraseSummary } from "@/lib/privacy";
 import { cappedField, FIELD_MAX } from "@/lib/formFields";
 import { licenseDigits } from "@/lib/licenseMatch";
+import { isAcceptablePublicText, ABOUT_REJECTED } from "@/lib/publicText";
 
 // Password re-verification is a brute-force surface: updatePasswordAction,
 // updateEmailAction, and deleteAccountAction each take a current password and
@@ -323,6 +324,27 @@ export async function savePublicPageAction(formData: FormData) {
   const about = str("about");
   if (about.length > 1000) {
     setFlash("The about section must be 1,000 characters or fewer.", "error");
+    redirect("/pro/profile");
+  }
+
+  // MODERATION: `about` is 1,000 characters of unreviewed free text printed
+  // verbatim on the public /p/<slug> page. It had a length cap and no content
+  // check at all, which made it the biggest free billboard on the site - a
+  // phone number here routes homeowners off-platform before any lead record
+  // exists, and a slur sits under a business name with no review step. Same
+  // gate the business name and the custom-service box get: censor() for
+  // profanity/slurs and a phone/email shape check for contact routes, both
+  // read off the Unicode fold. Refused outright rather than masked, so the pro
+  // is told.
+  //
+  // ONLY WHEN THE TEXT ACTUALLY CHANGED, for the same reason the business-name
+  // check is conditional (see src/app/pro/actions.ts): this action also saves
+  // the logo, so an unconditional check would let a stored `about` the filter
+  // dislikes block every future logo upload with a message about text the pro
+  // did not touch. The gate applies to what is being introduced.
+  const aboutChanged = about !== ((contractor as { about?: string | null }).about ?? "");
+  if (aboutChanged && !isAcceptablePublicText(about)) {
+    await setFlash(ABOUT_REJECTED, "error");
     redirect("/pro/profile");
   }
 

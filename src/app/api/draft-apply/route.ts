@@ -73,8 +73,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No job given." }, { status: 400 });
   }
 
-  // Load the job server-side with the admin client, but only the safe fields a
-  // pro can already see on the board - never the homeowner's contact info.
+  // AUTHORIZATION, before anything about the job is read back.
+  //
+  // This route used to load the lead with the ADMIN client keyed on nothing
+  // but the id, then check status / contractor_id / category by hand. Those
+  // three are a subset of what the job board actually enforces:
+  // open_jobs_for_me (latest body 0124_launch_city_enforcement.sql) ALSO
+  // requires serves_orange_county, a matching service_state, the pro's
+  // launch_cities to cover the home's zip, and direct_to to be null. A pro
+  // outside the launch area, or one who never confirmed Orange County, or a
+  // pro who is not the target of a private direct request, could therefore
+  // draft against a job their board would never show them - and the draft
+  // echoes the homeowner's issue_description straight back, so that is a read
+  // of another household's job details, paid for by our model budget.
+  //
+  // So eligibility is decided by the board function itself, on the
+  // USER-SCOPED client, rather than by a hand-copied subset of its WHERE
+  // clause that has already drifted twice. It is SECURITY DEFINER and derives
+  // auth.uid() itself, so the pro cannot ask it about anyone else's board.
+  // src/app/pro/ApplyJobButton.tsx (the only caller) is rendered exclusively
+  // from that same board's rows in src/app/pro/page.tsx, so every legitimate
+  // draft is for a job that is in this list by construction.
+  //
+  // A miss and a not-eligible job get the SAME 404 with the SAME wording: a
+  // separate "no longer open" / "not in your categories" answer would confirm
+  // that a guessed lead id exists and leak its category.
+  const { data: board } = await (authClient as any).rpc("open_jobs_for_me");
+  const eligible =
+    Array.isArray(board) &&
+    board.some((row: { id?: string }) => row?.id === leadId);
+  if (!eligible) {
+    return NextResponse.json({ error: "Job not found." }, { status: 404 });
+  }
+
+  // Only now, with the job proven to be on this pro's own board, read it back.
+  // Still the admin client and still only the safe fields a pro can already
+  // see on the board - never the homeowner's contact info.
   const admin = createAdminClient();
   const { data: lead } = await admin
     .from("contractor_leads")
@@ -86,19 +120,12 @@ export async function POST(req: NextRequest) {
   if (!lead) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
   }
-  if (lead.status !== "new" || lead.contractor_id !== null) {
-    return NextResponse.json(
-      { error: "This job is no longer open." },
-      { status: 400 }
-    );
-  }
+
+  // The pro's own trades, for the company profile in the prompt below. The
+  // category GATE that used to live here is gone on purpose: open_jobs_for_me
+  // already applies `cl.category = any (c.categories)`, so a job that reached
+  // this line is in their categories by definition.
   const cats = contractor.categories ?? [];
-  if (cats.length > 0 && !cats.includes(lead.category)) {
-    return NextResponse.json(
-      { error: "This job isn't in your categories." },
-      { status: 403 }
-    );
-  }
 
   // Per-user daily cap so a single account can't run up the paid model bill.
   // Shares the ai_usage counter (and the Plus ceiling) with Ask Hearth, so it

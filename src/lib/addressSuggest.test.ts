@@ -80,7 +80,7 @@ describe("photonSuggestUrl", () => {
     expect(url.searchParams.get("q")).toBe("9832 Bol, Westminster, California");
   });
 
-  it("ignores a ZIP outside the launch cities rather than sending a wrong city", () => {
+  it("ignores a ZIP outside the launch area rather than sending a wrong city", () => {
     // 90210 is a real ZIP, just not one of ours.
     const url = new URL(photonSuggestUrl("9832 Bol", "90210"));
     expect(url.searchParams.get("q")).toBe("9832 Bol, California");
@@ -126,10 +126,7 @@ describe("mapPhotonResults", () => {
     expect(mapPhotonResults(body(orphan))).toEqual([]);
   });
 
-  it("drops addresses outside the launch cities", () => {
-    // Irvine and Anaheim are Orange County - inside the bbox - but Hearth has
-    // no pros there, so the ZIP gate on the very next screen would reject
-    // them. Offering one as a suggestion would be a trap.
+  it("keeps addresses anywhere in Orange County since the launch area is the county", () => {
     const irvine = feature({
       housenumber: "100",
       street: "Technology Drive",
@@ -142,7 +139,22 @@ describe("mapPhotonResults", () => {
       city: "Anaheim",
       postcode: "92802",
     });
-    expect(mapPhotonResults(body(irvine, anaheim))).toEqual([]);
+    expect(mapPhotonResults(body(irvine, anaheim))).toEqual([
+      { line1: "100 Technology Drive", city: "Irvine", state: "CA", zip: "92618" },
+      { line1: "1313 Disneyland Drive", city: "Anaheim", state: "CA", zip: "92802" },
+    ]);
+  });
+
+  it("drops addresses outside the county", () => {
+    // Long Beach sits inside the bbox's northwest corner, but the ZIP gate on
+    // the very next screen would reject it. Offering it would be a trap.
+    const longBeach = feature({
+      housenumber: "1",
+      street: "Ocean Boulevard",
+      city: "Long Beach",
+      postcode: "90802",
+    });
+    expect(mapPhotonResults(body(longBeach))).toEqual([]);
   });
 
   it("drops a result with no ZIP at all", () => {
@@ -166,10 +178,10 @@ describe("mapPhotonResults", () => {
     });
   });
 
-  it("keeps OSM's city when it is itself a launch city, even if the ZIP maps elsewhere", () => {
+  it("shows OSM's city when it is itself a launch city, even if the ZIP maps elsewhere", () => {
     // 92844 is a Garden Grove ZIP, but this address sits on the Westminster
-    // side of the line and OSM says so. Both are launch cities, so show the
-    // name the resident recognizes.
+    // side of the line and OSM says so. The ZIP still gates (it is a launch
+    // ZIP either way); the name shown is the one the resident recognizes.
     expect(mapPhotonResults(body(BOLSA))[0]).toEqual({
       line1: "9842 Bolsa Avenue",
       city: "Westminster",
@@ -178,17 +190,58 @@ describe("mapPhotonResults", () => {
     });
   });
 
-  it("falls back to the ZIP's city when OSM's city is not a launch city", () => {
-    const oddCity = feature({
-      housenumber: "9871",
-      street: "Kings Canyon Drive",
-      // Photon sometimes returns a neighborhood or an adjacent place here.
-      city: "Sunset Beach",
-      postcode: "92646",
+  it("resolves the community names OSM uses through the ZIP map", () => {
+    // Photon returns the neighborhood or annexed community for a lot of
+    // Orange County: none of these is a checkbox or DB name, and the ZIP map
+    // is what turns each into the city that serves it.
+    const cases: [string, string, string][] = [
+      ["Sunset Beach", "90742", "Huntington Beach"],
+      ["Corona del Mar", "92625", "Newport Beach"],
+      ["Capistrano Beach", "92624", "Dana Point"],
+      ["Trabuco Canyon", "92679", "Rancho Santa Margarita"],
+      ["Coto de Caza", "92679", "Rancho Santa Margarita"],
+      ["Silverado", "92676", "Orange"],
+      ["Ladera Ranch", "92694", "Ladera Ranch"],
+      ["Rossmoor", "90720", "Los Alamitos"],
+      ["North Tustin", "92705", "Santa Ana"],
+      ["Foothill Ranch", "92610", "Lake Forest"],
+    ];
+    for (const [osmCity, zip, expected] of cases) {
+      const f = feature({
+        housenumber: "1",
+        street: "Main Street",
+        city: osmCity,
+        postcode: zip,
+      });
+      expect(mapPhotonResults(body(f))[0], osmCity).toMatchObject({
+        city: expected,
+        zip,
+      });
+    }
+  });
+
+  it("drops a ZIP outside the map even when OSM names a launch city", () => {
+    // 92899 is a unique (non-residential) Anaheim ZIP the map does not know.
+    // OSM calling the address Fullerton does not help: the ZIP is what the
+    // onboarding gate checks next, and it would bounce this straight to the
+    // waitlist panel. A suggestion that cannot be accepted is a trap.
+    const unknownZip = feature({
+      housenumber: "200",
+      street: "Harbor Boulevard",
+      city: "Fullerton",
+      postcode: "92899",
     });
-    expect(mapPhotonResults(body(oddCity))[0]).toMatchObject({
-      city: "Huntington Beach",
+    expect(mapPhotonResults(body(unknownZip))).toEqual([]);
+  });
+
+  it("drops a result when neither the ZIP nor OSM's city resolves", () => {
+    const nowhere = feature({
+      housenumber: "200",
+      street: "Harbor Boulevard",
+      city: "Capistrano Beach",
+      postcode: "92899",
     });
+    expect(mapPhotonResults(body(nowhere))).toEqual([]);
   });
 
   it("de-duplicates the several OSM nodes one address usually has", () => {

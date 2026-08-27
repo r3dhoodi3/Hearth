@@ -5,6 +5,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
+import { clearPasswordRecoveryAction } from "./actions";
 
 // Password reset, styled to match src/app/signin/page.tsx.
 //
@@ -61,17 +62,16 @@ export default function ResetPasswordForm({
     }
 
     setBusy(true);
-    // password_set is our own marker that this account now has a password.
-    // Supabase doesn't record one we can read: when someone who signed up with
-    // Google sets a password here, the password works but no "email" identity
-    // is added, so user.identities still shows Google alone. Without this flag
-    // the account security page would keep telling them they have no password
-    // forever (getPasswordStatus in src/lib/auth.ts reads it). Set in the same
-    // call as the password so the two can't disagree.
-    const { error } = await supabase.auth.updateUser({
-      password,
-      data: { password_set: true },
-    });
+    // No user_metadata stamp here any more. This form used to also set a
+    // password_set marker, and src/lib/auth.ts's heuristicHasPassword read it
+    // back - but user_metadata is writable by the account's own browser
+    // (this very call is how), so it was a security answer taken from an
+    // attacker-controlled field. The real answer comes from
+    // current_user_has_password() (migration 0120) reading
+    // auth.users.encrypted_password, and that heuristic now fails closed when
+    // the read cannot run. Writing the flag would change nothing except leave
+    // a stale field lying around for someone to trust again later.
+    const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
       setBusy(false);
@@ -81,6 +81,17 @@ export default function ResetPasswordForm({
           : friendlyAuthError(error)
       );
       return;
+    }
+
+    // One emailed link, one password change: drop the httpOnly recovery cookie
+    // now that the password is actually changed, so /reset-password?step=update
+    // stops rendering the form for the rest of the cookie's 15 minutes.
+    // Best-effort - the cookie expires on its own, and a failure here must not
+    // strand someone who just successfully reset their password.
+    try {
+      await clearPasswordRecoveryAction();
+    } catch {
+      // Ignore: the cookie is short-lived either way.
     }
 
     // They're signed in via the recovery session; "/" routes by role.

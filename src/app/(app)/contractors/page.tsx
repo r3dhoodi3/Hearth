@@ -47,6 +47,13 @@ import { redactContact } from "@/lib/redact";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 
 // Must match the markers LeadChat posts when either side closes a thread.
+//
+// This, and NOT contractor_leads.status, is what decides whether the review
+// prompt shows. Either side can close a conversation, so it is a fact about
+// the job that the homeowner also has a hand in. A draft of migration 0132
+// moved the gate to status = 'closed' and was withdrawn: only the pro can set
+// that status, so it would have let the reviewed party veto their own reviews.
+// leave_review() requires an assigned pro and nothing more.
 const isCloseMarker = (b: string) =>
   b.startsWith("Conversation closed") || b === "Chat closed by the contractor.";
 

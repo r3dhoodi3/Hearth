@@ -82,10 +82,22 @@ export function appreciationRateFor(state: string | null | undefined): number {
   return STATE_APPRECIATION_RATES[state.toUpperCase()] ?? DEFAULT_APPRECIATION_RATE;
 }
 
+// Ceiling on the compounding fallback, as a multiple of what was actually
+// paid. Compounding is only credible over a handful of years: at 6% a year a
+// 2007 purchase is 3x by 2026, so a real $3.9M sale rendered as $11.8M in a
+// big confident font on the dashboard. Nothing about that number came from
+// this home. 2.5x is deliberately blunt - it is not a better model, it is a
+// guardrail that keeps an old purchase from ballooning into a figure we would
+// have to apologise for. Roughly 16 years of appreciation at the 6% median
+// rate, past which the estimate stops moving and the honest answer is the
+// RentCast AVM (see headlineHomeValue below), not more compounding.
+export const FALLBACK_VALUE_CAP_MULTIPLE = 2.5;
+
 // Compounds the state's annual rate from the purchase year to the current
-// year to estimate today's value. A purchase year in the future, or equal to
-// the current year, is treated as zero elapsed years (returns purchasePrice
-// unchanged) rather than producing a negative or inflated result.
+// year to estimate today's value, capped at FALLBACK_VALUE_CAP_MULTIPLE times
+// the purchase price. A purchase year in the future, or equal to the current
+// year, is treated as zero elapsed years (returns purchasePrice unchanged)
+// rather than producing a negative or inflated result.
 export function estimateHomeValue(
   purchasePrice: number,
   purchaseYear: number,
@@ -94,7 +106,10 @@ export function estimateHomeValue(
 ): number {
   const rate = appreciationRateFor(state);
   const years = Math.max(0, currentYear - purchaseYear);
-  return Math.round(purchasePrice * Math.pow(1 + rate, years));
+  const compounded = purchasePrice * Math.pow(1 + rate, years);
+  return Math.round(
+    Math.min(compounded, purchasePrice * FALLBACK_VALUE_CAP_MULTIPLE)
+  );
 }
 
 // One estimated value per year from the purchase year through the current
@@ -132,4 +147,131 @@ export function calculateEquity(
 ): number {
   const balance = mortgageBalance ?? 0;
   return estimatedValue - balance;
+}
+
+// ===========================================================================
+// The headline number, in one place.
+//
+// The dashboard tile and the /value page were each picking their own value,
+// their own year-over-year delta and their own caption, which is how they
+// ended up able to disagree on the same day. Both now call this, so the number
+// in the tile, the number on the page, and the equity math underneath are the
+// same number by construction.
+// ===========================================================================
+
+export type HomeValueSource = "avm" | "formula";
+
+export interface HeadlineHomeValue {
+  // What to show, and what equity must be computed from.
+  value: number;
+  source: HomeValueSource;
+  // The AVM's confidence range, only ever set when source is "avm" and
+  // RentCast returned both ends.
+  low: number | null;
+  high: number | null;
+  // How much the number moved, and over what. Null when there is nothing
+  // honest to say - which is a real case, not a placeholder: an AVM for
+  // someone who never entered a purchase price has no earlier figure from the
+  // same source to compare against.
+  //
+  // "year"     - this year's modeled value minus last year's, both from the
+  //              same capped model. Only ever set in fallback mode.
+  // "purchase" - the AVM minus what they actually paid. A real difference
+  //              between two real numbers, and the only comparison the AVM
+  //              supports: the AVM is a point-in-time reading with no history
+  //              behind it, so any "this year" figure for it would have to be
+  //              modeled from the appreciation rate and dressed up as a
+  //              measurement. This can be negative, and should be.
+  change: number | null;
+  changeSince: "year" | "purchase" | null;
+  // Small print under the number. Says where it came from, plainly.
+  sourceLabel: string;
+}
+
+export const AVM_SOURCE_LABEL = "Estimate from RentCast";
+export const FORMULA_SOURCE_LABEL = "Estimate based on your purchase price";
+
+export function headlineHomeValue(input: {
+  // The stored RentCast AVM, when one has landed for this home.
+  marketValue: number | null;
+  marketValueLow: number | null;
+  marketValueHigh: number | null;
+  purchasePrice: number | null;
+  purchaseYear: number | null;
+  state: string | null | undefined;
+  currentYear: number;
+}): HeadlineHomeValue | null {
+  const {
+    marketValue,
+    marketValueLow,
+    marketValueHigh,
+    purchasePrice,
+    purchaseYear,
+    state,
+    currentYear,
+  } = input;
+
+  // The AVM wins whenever we have one: it is priced off actual comparable
+  // sales for this address, where the fallback is a statewide average applied
+  // to one old number.
+  if (marketValue != null && marketValue > 0) {
+    return {
+      value: marketValue,
+      source: "avm",
+      low: marketValueLow != null && marketValueLow > 0 ? marketValueLow : null,
+      high:
+        marketValueHigh != null && marketValueHigh > 0 ? marketValueHigh : null,
+      // Against the purchase price when we have one, and nothing at all when
+      // we don't. See the `change` docs above for why there is no yearly
+      // figure here.
+      change: purchasePrice != null ? marketValue - purchasePrice : null,
+      changeSince: purchasePrice != null ? "purchase" : null,
+      sourceLabel: AVM_SOURCE_LABEL,
+    };
+  }
+
+  if (purchasePrice == null || purchaseYear == null) return null;
+
+  const value = estimateHomeValue(purchasePrice, purchaseYear, state, currentYear);
+  const lastYear = estimateHomeValue(
+    purchasePrice,
+    purchaseYear,
+    state,
+    currentYear - 1
+  );
+  // Both years run through the same capped model, so a home already at the cap
+  // reports a 0 change - which is the truth about this estimate, not a hidden
+  // flat market.
+  return {
+    value,
+    source: "formula",
+    low: null,
+    high: null,
+    change: value - lastYear,
+    changeSince: "year",
+    sourceLabel: FORMULA_SOURCE_LABEL,
+  };
+}
+
+// Rescales a modeled timeline so its last point lands exactly on `anchor`,
+// keeping the shape of the curve but not its absolute numbers.
+//
+// The /value chart is built from the purchase-price model, so when the
+// headline above comes from the AVM the two disagree on the same screen: a
+// headline of $890k over a chart whose highlighted current-year bar reads
+// $2.1M. Scaling every point by anchor/last makes the final bar equal the
+// headline and every earlier bar the same fraction of it the model said it
+// was. That is honest about what the chart is - the trend, anchored to the
+// estimate - as long as the page labels it that way, which it does.
+//
+// A non-positive last point (nothing to scale from) returns the points
+// untouched rather than dividing by zero.
+export function anchorTimelineTo(
+  points: ValuePoint[],
+  anchor: number
+): ValuePoint[] {
+  const last = points[points.length - 1];
+  if (!last || last.value <= 0) return points;
+  const factor = anchor / last.value;
+  return points.map((p) => ({ year: p.year, value: Math.round(p.value * factor) }));
 }

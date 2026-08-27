@@ -96,6 +96,187 @@ const BLOCKED_TERMS = [
   "brothel",
 ];
 
+// ---------------------------------------------------------------------------
+// Unicode folding, and why the leet table below is not enough on its own
+// ---------------------------------------------------------------------------
+// The LEET table and the separator class catch ASCII evasion ("f#ck",
+// "f u c k"). They do nothing about the two tricks that cost an attacker
+// nothing at all:
+//
+//   1. Invisible characters. "f​u​c​k" renders as one word to
+//      every human reader and matches no pattern here, because a zero-width
+//      space is not in SEP. Same for a soft hyphen, the bidi controls, and the
+//      variation selectors.
+//   2. Homoglyphs. Cyrillic "а" (U+0430) and Greek "ο" (U+03BF) are pixel-
+//      identical to Latin "a" and "o" in every font this app ships. A slur
+//      spelled with two of them reads exactly the same on a public profile
+//      and matches nothing.
+//
+// Compatibility forms are the third: NFKC turns fullwidth "ｆｕｃｋ", the
+// circled and squared letters, and the ligatures into their plain ASCII
+// equivalents in one call.
+//
+// TWO folds, because there are two jobs:
+//
+//   fold()                - the full fold. Free to change length (NFKC
+//                           expands, invisibles are deleted). Used where the
+//                           answer is a yes/no on the whole string, so the
+//                           folded copy never has to line up with the
+//                           original: isAcceptableCustomCategory here, and
+//                           isAcceptablePublicText in src/lib/publicText.ts.
+//   foldPreservingLength() - the same fold, restricted to substitutions that
+//                           keep the UTF-16 length identical, so a match found
+//                           at index i in the folded copy is the same span at
+//                           index i of the original. That is what src/lib/
+//                           censor.ts needs: it MASKS a span of the caller's
+//                           text and hands the rest back untouched, so it must
+//                           never return a normalized rewrite of somebody's
+//                           chat message.
+//
+// Invisibles fold to "." rather than to nothing in the length-preserving
+// version, because "." is already in SEP: "f​u​c​k" becomes
+// "f.u.c.k", which the existing separator rule matches, with every index
+// still where it was.
+
+// Format/invisible characters an evader inserts between letters, written as
+// CODE POINT RANGES rather than as a regex with escapes in it. Two reasons:
+// a literal zero-width character inside a character class is invisible in the
+// editor and in every diff (exactly the property this list exists to defeat),
+// and a hex number is something a reviewer can look up.
+//
+//   00ad          soft hyphen
+//   200b - 200f   zero-width space, ZWNJ, ZWJ, LRM, RLM
+//   2028 - 202f   line/paragraph separator, the bidi overrides, narrow NBSP
+//   2060 - 206f   word joiner, invisible operators, deprecated format chars
+//   fe00 - fe0f   variation selectors
+const INVISIBLE_RANGES: readonly (readonly [number, number])[] = [
+  [0x00ad, 0x00ad],
+  [0x200b, 0x200f],
+  [0x2028, 0x202f],
+  [0x2060, 0x206f],
+  [0xfe00, 0xfe0f],
+];
+
+function isInvisible(ch: string): boolean {
+  const cp = ch.codePointAt(0);
+  if (cp === undefined) return false;
+  return INVISIBLE_RANGES.some(([lo, hi]) => cp >= lo && cp <= hi);
+}
+
+// Cyrillic and Greek letters that are visually identical (or near enough) to a
+// Latin letter in a normal UI font. Deliberately NOT a full confusables table:
+// this is the short list of characters that actually turn up in homoglyph
+// evasion, and every entry is a single BMP code unit, so substituting one is
+// always length-preserving. Keyed by code point for the same reason the
+// invisible list is: a literal Cyrillic small a and a Latin small a are the
+// same picture, and only the number tells them apart.
+const HOMOGLYPHS = new Map<number, string>([
+  // Cyrillic lowercase
+  [0x0430, "a"],
+  [0x0432, "b"],
+  [0x0435, "e"],
+  [0x043a, "k"],
+  [0x043c, "m"],
+  [0x043d, "h"],
+  [0x043e, "o"],
+  [0x0440, "p"],
+  [0x0441, "c"],
+  [0x0442, "t"],
+  [0x0443, "y"],
+  [0x0445, "x"],
+  [0x0455, "s"],
+  [0x0456, "i"],
+  [0x0457, "i"],
+  [0x0458, "j"],
+  [0x04bb, "h"],
+  [0x04cf, "l"],
+  [0x0501, "d"],
+  // Cyrillic uppercase
+  [0x0405, "S"],
+  [0x0406, "I"],
+  [0x0408, "J"],
+  [0x0410, "A"],
+  [0x0412, "B"],
+  [0x0415, "E"],
+  [0x041a, "K"],
+  [0x041c, "M"],
+  [0x041d, "H"],
+  [0x041e, "O"],
+  [0x0420, "P"],
+  [0x0421, "C"],
+  [0x0422, "T"],
+  [0x0423, "Y"],
+  [0x0425, "X"],
+  // Greek lowercase
+  [0x03b1, "a"],
+  [0x03b5, "e"],
+  [0x03b9, "i"],
+  [0x03ba, "k"],
+  [0x03bd, "v"],
+  [0x03bf, "o"],
+  [0x03c1, "p"],
+  [0x03c3, "o"],
+  [0x03c4, "t"],
+  [0x03c5, "u"],
+  [0x03c7, "x"],
+  // Greek uppercase
+  [0x0391, "A"],
+  [0x0392, "B"],
+  [0x0395, "E"],
+  [0x0396, "Z"],
+  [0x0397, "H"],
+  [0x0399, "I"],
+  [0x039a, "K"],
+  [0x039c, "M"],
+  [0x039d, "N"],
+  [0x039f, "O"],
+  [0x03a1, "P"],
+  [0x03a4, "T"],
+  [0x03a5, "Y"],
+  [0x03a7, "X"],
+]);
+
+function homoglyphFor(ch: string): string | undefined {
+  const cp = ch.codePointAt(0);
+  return cp === undefined ? undefined : HOMOGLYPHS.get(cp);
+}
+
+// The full fold: NFKC, invisibles removed, homoglyphs mapped to Latin.
+// Length is NOT preserved - see the note above for which callers may use this.
+export function fold(input: string): string {
+  let out = "";
+  for (const ch of input.normalize("NFKC")) {
+    if (isInvisible(ch)) continue;
+    out += homoglyphFor(ch) ?? ch;
+  }
+  return out;
+}
+
+// The same fold, with every substitution checked to keep the UTF-16 length
+// identical, so an index into the result is the same index in the input:
+//   - invisibles become "." (already a separator character in SEP)
+//   - homoglyphs map one BMP unit to one ASCII unit
+//   - NFKC is applied per character and kept only when the result is the same
+//     length, so the "fi" ligature is left alone and no surrogate pair is ever
+//     collapsed
+export function foldPreservingLength(input: string): string {
+  let out = "";
+  for (const ch of input) {
+    if (isInvisible(ch)) {
+      out += ".".repeat(ch.length);
+      continue;
+    }
+    const homoglyph = homoglyphFor(ch);
+    if (homoglyph !== undefined && homoglyph.length === ch.length) {
+      out += homoglyph;
+      continue;
+    }
+    const normalized = ch.normalize("NFKC");
+    out += normalized.length === ch.length ? normalized : ch;
+  }
+  return out;
+}
+
 // Leet / look-alike substitutions, per letter (the letter itself included).
 // Same table as src/lib/censor.ts: this is the evasion people actually try.
 const LEET: Record<string, string> = {
@@ -172,7 +353,7 @@ const BLOCKED_RE = new RegExp(
 // Several of these already survive on the word boundaries alone; they are
 // listed anyway, because the list is meant to be the place this gets fixed
 // when someone reports a rejection, not a puzzle about which rule saved it.
-const ALLOWED_WORDS = [
+export const ALLOWED_WORDS = [
   "chinking",
   "retarder",
   "dyke",
@@ -186,10 +367,21 @@ const ALLOWED_WORDS = [
 
 // Whole words only, same boundary rule as the block list. Global, because a
 // listing may well contain more than one of them.
-const ALLOWED_RE = new RegExp(
-  `(?<![a-z0-9])(?:${ALLOWED_WORDS.join("|")})(?![a-z0-9])`,
-  "gi"
-);
+//
+// Exported as a BUILDER rather than only as a finished regex because
+// src/lib/publicText.ts needs the same rule over a longer word list: a
+// business NAME collides with the block lists far more often than a service
+// description does (surnames - Dick, Spicer, Coons, Van Dyke - are the whole
+// problem), and the boundary rule is the part that must not be re-typed
+// slightly differently in two places.
+export function allowedWordsPattern(words: readonly string[]): RegExp {
+  return new RegExp(
+    `(?<![a-z0-9])(?:${words.join("|")})(?![a-z0-9])`,
+    "gi"
+  );
+}
+
+const ALLOWED_RE = allowedWordsPattern(ALLOWED_WORDS);
 
 // Off-platform contact routes. A pro who lists "call 714-555-0100" as their
 // service is using the public directory as a bypass around every part of the
@@ -197,7 +389,8 @@ const ALLOWED_RE = new RegExp(
 // the review request).
 const URL_RE =
   /(https?:\/\/|www\.|\b[a-z0-9][a-z0-9-]*\.(?:com|net|org|io|co|us|biz|info|shop|site|xyz|app|dev|me|tv|link)\b)/i;
-const EMAIL_RE = /[a-z0-9._%+-]+\s*(?:@|\(at\)|\[at\])\s*[a-z0-9.-]+\.[a-z]{2,}/i;
+export const EMAIL_RE =
+  /[a-z0-9._%+-]+\s*(?:@|\(at\)|\[at\])\s*[a-z0-9.-]+\.[a-z]{2,}/i;
 // A PHONE SHAPE, not "enough digits". The old rule was any run of seven or
 // more digits with phone punctuation between them, which is a description of
 // far more than a phone number: a contractor's license number ("Lic 1234567"),
@@ -218,7 +411,7 @@ const EMAIL_RE = /[a-z0-9._%+-]+\s*(?:@|\(at\)|\[at\])\s*[a-z0-9.-]+\.[a-z]{2,}/
 // A seven-digit local number with no area code no longer trips this. That is
 // the deliberate trade: it is indistinguishable from a license number, and
 // the license number is the one an honest pro actually types.
-const PHONE_RE =
+export const PHONE_RE =
   /(?<!\d)(?:\+?1[ .\-]?)?(?:\(\d{3}\)|\d{3})[ .\-]?\d{3}[ .\-]?\d{4}(?!\d)/;
 
 // The canonical labels and values from JOB_CATEGORIES, normalized. A custom
@@ -240,23 +433,33 @@ function normalize(s: string): string {
 export function isAcceptableCustomCategory(s: unknown): boolean {
   if (typeof s !== "string") return false;
   const trimmed = s.trim();
+  // The length cap is measured on what the pro actually typed, BEFORE folding:
+  // a 100-character cap that folding could shrink would let a longer string in
+  // through a pile of zero-width characters.
   if (!trimmed || trimmed.length > 100) return false;
+
+  // Everything below reads the FOLDED copy (see fold() above): a zero-width
+  // space between two letters, a fullwidth alphabet, and a Cyrillic look-alike
+  // are all evasions of every pattern in this file, and each one costs an
+  // attacker nothing. The stored value is still the pro's original string -
+  // this function only answers yes or no.
+  const folded = fold(trimmed);
 
   // Needs to actually be words. Three letters is the floor: "AC" is a real
   // trade abbreviation but it is already covered by HVAC, while "!!!", "$$$",
   // and "2 4 7" are decoration, not a service name.
-  const letters = trimmed.replace(/[^a-z]/gi, "");
+  const letters = folded.replace(/[^a-z]/gi, "");
   if (letters.length < 3) return false;
 
-  if (URL_RE.test(trimmed)) return false;
-  if (EMAIL_RE.test(trimmed)) return false;
-  if (PHONE_RE.test(trimmed)) return false;
+  if (URL_RE.test(folded)) return false;
+  if (EMAIL_RE.test(folded)) return false;
+  if (PHONE_RE.test(folded)) return false;
   // The allowlist is checked first, by taking its words OUT of the string the
   // block list reads. Only the block list gets the trimmed-down copy: an
   // allowlisted word is a false-positive collision, never a reason to skip the
   // URL/phone/canonical checks on the rest of the sentence.
-  if (BLOCKED_RE.test(trimmed.replace(ALLOWED_RE, " "))) return false;
-  if (CANONICAL.has(normalize(trimmed))) return false;
+  if (BLOCKED_RE.test(folded.replace(ALLOWED_RE, " "))) return false;
+  if (CANONICAL.has(normalize(folded))) return false;
 
   return true;
 }

@@ -14,6 +14,25 @@
 // it already has. Unknown text never reaches the user - it falls through to a
 // safe generic that says what to do next without surfacing internals.
 
+// The one thing we say when a sign-up hits an email that may or may not
+// already have an account.
+//
+// Telling the visitor that an account already exists for the address they
+// typed is an enumeration oracle: type an address, read the answer, and you
+// know whether that person is a Hearth customer. Repeat down a list and you
+// have a targeted phishing
+// set ("your Hearth account needs attention") plus, for the pro side, a map of
+// which local contractors are on the platform. Supabase's own enumeration
+// protection is what makes signUp return success-with-no-identities instead of
+// an error for an existing address; answering that with a sentence that says
+// "yes, it exists" hands the protection straight back.
+//
+// This message is deliberately true for BOTH cases and distinguishes neither,
+// the same way the reset flow's "If an account exists for X, a reset link is
+// on its way" does. It still gives the next step for either reader.
+export const SIGNUP_EMAIL_NEUTRAL =
+  "If that email is new to Hearth, a confirmation link is on its way. If it already has an account, sign in or reset your password instead. Check spam if nothing arrives in a minute or two.";
+
 type AuthErrorLike =
   | { message?: string | null; status?: number | null }
   | string
@@ -51,9 +70,10 @@ export function friendlyAuthError(error: AuthErrorLike): string {
     return "Password needs at least 8 characters.";
   }
 
-  // Signing up with an email that already has an account.
+  // Signing up with an email that already has an account. Answered with the
+  // neutral message above rather than a confirmation, see the note there.
   if (/already registered|already exists|already been registered|user already/.test(m)) {
-    return "An account with this email already exists. Try signing in instead.";
+    return SIGNUP_EMAIL_NEUTRAL;
   }
 
   // Email confirmation still pending for this account.

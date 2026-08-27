@@ -3,6 +3,7 @@ import Logo from "@/components/Logo";
 import HomeSwitcher from "@/components/HomeSwitcher";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
+import SidePill from "@/components/SidePill";
 import ToolsMenu from "@/components/ToolsMenu";
 import GlobalSearch from "@/components/GlobalSearch";
 import NotificationBell from "@/components/NotificationBell";
@@ -79,6 +80,12 @@ export default function Nav({
                 useful label and the logo alone identifies the app. */}
             <span className="hidden sm:inline">Hearth</span>
           </Link>
+          {/* Which side of the account you're on. Only for accounts that
+              hold both sides (hasPro) - a homeowner-only account has nothing
+              to distinguish, so it sees no pill. Desktop only here; the
+              max-sm twin lives just below the header row so it can't push
+              this line into two rows next to the bell and avatar. */}
+          {hasPro && <SidePill label="Home" accent="bark" className="hidden sm:inline-block" />}
           <span className="hidden text-stone-300 sm:inline dark:text-stone-500">·</span>
           {/* Project to just the fields the client switcher renders. The full
               property rows carry sensitive columns (mortgage_balance,
@@ -164,6 +171,15 @@ export default function Nav({
           />
         </div>
       </div>
+      {/* Phone twin of the desktop SidePill above. A phone header is already
+          tight with the address, search, bell, and avatar on one line, so
+          this renders as its own quiet line under the logo instead of
+          risking a wrap. */}
+      {hasPro && (
+        <div className="px-4 pb-1.5 sm:hidden">
+          <SidePill label="Home" accent="bark" />
+        </div>
+      )}
     </header>
     {/* Phone-only bottom tab bar: the same primary destinations as the top
         strip above, laid out like a native app so nothing needs horizontal

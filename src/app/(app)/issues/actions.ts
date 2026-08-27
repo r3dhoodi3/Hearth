@@ -58,11 +58,30 @@ export async function reportIssueAction(
     return err("Couldn't log that issue. Try again.");
   }
 
+  // The system this issue hangs off is a hidden form field, so it is as
+  // forgeable as the enums above and nothing downstream re-derives it: the
+  // resolve path reads issues.system_id back and writes to that home_systems
+  // row. RLS on home_systems would refuse the write, but a row pointing at
+  // another home's system is a broken record either way, so the id is checked
+  // against THIS home before it is stored. Dropped to null rather than
+  // rejected, so a stale id just logs an unlinked issue.
+  const systemIdRaw = (formData.get("system_id") as string) || null;
+  let systemId: string | null = null;
+  if (systemIdRaw) {
+    const { data: sys } = await supabase
+      .from("home_systems")
+      .select("id")
+      .eq("id", systemIdRaw)
+      .eq("property_id", property.id)
+      .maybeSingle();
+    systemId = sys?.id ?? null;
+  }
+
   const { data: issue, error } = await supabase
     .from("issues")
     .insert({
       property_id: property.id,
-      system_id: (formData.get("system_id") as string) || null,
+      system_id: systemId,
       category,
       severity,
       description: clipText(formData.get("description"), 4000),

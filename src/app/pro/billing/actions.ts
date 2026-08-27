@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { stripe } from "@/lib/stripe";
 import { getCurrentContractor } from "@/lib/contractor";
+import { MAX_DEPOSIT_CENTS } from "@/lib/constants";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -13,12 +14,14 @@ export async function depositAction(formData: FormData) {
   const dollars = Number(formData.get("amount"));
   const cents = Math.round(dollars * 100);
   if (!cents || cents < 500) redirect("/pro/billing"); // $5 minimum to deposit
-  // $2,000 maximum per deposit. The amount that lands in Stripe checkout
-  // metadata (and therefore what apply_deposit ultimately credits) is set
-  // server-side right here, so this cap isn't itself forgeable - it exists to
+  // $2,000 maximum per deposit, shared with the webhook that does the actual
+  // crediting (MAX_DEPOSIT_CENTS in src/lib/constants.ts) so the two ends can
+  // never drift apart. This end bounds what our own form may ask Stripe for;
+  // the webhook end bounds what the ledger will accept, reading Stripe's own
+  // amount_total rather than anything that rode along in metadata. It exists to
   // bound how much a single chargeback can claw back through, on top of the
   // reverse_deposit wallet-reversal handling in the Stripe webhook.
-  if (cents > 200_000) redirect("/pro/billing"); // $2,000 maximum per deposit
+  if (cents > MAX_DEPOSIT_CENTS) redirect("/pro/billing");
 
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");

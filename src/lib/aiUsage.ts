@@ -149,8 +149,29 @@ export async function countAiUsage(
   // every AI route funnels through this helper, this single check caps them
   // all. Counted once per request (fan-out weighting stays per-user via
   // addAiUsage), which is the right granularity for a runaway-cost breaker.
+  //
+  // IT DOES NOT REFUSE A MEMBER WHO HAS ACTUALLY PAID. The daily breaker is a
+  // single shared bucket, so a swarm of free accounts can spend the whole
+  // day's budget by 9am and the next person turned away is a Plus member or a
+  // Pro who paid for the feature that morning. That is the swarm getting what
+  // it came for: it cannot run the bill past the ceiling, but it CAN black out
+  // every paying customer, which is the cheaper attack of the two.
+  //
+  // The breaker is still CONSULTED for everybody - the call is what does the
+  // counting, so the bucket keeps meaning "requests today" rather than
+  // "requests today by free accounts" - it is only ENFORCED against accounts
+  // that have not paid. A paying account is still bounded by its own
+  // DAILY_LIMIT_PLUS, and the HOURLY brake below still applies to everybody,
+  // so how fast any budget can burn is unchanged. What changes is who gets
+  // shed first.
   const globalDaily = await checkAiGlobalDailyLimit();
-  if (globalDaily !== "ok") {
+  if (globalDaily !== "ok" && !(await exemptFromGlobalDaily(userId, isPlus))) {
+    // Hand back the usage bump above. The chat path has always done this
+    // (countAskUsage -> refundAskUsage): this request is being turned away
+    // by HEARTH's ceiling, not the caller's, and charging them one of their
+    // 25 for a request that never reached the model means an honest retry
+    // burns their day. Best effort, exactly like refundAskUsage.
+    await refundAiUsage(userId);
     return {
       overLimit: true,
       reason: globalDaily === "over" ? "global" : "counter_unavailable",
@@ -161,8 +182,10 @@ export async function countAiUsage(
 
   // And the owner-wide HOURLY ceiling, last: a request already refused above
   // must not bump the shared bucket and shed load from someone who still has
-  // allowance. Same reasoning as the chat routes' ordering.
+  // allowance. Same reasoning as the chat routes' ordering. This brake stays
+  // on for paying members too - it is what caps how fast any budget can burn.
   if (opts?.hourly !== false && (await overAiGlobalHourlyLimit())) {
+    await refundAiUsage(userId);
     return { overLimit: true, reason: "global", remaining, dailyLimit };
   }
 
@@ -236,8 +259,21 @@ export async function countAskUsage(
   // spent a question out of the bucket above, so hand it back: the homeowner
   // is being turned away by OUR ceiling, and charging them for that is the
   // bug. Best effort - see refundAskUsage.
+  //
+  // AND IT DOES NOT REFUSE A MEMBER WHO HAS ACTUALLY PAID, exactly as in
+  // countAiUsage above. The breaker is one shared bucket, so a swarm of free
+  // accounts that spends the day's budget by 9am would otherwise take Ask
+  // Hearth away from every Plus member too - the cheap attack is not running
+  // up the bill (the bucket caps that), it is blacking out the people who
+  // paid. Still CONSULTED for everybody, because that call is what does the
+  // counting and the bucket has to keep meaning "questions today"; only
+  // ENFORCED against accounts that have not paid, who are still bounded by
+  // ASK_DAILY_FREE. The hourly brake the two chat routes run either side of
+  // this (overAiGlobalHourlyLimit) stays on for everyone, so how fast any
+  // budget can burn is unchanged. An exempt member is never refused here, so
+  // nothing is ever refunded to them either.
   const globalDaily = await checkAiGlobalDailyLimit();
-  if (globalDaily !== "ok") {
+  if (globalDaily !== "ok" && !(await exemptFromGlobalDaily(userId, isPlus))) {
     await refundAskUsage(userId, windowStart);
     return {
       overLimit: true,
@@ -434,6 +470,57 @@ async function askRemaining(
   }
 }
 
+// May this caller ignore the owner-wide DAILY breaker (never the hourly one,
+// and never their own per-user cap)?
+//
+// ONLY A MEMBERSHIP THAT HAS ACTUALLY BEEN PAID FOR. The `isPlus` flag every
+// caller passes comes from hasPlus()/ownsPlus() in src/lib/subscription.ts,
+// which counts status "trialing" as Plus - correct for deciding what someone
+// may USE, and exactly wrong for deciding who may spend past a cost ceiling.
+// A free trial is free to start and can be started again from a fresh email,
+// so exempting trialers would hand the whole exemption back to the swarm it
+// exists to defend against: 20 trial accounts at DAILY_LIMIT_PLUS is the
+// entire AI_GLOBAL_DAILY_LIMIT, with no daily ceiling in front of any of it.
+// A trialing account is treated as free here and stays under the breaker.
+//
+// Costs one indexed read, and ONLY on the path where the breaker has already
+// refused - so on every normal request this is not called at all.
+//
+// FAILS CLOSED: an unreadable subscriptions table means "not exempt", which
+// keeps the ceiling standing. The cost of being wrong that way is a paying
+// member shedding one request during an outage of both the breaker and the
+// database; the other way is the ceiling quietly not existing.
+async function exemptFromGlobalDaily(
+  userId: string,
+  isPlus: boolean
+): Promise<boolean> {
+  // Not even a trialer: no lookup needed.
+  if (!isPlus) return false;
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("subscriptions")
+      .select("status, current_period_end")
+      .eq("user_id", userId);
+    if (error) throw error;
+    const now = Date.now();
+    // Either side counts: a homeowner Plus row or a contractor pro_ row. Both
+    // are money that arrived, and both buy access to model-backed features.
+    return (data ?? []).some(
+      (row) =>
+        row.status === "active" &&
+        (!row.current_period_end ||
+          new Date(row.current_period_end).getTime() > now)
+    );
+  } catch (err) {
+    console.error(
+      "exemptFromGlobalDaily lookup failed - treating as unpaid:",
+      err
+    );
+    return false;
+  }
+}
+
 // The owner-wide daily spend breaker, shared by the tool routes and the chat.
 // Anything but "ok" means deny; "error" is separated from "over" only so the
 // caller can say something true to the person in front of it (see
@@ -448,8 +535,11 @@ async function checkAiGlobalDailyLimit(): Promise<"ok" | "over" | "error"> {
     });
     if (error) throw error;
     if (allowed === false) {
+      // "[ALERT]" is a stable, greppable prefix: it is what an operator filters
+      // the Vercel logs on, and what a log drain can be pointed at. Do not
+      // reword it.
       console.error(
-        `AI global spend breaker tripped (${AI_GLOBAL_BUCKET} over ${AI_GLOBAL_DAILY_LIMIT}/day) - denying to cap runaway cost`
+        `[ALERT] AI global spend breaker tripped (${AI_GLOBAL_BUCKET} over ${AI_GLOBAL_DAILY_LIMIT}/day) - denying to cap runaway cost`
       );
       return "over";
     }
@@ -565,8 +655,9 @@ export async function overAiGlobalHourlyLimit(): Promise<boolean> {
     });
     if (error) throw error;
     if (allowed === false) {
+      // Same greppable prefix as the daily breaker above.
       console.error(
-        `AI global hourly ceiling tripped (${AI_GLOBAL_HOUR_BUCKET} over ${AI_GLOBAL_HOURLY_LIMIT}/hour) - shedding load`
+        `[ALERT] AI global hourly ceiling tripped (${AI_GLOBAL_HOUR_BUCKET} over ${AI_GLOBAL_HOURLY_LIMIT}/hour) - shedding load`
       );
       return true;
     }

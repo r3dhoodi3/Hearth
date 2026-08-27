@@ -199,3 +199,26 @@ export function deriveOwnershipStatus(
     ? "verified"
     : "unverified";
 }
+
+// Whether an ownership check should be RECORDED at all for these facts.
+//
+// record_ownership_check (migration 0095) stamps ownership_checked_at = now()
+// on every call, and a null ownership_checked_at is the ONLY thing that makes
+// a property eligible for the lazy re-check on its first job post
+// (src/app/(app)/contractors/actions.ts). So recording anything is a one-way
+// door: it spends the retry.
+//
+// That is exactly the wrong thing to spend on a records source we could not
+// reach (source "unavailable" - a 401 from a bad key, a 429, a 5xx, a
+// timeout). Writing "unverified" there would freeze an outage into a
+// permanent verdict: the home stays unverified forever, and its job posts
+// never get the fan-out that verified homes get. A miss or a real record is a
+// verdict worth keeping; an outage is a "come back later".
+//
+// Null facts (a lookup that was rate-limited or threw) are the same "come back
+// later", and are already handled the same way.
+export function shouldRecordOwnershipCheck(
+  facts: { source: string } | null | undefined
+): boolean {
+  return facts != null && facts.source !== "unavailable";
+}
