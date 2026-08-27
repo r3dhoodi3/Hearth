@@ -314,12 +314,8 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ result: normalize(parsed) });
   } catch (e) {
-    // The owner was already charged one of today's usages above (plus any
-    // extra fan-out weight for a multi-image or PDF submission); a thrown
-    // model call never produced a result, so hand it back rather than
-    // spending their allowance on a request that failed before it reached
-    // them.
-    // Refund the base unit plus the fan-out weight charged above.
+    // A thrown model call produced nothing: refund the base unit plus the
+    // fan-out weight charged above for a multi-image or PDF submission.
     for (let i = 0; i < 1 + Math.max(0, extraWeight); i++) await refundAiUsage(user.id);
     return NextResponse.json({
       result: null,
