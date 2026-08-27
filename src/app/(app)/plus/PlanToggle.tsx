@@ -12,20 +12,21 @@ import {
   yearlySavings,
 } from "@/lib/constants";
 
-// The two cadences Stripe can actually be sent. startPlusCheckoutAction reads
+// The three cadences Stripe can actually be sent. startPlusCheckoutAction reads
 // the "plan" field through checkoutCadence(), which only ever resolves to one
 // of these, so the hidden field below must never carry anything else.
-type Plan = "monthly" | "yearly";
+type Plan = "weekly" | "monthly" | "yearly";
 // What a card can be. "free" is a selectable card because it is a real answer
 // to "which plan do you want", but it is not a checkout: selecting it disables
-// the button rather than posting a third value.
+// the button rather than posting a fourth value.
 type Choice = Plan | "free";
 
-const CHOICES: Choice[] = ["monthly", "yearly", "free"];
+const CHOICES: Choice[] = ["weekly", "monthly", "yearly", "free"];
 
 // Every figure below is computed from PLUS_PLAN, never typed in. The saving is
 // twelve charges at the real monthly price minus the yearly price - the only
 // honest anchor this page is allowed to use.
+const WEEKLY_PRICE = formatUsd(PLUS_PLAN.weekly); // $1.99
 const MONTHLY_PRICE = formatUsd(PLUS_PLAN.monthly); // $4.99
 const YEARLY_PRICE = formatUsd(PLUS_PLAN.yearly); // $39.99
 const YEARLY_SAVING = formatUsd(yearlySavings(PLUS_PLAN)); // $19.89
@@ -54,33 +55,35 @@ const FREE_BULLETS = [
   "In-app alerts",
 ];
 
-// Three cards, shoulder to shoulder at every width: Monthly, Annual (the
-// middle one, emphasised), Free. THE CARD IS THE SELECTOR - tapping one moves
-// the accent outline to it and re-labels the single button underneath, so
-// there is exactly one primary action on the page instead of a button per
-// column. Annual is preselected because it is the plan worth recommending, and
-// startPlusCheckoutAction defaults to the same cadence, so the hidden field
-// and the server can never disagree.
+// Four cards: Weekly, Monthly, Annual, Free. Two by two on a phone and one row
+// from sm up - four columns at 390px would leave about 90px a card, which is
+// narrower than the prices themselves read comfortably in. THE CARD IS THE
+// SELECTOR - tapping one moves the accent outline to it and re-labels the
+// single button underneath, so there is exactly one primary action on the page
+// instead of a button per column.
 //
-// Weekly was retired as a new-checkout option (existing weekly subscribers keep
-// their plan), so it is not offered here.
+// MONTHLY is preselected: $4.99 is the anchor the whole page is priced around,
+// with weekly above it per month and annual below it. startPlusCheckoutAction
+// falls back to the same cadence, so the hidden field and the server can never
+// disagree.
 //
-// THE 3 FREE DAYS ARE PART OF MONTHLY, not a plan of their own and not an offer
-// on annual: annual bills $39.99 at signup. `trialEligible` mirrors the "no
-// existing homeowner subscription row" signal startPlusCheckoutAction checks;
-// billingTerms() applies the monthly-only rule on top of it, in one place, so
-// the disclosure, the consent record, and the Stripe trial cannot disagree.
+// THE 3 FREE DAYS ARE PART OF WEEKLY, not a plan of their own and not an offer
+// on monthly or annual: those two bill at signup. `trialEligible` mirrors the
+// "no existing homeowner subscription row" signal startPlusCheckoutAction
+// checks; billingTerms() applies the weekly-only rule on top of it, in one
+// place, so the disclosure, the consent record, and the Stripe trial cannot
+// disagree.
 export default function PlanToggle({
   trialEligible = true,
 }: {
   trialEligible?: boolean;
 }) {
-  const [choice, setChoice] = useState<Choice>("yearly");
+  const [choice, setChoice] = useState<Choice>("monthly");
   // The cadence the form posts. Free is not a cadence, so it falls back to the
-  // recommended one; the button is disabled in that state, so nothing can
-  // actually be submitted while it is showing.
-  const plan: Plan = choice === "free" ? "yearly" : choice;
-  const monthlyTrial = trialEligible;
+  // anchor plan; the button is disabled in that state, so nothing can actually
+  // be submitted while it is showing.
+  const plan: Plan = choice === "free" ? "monthly" : choice;
+  const weeklyTrial = trialEligible;
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   // Roving tabindex: one stop for the whole group, arrows move the selection
@@ -147,26 +150,31 @@ export default function PlanToggle({
     </span>
   );
 
+  // One label per card. Weekly is the only one that can say "free", and only
+  // while the trial is real: a returning subscriber is charged on day one, so
+  // its button says what it does instead.
   const buttonLabel =
     choice === "free"
       ? "Keep Free"
       : choice === "yearly"
         ? "Get Annual"
-        : monthlyTrial
-          ? `Start ${PLUS_PLAN.trialDays} days free`
-          : "Start monthly";
+        : choice === "monthly"
+          ? "Get Monthly"
+          : weeklyTrial
+            ? `Start ${PLUS_PLAN.trialDays} days free`
+            : "Start weekly";
 
   return (
     <div id="pricing" className="space-y-4">
       {/* The trial, offered once, at the top, as its own one-tap checkout. It
-          posts plan=monthly because the free days belong to monthly and
-          nothing else (see billingTerms.trialApplies), so the terms directly
-          under the button are the terms of the plan the tap actually buys.
-          Only rendered when the trial is real: a returning subscriber sees the
-          cards below and nothing that promises free days they will not get. */}
+          posts plan=weekly because the free days belong to weekly and nothing
+          else (see billingTerms.trialApplies), so the terms directly under the
+          button are the terms of the plan the tap actually buys. Only rendered
+          when the trial is real: a returning subscriber sees the cards below
+          and nothing that promises free days they will not get. */}
       {trialEligible && (
         <form action={startPlusCheckoutAction} className="card-hero space-y-2">
-          <input type="hidden" name="plan" value="monthly" />
+          <input type="hidden" name="plan" value="weekly" />
           <SubmitButton
             className="btn-primary w-full py-3 text-base"
             pendingLabel="Starting…"
@@ -174,7 +182,7 @@ export default function PlanToggle({
             Start {PLUS_PLAN.trialDays} free days
           </SubmitButton>
           <p className="text-center text-sm text-stone-600 dark:text-stone-300">
-            {PLUS_PLAN.trialDays} days free, then {MONTHLY_PRICE}/month. Cancel
+            {PLUS_PLAN.trialDays} days free, then {WEEKLY_PRICE}/week. Cancel
             anytime before the trial ends.
           </p>
           {/* Same disclosure the plan picker below carries, for the same
@@ -182,28 +190,53 @@ export default function PlanToggle({
               terms have to be on screen next to it before any billing
               information is collected (ROSCA 15 U.S.C. 8403(1)) and in visual
               proximity to the request for consent (Cal. Bus. & Prof. Code
-              17602(a)(1)). Hard-coded to "monthly" because the hidden field
+              17602(a)(1)). Hard-coded to "weekly" because the hidden field
               above is. */}
-          <AutoRenewalTerms plan="monthly" introEligible={trialEligible} />
+          <AutoRenewalTerms plan="weekly" introEligible={trialEligible} />
         </form>
       )}
 
       <form action={startPlusCheckoutAction} className="space-y-3">
         {/* The hidden field carries the selected cadence; startPlusCheckoutAction
-            defaults to yearly, the same plan preselected below. */}
+            falls back to monthly, the same plan preselected below. */}
         <input type="hidden" name="plan" value={plan} />
 
+        {/* Two by two on a phone, one row from sm up. Four columns at 390px
+            would squeeze each card under 90px, where "$39.99/year" wraps mid
+            price. */}
         <div
           role="radiogroup"
           aria-label="Choose your plan"
           onKeyDown={onGroupKeyDown}
-          className="grid grid-cols-3 items-stretch gap-1.5 sm:gap-4"
+          className="grid grid-cols-2 items-stretch gap-1.5 sm:grid-cols-4 sm:gap-3"
         >
-          {/* --- Monthly --- */}
-          <button {...cardProps("monthly", 0, `Monthly, ${MONTHLY_PRICE} a month`)}>
-            {/* Spacer matching the annual card's "Best value" label, so all
-                three plan names sit on the same line. */}
-            <span className="block min-h-4" aria-hidden />
+          {/* --- Weekly: the one cadence that carries the free days --- */}
+          <button {...cardProps("weekly", 0, `Weekly, ${WEEKLY_PRICE} a week`)}>
+            <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 dark:text-bark-500">
+              {weeklyTrial ? `${PLUS_PLAN.trialDays} days free` : ""}
+            </span>
+            <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
+              Weekly
+            </span>
+            <span className="mt-0.5 block min-h-10 sm:mt-1 sm:min-h-11">
+              <span className="block text-base font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
+                {WEEKLY_PRICE}
+                <span className="text-[11px] font-normal text-stone-500 sm:text-sm dark:text-stone-400">
+                  /week
+                </span>
+              </span>
+              <span className="block text-[11px] font-medium leading-snug text-bark-700 sm:text-sm dark:text-stone-300">
+                {weeklyTrial ? "Try it, then decide" : "Pay as you go"}
+              </span>
+            </span>
+            {bulletList(PLUS_BULLETS)}
+          </button>
+
+          {/* --- Monthly: the anchor, preselected --- */}
+          <button {...cardProps("monthly", 1, `Monthly, ${MONTHLY_PRICE} a month`)}>
+            <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 dark:text-bark-500">
+              Best for most
+            </span>
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
               Monthly
             </span>
@@ -214,18 +247,20 @@ export default function PlanToggle({
                   /month
                 </span>
               </span>
-              {monthlyTrial && (
-                <span className="block text-[11px] font-medium leading-snug text-bark-700 sm:text-sm dark:text-stone-300">
-                  {PLUS_PLAN.trialDays} days free first
-                </span>
-              )}
+              {/* No invented number: four weeks at the real weekly price is
+                  more than the monthly price, and a month is longer than four
+                  weeks, so this understates the gap rather than overstating
+                  it. */}
+              <span className="block text-[11px] font-medium leading-snug text-bark-700 sm:text-sm dark:text-stone-300">
+                Cheaper than 4 weeks
+              </span>
             </span>
             {bulletList(PLUS_BULLETS)}
           </button>
 
-          {/* --- Annual: the middle card, emphasised --- */}
+          {/* --- Annual: the cheapest per month --- */}
           <button
-            {...cardProps("yearly", 1, `Annual, ${YEARLY_PRICE} a year`)}
+            {...cardProps("yearly", 2, `Annual, ${YEARLY_PRICE} a year`)}
             className={`${card("yearly")} shadow-card`}
           >
             <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 dark:text-bark-500">
@@ -251,9 +286,9 @@ export default function PlanToggle({
           </button>
 
           {/* --- Free: the plan they are on today --- */}
-          <button {...cardProps("free", 2, "Free, the plan you have now")}>
-            {/* Spacer matching the annual card's "Best value" label, so all
-                three plan names sit on the same line. */}
+          <button {...cardProps("free", 3, "Free, the plan you have now")}>
+            {/* Spacer matching the labelled cards' badge line, so all four
+                plan names sit on the same line. */}
             <span className="block min-h-4" aria-hidden />
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
               Free
@@ -283,7 +318,7 @@ export default function PlanToggle({
             reads src/lib/billingTerms.ts - the same source as the consent
             record stashed in Stripe metadata and the acknowledgment sent
             afterwards - so the sentences here are word for word what gets
-            stored and emailed, including the monthly-only trial.
+            stored and emailed, including the weekly-only trial.
 
             Free is the one card with no terms block, because selecting it
             charges nothing and the button below is disabled. */}

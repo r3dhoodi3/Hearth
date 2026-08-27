@@ -40,7 +40,7 @@ Resend free + UptimeRobot free = ~$45/mo + Stripe's 2.9% + 30c per charge.
    NEXT_PUBLIC_SITE_URL=https://yourdomain (no trailing slash; build-time
    inlined, must exist at deploy), STRIPE_SECRET_KEY (live, Sensitive),
    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY (live), STRIPE_WEBHOOK_SECRET (real
-   value after step 9), STRIPE_PRICE_PLUS_MONTHLY/_YEARLY,
+   value after step 9), STRIPE_PRICE_PLUS_WEEKLY/_MONTHLY/_YEARLY,
    STRIPE_PRO_MONTHLY/_YEARLY_PRICE_ID, STRIPE_PRO_INTRO_COUPON_ID
    (optional), CRON_SECRET (Sensitive; this exact name makes Vercel attach
    it as the Bearer token on cron calls), ANTHROPIC_API_KEY (Sensitive),

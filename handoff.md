@@ -214,3 +214,8 @@ OWNER / OPS ITEMS (not code):
 - CSP is Report-Only with no report-uri (blocks nothing). Decide on an enforced policy later.
 - No per-account storage object cap; app_events has no prune. Follow-ups.
 - Review COMMENT text is not moderated yet (SQL cannot run censor; the TS path is in contractors/actions.ts leave-review). Follow-up.
+
+## MORNING ITEMS for Landen (found overnight 2026-08-26/27; both are yours, I could not do them)
+
+1. STRIPE_SECRET_KEY in Vercel is a placeholder ("yoursk_t...ive"), which is why every checkout says "couldn't start checkout" (Vercel log: "Invalid API Key provided"). Fix: open C:\Users\lande\hearth\.env.local, copy the value after STRIPE_SECRET_KEY= (starts sk_test_51SQD6dDxdfZ..., 107 chars, the sandbox where the webhook was created), paste it into Vercel > hearth > Settings > Environment Variables > STRIPE_SECRET_KEY (Edit, Production + Preview), then Deployments > Redeploy. The four STRIPE_PRICE_* / STRIPE_PRO_*_PRICE_ID vars were deleted on purpose (they pointed at prices that do not exist in the sandbox; the app uses its built-in prices when they are absent).
+2. Live DB is MISSING migrations 0130, 0131, 0132 (REST returns 404 for account_signals, account_risk, risk_overrides, has_open_chargeback; the Vercel log shows "Could not find the table public.account_signals"). 0129 may or may not be applied. The "SQL success" earlier was not the combined file. Re-run in the Supabase SQL editor: supabase/PRECHECK-2026-08-26.sql first (all six queries must return 0 rows), then supabase/COMBINED-2026-08-26-migrations-0129-0132.sql. Verify after: select public.launch_city_for_zip('92694'); select count(*) from account_signals; select proname from pg_proc where proname = 'has_open_chargeback';

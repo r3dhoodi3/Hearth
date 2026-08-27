@@ -167,7 +167,7 @@ export default async function TaxesPage() {
               what kind of number they're about to see before the colored
               card makes its call. */}
           <p className="mb-4 text-xs text-stone-500 dark:text-stone-400">
-            Hearth&apos;s number is an estimate: RentCast&apos;s automated valuation when one exists for your address, otherwise statewide price trends applied to your purchase price. It is not
+            Hearth&apos;s number is an estimate: an automated valuation when one exists for your address, otherwise statewide price trends applied to your purchase price. It is not
             an appraisal, and this page is not tax or legal advice. Assessment rules, ratios, and appeal processes vary a lot
             by county, and some counties assess at a fraction of market value
             by design, so a gap here doesn&apos;t always mean something is
@@ -260,12 +260,14 @@ export default async function TaxesPage() {
                 <p className="stat-number text-2xl">
                   {money(estimatedValue)}
                 </p>
-                {/* Say where the number actually came from. The caption used
+                {/* Say what the number is actually based on. The caption used
                     to always claim state price trends since the purchase,
-                    which is a false description of a RentCast AVM. */}
+                    which is a false description of an AVM. The provider's
+                    name is not printed - same call as /value and the
+                    dashboard tile. */}
                 <p className="text-xs text-stone-500 dark:text-stone-400">
                   {headline?.source === "avm" ? (
-                    `${headline.sourceLabel}, priced off recent sales near you.`
+                    "Priced off recent sales near you."
                   ) : (
                     <>
                       Based on{" "}

@@ -1,26 +1,21 @@
 import { Skeleton, SkeletonLine, SkeletonCard, SkeletonRow } from "@/components/Skeleton";
 
-// Mirrors dashboard/page.tsx: address header, the 4-tile stats grid (health
-// score tile first, given an extra line since its card-hero has a "why this
-// score" disclosure the other three don't), the "This month" card, the Plus
-// CTA + 3-tile tools grid, a few system rows, and the project-chip row.
+// Mirrors dashboard/page.tsx: the 4-tile stats grid (health score tile first,
+// given an extra line since its card-hero has a "why this score" disclosure
+// the other three don't - now a one-liner, not a paragraph), the "This
+// month" card (briefing + progress line + one collapsed "see tasks" row,
+// standing in for the details element), the Plus CTA + 3-tile tools row
+// (now compact, no description paragraph), a few system rows, and the
+// project-chip row.
 export default function Loading() {
   return (
     <div className="space-y-8" aria-hidden="true">
-      {/* Property header: address, the built/sqft/beds line, and the quiet
-          "something broken right now?" link. */}
-      <div className="space-y-2">
-        <Skeleton className="h-7 w-64" />
-        <SkeletonLine width="w-56" />
-        <SkeletonLine width="w-40" />
-      </div>
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card space-y-2">
           <SkeletonLine width="w-28" />
           <Skeleton className="h-9 w-16" />
-          <SkeletonLine width="w-full" />
           <SkeletonLine width="w-2/3" />
+          <SkeletonLine width="w-1/3" />
         </div>
         <div className="card space-y-2">
           <SkeletonLine width="w-20" />
@@ -41,13 +36,18 @@ export default function Loading() {
 
       <div className="space-y-3">
         <Skeleton className="h-5 w-28" />
-        <SkeletonCard lines={5} />
+        <div className="card space-y-3">
+          <SkeletonLine width="w-full" />
+          <SkeletonLine width="w-2/3" />
+          <SkeletonLine width="w-1/2" />
+          <SkeletonLine width="w-40" />
+        </div>
       </div>
 
       <div className="space-y-3">
         <Skeleton className="h-5 w-52" />
         <SkeletonCard lines={2} />
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
           <SkeletonCard lines={2} />
           <SkeletonCard lines={2} />
           <SkeletonCard lines={2} />

@@ -184,7 +184,11 @@ export interface HeadlineHomeValue {
   //              measurement. This can be negative, and should be.
   change: number | null;
   changeSince: "year" | "purchase" | null;
-  // Small print under the number. Says where it came from, plainly.
+  // Where the number came from, in plain words. NOT rendered anywhere in the
+  // UI any more: the dashboard tile, /value and /taxes all dropped it because
+  // naming the provider told a homeowner nothing and read as clutter. Kept on
+  // the type because it is a useful, tested description of which branch
+  // produced the value, and callers (logging, future admin views) may want it.
   sourceLabel: string;
 }
 

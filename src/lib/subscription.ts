@@ -136,7 +136,7 @@ export const getBillingOutlook = cache(
       let scheduledDowngrade: { switchesAt: Date } | null = null;
       const schedule = stripeSub.schedule;
       // A pending switch-to-monthly schedule can exist on a yearly row or on a
-      // grandfathered weekly one (both use downgradeToMonthlyAction).
+      // weekly one (both use downgradeToMonthlyAction).
       if (
         (sub.plan === "yearly" || sub.plan === "weekly") &&
         schedule &&

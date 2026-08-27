@@ -66,6 +66,7 @@ before any Products exist in the dashboard.
    `invoice.payment_succeeded`.
    Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
 3. Optional but recommended for clean reporting: create Products/Prices in Stripe and set
+   `STRIPE_PRICE_PLUS_WEEKLY` (a week-interval Price, the cadence carrying the 3-day trial),
    `STRIPE_PRICE_PLUS_MONTHLY`, `STRIPE_PRICE_PLUS_YEARLY`, `STRIPE_PRO_MONTHLY_PRICE_ID`,
    `STRIPE_PRO_YEARLY_PRICE_ID`, `STRIPE_PRO_INTRO_COUPON_ID`. Without them, checkout uses
    inline price_data at the amounts in `src/lib/constants.ts`.

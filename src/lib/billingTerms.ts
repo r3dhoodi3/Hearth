@@ -55,10 +55,11 @@ function money(amount: number): string {
 
 // Does THIS checkout actually carry the free trial?
 //
-// On Hearth Plus the 3 free days are part of the MONTHLY plan and nothing
-// else: annual is billed at signup ($39.99 today), so it never quotes trial
-// copy and startPlusCheckoutAction never sends trial_period_days for it. Pro
-// is untouched - both Pro cadences still trial.
+// On Hearth Plus the 3 free days are part of the WEEKLY plan and nothing
+// else: monthly is billed at signup ($4.99 today) and annual too ($39.99
+// today), so neither quotes trial copy and startPlusCheckoutAction never sends
+// trial_period_days for them. Pro is untouched - both Pro cadences still
+// trial.
 //
 // It lives here, next to the disclosure it governs, because four surfaces have
 // to agree on the answer: the copy on /plus, the Stripe trial itself, the
@@ -67,7 +68,7 @@ function money(amount: number): string {
 export function trialApplies(plan: PaidPlan, introEligible: boolean): boolean {
   if (!introEligible) return false;
   if (plan === "pro_monthly" || plan === "pro_yearly") return true;
-  return plan === "monthly";
+  return plan === "weekly";
 }
 
 // Terms for a specific plan. `introEligible` must mirror the exact signal the
@@ -129,11 +130,11 @@ export function billingTerms(
   }
 
   // Hearth Plus: weekly, monthly, or yearly. The free trial is part of the
-  // MONTHLY plan only (see trialApplies above): annual is billed at signup, so
-  // it always takes the "charged today" branch below. `introEligible` mirrors
-  // the exact "no existing Plus subscription" signal startPlusCheckoutAction
-  // uses, so a returning subscriber never sees trial copy for a trial they
-  // will not get either.
+  // WEEKLY plan only (see trialApplies above): monthly and annual are billed at
+  // signup, so they always take the "charged today" branch below.
+  // `introEligible` mirrors the exact "no existing Plus subscription" signal
+  // startPlusCheckoutAction uses, so a returning subscriber never sees trial
+  // copy for a trial they will not get either.
   const cadenceNoun =
     plan === "weekly" ? "week" : plan === "yearly" ? "year" : "month";
   // Yearly is billed on a 12-month cycle, not a calendar year, so the

@@ -23,6 +23,14 @@ import {
   dayLabel,
   type ConditionKey,
 } from "@/lib/weatherLabels";
+import {
+  convertTemp,
+  DEFAULT_TEMP_UNIT,
+  formatTemp,
+  readStoredTempUnit,
+  storeTempUnit,
+  type TempUnit,
+} from "@/lib/weatherUnits";
 
 // The word/icon buckets themselves live in @/lib/weatherLabels (pure, tested).
 // This map is the only part that needs lucide, so the labelling stays testable
@@ -45,8 +53,10 @@ const ICONS: Record<ConditionKey, LucideIcon> = {
 const RAIN_FLOOR = 10;
 
 // One quiet row of current weather at the top of the dashboard: temperature,
-// condition, today's high/low, city. Tapping it expands the week ahead in
-// place. Always shown when data arrives (unlike HomeAlerts below it, which
+// condition, today's high/low, city, and a "°F | °C" switch. Tapping the row
+// expands the week ahead in place; the unit switch is a separate control at
+// the end of the row (see unitToggle below) and converts every temperature
+// here and in the expanded week. Always shown when data arrives (unlike HomeAlerts below it, which
 // stays alert-only). Shares one /api/home-alerts fetch with HomeAlerts via
 // fetchHomeAlerts, and follows the same skeleton contract: a placeholder only
 // while the page itself is still loading, then nothing at all if the lookup
@@ -90,6 +100,22 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
   // payload to read a real value from: rendering nothing is the safe choice
   // when the strip can't tell the two cases apart.
   const [hasLocation, setHasLocation] = useState(false);
+  // Display unit for every temperature on the strip. Starts at the US default
+  // rather than reading localStorage during render: this component is server
+  // rendered, and a first paint that disagreed with the server's markup is a
+  // hydration mismatch. The effect below swaps in the stored choice on the
+  // client, before the weather fetch has realistically resolved, so a returning
+  // Celsius user never sees a Fahrenheit number flash.
+  const [unit, setUnit] = useState<TempUnit>(DEFAULT_TEMP_UNIT);
+
+  useEffect(() => {
+    setUnit(readStoredTempUnit());
+  }, []);
+
+  function chooseUnit(next: TempUnit) {
+    setUnit(next);
+    storeTempUnit(next);
+  }
 
   useEffect(() => {
     let alive = true;
@@ -158,44 +184,101 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
         className="h-4 w-4 shrink-0 text-bark-700 dark:text-stone-300"
         aria-hidden="true"
       />
-      {/* shrink-0 + nowrap: on a 390px phone the city is the only part allowed
-          to give ground, so the temperature and high/low never wrap onto a
-          second line to make room for it or for the chevron. */}
+      {/* shrink-0 + nowrap: the city is the only part allowed to give ground
+          (it truncates on desktop and drops out entirely on a phone - see
+          below), so the temperature and high/low never wrap onto a second line
+          to make room for it, the chevron, or the unit switch. */}
       <span className="shrink-0 whitespace-nowrap font-medium text-stone-900 dark:text-stone-100">
-        {weather.tempF}&deg; {word}
+        {convertTemp(weather.tempF, unit)}&deg; {word}
       </span>
       <span className="shrink-0 whitespace-nowrap text-stone-500 dark:text-stone-400">
-        H {weather.highF}&deg; L {weather.lowF}&deg;
+        H {convertTemp(weather.highF, unit)}&deg; L{" "}
+        {convertTemp(weather.lowF, unit)}&deg;
       </span>
+      {/* Hidden below sm ONLY. At 390px the app shell leaves 342px of row,
+          and the unit switch takes ~82 of it: keeping the city there would
+          leave it about one character wide, which is an ellipsis pretending to
+          be information. The header already shows this home's address (with
+          its city) on every page, so on a phone the city here was the
+          redundant part. sm and up are untouched - full city, ml-auto, same
+          truncation as before. */}
       {weather.city && (
-        <span className="ml-auto min-w-0 truncate text-stone-500 dark:text-stone-400">
+        <span className="ml-auto hidden min-w-0 truncate text-stone-500 sm:block dark:text-stone-400">
           {weather.city}
         </span>
       )}
     </>
   );
 
+  // "°F | °C" pair sitting on the row itself, the way Google's weather card
+  // does it - the one pattern of the three we looked at that needs no trip to
+  // a settings screen on a phone. Two real buttons rather than one flipping
+  // button, so tapping the unit you already have is a no-op instead of a
+  // surprise. It lives OUTSIDE the expand button because a button inside a
+  // button is invalid markup and would swallow the tap.
+  //
+  // h-10 / min-w-[2.5rem] keeps each half a 40px tap target; h-10 is also
+  // exactly the height the py-2.5 row already was, so adding this changed no
+  // vertical rhythm. The horizontal room it needs on a phone comes out of the
+  // city, which is hidden below sm for that reason (see summary above).
+  const unitToggle = (
+    <div
+      role="group"
+      aria-label="Temperature units"
+      className="mr-3 flex shrink-0 overflow-hidden rounded-full border border-stone-200 dark:border-white/10"
+    >
+      {(["F", "C"] as const).map((u) => (
+        <button
+          key={u}
+          type="button"
+          onClick={() => chooseUnit(u)}
+          aria-pressed={unit === u}
+          aria-label={
+            u === "F"
+              ? "Show temperatures in Fahrenheit"
+              : "Show temperatures in Celsius"
+          }
+          className={`flex h-10 min-w-[2.5rem] items-center justify-center px-2 text-xs font-medium ${
+            unit === u
+              ? "bg-bark-700 text-white dark:bg-bark-600"
+              : "text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
+          }`}
+        >
+          &deg;{u}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="rounded-xl border border-stone-200 bg-white text-sm shadow-card dark:border-white/10 dark:bg-stone-800">
-      {expandable ? (
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-label={open ? "Hide this week's forecast" : "Show this week's forecast"}
-          className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 text-left"
-        >
-          {summary}
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 text-stone-400 transition-transform dark:text-stone-500 ${
-              weather.city ? "" : "ml-auto"
-            } ${open ? "rotate-180" : ""}`}
-            aria-hidden="true"
-          />
-        </button>
-      ) : (
-        <div className="flex items-center gap-2 px-4 py-2.5">{summary}</div>
-      )}
+      <div className="flex items-center">
+        {expandable ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-label={open ? "Hide this week's forecast" : "Show this week's forecast"}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-xl py-2.5 pl-4 pr-2 text-left"
+          >
+            {summary}
+            <ChevronDown
+              // With the city hidden below sm there is nothing left to take
+              // up the slack, so the chevron takes it there instead. A home
+              // with no city at all keeps ml-auto at every width, as before.
+              className={`h-4 w-4 shrink-0 text-stone-400 transition-transform dark:text-stone-500 ${
+                weather.city ? "max-sm:ml-auto" : "ml-auto"
+              } ${open ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+          </button>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-2 py-2.5 pl-4 pr-2">
+            {summary}
+          </div>
+        )}
+        {unitToggle}
+      </div>
 
       {expandable && open && (
         <ul className="divide-y divide-stone-100 border-t border-stone-200 px-4 dark:divide-white/5 dark:border-white/10">
@@ -229,9 +312,9 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
                   </span>
                 )}
                 <span className="shrink-0 tabular-nums text-stone-900 dark:text-stone-100">
-                  {d.highF === null ? "--" : `${d.highF}°`}{" "}
+                  {formatTemp(d.highF, unit)}{" "}
                   <span className="text-stone-500 dark:text-stone-400">
-                    {d.lowF === null ? "--" : `${d.lowF}°`}
+                    {formatTemp(d.lowF, unit)}
                   </span>
                 </span>
               </li>

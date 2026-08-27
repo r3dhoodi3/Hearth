@@ -720,11 +720,12 @@ export const CATEGORIES: Category[] = [
   {
     category: "Professional and licensing information",
     examples:
-      "For contractors: company name, service area, contractor licence number, licence and insurance documents, and background-check status.",
+      "For contractors: company name, About-section text, service area, contractor licence number, licence and insurance documents, and background-check status.",
     sensitive: false,
     source:
       "You, plus the California State License Board and our background-check provider.",
-    purpose: "Verifying that pros on Hearth are licensed and insured.",
+    purpose:
+      "Verifying that pros on Hearth are licensed and insured, and, for company name and About text, checking for slurs, profanity, and off-platform contact details before a public profile goes live. Public profiles exist only for pros who serve Orange County.",
   },
   {
     category: "Commercial activity",
@@ -741,7 +742,7 @@ export const CATEGORIES: Category[] = [
     sensitive: false,
     source: "Your browser and Stripe when you sign up or start a membership, and the details you enter when you claim a home or set up a business.",
     purpose:
-      "One thing only: stopping the same person from claiming the free trial over and over with new accounts. Never used for advertising, never profiled, never shared, and never used to follow you to another company's site.",
+      "One thing only: stopping the same person from claiming the free trial over and over with new accounts, by linking accounts that share a value. Never used for advertising, never profiled, never shared, and never used to follow you to another company's site. Kept only as long as your account exists and deleted with it. A chargeback flags the account. A manual review may flag an account and remove its free-trial eligibility. Both are logged. Automated risk scoring may also affect trial eligibility once we turn it on.",
   },
 ];
 
@@ -780,7 +781,14 @@ export const THIRD_PARTIES: ThirdParty[] = [
   {
     name: "RentCast",
     role: "Property data and valuation",
-    receives: "Your home's street address and ZIP code.",
+    receives:
+      "Your home's street address and ZIP code. When RentCast has an automated valuation for your address, Hearth uses it as the headline home-value estimate; otherwise Hearth calculates a ballpark from your purchase price and typical price trends for your state.",
+  },
+  {
+    name: "Photon (OpenStreetMap)",
+    role: "Address suggestions while you type",
+    receives:
+      "The partial street address you're typing, plus the city (once your ZIP resolves to one) and the word \"California\", appended to help Photon find the right match. No name, account, or other personal information is sent with it.",
   },
   {
     name: "California State License Board (CSLB)",
@@ -812,6 +820,7 @@ export const THIRD_PARTIES: ThirdParty[] = [
   {
     name: "Twilio",
     role: "Text-message delivery",
-    receives: "Your phone number and the contents of the text we send you.",
+    receives:
+      "Your phone number and the contents of the text we send you. 10-digit US numbers only, and every text includes a reply-STOP opt-out.",
   },
 ];

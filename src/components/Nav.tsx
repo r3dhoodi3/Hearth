@@ -5,6 +5,7 @@ import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
 import SidePill from "@/components/SidePill";
 import ToolsMenu from "@/components/ToolsMenu";
+import AddToHomeScreenNudge from "@/components/AddToHomeScreenNudge";
 import GlobalSearch from "@/components/GlobalSearch";
 import NotificationBell from "@/components/NotificationBell";
 import UnreadProvider from "@/components/UnreadProvider";
@@ -181,6 +182,7 @@ export default function Nav({
         </div>
       )}
     </header>
+    <AddToHomeScreenNudge />
     {/* Phone-only bottom tab bar: the same primary destinations as the top
         strip above, laid out like a native app so nothing needs horizontal
         scrolling on a narrow viewport. Hidden from sm up, where the top

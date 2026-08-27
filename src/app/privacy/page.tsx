@@ -55,7 +55,7 @@ const GLANCE_ROWS: {
     why: "Pre-filling your home facts, local pricing, weather alerts, and getting a pro to the right house",
     linked: "Yes",
     leaves:
-      "Street + ZIP go to RentCast to look up county records. Your address is included in the context sent to Anthropic when you use Ask Hearth. City and state go to Open-Meteo for the forecast behind weather alerts. Your full address goes to the pro you choose.",
+      "Street + ZIP go to RentCast to look up county records and, when RentCast has one, an automated home-value estimate. The partial address you type while adding a home goes to Photon, a free OpenStreetMap-based lookup, so it can suggest matches as you type. Your address is included in the context sent to Anthropic when you use Ask Hearth. City and state go to Open-Meteo for the forecast behind weather alerts. Your full address goes to the pro you choose.",
   },
   {
     data: "Home facts and systems",
@@ -128,8 +128,8 @@ export default function PrivacyPage() {
         Privacy Policy
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-        Last updated July 2026. Plain English, and honest about what actually
-        happens in the app today.
+        Last updated August 26, 2026. Plain English, and honest about what
+        actually happens in the app today.
       </p>
 
       <div className="mt-8 space-y-8 text-stone-700 dark:text-stone-300">
@@ -251,6 +251,21 @@ export default function PrivacyPage() {
             unverified flag on your property. We do not show the county&apos;s
             owner names to other users, including pros you contact.
           </p>
+          <p className="mt-2 leading-relaxed">
+            Hearth currently serves all of Orange County, California, 36
+            cities and unincorporated communities in all, from Aliso Viejo to
+            Yorba Linda. If the address you enter is outside that area, we
+            still take it so we can add you to a waitlist and email you when
+            we expand there; the rest of the app stays gated until then.
+          </p>
+          <p className="mt-2 leading-relaxed">
+            The headline number on your Home Value page comes from
+            RentCast&apos;s automated valuation model when RentCast has one
+            for your address. When it doesn&apos;t, we calculate an estimate
+            ourselves from the purchase price you entered and typical
+            year-over-year price trends for your state. Either way, it&apos;s
+            a ballpark, not an appraisal.
+          </p>
         </section>
 
         <section>
@@ -344,6 +359,50 @@ export default function PrivacyPage() {
         </section>
 
         <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Cookies
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            Hearth sets a short list of first-party cookies, all needed for
+            the app to work. None of them are third-party ad or tracking
+            cookies, and none of them follow you to another company&apos;s
+            site.
+          </p>
+          <ul className="mt-3 list-disc space-y-2 pl-5 leading-relaxed">
+            <li>Supabase&apos;s own cookies keep you signed in.</li>
+            <li>
+              <span className="font-medium text-stone-900 dark:text-stone-100">
+                hearth_did
+              </span>
+              , a random id planted the first time you visit, kept for 400
+              days. Used only to notice when more than one account is being
+              created or paid for from the same device; see &ldquo;What we
+              don&apos;t do&rdquo; below.
+            </li>
+            <li>
+              <span className="font-medium text-stone-900 dark:text-stone-100">
+                hearth_fp
+              </span>
+              , a hash of a few features of your browser, used the same way
+              as hearth_did.
+            </li>
+            <li>
+              <span className="font-medium text-stone-900 dark:text-stone-100">
+                hearth_pwrecovery
+              </span>
+              , set only after you click a password reset link, and gone in
+              15 minutes. It is what lets the &ldquo;set a new password&rdquo;
+              screen work at all, and it stops a stranger from reaching that
+              screen just by typing its address in your browser.
+            </li>
+            <li>
+              A cookie that remembers which home is active, for anyone
+              managing more than one property.
+            </li>
+          </ul>
+        </section>
+
+        <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Payments</h2>
           <p className="mt-2 leading-relaxed">
             Payments (Hearth Plus, contractor fees, deposits) are processed by
@@ -369,6 +428,21 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Public pro profiles
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            A pro only gets a public profile page if they picked at least one
+            Orange County service city when they signed up, so nobody outside
+            the launch area is listed. The business name and the About text
+            on that page are checked before they go live: a submission with a
+            slur, profanity, or a phone number or email address in place of
+            Hearth&apos;s own messaging is rejected and the pro is told why,
+            rather than published and reviewed later.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Notifications
           </h2>
           <p className="mt-2 leading-relaxed">
@@ -386,6 +460,13 @@ export default function PrivacyPage() {
             channels are off unless we have the provider set up and you have
             the channel turned on; if a channel is off, nothing is sent to
             that provider.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            Texting is opt-in, off by default: you turn it on with a checkbox
+            in Account settings, and pros use the same checkbox to opt into
+            texts about new job leads. Twilio only sends to 10-digit US
+            phone numbers, and every text ends with &ldquo;Reply STOP to opt
+            out,&rdquo; which unsubscribes that number right away.
           </p>
         </section>
 
@@ -473,15 +554,26 @@ export default function PrivacyPage() {
           </p>
           <p className="mt-3 leading-relaxed">
             The other honest exception is free-trial abuse. Hearth stores
-            scrambled (hashed) identifiers for your device, your network, your
-            payment method, and, when you provide them, your phone number,
-            company name, and home parcel number, so the same person can&apos;t keep claiming a
-            new free trial by making new accounts. The scrambling is one-way and
-            uses a secret key, so the stored value can&apos;t be turned back into
-            your IP address, your card, or anything else about you. It is only
-            ever compared against other accounts&apos; scrambled values, it is
-            never used for advertising or shared with anyone, and it never
-            follows you to another company&apos;s website.
+            scrambled (hashed) identifiers for your IP address, your
+            hearth_did device cookie, your hearth_fp browser fingerprint
+            cookie, your payment method, and, when you provide them, your
+            phone number, company name, and home parcel number, so the same
+            person can&apos;t keep claiming a new free trial by making new
+            accounts. The scrambling is one-way and uses a secret key, so the
+            stored value can&apos;t be turned back into your IP address, your
+            card, or anything else about you. It is only ever compared
+            against other accounts&apos; scrambled values, to link accounts
+            that look like the same person, it is never used for advertising
+            or shared with anyone, and it never follows you to another
+            company&apos;s website.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            These records are kept only as long as your account exists, and
+            are deleted along with everything else when you delete your
+            account. A chargeback flags the account. A manual review may flag
+            an account and remove its free-trial eligibility. Both are
+            logged. Automated risk scoring may also affect trial eligibility
+            once we turn it on.
           </p>
         </section>
 
@@ -492,12 +584,18 @@ export default function PrivacyPage() {
           <p className="mt-2 leading-relaxed">
             We take reasonable steps to protect your information: photos and
             documents live in private storage and are only ever served
-            through a short-lived signed link (see above), and we never
-            handle or store your full card number ourselves; Stripe does.
-            No system is perfectly secure, and we can&apos;t promise your
-            data will never be exposed. If a breach happens that affects your
-            personal information, we&apos;ll notify you as required by
-            California law.
+            through a short-lived signed link (see above), the cookie that
+            carries a password-reset link is marked secure and httpOnly, your
+            sign-in session cookie is marked secure too, and
+            we never handle or store your full card number ourselves; Stripe
+            does, and Hearth keeps only a scrambled fingerprint of the payment
+            method, never the number itself. Changing your password requires
+            either a session you&apos;re still actively signed into or a
+            fresh emailed recovery link, and that link only works once and
+            only for 15 minutes. No system is perfectly secure, and we
+            can&apos;t promise your data will never be exposed. If a breach
+            happens that affects your personal information, we&apos;ll notify
+            you as required by California law.
           </p>
         </section>
 

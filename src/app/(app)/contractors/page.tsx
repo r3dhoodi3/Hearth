@@ -509,8 +509,8 @@ export default async function ContractorsPage(
             </p>
             <p className="text-sm text-bark-700 dark:text-stone-300">
               Free covers 3 open jobs at a time. Hearth Plus is unlimited, plus
-              priority matching so pros see yours first. 3-day free trial, then
-              $4.99/mo.
+              priority matching so pros see yours first. Start weekly with a
+              3-day free trial, or go monthly at $4.99.
             </p>
           </div>
           <Link href="/plus" className="btn-primary shrink-0">

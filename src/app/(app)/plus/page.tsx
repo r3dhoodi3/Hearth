@@ -100,6 +100,8 @@ export default async function PlusPage(
               ? "yearly"
               : sub?.plan === "monthly"
               ? "monthly"
+              : sub?.plan === "weekly"
+              ? "weekly"
               : undefined
           }
           introEligible={sub?.status === "trialing"}
@@ -121,8 +123,8 @@ export default async function PlusPage(
       ]);
     const homesUsed = properties.filter((p) => !p.isShared).length;
     // The add-on bills on the same cadence as the base plan, so only a
-    // monthly/yearly member can buy it. A grandfathered weekly member must
-    // switch cadence first.
+    // monthly/yearly member can buy it. A weekly member must switch cadence
+    // first.
     const isWeekly = sub?.plan === "weekly";
     const addonInterval: "monthly" | "yearly" | null =
       sub?.plan === "yearly" ? "yearly" : sub?.plan === "monthly" ? "monthly" : null;
@@ -183,9 +185,10 @@ export default async function PlusPage(
               </p>
               {isWeekly && (
                 <p className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-left text-xs text-stone-600 dark:border-white/10 dark:bg-stone-900 dark:text-stone-300">
-                  Your weekly plan is a legacy plan we no longer offer. You keep
-                  it as long as you like, but you can switch to monthly or yearly
-                  anytime below. Extra homes are available on monthly and yearly.
+                  You&apos;re on the weekly plan. Extra homes come with the
+                  monthly and yearly plans, so switch below if you want to add
+                  one. Monthly works out cheaper than four weeks, and yearly
+                  cheaper still.
                 </p>
               )}
               {sub.plan !== "yearly" && (
@@ -242,9 +245,10 @@ export default async function PlusPage(
             </div>
           )}
         </div>
-        {/* Pay-per-extra-home add-on, monthly/yearly members only. Weekly is
-            grandfathered and can't buy it - the legacy note in the Change plan
-            block above tells those members to switch cadence first. */}
+        {/* Pay-per-extra-home add-on, monthly/yearly members only. A weekly
+            member can't buy it (the add-on Prices are monthly/yearly, and
+            Stripe needs one interval per subscription) - the note in the
+            Change plan block above tells them to switch cadence first. */}
         {addonInterval && (
           <ExtraHomes
             interval={addonInterval}

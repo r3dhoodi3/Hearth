@@ -83,10 +83,13 @@ describe("auto-renewal disclosure placement", () => {
 
         for (const form of forms) {
           if (!form.includes("<AutoRenewalTerms")) continue;
-          const fixedField = /name="plan" value="(monthly|yearly)"/.exec(form);
+          const fixedField = /name="plan" value="(weekly|monthly|yearly)"/.exec(
+            form
+          );
           if (fixedField) {
             // Hard-coded field, so a hard-coded disclosure that names the same
-            // cadence. Pro prefixes its plans with pro_.
+            // cadence. Pro prefixes its plans with pro_ and has no weekly
+            // cadence, so only the homeowner file can match "weekly" here.
             const cadence = fixedField[1];
             expect(form).toMatch(
               new RegExp(`<AutoRenewalTerms\\s+plan="(pro_)?${cadence}"`)

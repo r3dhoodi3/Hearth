@@ -148,6 +148,7 @@ const GUARDED_SEGMENTS = new Set([
   "dashboard",
   "documents",
   "emergency",
+  "feedback",
   "forecast",
   "home-report",
   "inspection",

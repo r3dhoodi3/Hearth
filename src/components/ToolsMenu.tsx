@@ -10,6 +10,11 @@ import Link from "next/link";
 //
 // Rendered OUTSIDE the overflow-x-auto nav strip - a dropdown inside a
 // scroll container gets clipped by it.
+//
+// Below sm the same links render as a bottom sheet instead of a dropdown - a
+// 56px-wide list pinned to the top-right corner is workable with a mouse, not
+// with a thumb. Both variants are mounted at once and toggled with sm:hidden
+// / hidden sm:block, sharing the same `open` state, data, and close handlers.
 export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
   const [open, setOpen] = useState(false);
   // Plays the exit animation instead of an instant unmount: on the open ->
@@ -19,6 +24,10 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
   const wasOpen = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  // The phone sheet's own panel. Given focus on open; on desktop widths this
+  // element is display:none (sm:hidden), and focusing a display:none element
+  // is a silent no-op, so this never steals focus from the plain dropdown.
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open && wasOpen.current) {
@@ -31,8 +40,14 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
   }, [open]);
   const shouldRender = open || closing;
 
-  // Close on outside click or Escape. Escape hands focus back to the trigger
-  // so keyboard users aren't dropped at the top of the page.
+  // Move focus into the phone sheet the moment it opens.
+  useEffect(() => {
+    if (open) sheetRef.current?.focus();
+  }, [open]);
+
+  // Close on outside click or Escape. Both hand focus back to the trigger so
+  // keyboard users (and the sheet's scrim/X, via closeAndRefocus below)
+  // aren't dropped at the top of the page.
   useEffect(() => {
     if (!open) return;
     function onClick(e: MouseEvent) {
@@ -51,6 +66,14 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  // The phone sheet's scrim tap and X both close explicitly (they're inside
+  // `ref`, so the outside-click listener above never sees them) and return
+  // focus to the trigger, matching Escape's behavior.
+  function closeAndRefocus() {
+    setOpen(false);
+    btnRef.current?.focus();
+  }
 
   const homeLinks = [
     { href: "/walkthrough", label: "Walk your home" },
@@ -102,68 +125,184 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
         </svg>
       </button>
 
-      {/* Plain disclosure panel, not an ARIA menu: we don't implement the
-          menu keyboard contract (arrow keys, focus trapping), so we don't
-          claim the role either. Tab + Escape work as expected. */}
       {shouldRender && (
-        <div
-          className={`absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1.5 shadow-menu dark:border-white/10 dark:bg-stone-700 ${
-            open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
-          }`}
-        >
-          <div className="border-b border-stone-100 pb-1 dark:border-white/10">
-            <Link
-              href="/emergency"
-              onClick={() => setOpen(false)}
-              className="mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/15"
+        <>
+          {/* Desktop/tablet: the original dropdown, unchanged. Plain
+              disclosure panel, not an ARIA menu: we don't implement the menu
+              keyboard contract (arrow keys, focus trapping), so we don't
+              claim the role either. Tab + Escape work as expected. */}
+          <div
+            className={`absolute right-0 z-20 mt-1 hidden w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1.5 shadow-menu dark:border-white/10 dark:bg-stone-700 sm:block ${
+              open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
+            }`}
+          >
+            <div className="border-b border-stone-100 pb-1 dark:border-white/10">
+              <Link
+                href="/emergency"
+                onClick={() => setOpen(false)}
+                className="mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/15"
+              >
+                Emergency
+              </Link>
+            </div>
+            <div className="border-b border-stone-100 py-1 dark:border-white/10">
+              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                Your home
+              </p>
+              {homeLinks.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setOpen(false)}
+                  className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </div>
+            <div className="py-1">
+              <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                Plus tools
+              </p>
+              {plusTools.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setOpen(false)}
+                  className={`mx-1 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm hover:bg-bark-50 dark:hover:bg-stone-600 ${
+                    hasPlus
+                      ? "text-stone-700 dark:text-stone-300"
+                      : "text-stone-500 dark:text-stone-400"
+                  }`}
+                >
+                  <span>{l.label}</span>
+                  {!hasPlus && (
+                    <>
+                      {/* Matches the dashboard's Plus chip. */}
+                      <span className="rounded bg-bark-100 px-1.5 text-[11px] font-medium text-bark-700 dark:bg-bark-700 dark:text-stone-300">
+                        Plus
+                      </span>
+                      <span className="sr-only">(requires Hearth Plus)</span>
+                    </>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Phone: a bottom sheet grid instead of a corner dropdown. Same
+              links, same hrefs, same order - just laid out as tappable tiles
+              instead of a cramped list. */}
+          <div className="sm:hidden">
+            <div
+              onClick={closeAndRefocus}
+              aria-hidden="true"
+              className={`fixed inset-0 z-40 bg-black/40 ${
+                open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
+              }`}
+            />
+            <div
+              ref={sheetRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Tools"
+              tabIndex={-1}
+              className={`fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto rounded-t-2xl border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-menu outline-none dark:border-white/10 dark:bg-stone-800 ${
+                open ? "motion-safe:animate-fade-slide-up" : "motion-safe:animate-fade-slide-down"
+              }`}
             >
-              Emergency
-            </Link>
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white px-4 py-3 dark:border-white/10 dark:bg-stone-800">
+                <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                  Tools
+                </p>
+                <button
+                  type="button"
+                  onClick={closeAndRefocus}
+                  aria-label="Close"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-700"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 5l10 10M15 5L5 15" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-5 p-4">
+                <div>
+                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                    Emergency
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Link
+                      href="/emergency"
+                      onClick={closeAndRefocus}
+                      className="flex min-h-[64px] flex-col items-center justify-center rounded-xl border border-red-200 bg-red-50 px-2 py-3 text-center text-xs font-medium text-red-600 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-400"
+                    >
+                      Emergency
+                    </Link>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                    Your home
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {homeLinks.map((l) => (
+                      <Link
+                        key={l.href}
+                        href={l.href}
+                        onClick={closeAndRefocus}
+                        className="flex min-h-[64px] flex-col items-center justify-center rounded-xl border border-stone-200 bg-stone-50 px-2 py-3 text-center text-xs font-medium text-stone-700 hover:border-bark-300 hover:bg-bark-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
+                      >
+                        {l.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                    Plus tools
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {plusTools.map((l) => (
+                      <Link
+                        key={l.href}
+                        href={l.href}
+                        onClick={closeAndRefocus}
+                        className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-3 text-center text-xs font-medium ${
+                          hasPlus
+                            ? "border-stone-200 bg-stone-50 text-stone-700 hover:border-bark-300 hover:bg-bark-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
+                            : "border-stone-200 bg-stone-50 text-stone-500 hover:border-bark-300 hover:bg-bark-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400"
+                        }`}
+                      >
+                        <span>{l.label}</span>
+                        {!hasPlus && (
+                          <>
+                            {/* Matches the dashboard's Plus chip. */}
+                            <span className="rounded bg-bark-100 px-1.5 text-[10px] font-medium text-bark-700 dark:bg-bark-700 dark:text-stone-300">
+                              Plus
+                            </span>
+                            <span className="sr-only">(requires Hearth Plus)</span>
+                          </>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="border-b border-stone-100 py-1 dark:border-white/10">
-            <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-              Your home
-            </p>
-            {homeLinks.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className="mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
-              >
-                {l.label}
-              </Link>
-            ))}
-          </div>
-          <div className="py-1">
-            <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-              Plus tools
-            </p>
-            {plusTools.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className={`mx-1 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm hover:bg-bark-50 dark:hover:bg-stone-600 ${
-                  hasPlus
-                    ? "text-stone-700 dark:text-stone-300"
-                    : "text-stone-500 dark:text-stone-400"
-                }`}
-              >
-                <span>{l.label}</span>
-                {!hasPlus && (
-                  <>
-                    {/* Matches the dashboard's Plus chip. */}
-                    <span className="rounded bg-bark-100 px-1.5 text-[11px] font-medium text-bark-700 dark:bg-bark-700 dark:text-stone-300">
-                      Plus
-                    </span>
-                    <span className="sr-only">(requires Hearth Plus)</span>
-                  </>
-                )}
-              </Link>
-            ))}
-          </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -46,6 +46,10 @@ let rpcCalls: { fn: string; args: Record<string, unknown> }[] = [];
 // dispute or refund resolves back to.
 let depositSessions: Record<string, unknown>[] = [];
 
+// Every .from(table).update(payload) the route fires, so a test can assert the
+// plan name actually written to the subscriptions row.
+let tableUpdates: { table: string; payload: Record<string, unknown> }[] = [];
+
 // The thin slice of the PostgREST builder this route uses on the deposit path:
 // .from(...).select(...).eq(...).maybeSingle(). Everything reads back empty,
 // which is the "no Pro boost" path - the deposit itself still applies.
@@ -55,7 +59,7 @@ function fakeAdmin() {
       rpcCalls.push({ fn, args });
       return Promise.resolve({ data: null, error: null });
     },
-    from() {
+    from(table: string) {
       const api: Record<string, unknown> = {};
       const chain = () => api;
       Object.assign(api, {
@@ -67,7 +71,10 @@ function fakeAdmin() {
         maybeSingle: () => Promise.resolve({ data: null, error: null }),
         insert: () => Promise.resolve({ data: null, error: null }),
         upsert: () => Promise.resolve({ data: null, error: null }),
-        update: chain,
+        update: (payload: Record<string, unknown>) => {
+          tableUpdates.push({ table, payload });
+          return api;
+        },
         delete: chain,
       });
       return api;
@@ -96,6 +103,7 @@ const ORIGINAL_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 beforeEach(() => {
   rpcCalls = [];
   depositSessions = [];
+  tableUpdates = [];
   constructEvent.mockReset();
 });
 
@@ -317,5 +325,70 @@ describe("a deposit credits what Stripe charged, not what metadata claims", () =
     await POST(post());
 
     expect(applyDeposit()).toEqual([]);
+  });
+});
+
+// Hearth Plus sells three cadences, so the plan the webhook stores has to be
+// derived from all three Stripe intervals. Weekly is the newest, and it is the
+// one that carries the free trial, so a subscription that renews every week
+// must never be recorded as a monthly (or unknown) plan: /plus's cadence copy,
+// the renewal-reminder cron's per-cadence windows, and the extra-homes gate all
+// read subscriptions.plan.
+describe("the stored plan follows the billing interval, weekly included", () => {
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+  });
+
+  function subUpdatedEvent(interval: string | null) {
+    return {
+      id: "evt_sub_1",
+      type: "customer.subscription.updated",
+      data: {
+        object: {
+          id: "sub_test_1",
+          status: "active",
+          current_period_end: 1893456000,
+          items: {
+            data: [
+              {
+                id: "si_1",
+                quantity: 1,
+                metadata: {},
+                price: {
+                  id: "price_base",
+                  recurring: interval ? { interval } : null,
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+  }
+
+  async function planWrittenFor(interval: string | null) {
+    // Cleared per call, not just per test, so a test can drive several
+    // intervals through the route and read each write on its own.
+    tableUpdates = [];
+    constructEvent.mockReturnValue(subUpdatedEvent(interval));
+    const { POST } = await import("./route");
+    await POST(post());
+    const write = tableUpdates.find((u) => u.table === "subscriptions");
+    return write?.payload.plan;
+  }
+
+  it("stores weekly for a week interval", async () => {
+    expect(await planWrittenFor("week")).toBe("weekly");
+  });
+
+  it("still stores monthly and yearly for the other two", async () => {
+    expect(await planWrittenFor("month")).toBe("monthly");
+    expect(await planWrittenFor("year")).toBe("yearly");
+  });
+
+  it("leaves the stored plan alone when no interval is readable", async () => {
+    // Only overwrite the plan when the payload carries items we can read: a
+    // partial event must not blank out a live member's cadence.
+    expect(await planWrittenFor(null)).toBeUndefined();
   });
 });

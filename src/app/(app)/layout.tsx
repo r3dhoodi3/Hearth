@@ -11,6 +11,7 @@ import { hasPlus } from "@/lib/subscription";
 import Nav from "@/components/Nav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AskHearthDock from "@/components/AskHearthDock";
+import ReviewPrompt from "@/components/ReviewPrompt";
 
 // Shell for all signed-in homeowner screens. The only rule is that a claimed
 // home exists.
@@ -72,6 +73,7 @@ export default async function AppLayout({
           costs nothing at all. */}
       <AskHearthDock greetingUrl="/api/ask-greeting" hideOnPhone />
       <NewMessageNotifier role="homeowner" />
+      <ReviewPrompt />
     </div>
   );
 }

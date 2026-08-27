@@ -193,11 +193,11 @@ export default async function ValuePage() {
                 bought it.
               </p>
             )}
-            {/* Where the number came from, said plainly. The label itself is
-                the shared one from homeValue.ts, so the dashboard tile says
-                the same thing about the same number. */}
+            {/* What the number is based on, said plainly. The provider's name
+                (headline.sourceLabel) is deliberately NOT printed here or on
+                the dashboard tile - it means nothing to a homeowner and read
+                as clutter. The caveat is the part that actually matters. */}
             <p className="text-xs text-bark-600 dark:text-stone-400">
-              {headline?.sourceLabel}.{" "}
               {usingMarketValue
                 ? "Based on recent comparable sales near you, not a full appraisal."
                 : region
@@ -237,7 +237,7 @@ export default async function ValuePage() {
             <div className="card mt-6 space-y-3">
               <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
                 {usingMarketValue
-                  ? "Value trend, anchored to the RentCast estimate"
+                  ? "Value trend over time"
                   : "Estimated value over time"}
               </h2>
               <div className="overflow-x-auto pb-1">

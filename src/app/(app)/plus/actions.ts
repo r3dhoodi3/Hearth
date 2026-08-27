@@ -58,19 +58,18 @@ function productIdOf(item: Stripe.SubscriptionItem): string {
 }
 
 
-// Start a Hearth Plus checkout (monthly or yearly). Weekly was retired as a
-// new-checkout option and is no longer offered here; existing weekly
-// subscribers keep their plan (see PLUS_PLAN.weekly, grandfathered-only). Uses
-// the pre-created Stripe Price if one is configured, otherwise falls back to
-// inline price_data so the flow works before Products/Prices are set up in
-// Stripe.
+// Start a Hearth Plus checkout on any of the three sold cadences: weekly,
+// monthly, or yearly. Uses the pre-created Stripe Price if one is configured,
+// otherwise falls back to inline price_data so the flow works before
+// Products/Prices are set up in Stripe.
 export async function startPlusCheckoutAction(formData: FormData) {
-  // Yearly is the default cadence (see checkoutCadence): it is what the
+  // Monthly is the fallback cadence (see checkoutCadence): it is what the
   // pricing card preselects, so a form arriving without a readable "plan"
-  // field lands on the plan the buyer was looking at. The line item, the
-  // consent record, and the idempotency key below all derive from this one
-  // value, so they can never quote different plans.
-  const plan = checkoutCadence(formData.get("plan"));
+  // field lands on the plan the buyer was looking at - and never on weekly,
+  // the only cadence that carries free days. The line item, the consent
+  // record, and the idempotency key below all derive from this one value, so
+  // they can never quote different plans.
+  const plan = checkoutCadence(formData.get("plan"), "monthly");
 
   // Deliberately NOT src/lib/auth.ts's getUser(): that helper trusts
   // getSession(), which reads the user id straight off the (unverified)
@@ -85,14 +84,29 @@ export async function startPlusCheckoutAction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
+  // One pre-created Stripe Price per cadence, each optional: an unset env var
+  // falls through to the inline price_data below, so a cadence works before
+  // its Price exists in Stripe. STRIPE_PRICE_PLUS_WEEKLY is the newest of the
+  // three and the likeliest to be missing.
   const priceId =
-    plan === "yearly"
-      ? process.env.STRIPE_PRICE_PLUS_YEARLY
-      : process.env.STRIPE_PRICE_PLUS_MONTHLY;
+    plan === "weekly"
+      ? process.env.STRIPE_PRICE_PLUS_WEEKLY
+      : plan === "yearly"
+        ? process.env.STRIPE_PRICE_PLUS_YEARLY
+        : process.env.STRIPE_PRICE_PLUS_MONTHLY;
 
-  const planAmount = plan === "yearly" ? PLUS_PLAN.yearly : PLUS_PLAN.monthly;
+  const planAmount =
+    plan === "weekly"
+      ? PLUS_PLAN.weekly
+      : plan === "yearly"
+        ? PLUS_PLAN.yearly
+        : PLUS_PLAN.monthly;
   const planInterval =
-    plan === "yearly" ? ("year" as const) : ("month" as const);
+    plan === "weekly"
+      ? ("week" as const)
+      : plan === "yearly"
+        ? ("year" as const)
+        : ("month" as const);
 
   const lineItem = priceId
     ? { price: priceId, quantity: 1 }
@@ -179,9 +193,9 @@ export async function startPlusCheckoutAction(formData: FormData) {
     redirect("/plus");
   }
 
-  // The free trial (PLUS_PLAN.trialDays) belongs to the MONTHLY plan only:
-  // annual is billed at signup, which is what the /plus columns and the
-  // disclosure both say. trialApplies() is the one predicate all of that reads,
+  // The free trial (PLUS_PLAN.trialDays) belongs to the WEEKLY plan only:
+  // monthly and annual are billed at signup, which is what the /plus cards and
+  // the disclosure both say. trialApplies() is the one predicate all of that reads,
   // so the Stripe trial below, the disclosure the buyer saw, and the consent
   // record stored two blocks down cannot disagree. `existing` already scopes to
   // a homeowner-side Plus subscription, so a returning subscriber switching
@@ -263,9 +277,11 @@ export async function startPlusCheckoutAction(formData: FormData) {
 
 // Set the number of paid extra homes on a live Plus subscription (0 to
 // EXTRA_HOME.maxExtra). Extra homes are a Plus-only add-on: only a monthly or
-// yearly Plus member can buy them. A grandfathered weekly subscriber can't -
-// they're told to switch to monthly or yearly first. If Plus lapses, the slots
-// lapse with it (the webhook zeroes the column on cancellation).
+// yearly Plus member can buy them, because the add-on Prices exist at those two
+// intervals and Stripe requires every item on a subscription to share one
+// interval. A weekly subscriber is told to switch cadence first. If Plus
+// lapses, the slots lapse with it (the webhook zeroes the column on
+// cancellation).
 //
 // Implemented as a SECOND subscription item alongside the base Plus item.
 // Prefers the pre-created tiered volume Price (STRIPE_PRICE_HOME_SLOT_MONTHLY /
@@ -304,9 +320,9 @@ export async function setExtraHomesAction(formData: FormData) {
     redirect("/plus");
   }
 
-  // Grandfathered weekly rows can't buy the add-on: the volume Prices are
-  // monthly/yearly only, and the interval has to match the base plan. Tell
-  // them to switch cadence first.
+  // Weekly rows can't buy the add-on: the volume Prices are monthly/yearly
+  // only, and the interval has to match the base plan. Tell them to switch
+  // cadence first.
   if (sub.plan !== "monthly" && sub.plan !== "yearly") {
     await setFlash(
       "Extra homes come with the monthly and yearly plans. Switch your plan first, then add homes.",
@@ -527,8 +543,8 @@ export async function upgradeToYearlyAction() {
   revalidatePath("/plus");
 }
 
-// Schedule a switch to monthly at renewal, for a yearly subscriber OR a
-// grandfathered weekly one. Nothing is charged or refunded now: they keep the
+// Schedule a switch to monthly at renewal, for a yearly subscriber OR a weekly
+// one. Nothing is charged or refunded now: they keep the
 // access they already paid for (the rest of their yearly term, or their
 // current weekly period), and the subscription simply renews at $4.99/mo
 // instead. Implemented as a Stripe subscription schedule - phase 1 mirrors the
@@ -544,8 +560,8 @@ export async function downgradeToMonthlyAction() {
     await setFlash("No active subscription to change.", "error");
     redirect("/plus");
   }
-  // Only monthly subscribers have nothing to switch to. Yearly and legacy
-  // weekly rows both switch to monthly through the same schedule below.
+  // Only monthly subscribers have nothing to switch to. Yearly and weekly rows
+  // both switch to monthly through the same schedule below.
   if (sub.plan === "monthly") {
     await setFlash("You're already on the monthly plan.", "info");
     redirect("/plus");

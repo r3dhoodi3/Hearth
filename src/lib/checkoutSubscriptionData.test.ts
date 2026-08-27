@@ -21,9 +21,12 @@ const proCheckout = (trialEligible: boolean) =>
   });
 
 // startPlusCheckoutAction, exactly: the trial is gated through trialApplies,
-// which grants it to the monthly plan only. Pass the plan so a test cannot
+// which grants it to the weekly plan only. Pass the plan so a test cannot
 // assert a trial the real action would never send to Stripe.
-const plusCheckout = (plan: "monthly" | "yearly", trialEligible: boolean) => {
+const plusCheckout = (
+  plan: "weekly" | "monthly" | "yearly",
+  trialEligible: boolean
+) => {
   const trial = trialApplies(plan, trialEligible);
   return subscriptionCheckoutData({
     trialDays: trial ? PLUS_PLAN.trialDays : null,
@@ -49,7 +52,7 @@ describe("subscriptionCheckoutData", () => {
   it("keeps the Pro trial length independent of the Plus one", () => {
     // Same length today, different constants on purpose: changing the Pro
     // trial must never move the homeowner Plus trial, or vice versa.
-    expect(plusCheckout("monthly", true).trial_period_days).toBe(
+    expect(plusCheckout("weekly", true).trial_period_days).toBe(
       PLUS_PLAN.trialDays
     );
     expect(proCheckout(true).trial_period_days).toBe(PRO_PLAN.trialDays);
@@ -67,54 +70,81 @@ describe("subscriptionCheckoutData", () => {
 });
 
 describe("checkoutCadence", () => {
-  // Both pricing cards preselect the yearly plan, so the server's fallback has
-  // to agree with what the buyer was looking at. A form field that goes
-  // missing must not silently swap the plan out from under a submission.
-  it("defaults to yearly when the form field is missing or unreadable", () => {
+  // The fallback is the caller's own preselected card, so the server agrees
+  // with what the buyer was looking at. A form field that goes missing must
+  // not silently swap the plan out from under a submission.
+  it("falls back to yearly by default, which is what the Pro toggle preselects", () => {
     expect(checkoutCadence(null)).toBe("yearly");
     expect(checkoutCadence(undefined)).toBe("yearly");
     expect(checkoutCadence("")).toBe("yearly");
     expect(checkoutCadence("annual")).toBe("yearly");
-    expect(checkoutCadence("weekly")).toBe("yearly");
   });
 
-  it("honors an explicit monthly, the only way to opt out", () => {
+  // /plus preselects Monthly and passes it, so an unreadable field lands on
+  // the anchor plan - and never on weekly, the only cadence carrying free
+  // days. A garbled submit is charged today rather than silently trialed.
+  it("falls back to monthly for the Plus picker, never to the trial cadence", () => {
+    expect(checkoutCadence(null, "monthly")).toBe("monthly");
+    expect(checkoutCadence("", "monthly")).toBe("monthly");
+    expect(checkoutCadence("week", "monthly")).toBe("monthly");
+    expect(checkoutCadence("Weekly", "monthly")).toBe("monthly");
+  });
+
+  it("honors each of the three cadences when explicitly submitted", () => {
+    expect(checkoutCadence("weekly")).toBe("weekly");
     expect(checkoutCadence("monthly")).toBe("monthly");
+    expect(checkoutCadence("yearly")).toBe("yearly");
+    // An explicit value wins over any fallback the caller passed.
+    expect(checkoutCadence("weekly", "monthly")).toBe("weekly");
+    expect(checkoutCadence("yearly", "monthly")).toBe("yearly");
   });
 
   it("reads what the plan toggles actually submit", () => {
-    // The hidden <input name="plan"> on both toggles carries exactly these
-    // two strings, and FormData.get returns them as strings.
+    // The hidden <input name="plan"> on the toggles carries exactly these
+    // strings, and FormData.get returns them as strings.
     const form = new FormData();
-    form.set("plan", "yearly");
-    expect(checkoutCadence(form.get("plan"))).toBe("yearly");
-    form.set("plan", "monthly");
-    expect(checkoutCadence(form.get("plan"))).toBe("monthly");
+    for (const cadence of ["weekly", "monthly", "yearly"] as const) {
+      form.set("plan", cadence);
+      expect(checkoutCadence(form.get("plan"), "monthly")).toBe(cadence);
+    }
     // Nothing set at all: the field never arrived.
-    expect(checkoutCadence(new FormData().get("plan"))).toBe("yearly");
+    expect(checkoutCadence(new FormData().get("plan"), "monthly")).toBe(
+      "monthly"
+    );
   });
 
-  it("does not treat a case-variant or padded value as monthly", () => {
+  it("does not treat a case-variant or padded value as a cadence", () => {
     // Better to fall back to the preselected plan than to guess at intent.
     expect(checkoutCadence("Monthly")).toBe("yearly");
     expect(checkoutCadence(" monthly ")).toBe("yearly");
+    expect(checkoutCadence(" weekly ", "monthly")).toBe("monthly");
+  });
+
+  it("never hands the Pro side a weekly price", () => {
+    // Pro maps this result by treating anything that is not "monthly" as
+    // yearly, so a weekly value posted at a Pro form resolves the way any
+    // other unrecognized value already did: to the pro yearly plan.
+    const proPlanFor = (raw: unknown) =>
+      checkoutCadence(raw) === "monthly" ? "pro_monthly" : "pro_yearly";
+    expect(proPlanFor("weekly")).toBe("pro_yearly");
+    expect(proPlanFor(null)).toBe("pro_yearly");
   });
 });
 
 describe("the default cadence flowing into a disclosure", () => {
   // The checkout actions map checkoutCadence's result straight onto a
-  // billingTerms plan key. This pins that the DEFAULT path quotes the yearly
-  // price, so the auto-renewal disclosure can never promise a monthly charge
-  // on a checkout that bills a year.
-  const plusPlanFor = (raw: unknown) => checkoutCadence(raw);
+  // billingTerms plan key. This pins that each FALLBACK path quotes the price
+  // its own page preselected, so the auto-renewal disclosure can never promise
+  // one cadence's charge on a checkout that bills another.
+  const plusPlanFor = (raw: unknown) => checkoutCadence(raw, "monthly");
   const proPlanFor = (raw: unknown) =>
     checkoutCadence(raw) === "monthly" ? "pro_monthly" : "pro_yearly";
 
-  it("quotes the yearly Plus price when nothing was submitted", () => {
+  it("quotes the monthly Plus price when nothing was submitted", () => {
     const terms = billingTerms(plusPlanFor(null), true);
-    expect(terms.recurring).toContain(`$${PLUS_PLAN.yearly.toFixed(2)}`);
-    expect(terms.recurring).toContain("every 12 months");
-    expect(terms.recurring).not.toContain(`$${PLUS_PLAN.monthly.toFixed(2)}`);
+    expect(terms.recurring).toContain(`$${PLUS_PLAN.monthly.toFixed(2)}`);
+    expect(terms.recurring).toContain("every month");
+    expect(terms.recurring).not.toContain(`$${PLUS_PLAN.yearly.toFixed(2)}`);
   });
 
   it("quotes the yearly Pro price when nothing was submitted", () => {
@@ -124,23 +154,33 @@ describe("the default cadence flowing into a disclosure", () => {
     expect(terms.recurring).toContain("every 12 months");
   });
 
-  it("still quotes the monthly price when monthly was explicitly picked", () => {
-    expect(billingTerms(plusPlanFor("monthly"), true).recurring).toContain(
-      `$${PLUS_PLAN.monthly.toFixed(2)} a month`
+  it("still quotes the yearly price when annual was explicitly picked", () => {
+    expect(billingTerms(plusPlanFor("yearly"), true).recurring).toContain(
+      `$${PLUS_PLAN.yearly.toFixed(2)}`
     );
     expect(billingTerms(proPlanFor("monthly"), true).recurring).toContain(
       `$${PRO_PLAN.monthly.toFixed(2)} a month`
     );
   });
 
+  it("quotes the weekly price and the trial when weekly was picked", () => {
+    const terms = billingTerms(plusPlanFor("weekly"), true);
+    expect(terms.recurring).toContain(`$${PLUS_PLAN.weekly.toFixed(2)} a week`);
+    expect(terms.recurring).toContain("every week");
+    expect(plusCheckout("weekly", true).trial_period_days).toBe(
+      PLUS_PLAN.trialDays
+    );
+  });
+
   it("promises no trial on the default Plus cadence, which bills today", () => {
-    // The Plus trial belongs to the monthly plan only, so the default (yearly)
-    // path must never quote it - not in the copy, and not in the Stripe
-    // session the same value builds.
+    // The Plus trial belongs to the weekly plan only, so the fallback
+    // (monthly) path must never quote it - not in the copy, and not in the
+    // Stripe session the same value builds.
     expect(billingTerms(plusPlanFor(null), true).stepUp).toBeNull();
     expect(billingTerms(plusPlanFor(null), true).summary).toBe(
-      `$${PLUS_PLAN.yearly.toFixed(2)} today, and it renews every 12 months until you cancel.`
+      `$${PLUS_PLAN.monthly.toFixed(2)} today, and it renews every month until you cancel.`
     );
+    expect("trial_period_days" in plusCheckout("monthly", true)).toBe(false);
     expect("trial_period_days" in plusCheckout("yearly", true)).toBe(false);
     // Pro is untouched: both its cadences still trial.
     expect(billingTerms(proPlanFor(null), true).stepUp).toContain(
@@ -150,30 +190,33 @@ describe("the default cadence flowing into a disclosure", () => {
   });
 });
 
-// The 3 free days are part of the MONTHLY plan and nothing else. Four things
+// The 3 free days are part of the WEEKLY plan and nothing else. Four things
 // have to agree on that: the /plus copy, the Stripe trial, the consent record
 // written into session metadata, and the acknowledgment sent afterwards. They
 // all read trialApplies(), so these tests pin the one predicate plus the
 // sentences it decides.
-describe("the Plus trial is monthly-only", () => {
-  it("grants the trial to a brand-new monthly checkout", () => {
-    expect(trialApplies("monthly", true)).toBe(true);
-    expect(plusCheckout("monthly", true).trial_period_days).toBe(
+describe("the Plus trial is weekly-only", () => {
+  it("grants the trial to a brand-new weekly checkout", () => {
+    expect(trialApplies("weekly", true)).toBe(true);
+    expect(plusCheckout("weekly", true).trial_period_days).toBe(
       PLUS_PLAN.trialDays
     );
-    expect(plusCheckout("monthly", true).metadata.intro_step_up).toBe("true");
+    expect(plusCheckout("weekly", true).metadata.intro_step_up).toBe("true");
   });
 
-  it("never grants it on yearly, however eligible the buyer is", () => {
-    expect(trialApplies("yearly", true)).toBe(false);
-    const data = plusCheckout("yearly", true);
-    // Omitted, not zero: Stripe rejects a 0, and the step-up flag the renewal
-    // cron reads has to say there is no step-up coming.
-    expect("trial_period_days" in data).toBe(false);
-    expect(data.metadata.intro_step_up).toBe("false");
+  it("never grants it on monthly or yearly, however eligible the buyer is", () => {
+    for (const plan of ["monthly", "yearly"] as const) {
+      expect(trialApplies(plan, true)).toBe(false);
+      const data = plusCheckout(plan, true);
+      // Omitted, not zero: Stripe rejects a 0, and the step-up flag the
+      // renewal cron reads has to say there is no step-up coming.
+      expect("trial_period_days" in data).toBe(false);
+      expect(data.metadata.intro_step_up).toBe("false");
+    }
   });
 
-  it("never grants it to a returning subscriber on either cadence", () => {
+  it("never grants it to a returning subscriber on any cadence", () => {
+    expect(trialApplies("weekly", false)).toBe(false);
     expect(trialApplies("monthly", false)).toBe(false);
     expect(trialApplies("yearly", false)).toBe(false);
   });
@@ -183,12 +226,22 @@ describe("the Plus trial is monthly-only", () => {
     expect(trialApplies("pro_yearly", true)).toBe(true);
   });
 
-  it("says the monthly step-up in one sentence", () => {
-    const terms = billingTerms("monthly", true);
+  it("says the weekly step-up in one sentence", () => {
+    const terms = billingTerms("weekly", true);
     expect(terms.summary).toBe(
-      `Free for ${PLUS_PLAN.trialDays} days. After that it is $${PLUS_PLAN.monthly.toFixed(2)} a month, and it renews every month until you cancel.`
+      `Free for ${PLUS_PLAN.trialDays} days. After that it is $${PLUS_PLAN.weekly.toFixed(2)} a week, and it renews every week until you cancel.`
     );
     expect(terms.chargedToday).toContain("Nothing today");
+  });
+
+  it("says the monthly charge lands today, in one sentence", () => {
+    const terms = billingTerms("monthly", true);
+    expect(terms.summary).toBe(
+      `$${PLUS_PLAN.monthly.toFixed(2)} today, and it renews every month until you cancel.`
+    );
+    expect(terms.chargedToday).toBe(`$${PLUS_PLAN.monthly.toFixed(2)} today.`);
+    expect(billingTermsText("monthly", true)).not.toContain("trial");
+    expect(billingTermsText("monthly", true)).not.toContain("free");
   });
 
   it("says the yearly charge lands today, in one sentence", () => {
@@ -206,7 +259,7 @@ describe("the Plus trial is monthly-only", () => {
   it("keeps the consent record the checkout stores in step with the trial", () => {
     // What startPlusCheckoutAction writes into Stripe session metadata, built
     // from the same predicate that decides trial_period_days.
-    for (const plan of ["monthly", "yearly"] as const) {
+    for (const plan of ["weekly", "monthly", "yearly"] as const) {
       const trial = trialApplies(plan, true);
       const text = billingTermsText(plan, true);
       expect(text.includes(`first ${PLUS_PLAN.trialDays} days are free`)).toBe(
@@ -254,11 +307,12 @@ describe("billingTerms for Hearth Pro", () => {
   });
 
   it("leaves the homeowner Plus disclosure alone", () => {
-    const terms = billingTerms("monthly", true);
+    const terms = billingTerms("weekly", true);
     expect(terms.product).toBe("Hearth Plus");
     expect(terms.chargedToday).toContain(
       `Your first ${PLUS_PLAN.trialDays} days are free`
     );
-    expect(terms.recurring).toContain(`$${PLUS_PLAN.monthly.toFixed(2)} a month`);
+    expect(terms.recurring).toContain(`$${PLUS_PLAN.weekly.toFixed(2)} a week`);
+    expect(terms.cancelPath).toBe("/plus");
   });
 });

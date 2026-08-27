@@ -10,11 +10,11 @@ export const runtime = "nodejs";
 // Daily job (Vercel Cron, see vercel.json) that warns paying members BEFORE a
 // charge they might not be expecting. Four cases:
 //
-//   1. Trial ending. Every brand-new Hearth Plus subscriber (monthly or
-//      yearly - weekly is grandfathered-only and no longer sold) starts with a
-//      3-day Stripe free trial, and the notice fires about a day before that
-//      trial ends and the first real charge lands. A legacy weekly trial, if
-//      any remain, is handled the same way. California's Automatic Renewal Law
+//   1. Trial ending. A brand-new Hearth Plus subscriber who starts on the
+//      WEEKLY plan (the only Plus cadence carrying free days; monthly and
+//      yearly bill at signup) gets a 3-day Stripe free trial, and the notice
+//      fires about a day before that trial ends and the first real charge
+//      lands. Both Pro cadences trial the same way. California's Automatic Renewal Law
 //      3-to-21-day
 //      window for free periods only kicks in past 31 days, so for this
 //      3-day trial the 1-day lead is not a statutory requirement, it is a
@@ -196,14 +196,15 @@ async function runCron(req: NextRequest) {
   )
     .select("user_id, plan, status, stripe_subscription_id, current_period_end")
     .in("status", ["active", "trialing"])
-    // Weekly is grandfathered-only now (no longer sold), but any legacy weekly
-    // row still needs correct handling. An ACTIVE weekly sub never gets a
-    // notice (weekly is deliberately not covered outside its trial), yet its
-    // current_period_end is always inside this query's short horizon, so it
-    // would sit in the window forever, crowding out monthly/yearly candidates
-    // against MAX_SUBSCRIPTIONS and burning a Stripe retrieve every run for
-    // nothing. Only a TRIALING weekly sub can be due, so only that one is
-    // fetched. This stays as inert protection for the grandfathered rows.
+    // Weekly is sold again and is now the cadence that carries the free days,
+    // so this filter matters more than ever. An ACTIVE weekly sub gets no
+    // notice here (a renewal every 7 days is not news, and case 4 below gives
+    // it the once-a-year notice the law asks for), yet its current_period_end
+    // is always inside this query's short horizon, so it would sit in the
+    // window forever, crowding out monthly/yearly candidates against
+    // MAX_SUBSCRIPTIONS and burning a Stripe retrieve every run for nothing.
+    // Only a TRIALING weekly sub can be due here, so only that one is fetched -
+    // and that is exactly the row whose trial-end notice must go out.
     .or("plan.neq.weekly,status.eq.trialing")
     .not("stripe_subscription_id", "is", null)
     .not("current_period_end", "is", null)
@@ -407,9 +408,9 @@ async function runCron(req: NextRequest) {
           const yearly = plan === "yearly" || plan === "pro_yearly";
 
           // Pick the notice this subscription is due for, if any. Trial-end
-          // wins over everything else: it applies to every Plus cadence,
-          // including yearly and weekly, and a trial about to end is the
-          // most time-sensitive of the three notices.
+          // wins over everything else: it applies to any subscription Stripe
+          // reports as trialing (Plus weekly, both Pro cadences), and a trial
+          // about to end is the most time-sensitive of the three notices.
           let due: "trial_end" | "step_up" | "renewal" | null = null;
           if (
             trialing &&

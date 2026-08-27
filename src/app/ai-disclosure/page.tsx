@@ -8,8 +8,8 @@ import Link from "next/link";
 // derived from the actual code paths rather than a generic template: /api/ask,
 // /api/pro-ask, /api/analyze-quote, /api/pro-tools, /api/pro-past-jobs,
 // /api/ingest-inspection, /api/extract-document, /api/confirm-system,
-// /api/tax-appeal, /api/insurance-packet, /api/pro-compliance and
-// /api/draft-apply all call Anthropic's Claude Sonnet models on Anthropic's
+// /api/tax-appeal, /api/insurance-packet, /api/pro-compliance, /api/draft-apply
+// and /api/draft-job all call Anthropic's Claude Sonnet models on Anthropic's
 // paid API. Voice input is on-device browser speech recognition and sends no
 // audio anywhere. The inline label under AI output
 // (src/components/AiNotice.tsx) links here.
@@ -43,8 +43,8 @@ export default function AiDisclosurePage() {
         How Hearth Uses AI
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-        Last updated August 2026. Plain English, and specific about what the
-        software actually does.
+        Last updated August 26, 2026. Plain English, and specific about what
+        the software actually does.
       </p>
 
       <div className="mt-8 space-y-8 text-stone-700 dark:text-stone-300">
@@ -122,6 +122,15 @@ export default function AiDisclosurePage() {
               : when a pro applies to an open lead, the first-pass apply
               message is drafted for them. It fills the textarea, it doesn&apos;t
               send anything; the pro edits it before sending.
+            </li>
+            <li>
+              <span className="font-medium text-stone-900 dark:text-stone-100">
+                Drafting a job post from a photo
+              </span>
+              : when a homeowner attaches a photo of the problem while posting
+              a job, a description, category, and severity are drafted from
+              the photo. It fills the form, it doesn&apos;t post anything; the
+              homeowner edits it before sending.
             </li>
             <li>
               <span className="font-medium text-stone-900 dark:text-stone-100">

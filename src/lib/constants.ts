@@ -428,21 +428,33 @@ export const PRO_PLAN = {
 // plays for the contractor side: the ONE place the homeowner prices live, so
 // the /plus page, the checkout action, the auto-renewal disclosure in
 // src/lib/billingTerms.ts, and the renewal-reminder cron can never quote a
-// price the card isn't actually charged. Every brand-new subscriber, on any
-// cadence (MONTHLY only since 2026-08-23), gets a 3-day free trial (a Stripe trial, so nothing is charged
-// until it ends); yearly is also discounted on top of that.
+// price the card isn't actually charged. Three cadences are sold: weekly,
+// monthly, and yearly. The 3-day free trial (a Stripe trial, so nothing is
+// charged until it ends) belongs to WEEKLY only since 2026-08-26 - monthly and
+// yearly are billed on day one. trialApplies() in src/lib/billingTerms.ts is
+// the single predicate that says so.
 export const PLUS_PLAN = {
-  // GRANDFATHERED ONLY, no longer sold. Weekly was retired as a new-checkout
-  // option (only monthly and yearly are sold now), but existing weekly
-  // subscribers keep their plan, so the price stays here: the auto-renewal
-  // disclosure in src/lib/billingTerms.ts and the renewal-reminder cron still
-  // need it to quote a legacy weekly row correctly. Nothing new-checkout reads
-  // it - startPlusCheckoutAction only offers monthly/yearly.
+  // $1.99 a week, about $8.62 a month at 52/12 weeks. Priced from consumer
+  // subscription comparables rather than from a round number: the 2026 in-app
+  // benchmarks put the median weekly plan around $7.48 and category weekly
+  // medians at $4.99-$6.89, but those sit against monthly plans of $9.99-$12.99,
+  // roughly 2.3x the monthly rate on a per-month basis. Hearth's monthly is
+  // $4.99, less than half the market monthly median, so borrowing a market
+  // weekly price would put weekly at 5x monthly and read as a trap rather than
+  // as a low-commitment way in. Holding the same 1.5x-2.5x band against OUR
+  // monthly gives $1.72-$2.87 a week; $1.99 sits at the bottom of it (1.73x),
+  // which keeps monthly the obvious value at $4.99 and yearly the best at about
+  // $3.33 a month, and it is the price legacy weekly rows are already billed,
+  // so old and new weekly subscribers read one number in one disclosure. $2.49
+  // or $2.99 would clear the band's top and make the trial feel like bait.
   weekly: 1.99,
   monthly: 4.99,
   // 33% off monthly x 12 ($59.88), about $3.33/mo. Always compare against
   // monthly x 12 in copy, never an invented list price.
   yearly: 39.99,
+  // The trial rides on the WEEKLY plan and nothing else. Monthly and yearly
+  // are charged at signup, so neither ever quotes trial copy or sends
+  // trial_period_days to Stripe. See trialApplies() in src/lib/billingTerms.ts.
   trialDays: 3,
 } as const;
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { formatAddressLine, getActiveProperty } from "@/lib/property";
+import { getActiveProperty } from "@/lib/property";
 import { getUser } from "@/lib/auth";
 import { hasPlus } from "@/lib/subscription";
 import { generateMaintenancePlanAction } from "./actions";
@@ -44,10 +44,7 @@ import {
 } from "lucide-react";
 import { calculateEquity, headlineHomeValue } from "@/lib/homeValue";
 import HomeValueAutoFetch from "../value/ValueAutoFetch";
-import {
-  estimateSeasonalEnergyCost,
-  estimateUpgradeSavings,
-} from "@/lib/energy";
+import { estimateSeasonalEnergyCost } from "@/lib/energy";
 import type { Issue } from "@/lib/database.types";
 
 // Shared "Plus" badge chip, used on every paywalled CTA/card on this page.
@@ -476,13 +473,6 @@ export default async function HomePage(
     homeEstimatedValue != null
       ? calculateEquity(homeEstimatedValue, homeValueMortgageBalance)
       : null;
-  // How much the number moved, and over what period - both decided by the
-  // shared helper. The model compares this year to last year; the AVM compares
-  // itself to what was actually paid, because it has no history of its own to
-  // difference against. Null when neither comparison is available, in which
-  // case the tile simply doesn't claim a movement.
-  const homeValueDelta = homeHeadline?.change ?? null;
-  const homeValueDeltaSince = homeHeadline?.changeSince ?? null;
   // Kick the lazy AVM lookup off the FIRST time an address-holding home is
   // seen with no value on file, exactly as /value does. Client-side and
   // once-per-home (see HomeValueAutoFetch): this render never calls RentCast.
@@ -512,18 +502,6 @@ export default async function HomePage(
         currentYear: now.getFullYear(),
       })
     : null;
-  // Non-null only for a 15+ year old HVAC (the lib enforces the threshold).
-  const upgradeSavings =
-    hasEnergyInputs && hvacSystem
-      ? estimateUpgradeSavings({
-          sqft: property.sqft,
-          yearBuilt: property.year_built,
-          state: property.state,
-          hvacInstallYear: hvacSystem.install_year,
-          hvacType: hvacSystem.material_or_model,
-          currentYear: now.getFullYear(),
-        })
-      : null;
 
   // Shared body of the "Thinking about a project?" block - identical whether
   // it's rendered as a plain section (normal visits) or inside a collapsed
@@ -556,23 +534,6 @@ export default async function HomePage(
       </div>
     </>
   );
-
-  // The facts line under the address, built from what we actually know. It used
-  // to print every slot unconditionally, so a home whose details were never
-  // filled in read "Built - · - sqft · - bd / - ba", which looks like broken
-  // data rather than missing data. Beds and baths stay paired ("3 bd / 2 ba")
-  // when both are known, exactly as before.
-  const bedBath = [
-    property.beds != null ? `${property.beds} bd` : null,
-    property.baths != null ? `${property.baths} ba` : null,
-  ]
-    .filter(Boolean)
-    .join(" / ");
-  const homeFacts = [
-    property.year_built != null ? `Built ${property.year_built}` : null,
-    property.sqft != null ? `${property.sqft} sqft` : null,
-    bedBath || null,
-  ].filter(Boolean) as string[];
 
   return (
     <div className="space-y-8">
@@ -618,19 +579,24 @@ export default async function HomePage(
         </div>
       )}
 
-      {/* Property header */}
-      <section>
-        <h1 className="break-words text-2xl font-semibold text-stone-900 dark:text-stone-100">
-          {formatAddressLine(property)}
-          {property.city ? `, ${property.city}` : ""}
-        </h1>
-        {/* Quiet trust signal: only when the ownership check actually matched
-            (migration 0093). Same green chip-ok tone and same wording spirit as
-            the pro-side "Ownership verified" badge, so the semantics read the
-            same on both ends. No chip at all when unverified - nothing to nag
-            about, since a mismatch is expected and harmless. */}
-        {property.ownership_status === "verified" && (
-          <details className="mt-2 inline-block">
+      {/* The address masthead used to live here: a big address line, the home
+          facts caption (or an "Add home details" link in its place), and a
+          "Something broken right now?" link. All three are gone - the address
+          is already in the top-left of the header on every page, and both
+          links have permanent homes in the Tools menu ("Walk your home" and
+          "Emergency"), so nothing lost an entry point. The dashboard now opens
+          on the weather row and goes straight to the numbers.
+
+          Quiet trust signal, kept: it only renders when the ownership check
+          actually matched (migration 0093). Same green chip-ok tone and same
+          wording spirit as the pro-side "Ownership verified" badge, so the
+          semantics read the same on both ends. No section at all when
+          unverified - nothing to nag about, since a mismatch is expected and
+          harmless, and an empty section would leave a dead 32px gap in the
+          space-y-8 stack. */}
+      {property.ownership_status === "verified" && (
+        <section>
+          <details className="inline-block">
             <summary className="chip-ok focus-ring w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden">
               Matches county records
             </summary>
@@ -640,33 +606,8 @@ export default async function HomePage(
               signal we show pros, not proof of ownership.
             </p>
           </details>
-        )}
-        {homeFacts.length > 0 ? (
-          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            {homeFacts.join(" · ")}
-          </p>
-        ) : (
-          // Nothing known about the house yet. The walkthrough is the app's
-          // "tell us about your home" flow, so it is the one honest place to
-          // send someone from here. block + w-fit, not inline-block: it stands
-          // in for the <p> above, so it has to take its own line rather than
-          // sharing one with the emergency link below it.
-          <Link
-            href="/walkthrough"
-            className="mt-1 block w-fit text-sm text-bark-700 hover:underline max-sm:flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
-          >
-            Add home details
-          </Link>
-        )}
-        {/* Always-there escape hatch for urgent problems, kept quiet so it
-            doesn't compete with the rest of the page. */}
-        <Link
-          href="/emergency"
-          className="mt-1 inline-block text-sm text-red-600 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-red-400"
-        >
-          Something broken right now?
-        </Link>
-      </section>
+        </section>
+      )}
 
       {/* Proactive weather + safety-recall alerts; self-hides when there's none */}
       <HomeAlerts propertyId={property.id} />
@@ -676,19 +617,14 @@ export default async function HomePage(
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className={`card-hero border ${band.tone}`}>
           <p className="stat-label text-sm">Home Health Score</p>
-          {mostlyEstimated && (
-            <p className="mt-1 text-xs font-medium uppercase tracking-wide opacity-80">
-              Estimated score
-            </p>
-          )}
           <p className="stat-number mt-1 text-4xl">{score}</p>
-          <p className="text-sm">
-            {mostlyEstimated
-              ? "Based on your home's age. Confirm your systems to sharpen it."
-              : band.label}
-          </p>
-          <details className="mt-2 text-sm">
-            <summary className="cursor-pointer opacity-80 hover:opacity-100">
+          <p className="text-sm">{mostlyEstimated ? "Estimated score" : band.label}</p>
+          <details className="group mt-2 text-sm">
+            <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden opacity-80 hover:opacity-100">
+              <ChevronRight
+                className="h-4 w-4 shrink-0 transition-transform duration-150 group-open:rotate-90"
+                aria-hidden="true"
+              />
               Why this score?
             </summary>
             <ul className="mt-2 space-y-1">
@@ -706,60 +642,39 @@ export default async function HomePage(
                 <li className="opacity-80">No deductions. Everything looks healthy.</li>
               )}
             </ul>
-            {unconfirmedCount > 0 && (
+            {mostlyEstimated && (
+              <p className="mt-2 text-xs opacity-80">
+                Based on your home&apos;s age until you confirm your systems.
+              </p>
+            )}
+            {(biggestLever || unconfirmedCount > 0) && (
               <Link
                 href="/walkthrough"
-                className="mt-2 block font-medium underline"
+                className="mt-2 block font-medium underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
               >
-                Confirm your systems to make this score real
+                {biggestLever
+                  ? `Confirm your ${labelFor(SYSTEM_TYPES, biggestLever.system.system_type).toLowerCase()} (+${biggestLever.pts} pts)`
+                  : "Confirm your systems"}
               </Link>
             )}
           </details>
-          {biggestLever && (
-            <p className="mt-2 text-xs">
-              Biggest win:{" "}
-              <Link
-                href="/walkthrough"
-                className="font-medium underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
-              >
-                confirm your{" "}
-                {labelFor(SYSTEM_TYPES, biggestLever.system.system_type).toLowerCase()}{" "}
-                (+{biggestLever.pts} pts)
-              </Link>
-            </p>
-          )}
         </div>
-        <div className="card">
+        <Link
+          href={openJobsCount > 0 ? "/contractors#your-jobs" : "/contractors"}
+          className="card-link"
+        >
           <p className="stat-label text-sm">Open jobs</p>
           {openJobsCount > 0 ? (
-            <>
-              <p className="stat-number mt-1 text-2xl">
-                {openJobsCount}
-              </p>
-              <Link
-                href="/contractors#your-jobs"
-                className="text-sm text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
-              >
-                View job postings →
-              </Link>
-            </>
+            <p className="stat-number mt-1 text-2xl">{openJobsCount}</p>
           ) : (
-            <>
-              <p className="mt-1 text-lg font-semibold text-stone-900 dark:text-stone-100">
-                Post your first job
-              </p>
-              <p className="text-sm text-stone-500 dark:text-stone-400">
-                Describe what needs doing and get matched with a local pro.
-              </p>
-              <Link
-                href="/contractors"
-                className="text-sm text-bark-700 hover:underline dark:text-stone-300"
-              >
-                Find a pro →
-              </Link>
-            </>
+            <p className="mt-1 text-lg font-semibold text-stone-900 dark:text-stone-100">
+              No open jobs
+            </p>
           )}
-        </div>
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            {openJobsCount > 0 ? "View job postings" : "Post your first job"}
+          </p>
+        </Link>
         {/* Renders nothing: it exists to fire the one-per-home AVM lookup
             client-side, so the dashboard shows the real estimate instead of
             waiting for someone to open /value first. Cached 30 days in
@@ -770,10 +685,7 @@ export default async function HomePage(
           propertyId={property.id}
           silent
         />
-        <Link
-          href="/value"
-          className="card-link"
-        >
+        <Link href="/value" className="card-link">
           <p className="stat-label text-sm">Home value</p>
           {homeEstimatedValue != null ? (
             <>
@@ -782,48 +694,26 @@ export default async function HomePage(
               </p>
               <p className="text-sm text-stone-500 dark:text-stone-400">
                 {homeEquity != null && homeEquity < 0
-                  ? `-$${Math.round(Math.abs(homeEquity)).toLocaleString()} equity (underwater)`
+                  ? `-$${Math.round(Math.abs(homeEquity)).toLocaleString()} equity`
                   : `$${Math.round(homeEquity ?? 0).toLocaleString()} equity`}
-              </p>
-              {homeValueDelta != null && homeValueDelta !== 0 && (
-                <p
-                  className={`text-sm ${
-                    homeValueDelta > 0 ? "text-green-700 dark:text-green-400" : "text-stone-500 dark:text-stone-400"
-                  }`}
-                >
-                  {/* The period has to match what was actually compared:
-                      "this year" on an AVM would be a made-up figure, since
-                      the only real comparison it supports is against the
-                      purchase price. Both directions are reachable - an AVM
-                      can land below what someone paid. */}
-                  {homeValueDelta > 0 ? "Up" : "Down"} $
-                  {Math.round(Math.abs(homeValueDelta)).toLocaleString()}
-                  {homeValueDeltaSince === "purchase"
-                    ? " since you bought it"
-                    : " this year"}
-                </p>
-              )}
-              {/* Where the number came from, in the same words /value uses. */}
-              <p className="text-xs text-stone-500 dark:text-stone-400">
-                {homeHeadline?.sourceLabel}
               </p>
             </>
           ) : (
             <>
               <p className="mt-1 text-lg font-semibold text-stone-900 dark:text-stone-100">
-                Track your home&apos;s value
+                Not tracked yet
               </p>
               <p className="text-sm text-stone-500 dark:text-stone-400">
-                See what your home is likely worth today and how much equity
-                you have.
+                Get your estimate
               </p>
             </>
           )}
         </Link>
-        <div className="card">
-          <p className="stat-label text-sm">
-            Energy this season
-          </p>
+        <Link
+          href={energyEstimate ? "/forecast" : "/dashboard#systems"}
+          className="card-link"
+        >
+          <p className="stat-label text-sm">Energy this season</p>
           {energyEstimate ? (
             <>
               <p className="stat-number mt-1 text-2xl">
@@ -832,45 +722,21 @@ export default async function HomePage(
               </p>
               <p className="text-sm text-stone-500 dark:text-stone-400">
                 {energySeason === "winter"
-                  ? "to keep warm this winter"
-                  : "to stay cool this summer"}
+                  ? "For heating this winter"
+                  : "For cooling this summer"}
               </p>
-              {/* Same link and the same real numbers for everyone: the
-                  forecast page shows this HVAC upgrade estimate to free users
-                  too, so masking it here and pointing at a pitch page hid a
-                  number we already give away. */}
-              {upgradeSavings && (
-                <Link
-                  href="/forecast"
-                  className="mt-1 block text-xs text-bark-700 hover:underline dark:text-stone-300"
-                >
-                  Your HVAC is {upgradeSavings.hvacAge} years old. A new unit
-                  could save ~${upgradeSavings.low.toLocaleString()}-
-                  {upgradeSavings.high.toLocaleString()}/yr →
-                </Link>
-              )}
             </>
           ) : (
             <>
               <p className="mt-1 text-lg font-semibold text-stone-900 dark:text-stone-100">
-                Estimate your energy bills
+                No estimate yet
               </p>
               <p className="text-sm text-stone-500 dark:text-stone-400">
-                Add your home&apos;s state and square footage to see what
-                heating and cooling likely cost.
+                Add home details
               </p>
-              {/* Straight to the systems section. /profile still resolves
-                  here via the redirect in next.config.mjs, but an in-app link
-                  should not spend a round trip rediscovering that. */}
-              <Link
-                href="/dashboard#systems"
-                className="text-sm text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
-              >
-                Finish your home profile →
-              </Link>
             </>
           )}
-        </div>
+        </Link>
       </section>
 
       {/* This month: focus + one merged checklist (reminders + seasonal) */}
@@ -956,118 +822,134 @@ export default async function HomePage(
               </div>
             )}
 
-            <ChecklistProvider>
-              <div className="mt-3 space-y-4">
-                {/* Near-term work stays in view; everything further out folds
-                    into collapsed groups so the card shows a handful of tasks,
-                    not a wall. */}
-                {(["overdue", "soon"] as Urgency[])
-                  .filter((u) => groupedReminders[u].length > 0)
-                  .map((u) => (
-                    <div key={u}>
-                      <p
-                        className={`px-2 text-xs font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
-                      >
-                        {URGENCY_LABEL[u]} ({groupedReminders[u].length})
-                      </p>
-                      <ul className="mt-1 space-y-0.5">
-                        {groupedReminders[u].map((t) => (
-                          <ReminderItem
-                            key={t.id}
-                            id={t.id}
-                            title={t.title}
-                            due={t.due_date}
-                            daysLeft={t.due_date ? daysUntil(t.due_date) : null}
-                            initialDone={t.status === "done"}
-                          />
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+            <details
+              open={planOpen || isFirstVisit}
+              className="group mt-3"
+              data-testid="this-month-tasks"
+            >
+              <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden text-sm font-medium text-stone-700 dark:text-stone-300">
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
+                  aria-hidden="true"
+                />
+                See this month&apos;s tasks
+              </summary>
 
-                {(["later", "done"] as Urgency[])
-                  .filter((u) => groupedReminders[u].length > 0)
-                  .map((u) => (
-                    <details key={u} open={planOpen} className="group">
-                      <summary
-                        className={`focus-ring cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2 text-sm font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
+              <ChecklistProvider>
+                <div className="mt-3 space-y-4">
+                  {/* Near-term work stays in view; everything further out
+                      folds into collapsed groups so the card shows a handful
+                      of tasks, not a wall. */}
+                  {(["overdue", "soon"] as Urgency[])
+                    .filter((u) => groupedReminders[u].length > 0)
+                    .map((u) => (
+                      <div key={u}>
+                        <p
+                          className={`px-2 text-xs font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
+                        >
+                          {URGENCY_LABEL[u]} ({groupedReminders[u].length})
+                        </p>
+                        <ul className="mt-1 space-y-0.5">
+                          {groupedReminders[u].map((t) => (
+                            <ReminderItem
+                              key={t.id}
+                              id={t.id}
+                              title={t.title}
+                              due={t.due_date}
+                              daysLeft={t.due_date ? daysUntil(t.due_date) : null}
+                              initialDone={t.status === "done"}
+                            />
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+
+                  {(["later", "done"] as Urgency[])
+                    .filter((u) => groupedReminders[u].length > 0)
+                    .map((u) => (
+                      <details key={u} open={planOpen} className="group">
+                        <summary
+                          className={`focus-ring flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden px-2 text-xs font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
+                        >
+                          <ChevronRight
+                            className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
+                            aria-hidden="true"
+                          />
+                          {URGENCY_LABEL[u]} ({groupedReminders[u].length})
+                        </summary>
+                        <ul className="mt-1 space-y-0.5">
+                          {groupedReminders[u].map((t) => (
+                            <ReminderItem
+                              key={t.id}
+                              id={t.id}
+                              title={t.title}
+                              due={t.due_date}
+                              daysLeft={t.due_date ? daysUntil(t.due_date) : null}
+                              initialDone={t.status === "done"}
+                            />
+                          ))}
+                        </ul>
+                      </details>
+                    ))}
+
+                  <details open={planOpen || remindersTotal === 0} className="group">
+                    <summary className="focus-ring flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden px-2 text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-400">
+                      <ChevronRight
+                        className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
+                        aria-hidden="true"
+                      />
+                      Seasonal, {seasonLabel} ({SEASONAL_TASKS[season].length})
+                    </summary>
+                    <ul className="mt-1 space-y-0.5">
+                      <SeasonalChecklist
+                        period={monthKey}
+                        tasks={SEASONAL_TASKS[season]}
+                      />
+                    </ul>
+                  </details>
+                </div>
+              </ChecklistProvider>
+
+              {/* Warranties from the documents vault, folded in as a compact
+                  sub-block under this month's tasks instead of a standalone
+                  section further down the page. */}
+              {warranties.length > 0 && (
+                <div className="mt-4 border-t border-stone-100 pt-3 dark:border-white/10">
+                  <p className="text-sm font-medium text-stone-700 dark:text-stone-300">
+                    Warranties ({warranties.length})
+                  </p>
+                  <ul className="mt-1.5 divide-y divide-stone-100 dark:divide-white/10">
+                    {warranties.map((w) => (
+                      <li
+                        key={w.id}
+                        className="flex items-center justify-between gap-3 py-1.5 first:pt-0"
                       >
-                        <span className="mr-1 inline-block transition-transform group-open:rotate-90">
-                          ▸
+                        <span className="flex min-w-0 items-center gap-2 text-sm text-stone-800 dark:text-stone-200">
+                          <span>
+                            <FileText className="h-4 w-4" aria-hidden="true" />
+                          </span>
+                          <span className="truncate">{w.title ?? "Home document"}</span>
                         </span>
-                        {URGENCY_LABEL[u]} ({groupedReminders[u].length})
-                      </summary>
-                      <ul className="mt-1 space-y-0.5">
-                        {groupedReminders[u].map((t) => (
-                          <ReminderItem
-                            key={t.id}
-                            id={t.id}
-                            title={t.title}
-                            due={t.due_date}
-                            daysLeft={t.due_date ? daysUntil(t.due_date) : null}
-                            initialDone={t.status === "done"}
-                          />
-                        ))}
-                      </ul>
-                    </details>
-                  ))}
-
-                <details open={planOpen || remindersTotal === 0} className="group">
-                  <summary className="focus-ring cursor-pointer list-none [&::-webkit-details-marker]:hidden px-2 text-sm font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-400">
-                    <span className="mr-1 inline-block transition-transform group-open:rotate-90">
-                      ▸
-                    </span>
-                    Seasonal, {seasonLabel} ({SEASONAL_TASKS[season].length})
-                  </summary>
-                  <ul className="mt-1 space-y-0.5">
-                    <SeasonalChecklist
-                      period={monthKey}
-                      tasks={SEASONAL_TASKS[season]}
-                    />
+                        <span
+                          className={`chip shrink-0 text-sm ${
+                            w.days <= 60 ? "chip-warn" : "chip-muted"
+                          }`}
+                        >
+                          {warrantyLeft(w.days)}
+                        </span>
+                      </li>
+                    ))}
                   </ul>
-                </details>
-              </div>
-            </ChecklistProvider>
-
-            {/* Warranties from the documents vault, folded in as a compact
-                sub-block under this month's tasks instead of a standalone
-                section further down the page. */}
-            {warranties.length > 0 && (
-              <div className="mt-4 border-t border-stone-100 pt-3 dark:border-white/10">
-                <p className="text-sm font-medium text-stone-700 dark:text-stone-300">
-                  Warranties ({warranties.length})
-                </p>
-                <ul className="mt-1.5 divide-y divide-stone-100 dark:divide-white/10">
-                  {warranties.map((w) => (
-                    <li
-                      key={w.id}
-                      className="flex items-center justify-between gap-3 py-1.5 first:pt-0"
-                    >
-                      <span className="flex min-w-0 items-center gap-2 text-sm text-stone-800 dark:text-stone-200">
-                        <span>
-                          <FileText className="h-4 w-4" aria-hidden="true" />
-                        </span>
-                        <span className="truncate">{w.title ?? "Home document"}</span>
-                      </span>
-                      <span
-                        className={`chip shrink-0 text-sm ${
-                          w.days <= 60 ? "chip-warn" : "chip-muted"
-                        }`}
-                      >
-                        {warrantyLeft(w.days)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
-                  Pulled from your{" "}
-                  <Link href="/documents" className="text-bark-700 hover:underline dark:text-stone-300">
-                    documents
-                  </Link>
-                  .
-                </p>
-              </div>
-            )}
+                  <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
+                    Pulled from your{" "}
+                    <Link href="/documents" className="text-bark-700 hover:underline dark:text-stone-300">
+                      documents
+                    </Link>
+                    .
+                  </p>
+                </div>
+              )}
+            </details>
           </div>
         </div>
       </section>
@@ -1087,8 +969,7 @@ export default async function HomePage(
                 Build my maintenance plan
               </h3>
               <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-                Upkeep reminders timed to your home&apos;s systems, a few at a
-                time so it never feels like a chore.
+                Reminders timed to your systems.
               </p>
             </div>
           </div>
@@ -1124,8 +1005,7 @@ export default async function HomePage(
                 </SubmitButton>
               </form>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                Your first plan build is free. Keeping it fresh as your home
-                changes is a Plus thing.
+                First plan build is free.
               </p>
             </div>
           ) : (
@@ -1142,7 +1022,7 @@ export default async function HomePage(
           )}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
           {[
             // All three go straight to the tool, member or not. Each page
             // handles its own gating in context (the forecast masks the
@@ -1154,39 +1034,39 @@ export default async function HomePage(
               href: "/forecast",
               icon: TrendingUp,
               title: "Cost forecast",
-              desc: "See what will need replacing and the amount to set aside each month.",
+              line: "Plan future costs",
             },
             {
               href: "/quote-check",
               icon: Search,
               title: "Quote analyzer",
-              desc: "Snap a contractor's quote and check whether the price is fair.",
+              line: "Check a quote",
             },
             {
               href: "/home-report",
               icon: ClipboardList,
               title: "Home report",
-              desc: "A shareable record of your home for insurance and resale.",
+              line: "Shareable home record",
             },
           ].map((t) => (
-            <Link
-              key={t.title}
-              href={t.href}
-              className="card-link"
-            >
+            <Link key={t.title} href={t.href} className="card-link p-3 text-center">
               <p className="icon-chip">
                 <t.icon className="h-5 w-5" aria-hidden="true" />
               </p>
-              <p className="mt-1 font-medium text-stone-900 dark:text-stone-100">
+              <p className="mt-1.5 text-xs font-medium text-stone-900 dark:text-stone-100 sm:text-sm">
                 {t.title}
-                {!plus && <PlusChip className="ml-1.5" />}
-                {!plus && freeQuoteCredit && t.title === "Quote analyzer" && (
-                  <span className="chip ml-1.5 bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300">
-                    1 free
-                  </span>
-                )}
               </p>
-              <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{t.desc}</p>
+              {!plus && (
+                <p className="mt-0.5 flex flex-wrap justify-center gap-1">
+                  <PlusChip />
+                  {freeQuoteCredit && t.title === "Quote analyzer" && (
+                    <span className="chip bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300">
+                      1 free
+                    </span>
+                  )}
+                </p>
+              )}
+              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{t.line}</p>
             </Link>
           ))}
         </div>
@@ -1232,8 +1112,7 @@ export default async function HomePage(
               </span>
             </div>
             <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-              No systems yet. Add your roof, HVAC, and water heater first. Those
-              drive the most useful reminders.
+              Add your roof, HVAC, and water heater to get started.
             </p>
             {/* One-tap starts: each chip files the system with just its type;
                 details (year, condition, photos) can come later in a
@@ -1267,10 +1146,11 @@ export default async function HomePage(
           below Systems too. */}
       {isFirstVisit ? (
         <details className="group space-y-3">
-          <summary className="focus-ring w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden text-lg font-semibold text-stone-900 dark:text-stone-100">
-            <span className="mr-1 inline-block transition-transform group-open:rotate-90">
-              ▸
-            </span>
+          <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden text-lg font-semibold text-stone-900 dark:text-stone-100">
+            <ChevronRight
+              className="h-5 w-5 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
+              aria-hidden="true"
+            />
             Thinking about a project?
           </summary>
           {projectChips}

@@ -70,14 +70,19 @@ function extraHomeSlotsFromItems(subscription: any): number {
   return Number.isFinite(qty) && qty > 0 ? qty : 0;
 }
 
-// Derive the stored plan ("monthly"/"yearly") from the price on the BASE
-// subscription item (never the extra-home add-on item). It changes on an
+// Derive the stored plan ("weekly"/"monthly"/"yearly") from the price on the
+// BASE subscription item (never the extra-home add-on item). It changes on an
 // immediate upgrade and again when a scheduled downgrade's monthly phase kicks
 // in at period end.
+//
+// All three Plus cadences are sold, so "week" maps as readily as the other two.
+// Pro sells monthly and yearly only, and the caller that re-derives a pro_ plan
+// name from this value ignores a weekly result for exactly that reason.
 function planFromItems(subscription: any): string | null {
   const interval = baseItem(subscription)?.price?.recurring?.interval;
   if (interval === "year") return "yearly";
   if (interval === "month") return "monthly";
+  if (interval === "week") return "weekly";
   return null;
 }
 
@@ -1160,12 +1165,22 @@ export async function POST(req: NextRequest) {
       // card that burned a Plus trial is also known to the Pro checkout.
       await recordSubscriptionCard(meta.user_id, subscription, "plus_checkout");
 
-      // Retainable acknowledgment of the auto-renewal terms. The free first
-      // month is a Stripe trial, so "trialing" is the step-up signal here.
+      // Retainable acknowledgment of the auto-renewal terms. The free days are
+      // a Stripe trial, so "trialing" is the step-up signal here.
+      //
+      // The interval Stripe actually billed wins over the session metadata:
+      // metadata is what the buyer's form said, the items are what the
+      // subscription is. Only when the interval is unreadable does the
+      // metadata plan decide, and it is checked against the same three names.
+      const derivedPlusPlan = planFromItems(subscription);
       const plusPlan: PaidPlan =
-        planFromItems(subscription) === "yearly" || meta.plan === "yearly"
-          ? "yearly"
-          : "monthly";
+        derivedPlusPlan === "weekly" ||
+        derivedPlusPlan === "monthly" ||
+        derivedPlusPlan === "yearly"
+          ? derivedPlusPlan
+          : meta.plan === "weekly" || meta.plan === "yearly"
+            ? meta.plan
+            : "monthly";
       await sendRenewalAcknowledgment(
         admin,
         meta.user_id,
@@ -1175,8 +1190,9 @@ export async function POST(req: NextRequest) {
       );
 
       // Same card re-check as the Pro branch above. Plus only trials on the
-      // monthly plan, so on yearly this is a no-op (the subscription is never
-      // "trialing"), which is correct and costs one status comparison.
+      // weekly plan, so on monthly and yearly this is a no-op (the
+      // subscription is never "trialing"), which is correct and costs one
+      // status comparison.
       await endTrialIfRisky(
         admin,
         meta.user_id,
@@ -1364,8 +1380,14 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
       const existingPlan: string | null = existing?.plan ?? null;
       if (interval && existingPlan?.startsWith("pro_")) {
+        // Pro sells monthly and yearly only. A "weekly" interval on a pro_ row
+        // is not a plan that exists, so the stored name is kept rather than
+        // inventing a pro_weekly - the same conservative branch any other
+        // non-standard pro_ plan name already takes.
+        const proCadence = interval === "monthly" || interval === "yearly";
         plan =
-          existingPlan === "pro_monthly" || existingPlan === "pro_yearly"
+          proCadence &&
+          (existingPlan === "pro_monthly" || existingPlan === "pro_yearly")
             ? `pro_${interval}`
             : existingPlan;
       }

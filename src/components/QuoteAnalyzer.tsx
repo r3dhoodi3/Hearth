@@ -948,7 +948,7 @@ export default function QuoteAnalyzer({
         <div className="card space-y-3 border-bark-100 bg-bark-50 text-center dark:border-bark-700 dark:bg-bark-700/40">
           <p className="text-sm text-bark-700 dark:text-stone-300">
             That was your free check. Get every quote checked with Hearth Plus,
-            $4.99/mo (3-day free trial for new members).
+            $4.99/mo, or start weekly with 3 free days.
           </p>
           <Link href="/plus?reason=quote" className="btn-primary inline-block">
             Get Hearth Plus

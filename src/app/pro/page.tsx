@@ -66,6 +66,17 @@ function money(n: number | string | null) {
   return Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
 }
 
+// The fee slot on a phone lead card's one-line glance. Normally the already-
+// formatted price string; "Free" for an exact-zero fee, "New lead" as a
+// defensive fallback if a fee could not be computed at all - LEAD_TIER_FEES
+// never actually reaches zero today, but the glance line should never show a
+// blank price.
+function feeGlanceLabel(fee: number, feeStr: string): string {
+  if (!Number.isFinite(fee)) return "New lead";
+  if (fee <= 0) return "Free";
+  return feeStr;
+}
+
 // How long a job has been sitting open - shown on the card so a pro can see
 // why an aging markdown exists (or that a listing is brand new).
 function postedAgo(createdAt: string | null | undefined): string | null {
@@ -579,45 +590,20 @@ export default async function ProDashboard(
                 d.budget_range && d.budget_range !== "not-sure"
                   ? labelFor(BUDGET_RANGES, d.budget_range)
                   : null;
-              return (
-                <li key={d.id} className="card space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                      {labelFor(JOB_CATEGORIES, d.category)}
-                      {d.city ? (
-                        <span className="font-normal text-stone-500 dark:text-stone-400">
-                          in {d.city}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="chip border border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
-                      Direct request
-                    </span>
-                    {d.issue_severity && (
-                      <span
-                        className={`chip border ${SEVERITY_STYLE[d.issue_severity] ?? ""}`}
-                      >
-                        {d.issue_severity}
-                      </span>
-                    )}
-                    <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
-                      {introFee !== null && (
-                        <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
-                          First big-ticket lead
-                        </span>
-                      )}
-                      <span className="[font-variant-numeric:tabular-nums]">
-                        Unlock fee{" "}
-                        {introFee !== null && (
-                          <span className="text-stone-500 line-through dark:text-stone-400">
-                            {money(normalFee)}
-                          </span>
-                        )}{" "}
-                        {feeStr}
-                      </span>
-                    </span>
-                  </div>
-
+              const feeGlance = feeGlanceLabel(fee, feeStr);
+              const glanceLine2 = [
+                d.timing ? labelFor(TIMING_OPTIONS, d.timing) : null,
+                d.city ? `in ${d.city}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              // Folded detail (0128 phone density pass): description, photos,
+              // budget/quality/scope chips, posted-ago/timing. Rendered once
+              // here and reused below in both the phone <details> and the
+              // desktop always-visible div, so the two variants can never
+              // drift out of sync.
+              const detailsContent = (
+                <>
                   {d.issue_description ? (
                     <p className="text-sm text-stone-600 dark:text-stone-400">
                       {d.issue_description}
@@ -676,6 +662,99 @@ export default async function ProDashboard(
                       )}
                     </div>
                   )}
+                </>
+              );
+              return (
+                <li key={d.id} className="card space-y-3">
+                  {/* Header: one glanceable line below sm (category + fee,
+                      then timing/city), the full desktop row at sm+. Both
+                      variants share one wrapper div so this list item's
+                      space-y-3 sees a single child here rather than two -
+                      Tailwind's space-y margin selector only excludes
+                      children carrying the HTML "hidden" attribute, not ones
+                      merely styled display:none, so two breakpoint-gated
+                      siblings would each still count and add a phantom gap.
+                      Same reasoning applies to the folded-detail wrapper
+                      below. */}
+                  <div>
+                    <div className="sm:hidden">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 flex-1 font-medium text-stone-900 dark:text-stone-100">
+                          {labelFor(JOB_CATEGORIES, d.category)}
+                        </span>
+                        <span className="shrink-0 text-sm font-semibold text-stone-700 [font-variant-numeric:tabular-nums] dark:text-stone-300">
+                          {feeGlance}
+                        </span>
+                      </div>
+                      {glanceLine2 && (
+                        <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
+                          {glanceLine2}
+                        </p>
+                      )}
+                    </div>
+                    <div className="hidden flex-wrap items-center gap-2 sm:flex">
+                      <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
+                        {labelFor(JOB_CATEGORIES, d.category)}
+                        {d.city ? (
+                          <span className="font-normal text-stone-500 dark:text-stone-400">
+                            in {d.city}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="chip border border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                        Direct request
+                      </span>
+                      {d.issue_severity && (
+                        <span
+                          className={`chip border ${SEVERITY_STYLE[d.issue_severity] ?? ""}`}
+                        >
+                          {d.issue_severity}
+                        </span>
+                      )}
+                      <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
+                        {introFee !== null && (
+                          <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                            First big-ticket lead
+                          </span>
+                        )}
+                        <span className="[font-variant-numeric:tabular-nums]">
+                          Unlock fee{" "}
+                          {introFee !== null && (
+                            <span className="text-stone-500 line-through dark:text-stone-400">
+                              {money(normalFee)}
+                            </span>
+                          )}{" "}
+                          {feeStr}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Folded detail: description, photos, budget/quality/scope
+                      chips, and posted-ago/timing - collapsed by default on
+                      phone via a real <details> disclosure, always visible
+                      above sm. */}
+                  <div>
+                    <details className="group sm:hidden">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-medium text-hearth-700 [&::-webkit-details-marker]:hidden dark:text-hearth-300">
+                        Details
+                        <svg
+                          viewBox="0 0 20 20"
+                          className="h-4 w-4 transition-transform group-open:rotate-180"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </summary>
+                      <div className="mt-2 space-y-3">{detailsContent}</div>
+                    </details>
+                    <div className="hidden space-y-3 sm:block">{detailsContent}</div>
+                  </div>
 
                   <DirectRequestActions
                     leadId={d.id}
@@ -847,57 +926,20 @@ export default async function ProDashboard(
                 j.budget_range && j.budget_range !== "not-sure"
                   ? labelFor(BUDGET_RANGES, j.budget_range)
                   : null;
-              return (
-                <li key={j.id} className="card space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                      {labelFor(JOB_CATEGORIES, j.category)}
-                      {/* Locality: open_jobs_for_me (0074) returns the
-                          property city. Pros price a lead by where it is. */}
-                      {j.city ? (
-                        <span className="font-normal text-stone-500 dark:text-stone-400">
-                          in {j.city}
-                        </span>
-                      ) : null}
-                    </span>
-                    {j.issue_severity && (
-                      <span
-                        className={`chip border ${SEVERITY_STYLE[j.issue_severity] ?? ""}`}
-                      >
-                        {j.issue_severity}
-                      </span>
-                    )}
-                    {j.ownership_verified && (
-                      <span
-                        className="chip-ok"
-                        title="The poster's account name matches the county assessor's owner record for this address."
-                      >
-                        Ownership verified
-                      </span>
-                    )}
-                    <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
-                      {introFee !== null && (
-                        <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
-                          First big-ticket lead
-                        </span>
-                      )}
-                      {off > 0 && introFee === null && (
-                        <span className="chip border border-amber-200 bg-amber-100 font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
-                          {off}% off, aging deal
-                        </span>
-                      )}
-                      <span className="[font-variant-numeric:tabular-nums]">
-                        Apply fee{" "}
-                        {(off > 0 || introFee !== null) && (
-                          <span className="text-stone-500 line-through dark:text-stone-400">
-                            {baseStr}
-                          </span>
-                        )}{" "}
-                        {feeStr}
-                      </span>
-                    </span>
-                  </div>
-
+              const feeGlance = feeGlanceLabel(fee, feeStr);
+              const glanceLine2 = [
+                j.timing ? labelFor(TIMING_OPTIONS, j.timing) : null,
+                j.city ? `in ${j.city}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              // Folded detail (0128 phone density pass): description, photos,
+              // budget/quality/scope chips, posted-ago/timing. Rendered once
+              // here and reused below in both the phone <details> and the
+              // desktop always-visible div, so the two variants can never
+              // drift out of sync.
+              const detailsContent = (
+                <>
                   {j.issue_description ? (
                     <p className="text-sm text-stone-600 dark:text-stone-400">
                       {j.issue_description}
@@ -958,6 +1000,111 @@ export default async function ProDashboard(
                       )}
                     </div>
                   )}
+                </>
+              );
+              return (
+                <li key={j.id} className="card space-y-3">
+                  {/* Header: one glanceable line below sm (category + fee,
+                      then timing/city), the full desktop row at sm+. Both
+                      variants share one wrapper div so this list item's
+                      space-y-3 sees a single child here rather than two -
+                      Tailwind's space-y margin selector only excludes
+                      children carrying the HTML "hidden" attribute, not ones
+                      merely styled display:none, so two breakpoint-gated
+                      siblings would each still count and add a phantom gap.
+                      Same reasoning applies to the folded-detail wrapper
+                      below. */}
+                  <div>
+                    <div className="sm:hidden">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 flex-1 font-medium text-stone-900 dark:text-stone-100">
+                          {labelFor(JOB_CATEGORIES, j.category)}
+                        </span>
+                        <span className="shrink-0 text-sm font-semibold text-stone-700 [font-variant-numeric:tabular-nums] dark:text-stone-300">
+                          {feeGlance}
+                        </span>
+                      </div>
+                      {glanceLine2 && (
+                        <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
+                          {glanceLine2}
+                        </p>
+                      )}
+                    </div>
+                    <div className="hidden flex-wrap items-center gap-2 sm:flex">
+                      <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
+                        {labelFor(JOB_CATEGORIES, j.category)}
+                        {/* Locality: open_jobs_for_me (0074) returns the
+                            property city. Pros price a lead by where it is. */}
+                        {j.city ? (
+                          <span className="font-normal text-stone-500 dark:text-stone-400">
+                            in {j.city}
+                          </span>
+                        ) : null}
+                      </span>
+                      {j.issue_severity && (
+                        <span
+                          className={`chip border ${SEVERITY_STYLE[j.issue_severity] ?? ""}`}
+                        >
+                          {j.issue_severity}
+                        </span>
+                      )}
+                      {j.ownership_verified && (
+                        <span
+                          className="chip-ok"
+                          title="The poster's account name matches the county assessor's owner record for this address."
+                        >
+                          Ownership verified
+                        </span>
+                      )}
+                      <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
+                        {introFee !== null && (
+                          <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                            First big-ticket lead
+                          </span>
+                        )}
+                        {off > 0 && introFee === null && (
+                          <span className="chip border border-amber-200 bg-amber-100 font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
+                            {off}% off, aging deal
+                          </span>
+                        )}
+                        <span className="[font-variant-numeric:tabular-nums]">
+                          Apply fee{" "}
+                          {(off > 0 || introFee !== null) && (
+                            <span className="text-stone-500 line-through dark:text-stone-400">
+                              {baseStr}
+                            </span>
+                          )}{" "}
+                          {feeStr}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Folded detail: description, photos, budget/quality/scope
+                      chips, and posted-ago/timing - collapsed by default on
+                      phone via a real <details> disclosure, always visible
+                      above sm. */}
+                  <div>
+                    <details className="group sm:hidden">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-medium text-hearth-700 [&::-webkit-details-marker]:hidden dark:text-hearth-300">
+                        Details
+                        <svg
+                          viewBox="0 0 20 20"
+                          className="h-4 w-4 transition-transform group-open:rotate-180"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </summary>
+                      <div className="mt-2 space-y-3">{detailsContent}</div>
+                    </details>
+                    <div className="hidden space-y-3 sm:block">{detailsContent}</div>
+                  </div>
 
                   {/* Applicant count: shown on every card so a pro can judge
                       competition before paying the apply fee, not just once

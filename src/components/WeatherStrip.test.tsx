@@ -1,7 +1,19 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  cleanup,
+  act,
+  fireEvent,
+} from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
+import {
+  convertTemp,
+  formatTemp,
+  TEMP_UNIT_STORAGE_KEY,
+} from "@/lib/weatherUnits";
 
 // fetchHomeAlerts is mocked per test so we control exactly what the route
 // would have returned, including the hasLocation flag this fix adds.
@@ -22,13 +34,28 @@ const realWeather = {
   daily: [],
 };
 
+// A home with a real week attached, for the unit tests below. 72F/80F/60F map
+// to 22C/27C/16C, and the daily row carries a null low so the "--" hole keeps
+// working once the numbers go through the converter.
+const weatherWithWeek = {
+  ...realWeather,
+  today: "2026-01-05",
+  daily: [
+    { date: "2026-01-06", code: 0, highF: 68, lowF: null, rainPct: 4 },
+  ],
+};
+
 beforeEach(() => {
   fetchHomeAlerts.mockReset();
+  window.localStorage.clear();
 });
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  // The localStorage-throws test installs a Storage.prototype spy; restoring
+  // here keeps a failed assertion from leaking it into the next test.
+  vi.restoreAllMocks();
 });
 
 describe("WeatherStrip", () => {
@@ -126,5 +153,99 @@ describe("WeatherStrip", () => {
     fetchHomeAlerts.mockReturnValue(new Promise(() => {})); // never resolves
     const { container } = render(<WeatherStrip propertyId="p1" />);
     expect(container.querySelector(".motion-safe\\:animate-pulse")).toBeTruthy();
+  });
+});
+
+describe("temperature conversion", () => {
+  it("rounds Fahrenheit through unchanged and converts to whole Celsius", () => {
+    expect(convertTemp(72, "F")).toBe(72);
+    expect(convertTemp(72.4, "F")).toBe(72);
+    expect(convertTemp(32, "C")).toBe(0);
+    expect(convertTemp(212, "C")).toBe(100);
+    expect(convertTemp(72, "C")).toBe(22);
+    expect(convertTemp(-40, "C")).toBe(-40);
+  });
+
+  it("renders a missing temperature as a hole in both units", () => {
+    expect(formatTemp(null, "F")).toBe("--");
+    expect(formatTemp(null, "C")).toBe("--");
+    expect(formatTemp(68, "F")).toBe("68°");
+    expect(formatTemp(68, "C")).toBe("20°");
+  });
+});
+
+describe("WeatherStrip units", () => {
+  it("defaults to Fahrenheit when nothing has been stored", async () => {
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: [],
+      current: realWeather,
+      hasLocation: true,
+    });
+    render(<WeatherStrip propertyId="p1" />);
+    expect(await screen.findByText("72° Sunny")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show temperatures in Fahrenheit" })
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("converts the row and the week, and remembers the choice", async () => {
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: [],
+      current: weatherWithWeek,
+      hasLocation: true,
+    });
+    render(<WeatherStrip propertyId="p1" />);
+
+    // Open the week first, so both the summary row and a daily row are on
+    // screen when the unit flips.
+    fireEvent.click(await screen.findByRole("button", { name: /forecast/i }));
+    const dayRow = screen.getByRole("listitem");
+    expect(dayRow).toHaveTextContent("68°");
+    expect(dayRow).toHaveTextContent("--");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show temperatures in Celsius" })
+    );
+
+    expect(screen.getByText("22° Sunny")).toBeInTheDocument();
+    expect(screen.getByText(/H 27° L 16°/)).toBeInTheDocument();
+    // 68F -> 20C on the daily row, and the null low is still a hole.
+    expect(dayRow).toHaveTextContent("20°");
+    expect(dayRow).toHaveTextContent("--");
+    expect(window.localStorage.getItem(TEMP_UNIT_STORAGE_KEY)).toBe("C");
+  });
+
+  it("starts in Celsius when that is what the device remembers", async () => {
+    window.localStorage.setItem(TEMP_UNIT_STORAGE_KEY, "C");
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: [],
+      current: realWeather,
+      hasLocation: true,
+    });
+    render(<WeatherStrip propertyId="p1" />);
+    expect(await screen.findByText("22° Sunny")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show temperatures in Celsius" })
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("falls back to Fahrenheit when localStorage throws", async () => {
+    const spy = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new Error("site data blocked");
+      });
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: [],
+      current: realWeather,
+      hasLocation: true,
+    });
+    render(<WeatherStrip propertyId="p1" />);
+    expect(await screen.findByText("72° Sunny")).toBeInTheDocument();
+    spy.mockRestore();
   });
 });

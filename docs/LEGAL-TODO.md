@@ -88,6 +88,43 @@ exists; "Open" means nothing exists yet.
 19. **Written data retention schedule** (the privacy page describes deletion;
     no internal document exists).
 
+## 4. 2026-08-26 update (privacy / AI-disclosure copy pass)
+
+`/privacy`, `/ai-disclosure` and `src/lib/privacy.ts` were updated to reflect
+five code changes: the Orange County-wide service area (36 cities,
+`src/lib/serviceArea.ts`), the RentCast-AVM-or-formula home value estimate
+(`src/lib/homeValue.ts`) and the new Photon/OpenStreetMap address-suggestion
+third party (`src/lib/addressSuggest.ts`), a first-party cookie list
+(`hearth_did`, `hearth_fp`, `hearth_pwrecovery`, the active-home cookie),
+Twilio's 10-digit-US-numbers-only scope and STOP keyword, and the Orange-County gate
+plus slur/contact-info moderation on public pro profiles
+(`src/lib/publicText.ts`). No code changed as part of this pass, only the
+legal-copy pages; still flagging for counsel:
+
+20. **Re-flagging from item 2**: the DMCA agent is still unregistered and
+    `src/app/dmca/page.tsx` is still blank. Open.
+21. **Re-flagging from item 3**: the mailing/business address placeholders in
+    `src/lib/notify.ts`, the terms opt-out address, and the DMCA page are
+    still unfilled `TODO(legal)` markers. Open.
+22. **Follow-up on 10b(a)**: the `/privacy` copy and the
+    "Abuse-prevention identifiers" CCPA category now explicitly state that
+    trial-abuse signals are retained only while the account exists, deleted
+    with the account, and that a chargeback or manual flag can remove trial
+    eligibility with the decision logged. Point (a) of 10b can likely be
+    closed on review; points (b) and (c) of 10b (whether a hashed
+    IP/device id needs more than notice under CPRA's sharing/ADMT rules, and
+    whether to invoke the fraud-prevention retention exception) are still
+    open decisions, unchanged by this copy pass.
+23. **Orange County service-area expansion**: confirm the wider launch area
+    (up from a handful of cities to all 36) doesn't trigger additional
+    per-city business-license or marketplace-registration requirements beyond
+    the Huntington Beach license already flagged in item 1.
+24. **Public pro profile gating and moderation**: confirm the
+    Orange-County-only visibility gate and the automated slur/profanity/
+    contact-info filter on business name and About text
+    (`src/lib/publicText.ts`, a keyword filter, not human review) is adequate
+    disclosure and doesn't need its own consumer-facing moderation policy.
+
 Files with `TODO(legal)` needing attorney sign-off: terms, pro-terms,
 ai-disclosure, dmca pages; `src/lib/constants.ts`, `src/lib/notify.ts`,
 `src/lib/privacy.ts`, `src/components/LegalContact.tsx`,

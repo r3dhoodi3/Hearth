@@ -1236,6 +1236,28 @@ export interface Database {
         >;
         Relationships: [];
       };
+      app_feedback: {
+        Row: {
+          id: string;
+          user_id: string;
+          side: string;
+          kind: string;
+          message: string | null;
+          contact_email: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          side?: string;
+          kind: string;
+          message?: string | null;
+          contact_email?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["app_feedback"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       lead_previews: {

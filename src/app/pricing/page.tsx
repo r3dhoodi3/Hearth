@@ -50,6 +50,7 @@ export const metadata: Metadata = {
 // drift: the saving is always twelve charges at the real monthly price minus
 // the yearly price (never an invented list price), and the per-day figure is
 // the yearly price over 365 days, rounded UP to the cent.
+const WEEKLY = formatUsd(PLUS_PLAN.weekly); // $1.99
 const MONTHLY = formatUsd(PLUS_PLAN.monthly); // $4.99
 const YEARLY = formatUsd(PLUS_PLAN.yearly); // $39.99
 const YEARLY_PER_MONTH = formatUsd(yearlyAsMonthly(PLUS_PLAN)); // about $3.33
@@ -170,10 +171,10 @@ export default function PricingPage() {
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               About {YEARLY_PER_MONTH} a month, billed once a year.
             </p>
-            {/* The trial belongs to the monthly plan only, so this card says
+            {/* The trial belongs to the weekly plan only, so this card says
                 plainly what yearly does instead: it charges at signup. Saying
-                nothing here would leave the trial line on the monthly card to
-                be read as covering both. */}
+                nothing here would leave the trial line elsewhere on the page to
+                be read as covering this plan too. */}
             <p className="mt-3 text-sm font-medium text-bark-700 dark:text-stone-300">
               {YEARLY} today, then every 12 months. No trial on yearly.
             </p>
@@ -214,8 +215,13 @@ export default function PricingPage() {
             <p className="mt-2 text-sm text-stone-700 dark:text-stone-300">
               The same Plus, month to month.
             </p>
+            {/* Monthly is billed on day one. The {TRIAL_DAYS} free days ride on
+                the weekly plan and nowhere else, so this card names the plan
+                that has them rather than implying it has them itself. */}
             <p className="mt-3 text-sm font-medium text-bark-700 dark:text-stone-300">
-              Your first {TRIAL_DAYS} days are free, then {MONTHLY} a month.
+              {MONTHLY} today, then every month. Want to try it first? The
+              weekly plan is {WEEKLY} a week and starts with {TRIAL_DAYS} free
+              days.
             </p>
           </div>
           {/* The page's one loss-framed line, and the loss is real today: the
@@ -246,17 +252,19 @@ export default function PricingPage() {
           How the Plus trial and billing work
         </h2>
         <p className="mt-2 text-base leading-relaxed text-stone-700 dark:text-stone-300">
-          The free trial is part of the monthly plan. If you start Plus monthly,
+          The free trial is part of the weekly plan. If you start Plus weekly,
           your first {TRIAL_DAYS} days are free and nothing is charged, then it
-          renews automatically at {MONTHLY} a month until you cancel.
+          renews automatically at {WEEKLY} a week until you cancel.
         </p>
         <p className="mt-2 text-base leading-relaxed text-stone-700 dark:text-stone-300">
-          The yearly plan has no trial: it charges {YEARLY} today and renews
-          every 12 months until you cancel.
+          The monthly and yearly plans have no trial: monthly charges {MONTHLY}
+          {" "}
+          today and renews every month, yearly charges {YEARLY} today and renews
+          every 12 months, both until you cancel.
         </p>
         <p className="mt-2 text-base leading-relaxed text-stone-700 dark:text-stone-300">
           You can cancel anytime from your account with one button. There is
-          nothing to call or email. If you cancel during the monthly plan&apos;s
+          nothing to call or email. If you cancel during the weekly plan&apos;s
           {" "}
           {TRIAL_DAYS}-day trial, you are never charged, and if you cancel later
           you keep Plus until the end of the period you already paid for.
