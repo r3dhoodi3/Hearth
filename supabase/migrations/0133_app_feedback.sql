@@ -55,6 +55,23 @@ create table if not exists public.app_feedback (
 );
 create index if not exists app_feedback_user_id_idx on public.app_feedback (user_id);
 
+-- At most ONE of each message-less prompt event per account, enforced by the
+-- database rather than by the app remembering to check. recordReviewPromptEvent
+-- is a server action: any signed-in account can call it directly, in a loop,
+-- with any kind, and a double-submit (React strict mode, a retried action)
+-- reaches it by accident too. Without this, "at most once per account" was only
+-- ever a read-then-write race away from a table full of duplicate rows.
+--
+-- Partial on `message is null` on purpose: that is exactly the three
+-- prompt-event rows ('prompt_shown', 'loved', 'not_really' from the card). The
+-- /feedback form's rows carry a message and are deliberately NOT constrained -
+-- app_feedback is that form's inbox, and somebody with two things to tell us
+-- gets to send both. The insert path treats the resulting unique violation
+-- (23505) as "already recorded", not as an error.
+create unique index if not exists app_feedback_one_event_per_kind_idx
+  on public.app_feedback (user_id, kind)
+  where message is null;
+
 alter table public.app_feedback enable row level security;
 
 -- A user can insert their own row (either kind of prompt event, or the

@@ -283,10 +283,13 @@ export default function ProPlanToggle({
         </button>
       </div>
 
-      {/* The trial IS the headline, and the price is the follow-through line
-          directly under it, never the lead. Both numbers are real: nothing is
-          charged for the first PRO_PLAN.trialDays days, and the price below is
-          what the card is charged when the trial converts. */}
+      {/* The trial IS the headline, and the price recap directly under it is
+          the only other line here - AutoRenewalTerms below already carries
+          every fact (what's charged today, what it becomes, how to cancel),
+          so this block used to restate the same terms in prose twice more
+          (once above the form, once again after the button), which was pure
+          duplication padding out the page. One recap line, one disclosure,
+          one button. */}
       <div className="card-hero space-y-4 text-center">
         <div className="space-y-0.5">
           {trialEligible && (
@@ -300,11 +303,6 @@ export default function ProPlanToggle({
               {copy.unit}
             </span>
           </p>
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            {trialEligible
-              ? `Then ${copy.price}${copy.unit}, ${copy.billed}. Auto-renews until you cancel.`
-              : `${copy.price}${copy.unit}, ${copy.billed}. Auto-renews until you cancel.`}
-          </p>
         </div>
 
         {/* The recurring terms sit INSIDE the checkout form, immediately above
@@ -313,7 +311,10 @@ export default function ProPlanToggle({
             carry the same trial, so introEligible mirrors trialEligible directly
             instead of being plan-specific. The hidden field carries the selected
             cadence; startProCheckoutAction defaults to yearly, the same plan
-            preselected above, so the two can never disagree. */}
+            preselected above, so the two can never disagree. This is the ONE
+            checkout button on the page below the top trial shortcut - its label
+            and its AutoRenewalTerms both follow whichever cadence card is
+            selected, so they can never say two different things. */}
         <form action={startProCheckoutAction} className="space-y-3">
           <input type="hidden" name="plan" value={plan} />
           <AutoRenewalTerms
@@ -327,14 +328,6 @@ export default function ProPlanToggle({
                 : "Start my Pro membership"
             }
           />
-          {/* Restates the auto-renewal and the cancellation right at the point of
-              consent. The button label is the affirmative act; this line makes
-              clear what is being agreed to. */}
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            {trialEligible
-              ? `We take your card now and charge nothing today. Then ${copy.price}${copy.unit}, automatically, until you cancel. Cancel anytime before the trial ends and you won't be charged. Your lead access never changes either way.`
-              : `By continuing you agree to the automatic renewal terms above. Cancel anytime. Your lead access never changes either way.`}
-          </p>
         </form>
       </div>
     </div>

@@ -107,9 +107,22 @@ function queryParam(path: string, key: string): string | null {
 // the OUTER ?next= was validated by the route, its inner one was not.
 // /onboarding inside /onboarding is rejected too, since following it walks
 // straight back into the page this rewrite exists to avoid.
+//
+// The control-character and backslash rules are not decoration, they are the
+// whole reason this cannot be a bare startsWith("/") check. safeNextPath saw
+// the OUTER value "/onboarding?next=/%5Cevil.com", which is a perfectly
+// ordinary relative path of ours. URLSearchParams.get() then percent-DECODES
+// the inner one, so what lands here is "/\evil.com" - and the WHATWG URL
+// parser normalizes that backslash to a slash, making new URL(inner, origin)
+// resolve to https://evil.com/. A C0 control character (the %09 form) is
+// stripped by the same parser, with the same result. Both must be rejected
+// against the DECODED value, which is exactly what this function holds.
 function innerNext(path: string): string | null {
   const inner = queryParam(path, "next");
   if (!inner) return null;
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f\x7f]/.test(inner)) return null;
+  if (inner.includes("\\")) return null;
   if (!inner.startsWith("/") || inner.startsWith("//")) return null;
   if (isFirstHomeSetupPath(inner)) return null;
   return inner;

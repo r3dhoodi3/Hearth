@@ -62,10 +62,15 @@ const FREE_BULLETS = [
 // single button underneath, so there is exactly one primary action on the page
 // instead of a button per column.
 //
-// MONTHLY is preselected: $4.99 is the anchor the whole page is priced around,
-// with weekly above it per month and annual below it. startPlusCheckoutAction
-// falls back to the same cadence, so the hidden field and the server can never
-// disagree.
+// WEEKLY is preselected whenever the trial is on offer, so the picker agrees
+// with the top "Start N free days" button above it instead of contradicting
+// it - the two used to disagree (that button always means weekly, but the
+// picker defaulted to Monthly), so tapping the top button and then glancing
+// at the picker looked like two different plans. With no trial to offer,
+// Monthly goes back to being the default: $4.99 is the anchor the whole page
+// is priced around, with weekly above it per month and annual below it.
+// startPlusCheckoutAction falls back to the same cadence, so the hidden field
+// and the server can never disagree.
 //
 // THE 3 FREE DAYS ARE PART OF WEEKLY, not a plan of their own and not an offer
 // on monthly or annual: those two bill at signup. `trialEligible` mirrors the
@@ -78,7 +83,9 @@ export default function PlanToggle({
 }: {
   trialEligible?: boolean;
 }) {
-  const [choice, setChoice] = useState<Choice>("monthly");
+  const [choice, setChoice] = useState<Choice>(
+    trialEligible ? "weekly" : "monthly"
+  );
   // The cadence the form posts. Free is not a cadence, so it falls back to the
   // anchor plan; the button is disabled in that state, so nothing can actually
   // be submitted while it is showing.

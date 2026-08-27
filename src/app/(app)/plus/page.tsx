@@ -4,8 +4,7 @@ import {
   ownsPlus,
   getSubscription,
   getBillingOutlook,
-  getExtraHomeSlots,
-} from "@/lib/subscription";
+  getExtraHomeSlots, isPlusTrialEligible } from "@/lib/subscription";
 import { getProperties } from "@/lib/property";
 import { getUser } from "@/lib/auth";
 import { trialDecision } from "@/lib/risk/decision";
@@ -347,15 +346,21 @@ export default async function PlusPage(
   // cookie-edited id here could only ever mislead the person holding the
   // cookie about their own screen.
   const viewer = await getUser();
-  const risk = viewer
-    ? await trialDecision(viewer.id, {
-        accountCreatedAt: viewer.created_at ?? null,
-        // A page render is a GET: compute, do not write. The checkout action
-        // re-runs the same decision and records it there.
-        persist: false,
-      })
-    : null;
-  const trialEligible = !sub && (risk?.allowTrial ?? true);
+  // Only worth deciding when a trial is even possible: an existing subscriber
+  // (sub is truthy) can never see trial copy, so the ~10 service-role queries
+  // trialDecision runs would be spent computing an answer trialEligible below
+  // throws away.
+  const risk =
+    viewer && !sub
+      ? await trialDecision(viewer.id, {
+          accountCreatedAt: viewer.created_at ?? null,
+          // A page render is a GET: compute, do not write. The checkout action
+          // re-runs the same decision and records it there.
+          persist: false,
+        })
+      : null;
+  const trialEligible =
+    (await isPlusTrialEligible()) && (risk?.allowTrial ?? true);
 
   // Free-taste credit for the quote analyzer, read from the SAME column the
   // tool itself claims against (users.free_quote_used_at - see

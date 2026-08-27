@@ -23,17 +23,29 @@ const FIRST_SEEN_KEY = "hearth_first_seen_at";
 // under (app) so this is belt and braces there, but /feedback and /plus
 // (billing/checkout) genuinely are, and this is the only thing keeping the
 // prompt off them.
-export const REVIEW_PROMPT_EXCLUDED_PATH_PREFIXES = [
+// "/signin", not "/sign-in": the real route is src/app/signin. The hyphenated
+// spelling excluded a page that does not exist while leaving the one that does
+// wide open.
+export const REVIEW_PROMPT_EXCLUDED_PATHS = [
   "/feedback",
   "/plus",
   "/onboarding",
-  "/sign-in",
+  "/signin",
   "/checkout",
 ] as const;
 
+// Matched segment-wise, not by bare prefix. startsWith() alone excludes
+// /plusters (and any future route that merely begins with one of these
+// spellings) while a query string or a child path is still correctly inside
+// the excluded route. Same rule roleRouting.ts's isUnder uses, kept local so
+// this file stays importable from a client component with no dependencies.
 export function isExcludedPath(pathname: string): boolean {
-  return REVIEW_PROMPT_EXCLUDED_PATH_PREFIXES.some((p) =>
-    pathname.startsWith(p)
+  // A pathname carries no query string in Next's usePathname(), but callers
+  // and tests hand this "/plus?reason=ask" too, so cut at the first ? or #
+  // before comparing rather than pretending they cannot appear.
+  const path = pathname.split(/[?#]/)[0];
+  return REVIEW_PROMPT_EXCLUDED_PATHS.some(
+    (p) => path === p || path.startsWith(p + "/")
   );
 }
 

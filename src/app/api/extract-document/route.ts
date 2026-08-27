@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_TYPES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import { hasPlus } from "@/lib/subscription";
-import { countAiUsage, overToolBurst } from "@/lib/aiUsage";
+import { countAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { readJsonBounded } from "@/lib/boundedBody";
 import { generateJson, hasClaudeKey, isRateLimitError } from "@/lib/claude";
@@ -159,6 +159,11 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ doc: normalize(parsed) });
   } catch (e) {
+    // The owner was already charged one of today's usages above; a thrown
+    // model call never produced an extraction, so hand it back rather than
+    // spending their allowance on a request that failed before it reached
+    // them.
+    await refundAiUsage(user.id);
     return NextResponse.json({
       doc: null,
       reason: isRateLimitError(e) ? "rate_limited" : "failed",

@@ -207,7 +207,15 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
               aria-modal="true"
               aria-label="Tools"
               tabIndex={-1}
-              className={`fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto rounded-t-2xl border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-menu outline-none dark:border-white/10 dark:bg-stone-800 ${
+              // max-h-[85vh] + overflow-y-auto keeps every tile reachable by
+              // scroll on a short viewport; the bottom padding on the content
+              // below is what actually clears the fixed tab bar, since this
+              // panel's own bottom edge sits flush with the viewport bottom
+              // (same as the tab bar's). z-50, one tier above the scrim
+              // (z-40) and the header this sheet is nested in (Nav.tsx's
+              // header is z-40, above the tab bar's z-30) - see Nav.tsx for
+              // why the header's own z-index has to clear the tab bar.
+              className={`fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-menu outline-none dark:border-white/10 dark:bg-stone-800 ${
                 open ? "motion-safe:animate-fade-slide-up" : "motion-safe:animate-fade-slide-down"
               }`}
             >
@@ -219,7 +227,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                   type="button"
                   onClick={closeAndRefocus}
                   aria-label="Close"
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-700"
+                  className="-m-1.5 flex h-11 w-11 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-700"
                 >
                   <svg
                     viewBox="0 0 20 20"
@@ -235,7 +243,13 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                 </button>
               </div>
 
-              <div className="space-y-5 p-4">
+              {/* Bottom padding equal to the tab bar's own height + safe area
+                  + 1rem: on a short viewport the last row (Plus tools) would
+                  otherwise scroll to sit flush with this panel's bottom edge,
+                  which is exactly where the fixed tab bar overlaps it. This
+                  guarantees the last tile always clears the tab bar even if
+                  the z-index ordering above is ever undone. */}
+              <div className="space-y-5 p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)]">
                 <div>
                   <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
                     Emergency

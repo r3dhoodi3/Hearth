@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasPlus } from "@/lib/subscription";
-import { countAiUsage } from "@/lib/aiUsage";
+import { countAiUsage, refundAiUsage } from "@/lib/aiUsage";
 import {
   reasonToClientPayload,
   type AiClientReason,
@@ -123,7 +123,8 @@ function plausibleExpiry(dateStr: string): boolean {
 async function extractExpiry(
   kind: "license" | "insurance",
   base64: string,
-  mime: string
+  mime: string,
+  userId: string
 ): Promise<{ expires_on: string | null; issuer: string | null } | null> {
   if (!hasClaudeKey()) return null;
 
@@ -169,7 +170,11 @@ async function extractExpiry(
     };
   } catch {
     // Throttled, timed out, or refused: the pro types the date in by hand,
-    // which is the same path an unreadable document already takes.
+    // which is the same path an unreadable document already takes. The pro
+    // was already charged one of today's usages by the countAiUsage call at
+    // the call site, and a thrown model call never read a date, so hand it
+    // back rather than spending their allowance on a request that failed.
+    await refundAiUsage(userId);
     return null;
   }
 }
@@ -306,7 +311,7 @@ export async function POST(req: NextRequest) {
         skipReason = reasonToClientPayload(reason).reason;
       } else {
         const base64 = Buffer.from(bytes).toString("base64");
-        const extracted = await extractExpiry(kind, base64, mime);
+        const extracted = await extractExpiry(kind, base64, mime, user.id);
         if (extracted) {
           expiresOn = extracted.expires_on;
           issuer = extracted.issuer;

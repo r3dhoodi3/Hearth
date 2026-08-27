@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { hasPlus } from "@/lib/subscription";
-import { countAiUsage } from "@/lib/aiUsage";
+import { countAiUsage, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { getActiveProperty } from "@/lib/property";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
@@ -257,6 +257,11 @@ export async function POST() {
     if (text) return NextResponse.json({ packet: text });
     return NextResponse.json({ packet: null, reason: "failed" });
   } catch (e) {
+    // The owner was already charged one of today's usages above; a thrown
+    // model call never produced a packet, so hand it back rather than
+    // spending their allowance on a request that failed before it reached
+    // them.
+    await refundAiUsage(user.id);
     return NextResponse.json({
       packet: null,
       reason: isRateLimitError(e) ? "rate_limited" : "failed",

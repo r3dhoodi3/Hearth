@@ -30,6 +30,15 @@ create table if not exists public.app_feedback (
 );
 create index if not exists app_feedback_user_id_idx on public.app_feedback (user_id);
 
+-- At most one message-less prompt event ('prompt_shown'/'loved'/'not_really')
+-- per account, so the "ask at most once" rule is enforced by the database and
+-- not by the app winning a read-then-write race. The /feedback form's rows
+-- carry a message and are exempt, so somebody can still send more than one
+-- note. See the migration file for the full reasoning.
+create unique index if not exists app_feedback_one_event_per_kind_idx
+  on public.app_feedback (user_id, kind)
+  where message is null;
+
 alter table public.app_feedback enable row level security;
 
 drop policy if exists "app_feedback self insert" on public.app_feedback;

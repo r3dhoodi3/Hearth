@@ -42,10 +42,18 @@ export async function GET(request: NextRequest) {
         data.user && isFirstHomeSetupPath(next)
           ? destinationForSignIn(next, await propertyRowExists(data.user.id))
           : next;
+      // Re-validated even though `next` already went through safeNextPath:
+      // destinationForSignIn can return a value taken from the INNER ?next= of
+      // /onboarding?next=..., which arrives percent-DECODED, so the outer check
+      // never saw the characters that matter ("/%5Cevil.com" decodes to
+      // "/\evil.com", which new URL() resolves to https://evil.com/).
+      // innerNext() rejects those itself; this is the second lock on the line
+      // that actually builds the absolute URL.
+      const safeDestination = safeNextPath(destination) ?? "/dashboard";
       // requestOrigin, not request.url: request.url carries the dev server's
       // bind address (`-H 0.0.0.0`) and would strand the browser there.
       const response = NextResponse.redirect(
-        new URL(destination, requestOrigin(request))
+        new URL(safeDestination, requestOrigin(request))
       );
       // Same recovery cookie /auth/callback hands out, for the same reason.
       // Which of the two routes a reset link lands on is decided by the

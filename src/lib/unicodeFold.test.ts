@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   fold,
   foldPreservingLength,
+  hasBidiControl,
   isAcceptableCustomCategory,
 } from "@/lib/customCategory";
 import { censor } from "@/lib/censor";
@@ -29,6 +30,26 @@ const CYR_O = String.fromCharCode(0x043e); // Cyrillic small o
 const CYR_E = String.fromCharCode(0x0435); // Cyrillic small ie, looks like e
 const GREEK_O = String.fromCharCode(0x03bf); // Greek small omicron
 const GREEK_A = String.fromCharCode(0x03b1); // Greek small alpha
+const ARMENIAN_O = String.fromCharCode(0x0585); // Armenian small letter oh
+
+// Combining/enclosing marks and format characters (Mn/Me/Cf): drawn OVER a
+// base letter rather than being a letter in their own right, so an exact
+// letter-by-letter pattern never sees them unless they are stripped first.
+const COMBINING_DIAERESIS = String.fromCharCode(0x0308); // Mn
+const ENCLOSING_CIRCLE = String.fromCharCode(0x20dd); // Me
+// A Unicode "tag" character (supplementary plane, Cf), the block used to
+// smuggle invisible text after an emoji. Built with fromCodePoint since it is
+// outside the BMP; the value carried is arbitrary, only its category matters.
+const TAG_CHAR = String.fromCodePoint(0xe0069);
+
+// Bidi controls: the RTL/LTR overrides and the directional isolates. These
+// reorder how everything AFTER them renders, not just themselves, which is
+// why the gate rejects a string containing one outright rather than folding
+// around it.
+const RLO = String.fromCharCode(0x202e); // right-to-left override
+const PDF = String.fromCharCode(0x202c); // pop directional formatting
+const LRI = String.fromCharCode(0x2066); // left-to-right isolate
+const PDI = String.fromCharCode(0x2069); // pop directional isolate
 
 describe("fold", () => {
   it("removes the invisible characters used to break up a word", () => {
@@ -44,6 +65,38 @@ describe("fold", () => {
     expect(fold(`${CYR_C}${CYR_O}${CYR_O}n`)).toBe("coon");
     expect(fold(`p${GREEK_O}rn`)).toBe("porn");
     expect(fold(`${GREEK_A}n${CYR_A}l`)).toBe("anal");
+  });
+
+  it("maps the Armenian look-alike onto Latin", () => {
+    expect(fold(`p${ARMENIAN_O}rn`)).toBe("porn");
+  });
+
+  it("strips a combining mark rather than leaving it to dodge an exact letter match", () => {
+    // "n" + "i" + COMBINING DIAERESIS + "gger" reads as "nïgger" to a human
+    // and, unstripped, matches no letter pattern in this file. NFKC would
+    // have RECOMPOSED the mark onto the "i" into the single character "ï",
+    // which is exactly as unmatchable; NFKD decomposes the other way and
+    // leaves the mark on its own to be removed.
+    expect(fold(`n${"i"}${COMBINING_DIAERESIS}gger`)).toBe("nigger");
+  });
+
+  it("strips an enclosing mark", () => {
+    expect(fold(`c${ENCLOSING_CIRCLE}oon`)).toBe("coon");
+  });
+
+  it("strips a Unicode tag character (the emoji-smuggling block)", () => {
+    expect(fold(`sh${TAG_CHAR}it`)).toBe("shit");
+  });
+
+  it("still folds precomposed accents to plain ASCII for matching, without touching honest names", () => {
+    // fold() only ever answers a yes/no; the stored value is untouched. NFKD
+    // decomposes the accent off the base letter and the mark is then
+    // stripped, which is exactly what keeps these from ever colliding with a
+    // blocked term while still being harmless to real names.
+    expect(fold("José")).toBe("Jose");
+    expect(fold("Müller")).toBe("Muller");
+    expect(fold("Núñez")).toBe("Nunez");
+    expect(fold("Söhne")).toBe("Sohne");
   });
 
   it("applies NFKC, so compatibility spellings collapse to plain ASCII", () => {
@@ -76,6 +129,9 @@ describe("foldPreservingLength", () => {
     "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467} family sequence",
     "the fi ligature: ﬁnish",
     "combining accent: é",
+    `n${"i"}${COMBINING_DIAERESIS}gger`,
+    `c${ENCLOSING_CIRCLE}oon`,
+    `sh${TAG_CHAR}it`,
   ];
 
   it("never changes the UTF-16 length", () => {
@@ -97,6 +153,34 @@ describe("foldPreservingLength", () => {
     // The fi ligature NFKC-expands to two characters, which would shift every
     // index after it, so it is deliberately skipped here.
     expect(foldPreservingLength("ﬁnish")).toBe("ﬁnish");
+  });
+
+  it("turns a combining/enclosing mark or tag character into the same separator, never removing it", () => {
+    // Each of these is a single code point sitting on its own in the walked
+    // string (never decomposed here), so swapping it for "." is always
+    // length-safe - unlike fold()'s NFKD pass, which can split ONE character
+    // into a base plus a mark.
+    expect(foldPreservingLength(`n${"i"}${COMBINING_DIAERESIS}gger`)).toBe(
+      "ni.gger"
+    );
+    expect(foldPreservingLength(`c${ENCLOSING_CIRCLE}oon`)).toBe("c.oon");
+    // TAG_CHAR is a supplementary-plane code point - a surrogate pair, so two
+    // UTF-16 units - which is exactly why the placeholder is repeated
+    // ch.length times rather than written as a single character.
+    expect(foldPreservingLength(`sh${TAG_CHAR}it`)).toBe("sh..it");
+  });
+});
+
+describe("hasBidiControl", () => {
+  it("flags a right-to-left override or an isolate anywhere in the string", () => {
+    expect(hasBidiControl(`Roofing ${RLO}gnicivres${PDF}`)).toBe(true);
+    expect(hasBidiControl(`${LRI}Plumbing${PDI}`)).toBe(true);
+  });
+
+  it("leaves ordinary text, including accented names, alone", () => {
+    expect(hasBidiControl("José Núñez Plumbing")).toBe(false);
+    expect(hasBidiControl("Solar panel cleaning")).toBe(false);
+    expect(hasBidiControl("")).toBe(false);
   });
 });
 
@@ -183,5 +267,39 @@ describe("isAcceptableCustomCategory with the fold", () => {
     expect(isAcceptableCustomCategory("Solar panel cleaning")).toBe(true);
     expect(isAcceptableCustomCategory("Crape myrtle trimming")).toBe(true);
     expect(isAcceptableCustomCategory("Log home chinking")).toBe(true);
+  });
+
+  it("rejects a slur spelled with a combining mark splitting a letter", () => {
+    expect(
+      isAcceptableCustomCategory(`n${"i"}${COMBINING_DIAERESIS}gger removal`)
+    ).toBe(false);
+  });
+
+  it("rejects a slur hidden behind an enclosing mark", () => {
+    expect(isAcceptableCustomCategory(`c${ENCLOSING_CIRCLE}oon cleanup`)).toBe(
+      false
+    );
+  });
+
+  it("rejects a blocked term split by a Unicode tag character", () => {
+    expect(isAcceptableCustomCategory(`sh${TAG_CHAR}it removal`)).toBe(false);
+  });
+
+  it("rejects the Armenian look-alike spelling", () => {
+    expect(isAcceptableCustomCategory(`p${ARMENIAN_O}rn cleanup`)).toBe(false);
+  });
+
+  it("rejects any string carrying a bidi override or isolate outright", () => {
+    expect(isAcceptableCustomCategory(`Roofing ${RLO}gnicivres${PDF}`)).toBe(
+      false
+    );
+    expect(isAcceptableCustomCategory(`${LRI}Plumbing${PDI} service`)).toBe(
+      false
+    );
+  });
+
+  it("still accepts real names with precomposed accents", () => {
+    expect(isAcceptableCustomCategory("José Núñez Plumbing")).toBe(true);
+    expect(isAcceptableCustomCategory("Müller & Söhne HVAC")).toBe(true);
   });
 });

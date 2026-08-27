@@ -103,6 +103,24 @@ export async function isProTrialEligible(): Promise<boolean> {
   return !rows.some((row) => isProPlanName(row.plan));
 }
 
+// The homeowner-side twin of isProTrialEligible: may the current user start a
+// first-time Hearth Plus free trial (the 3 free days the weekly cadence
+// carries)? Same rule, same failure posture, for the same reason - the Plus row
+// also survives a cancellation, so any homeowner-side row at all means the
+// trial has already been used.
+//
+// Fails CLOSED. startPlusCheckoutAction used to gate the trial on `!existing`,
+// where `existing` is getSubscription()'s null return - and that null cannot
+// tell "never subscribed" apart from "the subscriptions read just failed". A
+// transient or RLS error therefore handed a fresh set of free days to a
+// churned subscriber on every retry, which is the cheapest trial farm there
+// is. The normal path is unchanged: no Plus row and no read error is eligible.
+export async function isPlusTrialEligible(): Promise<boolean> {
+  const { rows, errored } = await getSubscriptionRowsResult();
+  if (errored) return false;
+  return !rows.some((row) => !isProPlanName(row.plan));
+}
+
 // Pending billing changes, read live from Stripe (one call) so the UI can't
 // drift out of sync. Generic over whichever side's row is passed in:
 // - scheduledDowngrade: a yearly subscriber's pending switch to monthly (the

@@ -60,7 +60,7 @@ export default function WalkthroughNudge({ count }: { count: number }) {
         type="button"
         onClick={dismiss}
         aria-label="Dismiss"
-        className="shrink-0 -m-2 p-2 text-bark-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300"
+        className="-m-3.5 flex h-11 w-11 shrink-0 items-center justify-center text-bark-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300"
       >
         <X className="h-4 w-4" aria-hidden="true" />
       </button>

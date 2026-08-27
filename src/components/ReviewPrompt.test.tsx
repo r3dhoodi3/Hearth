@@ -61,6 +61,7 @@ beforeEach(() => {
   mockPush.mockReset();
   mockRequestNativeReview.mockReset();
   delete process.env.NEXT_PUBLIC_APP_STORE_URL;
+  window.localStorage.clear();
 });
 
 afterEach(() => {
@@ -170,5 +171,49 @@ describe("ReviewPrompt: dismiss", () => {
     // itself writes nothing further.
     expect(mockRecordEvent.mock.calls.length).toBe(callsBeforeDismiss);
     expect(mockPush).not.toHaveBeenCalled();
+  });
+});
+
+describe("ReviewPrompt: settled flag skips the server round trip", () => {
+  it("remembers 'already shown or answered' in localStorage and never calls the server again", async () => {
+    mockGetSignals.mockResolvedValue({
+      alreadyShownOrAnswered: true,
+      hasMeaningfulActivity: true,
+    });
+    const { unmount } = render(<ReviewPrompt />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(mockGetSignals).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem("hearth_review_prompt_settled")).toBe(
+      "1"
+    );
+    unmount();
+
+    // A fresh mount (a route change) must not call the server again: the
+    // localStorage flag already answers the question.
+    mockGetSignals.mockClear();
+    render(<ReviewPrompt />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(mockGetSignals).not.toHaveBeenCalled();
+    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+  });
+
+  it("sets the settled flag as soon as the card is shown, before any button is pressed", async () => {
+    expect(
+      window.localStorage.getItem("hearth_review_prompt_settled")
+    ).toBeNull();
+    await renderAndWaitForCard();
+    expect(screen.getByText("Enjoying Hearth?")).toBeInTheDocument();
+    expect(window.localStorage.getItem("hearth_review_prompt_settled")).toBe(
+      "1"
+    );
+  });
+
+  it("still calls the server on a fresh browser with no settled flag", async () => {
+    await renderAndWaitForCard();
+    expect(mockGetSignals).toHaveBeenCalledTimes(1);
   });
 });

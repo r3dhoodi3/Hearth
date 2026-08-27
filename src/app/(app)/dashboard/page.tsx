@@ -709,10 +709,13 @@ export default async function HomePage(
             </>
           )}
         </Link>
-        <Link
-          href={energyEstimate ? "/forecast" : "/dashboard#systems"}
-          className="card-link"
-        >
+        {/* A plain card, not a link: this used to open /forecast, which is
+            the 10-year REPAIR forecast and never mentions energy at all -
+            a tester followed it expecting an energy breakdown and found
+            nothing about energy on the page. In place of navigating
+            anywhere, it now discloses its own method inline, matching the
+            Health Score card's "Why this score?" pattern above. */}
+        <div className="card">
           <p className="stat-label text-sm">Energy this season</p>
           {energyEstimate ? (
             <>
@@ -736,7 +739,27 @@ export default async function HomePage(
               </p>
             </>
           )}
-        </Link>
+          <details className="group mt-2 text-sm">
+            <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1 text-stone-500 [&::-webkit-details-marker]:hidden hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300">
+              <ChevronRight
+                className="h-4 w-4 shrink-0 transition-transform duration-150 group-open:rotate-90"
+                aria-hidden="true"
+              />
+              How this is estimated?
+            </summary>
+            <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
+              Estimated from your home&apos;s size, age, and typical energy
+              prices in your state, plus your HVAC system&apos;s age and type
+              when you&apos;ve added one. It&apos;s a ballpark, not a bill.
+            </p>
+            <Link
+              href="/walkthrough"
+              className="mt-1.5 block font-medium text-bark-700 underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
+            >
+              Add home details
+            </Link>
+          </details>
+        </div>
       </section>
 
       {/* This month: focus + one merged checklist (reminders + seasonal) */}

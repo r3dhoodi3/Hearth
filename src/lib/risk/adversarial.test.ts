@@ -479,7 +479,10 @@ describe("FIXED: page copy and Stripe agree on the same render", () => {
   });
 
   it("the page's decision is the one the disclosure copy is built from", () => {
-    expect(plusPage).toContain("const trialEligible = !sub && (risk?.allowTrial ?? true)");
+    // The homeowner page now fails CLOSED through isPlusTrialEligible (red team 2).
+    expect(plusPage).toMatch(
+      /const trialEligible =\s*\(await isPlusTrialEligible\(\)\) && \(risk\?\.allowTrial \?\? true\)/
+    );
     expect(proPage).toContain("const trialEligible = !sub && (risk?.allowTrial ?? true)");
   });
 });

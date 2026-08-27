@@ -64,7 +64,19 @@ export default function Nav({
         + mobile bottom bar): one poll and one realtime subscription for the
         unread-messages badge instead of each rendering running its own. */}
     <UnreadProvider role="homeowner">
-    <header className="sticky top-0 z-30 border-b border-stone-200 bg-bark-50 dark:border-white/10 dark:bg-stone-900">
+    {/* z-40, not z-30: header creates its own stacking context (sticky +
+        z-index), which traps ToolsMenu's phone-sheet/scrim (nested inside
+        it, at z-50/z-40) inside that context for cross-element paint order.
+        The bottom tab bar below is a separate, later sibling at z-30 - with
+        the header ALSO at z-30 the tab bar (later in the DOM, same z-index)
+        painted on top of the header's entire subtree, including the sheet,
+        so taps on the sheet's lower rows hit the tab bar underneath instead.
+        Bumping the header above the tab bar's z-30 fixes that without
+        touching the sheet's own z-50/z-40, which still order correctly
+        relative to each other. Purely a stacking fix: the header only
+        occupies the top of the viewport, so it never visually overlaps
+        anything else this raises it above. */}
+    <header className="sticky top-0 z-40 border-b border-stone-200 bg-bark-50 dark:border-white/10 dark:bg-stone-900">
       {/* One row at every width. Below sm this used to stack into two rows
           (brand line, then the controls left-aligned underneath), which on a
           phone read as a second toolbar. Now the brand + home switcher sit on

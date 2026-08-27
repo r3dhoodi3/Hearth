@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
 import { saveCompanyAction, verifyLicenseNowAction } from "../actions";
@@ -54,8 +55,42 @@ function DisputeLicenseButton() {
 
 function SaveChangesButton() {
   const { pending } = useFormStatus();
+  // Synchronous double-submit guard, same as src/components/SubmitButton.tsx:
+  // `pending` is state and lands a render behind the click, so two clicks in
+  // the same tick (a fast double tap, confirmed live on this exact button)
+  // both still read `pending` as false and both reach the native submit. This
+  // ref flips the instant the first click happens, before React re-renders,
+  // so the second click can see it and stop that submit before it starts.
+  const submittedRef = useRef(false);
+
+  useEffect(() => {
+    // Release the latch once the action is no longer in flight, so a failed
+    // submit can be retried with another click. Only the pending -> not-
+    // pending edge resets it, never while still pending.
+    if (!pending) submittedRef.current = false;
+  }, [pending]);
+
+  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+    if (submittedRef.current) {
+      e.preventDefault();
+      return;
+    }
+    // Only latch when a submit will actually start: a form that fails the
+    // browser's own constraint validation (required, minLength, type=email)
+    // never runs the action, so `pending` never flips and the effect above
+    // would never release the latch.
+    const form = e.currentTarget.form;
+    if (form && !form.noValidate && !form.checkValidity()) return;
+    submittedRef.current = true;
+  }
+
   return (
-    <button type="submit" disabled={pending} className="btn-primary">
+    <button
+      type="submit"
+      disabled={pending}
+      className="btn-primary"
+      onClick={handleClick}
+    >
       {pending && <InlineSpinner />}
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />

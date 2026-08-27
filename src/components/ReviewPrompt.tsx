@@ -21,6 +21,29 @@ type Step = "hidden" | "ask" | "rate";
 // just landed on.
 const SHOW_DELAY_MS = 3000;
 
+// Once the server reports this account as already shown or answered, that
+// answer can never change back, so it is worth remembering client-side: every
+// later navigation would otherwise pay a getReviewPromptSignals() round trip
+// just to hear the same permanent no again.
+const SETTLED_KEY = "hearth_review_prompt_settled";
+
+function isSettled(): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(SETTLED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markSettled(): void {
+  try {
+    window.localStorage.setItem(SETTLED_KEY, "1");
+  } catch {
+    // Storage can be unavailable (private mode, disabled). Worst case, later
+    // navigations keep asking the server, exactly like today.
+  }
+}
+
 // The one review-prompt surface in the app: "Enjoying Hearth?" -> Love it /
 // Not really. Never the native store prompt - see requestNativeReview() in
 // src/lib/reviewPrompt.ts for where that would plug in on a native wrapper.
@@ -57,9 +80,13 @@ export default function ReviewPrompt() {
     // eligible-page mount so a browser that never lands on one still gets
     // marked the first time it does.
     const firstSession = isFirstSession();
+    // Once the server has ever said "already shown or answered" for this
+    // account, that can never flip back to eligible, so a settled browser
+    // skips the round trip entirely on every later navigation.
+    const settled = isSettled();
 
     let timerDone = false;
-    let signalsDone = firstSession; // skip the fetch entirely when it can't matter
+    let signalsDone = firstSession || settled; // skip the fetch entirely when it can't matter
     let signals: Awaited<ReturnType<typeof getReviewPromptSignals>> = null;
 
     function maybeShow() {
@@ -77,6 +104,9 @@ export default function ReviewPrompt() {
       // Fire-and-forget: writing this is what makes "at most once per
       // account" hold even if the person never taps a button at all.
       recordReviewPromptEvent("prompt_shown");
+      // From this point on the account is answered (shown counts), so every
+      // later navigation can skip the server round trip too.
+      markSettled();
     }
 
     const timer = setTimeout(() => {
@@ -84,10 +114,11 @@ export default function ReviewPrompt() {
       maybeShow();
     }, SHOW_DELAY_MS);
 
-    if (!firstSession) {
+    if (!firstSession && !settled) {
       getReviewPromptSignals()
         .then((s) => {
           signals = s;
+          if (s?.alreadyShownOrAnswered) markSettled();
         })
         .catch(() => {
           signals = null;

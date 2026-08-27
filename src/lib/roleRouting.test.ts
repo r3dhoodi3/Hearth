@@ -493,6 +493,91 @@ describe("destinationForSignIn", () => {
   });
 });
 
+// The open redirect this rule nearly shipped. The OUTER ?next= is checked by
+// safeNextPath, which rejects backslashes and control characters - but
+// "/onboarding?next=/%5Cevil.com" contains neither: it is an ordinary relative
+// path of ours, and safeNextPath passes it. URLSearchParams.get() then DECODES
+// the inner value, so innerNext() is handed "/\evil.com", and the WHATWG URL
+// parser normalizes that backslash into a slash: new URL("/\\evil.com",
+// origin) is https://evil.com/. The %09 (tab) form works the same way, since
+// the parser strips C0 controls anywhere in the string. innerNext therefore has
+// to re-run BOTH rules against the decoded value.
+describe("destinationForSignIn: the inner ?next= cannot leave the origin", () => {
+  const ORIGIN = "https://gethearth.vercel.app";
+  // What the auth routes really do with the returned value.
+  const resolvesTo = (path: string) => new URL(path, ORIGIN).href;
+
+  it("rejects a percent-encoded backslash in the inner next", () => {
+    const dest = destinationForSignIn("/onboarding?next=/%5Cevil.com", true);
+    expect(dest).toBe("/dashboard");
+    expect(resolvesTo(dest)).toBe(`${ORIGIN}/dashboard`);
+  });
+
+  it("rejects a percent-encoded tab (any C0 control) in the inner next", () => {
+    const dest = destinationForSignIn("/onboarding?next=/%09/evil.com", true);
+    expect(dest).toBe("/dashboard");
+    expect(resolvesTo(dest)).toBe(`${ORIGIN}/dashboard`);
+  });
+
+  it("rejects a literal backslash, wherever in the value it sits", () => {
+    expect(destinationForSignIn("/onboarding?next=/\\evil.com", true)).toBe(
+      "/dashboard"
+    );
+    expect(destinationForSignIn("/onboarding?next=/a/b\\c", true)).toBe(
+      "/dashboard"
+    );
+  });
+
+  it("still rejects the forms that were already rejected", () => {
+    for (const inner of [
+      "https%3A%2F%2Fevil.example.com",
+      "%2F%2Fevil.example.com",
+      "%2Fonboarding",
+      "not-a-path",
+    ]) {
+      expect(
+        destinationForSignIn(`/onboarding?next=${inner}`, true),
+        inner
+      ).toBe("/dashboard");
+    }
+  });
+
+  it("what the fix must not break: real inner destinations still pass", () => {
+    // The household QR invite is the whole reason innerNext exists.
+    expect(destinationForSignIn("/onboarding?next=/join/abc123", true)).toBe(
+      "/join/abc123"
+    );
+    expect(
+      destinationForSignIn("/onboarding?next=/join/household/abc", true)
+    ).toBe("/join/household/abc");
+    expect(destinationForSignIn("/onboarding?next=%2Fplus", true)).toBe(
+      "/plus"
+    );
+    // The one explicit "I am adding a home" intent still reaches the wizard.
+    expect(destinationForSignIn("/onboarding?add=home", true)).toBe(
+      "/onboarding?add=home"
+    );
+    expect(destinationForSignIn("/onboarding", true)).toBe("/dashboard");
+  });
+
+  it("is closed through the full sign-in path too, not just the helper", () => {
+    for (const next of [
+      "/onboarding?next=/%5Cevil.com",
+      "/onboarding?next=/%09/evil.com",
+    ]) {
+      expect(
+        resolveAuthRole({
+          metadataRole: "homeowner",
+          hasContractorRow: false,
+          hasPropertyRow: true,
+          next,
+        }).redirect,
+        next
+      ).toBe("/dashboard");
+    }
+  });
+});
+
 // The rule above only works if the two auth routes actually ASK whether this
 // account owns a home. In /auth/callback that lookup used to be skipped for
 // everyone without a contractors row, which is every ordinary homeowner - so
@@ -519,5 +604,21 @@ describe("auth route wiring", () => {
     expect(source).toMatch(
       /destinationForSignIn\(next, await propertyRowExists\(data\.user\.id\)\)/
     );
+  });
+
+  // Belt and braces for the inner-?next= open redirect above: innerNext()
+  // rejects the escapes, and the two lines that actually build an absolute URL
+  // re-check whatever the decision handed back. Either lock alone closes it;
+  // both together mean a future rewrite of the decision cannot reopen it.
+  it("re-validates the resolved destination before building the URL", () => {
+    expect(read("callback")).toMatch(
+      /safeNextPath\(decision\.redirect\) \?\? "\/dashboard"/
+    );
+    expect(read("callback")).toMatch(
+      /NextResponse\.redirect\(new URL\(redirectPath, origin\)\)/
+    );
+    const confirm = read("confirm");
+    expect(confirm).toMatch(/safeNextPath\(destination\) \?\? "\/dashboard"/);
+    expect(confirm).toMatch(/new URL\(safeDestination, requestOrigin\(request\)\)/);
   });
 });

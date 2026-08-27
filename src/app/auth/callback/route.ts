@@ -217,8 +217,17 @@ export async function GET(request: NextRequest) {
         // decision.redirect covers all three cases: the role picker for
         // someone we know nothing about, the corrected side of the app for a
         // role/destination mismatch, and plain `next` for everyone else.
+        //
+        // Re-validated through safeNextPath even though `next` already was:
+        // resolveAuthRole can hand back a value it read out of the INNER
+        // ?next= of /onboarding?next=... (destinationForSignIn), and that
+        // value arrives percent-DECODED, so the outer check never saw its real
+        // characters. innerNext() rejects the escapes itself; this is the
+        // second lock on the one line that actually builds an absolute URL, so
+        // no future rewrite of the decision can reopen an open redirect here.
+        const redirectPath = safeNextPath(decision.redirect) ?? "/dashboard";
         return withRecoveryCookie(
-          NextResponse.redirect(new URL(decision.redirect, origin))
+          NextResponse.redirect(new URL(redirectPath, origin))
         );
       }
 

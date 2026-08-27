@@ -787,8 +787,18 @@ export async function saveCompanyAction(formData: FormData) {
     } else {
       await setFlash("Profile saved.");
     }
+    // revalidatePath alone, no redirect: this action is always submitted FROM
+    // /pro/profile, so there is nowhere to navigate to - a redirect() back to
+    // the exact same path the form is already on is a known Next.js App
+    // Router footgun (a same-path action redirect can leave the route stuck
+    // on its loading.tsx boundary indefinitely instead of resolving back to
+    // the real page), which is exactly what this looked like: the whole form
+    // disappearing after every save until a manual reload. revalidatePath
+    // already marks this route's cache stale, which is what makes the page
+    // pick up the fresh contractor row and flash message - no navigation
+    // needed to get there.
     revalidatePath("/pro/profile");
-    redirect("/pro/profile");
+    return;
   }
 
   // Orange County launch gate (0074), first-time company creation only. A pro

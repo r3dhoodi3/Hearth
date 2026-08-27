@@ -27,6 +27,7 @@ import CategoryFilter from "./CategoryFilter";
 import LeadChat from "@/components/LeadChat";
 import PhoneInput from "@/components/PhoneInput";
 import FadingBanner from "@/components/FadingBanner";
+import ScrollIntoViewOnMount from "@/components/ScrollIntoViewOnMount";
 import CloseJobButton from "./CloseJobButton";
 import EditJobForm from "./EditJobForm";
 import PostJobButton from "./PostJobButton";
@@ -520,30 +521,54 @@ export default async function ContractorsPage(
       )}
 
       {searchParams.posted && (
-        <FadingBanner
-          delay={2500}
-          fadeMs={4500}
-          className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
-        >
-          Job posted. Matching pros can now apply, and we&apos;ll notify you
-          the moment one does. Honest note: Hearth is still new in some areas,
-          so if applications are slow it&apos;s our pro coverage catching up,
-          not a problem with your post.
-        </FadingBanner>
+        // The form above resets on every ?posted (its key is tied to that
+        // param), so without this the reader is left staring at a blank,
+        // reset form with no visible sign their post went through - this
+        // banner renders well below the fold on a long page. Scrolling it
+        // into view on mount is what actually surfaces the confirmation.
+        <ScrollIntoViewOnMount>
+          <FadingBanner
+            delay={2500}
+            fadeMs={4500}
+            className="scroll-mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 shadow-sm dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
+          >
+            Job posted. Matching pros can now apply, and we&apos;ll notify you
+            the moment one does. Honest note: Hearth is still new in some areas,
+            so if applications are slow it&apos;s our pro coverage catching up,
+            not a problem with your post.
+          </FadingBanner>
+        </ScrollIntoViewOnMount>
       )}
 
       {searchParams.directsent && (
-        <FadingBanner
-          delay={2500}
-          fadeMs={4500}
-          className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
-        >
-          Request sent. Only this pro can see it. If they accept, they get your
-          contact and a chat opens. If they pass, you can post it to all local
-          pros from the card below.
-        </FadingBanner>
+        <ScrollIntoViewOnMount>
+          <FadingBanner
+            delay={2500}
+            fadeMs={4500}
+            className="scroll-mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 shadow-sm dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
+          >
+            Request sent. Only this pro can see it. If they accept, they get your
+            contact and a chat opens. If they pass, you can post it to all local
+            pros from the card below.
+          </FadingBanner>
+        </ScrollIntoViewOnMount>
       )}
 
+      {/* id="your-jobs": the dashboard's "View job postings" link (openJobsCount
+          > 0, which counts every lead with no contractor_id yet, direct
+          requests included) lands here directly. It has to sit on a wrapper
+          around BOTH sections below, not just the "Your jobs" one further
+          down: a homeowner whose only open job is a pending direct request
+          has jobLeads.length === 0 (direct-only leads are filtered OUT of
+          jobLeads above), so an id scoped to just that section would render
+          nothing at all for that homeowner - the exact bug this fixes.
+          leads.length > 0 is equivalent to directRequests.length > 0 ||
+          jobLeads.length > 0 (the two are a full, disjoint partition of
+          `leads`), so this wrapper renders in every case openJobsCount > 0
+          can occur, plus the (harmless) case of jobs that are all
+          closed/chosen. */}
+      {(directRequests.length > 0 || jobLeads.length > 0) && (
+        <div id="your-jobs" className="scroll-mt-4 space-y-8">
       {/* Pending direct requests (migration 0104): a request aimed at one
           specific pro that they haven't accepted yet. Kept out of "Your jobs"
           above until a pro unlocks it. */}
@@ -632,12 +657,10 @@ export default async function ContractorsPage(
       )}
 
       {/* Renders nothing when there are no jobs yet; posting the first one
-          is handled by the form above, not this section. */}
+          is handled by the form above, not this section. The id lives on the
+          wrapper above now (see the comment there for why). */}
       {jobLeads.length > 0 && (
-        /* id="your-jobs": the dashboard's "View job postings" link lands here
-           directly - without the anchor it dropped homeowners at the top of
-           the page, on the post-a-new-job form, when they asked to SEE jobs. */
-        <section id="your-jobs" className="scroll-mt-4 space-y-3">
+        <section className="space-y-3">
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Your jobs</h2>
           <ul className="space-y-3">
             {jobLeads.map((l) => {
@@ -996,6 +1019,8 @@ export default async function ContractorsPage(
             })}
           </ul>
         </section>
+      )}
+        </div>
       )}
 
       <p className="text-center text-sm text-stone-500 dark:text-stone-400">

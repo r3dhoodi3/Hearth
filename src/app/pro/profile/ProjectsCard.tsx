@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
@@ -31,8 +31,41 @@ function DeleteProjectButton() {
 
 function SaveProjectButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
+  // Synchronous double-submit guard, same as src/components/SubmitButton.tsx:
+  // `pending` is state and lands a render behind the click, so two clicks in
+  // the same tick (a fast double tap) both still read `pending` as false and
+  // both reach the native submit. This ref flips the instant the first click
+  // happens, before React re-renders, so the second click can see it and stop
+  // that submit before it starts.
+  const submittedRef = useRef(false);
+
+  useEffect(() => {
+    // Release the latch once the action is no longer in flight, so a failed
+    // submit can be retried with another click. Only the pending -> not-
+    // pending edge resets it, never while still pending.
+    if (!pending) submittedRef.current = false;
+  }, [pending]);
+
+  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+    if (submittedRef.current) {
+      e.preventDefault();
+      return;
+    }
+    // Only latch when a submit will actually start: a form that fails the
+    // browser's own constraint validation never runs the action, so `pending`
+    // never flips and the effect above would never release the latch.
+    const form = e.currentTarget.form;
+    if (form && !form.noValidate && !form.checkValidity()) return;
+    submittedRef.current = true;
+  }
+
   return (
-    <button type="submit" disabled={pending} className="btn-primary">
+    <button
+      type="submit"
+      disabled={pending}
+      className="btn-primary"
+      onClick={handleClick}
+    >
       {pending && <InlineSpinner />}
       {label}
     </button>

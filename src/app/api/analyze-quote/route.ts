@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasPlus } from "@/lib/subscription";
-import { countAiUsage, addAiUsage, overToolBurst } from "@/lib/aiUsage";
+import { countAiUsage, addAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { readJsonBounded } from "@/lib/boundedBody";
 import { sendNotification } from "@/lib/notify";
@@ -258,7 +258,11 @@ export async function POST(req: NextRequest) {
 
   // STAGE 1: transcribe the quote into a faithful, verbatim JSON record.
   // Nothing evaluative happens here.
-  const { transcript, rateLimited: t1RateLimited } = await runTranscribe({
+  const {
+    transcript,
+    rateLimited: t1RateLimited,
+    threw: t1Threw,
+  } = await runTranscribe({
     image,
     mime,
     text,
@@ -266,6 +270,12 @@ export async function POST(req: NextRequest) {
   });
   if (!transcript) {
     await refundFreeCredit();
+    // The countAiUsage call above already charged one of today's usages for
+    // this whole two-stage pipeline. A THROWN model call never produced a
+    // transcript, so hand that usage back; a normal no-result (the model ran
+    // and simply couldn't read the document) is not a failure of the model
+    // call and keeps the charge, same as every other route's "failed" path.
+    if (t1Threw) await refundAiUsage(user.id);
     const reason = t1RateLimited ? "rate_limited" : "failed";
     await finish({ ok: false, reason });
     return NextResponse.json({ analysis: null, reason });
@@ -290,12 +300,16 @@ export async function POST(req: NextRequest) {
   // photo or pasted text again, so every finding traces back to a verbatim
   // line (isEvidenceGrounded in quoteAnalysis.ts enforces this in code, not
   // just via the prompt).
-  const { diagnosis, rateLimited: t2RateLimited } = await runDiagnose(
-    transcript,
-    { category }
-  );
+  const {
+    diagnosis,
+    rateLimited: t2RateLimited,
+    threw: t2Threw,
+  } = await runDiagnose(transcript, { category });
   if (!diagnosis) {
     await refundFreeCredit();
+    // Stage 2 was charged via the addAiUsage(user.id, 1) fan-out bump just
+    // above. Same rule as stage 1: only a THROWN call hands the usage back.
+    if (t2Threw) await refundAiUsage(user.id);
     const reason = t2RateLimited ? "rate_limited" : "failed";
     await finish({ ok: false, reason });
     return NextResponse.json({ analysis: null, reason });

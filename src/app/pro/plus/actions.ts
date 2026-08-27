@@ -125,7 +125,26 @@ export async function startProCheckoutAction(formData: FormData) {
   const customerId =
     existing?.stripe_customer_id ?? homeownerSub?.stripe_customer_id ?? null;
 
-  // Double-checkout guard, mirroring startPlusCheckoutAction: our
+  // First double-checkout guard, on OUR OWN row, before Stripe is consulted at
+  // all. The Stripe-side check below only runs when a customer id already
+  // exists, and that id comes from a subscriptions row - so an account whose
+  // Pro row somehow carries no stripe_customer_id (an older row, a manual fix,
+  // a webhook that landed the plan before the customer) skipped the guard
+  // entirely and could open a second live membership. A live row here is
+  // already proof of one. Mirrors startPlusCheckoutAction on the homeowner
+  // side.
+  const liveExisting =
+    existing &&
+    (existing.status === "active" || existing.status === "trialing");
+  if (liveExisting) {
+    await setFlash(
+      "You already have a Hearth Pro membership. No need to buy it twice.",
+      "info"
+    );
+    redirect("/pro/plus");
+  }
+
+  // Second double-checkout guard, mirroring startPlusCheckoutAction: our
   // subscriptions row only appears after the Stripe webhook fires, so two
   // checkouts opened back-to-back could each mint a live Stripe
   // subscription. When we already know the Stripe customer, ask Stripe

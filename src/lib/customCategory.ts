@@ -163,6 +163,50 @@ function isInvisible(ch: string): boolean {
   return INVISIBLE_RANGES.some(([lo, hi]) => cp >= lo && cp <= hi);
 }
 
+// Bidi control characters that reorder how the SURROUNDING text renders
+// without changing what it is. Folding these away (the way the invisible
+// ranges above already do, for matching purposes) is not enough on its own,
+// because the raw string - override characters and all - is what gets stored
+// and rendered everywhere else a business name or service description shows
+// up. A string that reads one way on this form and a different way wherever
+// it renders next is refused outright rather than folded, which is why this
+// is exported for isAcceptableCustomCategory and isAcceptablePublicText to
+// check BEFORE they ever call fold().
+//
+// Written as escaped hex ranges, not literal characters, for the same reason
+// INVISIBLE_RANGES is: a literal bidi control pasted into a character class is
+// invisible in the editor and in every diff, and a hex number is something a
+// reviewer can look up.
+//   202a - 202e   LRE, RLE, PDF, LRO, RLO (the overrides)
+//   2066 - 2069   LRI, RLI, FSI, PDI (the isolates)
+const BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069]/;
+
+export function hasBidiControl(s: string): boolean {
+  return BIDI_CONTROL_RE.test(s);
+}
+
+// Combining marks (Mn), enclosing marks (Me), and format characters (Cf) - a
+// broader net than the hand-picked INVISIBLE_RANGES above. Mn/Me are how an
+// accent or a circle/keycap is drawn OVER a base letter rather than being a
+// letter in their own right: "n" + COMBINING DIAERESIS (U+0308) reads as "nï"
+// to a human and, left unstripped, matches no exact-letter pattern in this
+// file - see fold() below for how NFKD turns that into plain "nigger" for
+// matching. Cf additionally covers the invisible Unicode "tag" characters at
+// U+E0000-U+E007F, used to smuggle invisible text after an emoji; that block
+// is spelled out explicitly too, on the same reasoning as INVISIBLE_RANGES
+// above - a supplementary-plane range as a hex number is something a reviewer
+// can look up, rather than trusting \p{Cf} alone to cover it.
+const STRIP_CATEGORY_RE = /[\p{Mn}\p{Me}\p{Cf}]/u;
+
+function isTagCharacter(ch: string): boolean {
+  const cp = ch.codePointAt(0);
+  return cp !== undefined && cp >= 0xe0000 && cp <= 0xe007f;
+}
+
+function isStrippableMark(ch: string): boolean {
+  return isTagCharacter(ch) || STRIP_CATEGORY_RE.test(ch);
+}
+
 // Cyrillic and Greek letters that are visually identical (or near enough) to a
 // Latin letter in a normal UI font. Deliberately NOT a full confusables table:
 // this is the short list of characters that actually turn up in homoglyph
@@ -234,6 +278,14 @@ const HOMOGLYPHS = new Map<number, string>([
   [0x03a4, "T"],
   [0x03a5, "Y"],
   [0x03a7, "X"],
+  // Additional Cyrillic/Greek look-alikes, added when the block above missed
+  // one that is a genuinely common confusable rather than a hypothetical.
+  [0x04c0, "I"], // CYRILLIC LETTER PALOCHKA - a bare vertical stroke used as I/l
+  [0x0500, "D"], // CYRILLIC CAPITAL LETTER KOMI DE - symmetric with 0x0501 above
+  [0x03b7, "n"], // GREEK SMALL LETTER ETA - reads as a Latin n in most UI fonts
+  // Armenian: this script is otherwise unrepresented above, so this is a new
+  // family, not a gap in an existing one.
+  [0x0585, "o"], // ARMENIAN SMALL LETTER OH - pixel-identical to Latin o
 ]);
 
 function homoglyphFor(ch: string): string | undefined {
@@ -241,12 +293,24 @@ function homoglyphFor(ch: string): string | undefined {
   return cp === undefined ? undefined : HOMOGLYPHS.get(cp);
 }
 
-// The full fold: NFKC, invisibles removed, homoglyphs mapped to Latin.
-// Length is NOT preserved - see the note above for which callers may use this.
+// The full fold: NFKD, invisibles and combining/enclosing/format marks
+// removed, homoglyphs mapped to Latin. Length is NOT preserved - see the note
+// above for which callers may use this.
+//
+// NFKD, not NFKC, is what defeats "n" + "i" + COMBINING DIAERESIS + "gger":
+// NFKC would canonically RECOMPOSE the "i" and its mark into the single
+// precomposed character "ï", which matches no letter pattern in this file.
+// NFKD decomposes the other way and leaves the mark on its own, where
+// isStrippableMark removes it below, so the result is the plain letters
+// "nigger". Compatibility spellings (fullwidth, circled, ligatures) still
+// collapse to plain ASCII either way, since that half of the mapping does not
+// involve combining marks. The same decomposition turns "José" into "Jose"
+// and "Müller" into "Muller" for MATCHING purposes only - fold() never
+// touches the value that actually gets stored, it only answers a yes/no.
 export function fold(input: string): string {
   let out = "";
-  for (const ch of input.normalize("NFKC")) {
-    if (isInvisible(ch)) continue;
+  for (const ch of input.normalize("NFKD")) {
+    if (isInvisible(ch) || isStrippableMark(ch)) continue;
     out += homoglyphFor(ch) ?? ch;
   }
   return out;
@@ -256,6 +320,12 @@ export function fold(input: string): string {
 // identical, so an index into the result is the same index in the input:
 //   - invisibles become "." (already a separator character in SEP)
 //   - homoglyphs map one BMP unit to one ASCII unit
+//   - a combining/enclosing mark or format character (isStrippableMark) also
+//     becomes "." rather than being removed: the input here is walked
+//     character by character and never decomposed, so a mark like this is
+//     always a single code point on its own, and swapping it for a same-
+//     length placeholder is always safe. "n" + COMBINING DIAERESIS + "gger"
+//     therefore folds to "n.gger", which the existing separator rule matches.
 //   - NFKC is applied per character and kept only when the result is the same
 //     length, so the "fi" ligature is left alone and no surrogate pair is ever
 //     collapsed
@@ -269,6 +339,10 @@ export function foldPreservingLength(input: string): string {
     const homoglyph = homoglyphFor(ch);
     if (homoglyph !== undefined && homoglyph.length === ch.length) {
       out += homoglyph;
+      continue;
+    }
+    if (isStrippableMark(ch)) {
+      out += ".".repeat(ch.length);
       continue;
     }
     const normalized = ch.normalize("NFKC");
@@ -437,6 +511,12 @@ export function isAcceptableCustomCategory(s: unknown): boolean {
   // a 100-character cap that folding could shrink would let a longer string in
   // through a pile of zero-width characters.
   if (!trimmed || trimmed.length > 100) return false;
+
+  // A bidi override/isolate changes how everything AFTER it renders, not just
+  // itself, so this runs on the raw string, before folding could hide it, and
+  // rejects outright rather than trying to fold around it. See hasBidiControl
+  // above.
+  if (hasBidiControl(trimmed)) return false;
 
   // Everything below reads the FOLDED copy (see fold() above): a zero-width
   // space between two letters, a fullwidth alphabet, and a Cyrillic look-alike

@@ -14,8 +14,6 @@ import {
   PRO_PLAN,
   PRO_DEPOSIT_BOOST_PTS,
   COLD_START_FREE_ALERTS,
-  formatUsd,
-  yearlySavings,
 } from "@/lib/constants";
 import {
   manageProBillingAction,
@@ -398,26 +396,15 @@ export default async function ProPlusPage(
           credit on every deposit, and an AI back office that handles the
           paperwork.
         </p>
-        <div className="mt-5">
-          {/* Trial-first: the button leads with the free trial and the price is
-              the follow-through line under it, never the lead. `trialEligible`
-              is the same no-existing-Pro-row signal startProCheckoutAction
-              uses, so a returning member sees the plain price instead. */}
-          <a href="#pricing" className="btn-primary">
-            {trialEligible
-              ? `Try Pro free for ${PRO_PLAN.trialDays} days`
-              : "Start my Pro membership"}
-          </a>
-          {/* Every figure computed from PRO_PLAN, and the saving is the honest
-              monthly-x-12 delta, so this line can never quote something the
-              card isn't charged. Yearly leads because it is the plan the
-              pricing block below preselects. */}
-          <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-            {trialEligible
-              ? `Then ${formatUsd(PRO_PLAN.yearly)}/year, ${formatUsd(yearlySavings(PRO_PLAN))} less than paying monthly, or ${formatUsd(PRO_PLAN.monthly)}/month. Auto-renews. Cancel anytime before the trial ends and you won't be charged.`
-              : `${formatUsd(PRO_PLAN.yearly)}/year, ${formatUsd(yearlySavings(PRO_PLAN))} less than paying monthly, or ${formatUsd(PRO_PLAN.monthly)}/month. Auto-renews until you cancel.`}
-          </p>
-        </div>
+        {/* No CTA button up here any more. This used to duplicate the trial
+            button in ProPlanToggle below with a second, differently-worded
+            button ("Try Pro free..." here vs. "Start N free days" there) plus
+            its own restatement of the price and renewal terms - four buttons
+            and two phrasings on one page before counting the plan cards.
+            ProPlanToggle's own top trial button now states the same facts
+            (free days, price after, cancel before it ends) in the one place a
+            reader is actually about to act on them; repeating it here was the
+            clutter, matching the homeowner /plus page's own PlanToggle. */}
       </div>
 
       {/* The straight answer, up front: membership never touches lead access. */}

@@ -67,7 +67,7 @@ describe("isEligibleForReviewPrompt: session and page gates", () => {
       "/feedback",
       "/plus",
       "/onboarding",
-      "/sign-in",
+      "/signin",
       "/checkout",
       "/plus/upgrade",
     ]) {
@@ -88,16 +88,29 @@ describe("isEligibleForReviewPrompt: session and page gates", () => {
 });
 
 describe("isExcludedPath", () => {
-  it("matches a prefix, not just an exact path", () => {
+  it("matches the route itself, anything inside it, and a query string", () => {
     expect(isExcludedPath("/feedback")).toBe(true);
     expect(isExcludedPath("/feedback/thanks")).toBe(true);
     expect(isExcludedPath("/plus")).toBe(true);
     expect(isExcludedPath("/plus?reason=ask")).toBe(true);
+    expect(isExcludedPath("/plus/upgrade?ref=x")).toBe(true);
+    expect(isExcludedPath("/plus#plans")).toBe(true);
   });
 
-  it("does not match an unrelated path that merely starts similarly", () => {
-    // Not a real route today, but this proves the check is a real prefix
-    // match and not a substring anywhere in the string.
+  it("excludes the sign-in route that actually exists", () => {
+    // The list said "/sign-in" for a route that is spelled /signin, so the
+    // prompt could appear over the sign-in page while excluding a page that
+    // has never existed.
+    expect(isExcludedPath("/signin")).toBe(true);
+    expect(isExcludedPath("/signin?next=/dashboard")).toBe(true);
+    expect(isExcludedPath("/sign-in")).toBe(false);
+  });
+
+  it("matches segment-wise, so a route that merely starts the same is not excluded", () => {
+    // The bare startsWith() this replaced excluded /plusters too.
+    expect(isExcludedPath("/plusters")).toBe(false);
+    expect(isExcludedPath("/feedbackery")).toBe(false);
+    expect(isExcludedPath("/signing-up")).toBe(false);
     expect(isExcludedPath("/dashboard")).toBe(false);
   });
 });
@@ -203,10 +216,59 @@ describe("migration 0133: app_feedback RLS", () => {
     );
   });
 
+  it("makes the message-less prompt events idempotent per account", () => {
+    // recordReviewPromptEvent is a server action: any signed-in account can
+    // call it directly, in a loop. "At most once per account" has to be a
+    // database constraint, not an app-level read-then-write.
+    for (const source of [sql, read(PASTE_ME)]) {
+      expect(source).toContain(
+        "create unique index if not exists app_feedback_one_event_per_kind_idx"
+      );
+      expect(source).toContain("on public.app_feedback (user_id, kind)");
+      expect(source).toContain("where message is null");
+    }
+  });
+
+  it("leaves the feedback form's own rows unconstrained", () => {
+    // The partial index is deliberately scoped to `message is null`: a
+    // homeowner with two things to tell us gets to send both notes.
+    expect(sql).toMatch(
+      /app_feedback_one_event_per_kind_idx[\s\S]{0,120}where message is null/
+    );
+  });
+
   it("has a matching PASTE-ME bundle carrying the same table and policy", () => {
     const paste = read(PASTE_ME);
     expect(paste).toContain("create table if not exists public.app_feedback");
     expect(paste).toContain('create policy "app_feedback self insert" on public.app_feedback');
     expect(paste).toContain("for insert to authenticated");
+  });
+});
+
+// The two writes into app_feedback are both reachable as server actions with
+// no form in front of them, so both need a cap and neither may hard-fail on
+// the new unique index. A source-text check: the wiring compiles either way.
+describe("feedback actions: rate limits and idempotent inserts", () => {
+  const actions = read("src/app/(app)/feedback/actions.ts");
+
+  it("caps prompt events per account per day", () => {
+    expect(actions).toContain("`review-prompt:${user.id}`");
+    expect(actions).toMatch(/p_limit: 10,[\s\S]{0,40}p_window_seconds: 86400/);
+  });
+
+  it("caps written feedback per account per hour, like the support form", () => {
+    expect(actions).toContain("`feedback:${user.id}`");
+    expect(actions).toMatch(/p_limit: 5,[\s\S]{0,40}p_window_seconds: 3600/);
+  });
+
+  it("fails OPEN on a limiter error: only an explicit false blocks", () => {
+    // A spam bucket, not a brute-force one. `allowed == null` (the RPC errored
+    // or the function is missing) must never stop a real homeowner.
+    expect(actions).not.toContain("if (!allowed)");
+    expect(actions.match(/allowed === false/g) ?? []).toHaveLength(2);
+  });
+
+  it("treats the unique-index collision as already recorded", () => {
+    expect(actions).toContain('error.code !== "23505"');
   });
 });

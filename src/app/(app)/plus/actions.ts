@@ -7,7 +7,11 @@ import { stripe } from "@/lib/stripe";
 import { getUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getSubscription, getProSubscription } from "@/lib/subscription";
+import {
+  getSubscription,
+  getProSubscription,
+  isPlusTrialEligible,
+} from "@/lib/subscription";
 import { billingTermsText, trialApplies } from "@/lib/billingTerms";
 import {
   checkoutCadence,
@@ -128,7 +132,22 @@ export async function startPlusCheckoutAction(formData: FormData) {
   const customerId =
     existing?.stripe_customer_id ?? proSub?.stripe_customer_id ?? null;
 
-  // Double-checkout guard: our subscriptions row only appears after the
+  // First double-checkout guard, on OUR OWN row, before Stripe is consulted at
+  // all. The Stripe-side check below only runs when a customer id already
+  // exists, and the customer id comes from a subscriptions row - so an account
+  // whose row somehow carries no stripe_customer_id (an older row, a manual
+  // fix, a webhook that landed the plan before the customer) skipped the guard
+  // entirely and could open a second live membership. A live row here is
+  // already proof of a membership, and it is the cheapest possible check.
+  const liveExisting =
+    existing &&
+    (existing.status === "active" || existing.status === "trialing");
+  if (liveExisting) {
+    await setFlash("You already have a membership.", "info");
+    redirect("/plus");
+  }
+
+  // Second double-checkout guard: our subscriptions row only appears after the
   // Stripe webhook fires, so two checkouts opened back-to-back could each
   // mint a live Stripe subscription (and a trial). When we already know the
   // Stripe customer, ask Stripe directly whether they have a live Plus
@@ -197,9 +216,14 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // monthly and annual are billed at signup, which is what the /plus cards and
   // the disclosure both say. trialApplies() is the one predicate all of that reads,
   // so the Stripe trial below, the disclosure the buyer saw, and the consent
-  // record stored two blocks down cannot disagree. `existing` already scopes to
-  // a homeowner-side Plus subscription, so a returning subscriber switching
-  // cadence never gets a second trial either.
+  // record stored two blocks down cannot disagree.
+  //
+  // isPlusTrialEligible(), not `!existing`: both mean "no homeowner-side row",
+  // but `existing` is getSubscription()'s null, which also means "the read
+  // failed". Gating free days on that failed OPEN - a churned subscriber whose
+  // subscriptions read errored was handed the trial again, and could retry
+  // until it did. isPlusTrialEligible returns false on an errored read, the
+  // same fix the Pro side already carries (isProTrialEligible).
   //
   // risk.allowTrial is ANDed into the same `introEligible` input rather than
   // bolted on afterwards, so the removal flows through every surface that reads
@@ -208,7 +232,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // they consent to say exactly that - billingTerms() takes the "charged today"
   // branch, so nothing on screen or in the record promises free days that are
   // not coming. /plus's own copy is gated on the same decision (page.tsx).
-  const freeTrial = trialApplies(plan, !existing && risk.allowTrial);
+  const freeTrial = trialApplies(plan, (await isPlusTrialEligible()) && risk.allowTrial);
 
   // Consent record. California's Automatic Renewal Law requires keeping proof
   // of what the subscriber agreed to (Bus. & Prof. Code 17602(b)(2): at least

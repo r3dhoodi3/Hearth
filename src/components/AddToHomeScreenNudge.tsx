@@ -139,7 +139,12 @@ export default function AddToHomeScreenNudge() {
     // Nav.tsx), which itself only exists below sm. bottom offset mirrors that
     // bar's own height (3rem content + its safe-area padding) plus a small
     // gap, the same math globals.css uses to lift the floating docks above it.
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-40 flex justify-center px-3 sm:hidden">
+    // z-35: above the bottom tab bar (z-30, Nav.tsx) so this never renders
+    // inline under it, but below the header's stacking context (z-40,
+    // Nav.tsx) that the Tools sheet and its scrim are nested inside, so a
+    // rare moment where both are visible resolves with the modal sheet on
+    // top.
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-[35] flex justify-center px-3 sm:hidden">
       <div
         role="status"
         className="pointer-events-auto w-full max-w-sm rounded-xl border border-stone-200 bg-white p-3 shadow-menu dark:border-white/10 dark:bg-stone-800"
@@ -158,7 +163,7 @@ export default function AddToHomeScreenNudge() {
             type="button"
             onClick={dismiss}
             aria-label="Dismiss"
-            className="-m-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-700 dark:hover:text-stone-300"
+            className="-m-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-700 dark:hover:text-stone-300"
           >
             <svg
               viewBox="0 0 20 20"

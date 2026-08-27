@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_TYPES, ISSUE_CATEGORIES, SEVERITIES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import { hasPlus } from "@/lib/subscription";
-import { countAiUsage, addAiUsage, overToolBurst } from "@/lib/aiUsage";
+import { countAiUsage, addAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { readJsonBounded } from "@/lib/boundedBody";
 import { wrapUntrusted } from "@/lib/promptSafe";
@@ -314,6 +314,13 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ result: normalize(parsed) });
   } catch (e) {
+    // The owner was already charged one of today's usages above (plus any
+    // extra fan-out weight for a multi-image or PDF submission); a thrown
+    // model call never produced a result, so hand it back rather than
+    // spending their allowance on a request that failed before it reached
+    // them.
+    // Refund the base unit plus the fan-out weight charged above.
+    for (let i = 0; i < 1 + Math.max(0, extraWeight); i++) await refundAiUsage(user.id);
     return NextResponse.json({
       result: null,
       reason: isRateLimitError(e) ? "rate_limited" : "failed",

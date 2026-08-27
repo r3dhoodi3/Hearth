@@ -62,6 +62,7 @@ import {
   ALLOWED_WORDS,
   allowedWordsPattern,
   fold,
+  hasBidiControl,
   EMAIL_RE,
   PHONE_RE,
 } from "@/lib/customCategory";
@@ -109,6 +110,11 @@ const PUBLIC_TEXT_ALLOWED_RE = allowedWordsPattern([
 // required); only content is judged.
 export function isAcceptablePublicText(s: unknown): boolean {
   if (typeof s !== "string") return false;
+  // A bidi override/isolate changes how everything AFTER it renders on the
+  // public page, not just itself, so this is checked on the raw string,
+  // before folding could hide it - same reasoning and same helper as
+  // isAcceptableCustomCategory in customCategory.ts.
+  if (hasBidiControl(s)) return false;
   const folded = fold(s);
   if (!folded.trim()) return true;
 

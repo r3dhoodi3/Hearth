@@ -15,6 +15,15 @@ import {
 
 const CYR_C = String.fromCharCode(0x0441);
 const ZWSP = String.fromCharCode(0x200b);
+const ARMENIAN_O = String.fromCharCode(0x0585); // Armenian small letter oh
+const COMBINING_DIAERESIS = String.fromCharCode(0x0308); // Mn
+const ENCLOSING_CIRCLE = String.fromCharCode(0x20dd); // Me
+// A Unicode "tag" character (supplementary plane, Cf) - the block used to
+// smuggle invisible text after an emoji. Built with fromCodePoint since it is
+// outside the BMP.
+const TAG_CHAR = String.fromCodePoint(0xe0069);
+const RLO = String.fromCharCode(0x202e); // right-to-left override
+const PDF = String.fromCharCode(0x202c); // pop directional formatting
 
 describe("isAcceptablePublicText", () => {
   it("accepts an ordinary business name", () => {
@@ -44,6 +53,53 @@ describe("isAcceptablePublicText", () => {
   it("rejects the same words spelled to dodge the filter", () => {
     expect(isAcceptablePublicText(`Best Fu${CYR_C}king Plumber`)).toBe(false);
     expect(isAcceptablePublicText(`Sh${ZWSP}it Removal Co`)).toBe(false);
+  });
+
+  // Unicode hardening: a combining mark splitting a letter, an enclosing
+  // mark, a Unicode tag character, an Armenian look-alike, and a bidi
+  // override/isolate are all evasions of every pattern this gate runs, and
+  // each costs an attacker nothing. See src/lib/customCategory.ts fold() and
+  // hasBidiControl() for how each one is defeated.
+  it("rejects a slur spelled with a combining mark splitting a letter", () => {
+    expect(
+      isAcceptablePublicText(`Best F${"u"}c${COMBINING_DIAERESIS}king Plumber`)
+    ).toBe(false);
+    expect(
+      isAcceptablePublicText(`n${"i"}${COMBINING_DIAERESIS}gger Removal Co`)
+    ).toBe(false);
+  });
+
+  it("rejects a slur hidden behind an enclosing mark", () => {
+    expect(isAcceptablePublicText(`c${ENCLOSING_CIRCLE}oon Cleaning`)).toBe(
+      false
+    );
+  });
+
+  it("rejects a blocked term split by a Unicode tag character", () => {
+    expect(isAcceptablePublicText(`Sh${TAG_CHAR}it Removal Co`)).toBe(false);
+  });
+
+  it("rejects the Armenian look-alike spelling", () => {
+    // censor() (which this gate runs on) has no "porn" entry of its own -
+    // that word is only in customCategory.ts's separate BLOCKED_TERMS - so
+    // this uses a word actually on censor's SLURS list instead.
+    expect(isAcceptablePublicText(`Wh${ARMENIAN_O}re Cleaning`)).toBe(false);
+  });
+
+  it("rejects any name or about section carrying a bidi override or isolate", () => {
+    expect(isAcceptablePublicText(`Roofing ${RLO}gnicivres${PDF}`)).toBe(
+      false
+    );
+    expect(
+      isAcceptablePublicText(
+        `Family run since 1998. ${RLO}txet nedih${PDF} We do repipes.`
+      )
+    ).toBe(false);
+  });
+
+  it("still accepts real names with precomposed accents", () => {
+    expect(isAcceptablePublicText("José Núñez Plumbing")).toBe(true);
+    expect(isAcceptablePublicText("Müller & Söhne HVAC")).toBe(true);
   });
 
   it("rejects an off-platform contact route in the name", () => {

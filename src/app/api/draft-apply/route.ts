@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasPlus, hasProPlan } from "@/lib/subscription";
-import { countAiUsage, overToolBurst } from "@/lib/aiUsage";
+import { countAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { readJsonBounded } from "@/lib/boundedBody";
 import { wrapUntrusted } from "@/lib/promptSafe";
@@ -213,6 +213,10 @@ export async function POST(req: NextRequest) {
     // Empty or refused: the pro writes it themselves.
     return NextResponse.json({ message: null, reason: "failed" });
   } catch (e) {
+    // The pro was already charged one of today's usages above; a thrown model
+    // call never produced a draft, so hand it back rather than spending their
+    // allowance on a request that failed before it ever reached them.
+    await refundAiUsage(authUser.id);
     return NextResponse.json({
       message: null,
       reason: isRateLimitError(e) ? "rate_limited" : "failed",

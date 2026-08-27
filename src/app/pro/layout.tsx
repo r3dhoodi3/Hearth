@@ -94,7 +94,10 @@ export default async function ProLayout({
       </main>
       <footer className="mx-auto max-w-5xl px-6 pb-8 text-center text-xs text-stone-500 dark:text-stone-400">
         Need a hand?{" "}
-        <Link href="/pro/help" className="underline hover:text-stone-600 dark:hover:text-stone-300">
+        <Link
+          href="/pro/help"
+          className="underline hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:py-2 dark:hover:text-stone-300"
+        >
           Help
         </Link>
       </footer>

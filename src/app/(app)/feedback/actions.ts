@@ -85,9 +85,33 @@ export async function recordReviewPromptEvent(
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase
+
+    // This is an unauthenticated-shaped write in practice: any signed-in
+    // account can call the server action directly, with any kind, as often as
+    // it likes, and every call lands a row in the table staff read. Ten a day
+    // is far more than the real flow can produce (the card writes one
+    // 'prompt_shown' and at most one answer, ever), so a legitimate homeowner
+    // never meets this. Same fixed-window limiter and same fail-open posture as
+    // account/help/actions.ts: only an explicit `false` blocks, so a limiter
+    // outage cannot turn into a repeat nag or a lost event.
+    const admin = createAdminClient();
+    const { data: allowed } = await admin.rpc("rate_limit_hit", {
+      p_bucket: `review-prompt:${user.id}`,
+      p_limit: 10,
+      p_window_seconds: 86400,
+    });
+    if (allowed === false) return;
+
+    const { error } = await supabase
       .from("app_feedback")
       .insert({ user_id: user.id, side: "homeowner", kind });
+    // 23505 = unique_violation. Migration 0133's
+    // app_feedback_one_event_per_kind_idx makes the three message-less prompt
+    // events idempotent per account, so a double-submit (React strict mode,
+    // a retried action, a replayed request) collides here instead of writing a
+    // second row. That collision IS the success case - the event is already
+    // recorded - so it is swallowed rather than logged as a failure.
+    if (error && error.code !== "23505") throw error;
   } catch (err) {
     console.error("recordReviewPromptEvent failed:", err);
   }
@@ -113,6 +137,27 @@ export async function submitFeedbackAction(formData: FormData) {
   const message = cappedField(formData, "message", FIELD_MAX.message);
   if (!message) {
     setFlash("Please write a short note first.", "error");
+    redirect(FEEDBACK_PATH);
+  }
+
+  // Same spam cap the support form uses (account/help/actions.ts), for the
+  // same reason: this stores attacker-controllable text that staff later read,
+  // and a server action takes as many submissions as it is handed. Charged
+  // HERE, after the empty-message check, so a blank submit never burns a slot.
+  // Fails open on a limiter error (only an explicit `false` blocks) - this is
+  // a spam-class bucket, not a brute-force one, and a DB hiccup must not stop
+  // a real homeowner from telling us something.
+  const admin = createAdminClient();
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_bucket: `feedback:${user.id}`,
+    p_limit: 5,
+    p_window_seconds: 3600,
+  });
+  if (allowed === false) {
+    setFlash(
+      "You've sent us a few notes already. Please wait a bit before sending another.",
+      "error"
+    );
     redirect(FEEDBACK_PATH);
   }
 

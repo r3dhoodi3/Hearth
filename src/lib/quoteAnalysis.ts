@@ -560,7 +560,7 @@ export async function runTranscribe(input: {
   mime?: string;
   text?: string;
   category?: string | null;
-}): Promise<{ transcript: Transcript | null; rateLimited: boolean }> {
+}): Promise<{ transcript: Transcript | null; rateLimited: boolean; threw: boolean }> {
   const category = input.category ?? null;
   const today = new Date().toISOString().slice(0, 10);
   const instruction = buildTranscribePrompt({ category, today });
@@ -609,9 +609,13 @@ export async function runTranscribe(input: {
     return {
       transcript: data ? normalizeTranscript(data) : null,
       rateLimited: false,
+      // A null transcript here is a NORMAL no-result (the model ran and
+      // returned nothing usable), not a thrown error, so the caller's usage
+      // refund must not fire for this path - only for the catch below.
+      threw: false,
     };
   } catch (e) {
-    return { transcript: null, rateLimited: isRateLimitError(e) };
+    return { transcript: null, rateLimited: isRateLimitError(e), threw: true };
   }
 }
 
@@ -623,7 +627,7 @@ export async function runTranscribe(input: {
 export async function runDiagnose(
   transcript: Transcript,
   opts: QuoteAnalysisOpts = {}
-): Promise<{ diagnosis: Diagnosis | null; rateLimited: boolean }> {
+): Promise<{ diagnosis: Diagnosis | null; rateLimited: boolean; threw: boolean }> {
   const category = opts.category ?? null;
   const baseline = baselineFor(category);
   const today = new Date().toISOString().slice(0, 10);
@@ -644,8 +648,11 @@ export async function runDiagnose(
     return {
       diagnosis: data ? normalizeDiagnosis(data, transcript) : null,
       rateLimited: false,
+      // Same distinction as runTranscribe above: null here is a normal
+      // no-result, not a thrown error.
+      threw: false,
     };
   } catch (e) {
-    return { diagnosis: null, rateLimited: isRateLimitError(e) };
+    return { diagnosis: null, rateLimited: isRateLimitError(e), threw: true };
   }
 }

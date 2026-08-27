@@ -61,8 +61,21 @@ describe("PlanToggle plan selection", () => {
     );
   });
 
-  it("preselects Monthly and posts monthly", () => {
+  it("preselects Weekly and posts weekly when the trial is on offer, agreeing with the top trial button", () => {
     render(<PlanToggle />);
+    expect(card(/^Weekly/)).toHaveAttribute("aria-checked", "true");
+    expect(card(/^Monthly/)).toHaveAttribute("aria-checked", "false");
+    expect(card(/^Annual/)).toHaveAttribute("aria-checked", "false");
+    expect(postedPlan()).toBe("weekly");
+    expect(
+      within(pickerForm()).getByRole("button", {
+        name: `Start ${PLUS_PLAN.trialDays} days free`,
+      })
+    ).toBeInTheDocument();
+  });
+
+  it("preselects Monthly and posts monthly when there is no trial to offer", () => {
+    render(<PlanToggle trialEligible={false} />);
     expect(card(/^Monthly/)).toHaveAttribute("aria-checked", "true");
     expect(card(/^Weekly/)).toHaveAttribute("aria-checked", "false");
     expect(card(/^Annual/)).toHaveAttribute("aria-checked", "false");
@@ -125,7 +138,9 @@ describe("PlanToggle plan selection", () => {
   });
 
   it("walks the cards with the arrow keys and selects with the keyboard", () => {
-    render(<PlanToggle />);
+    // No trial here so the walk starts from the same Monthly default this
+    // test was written against; the trial-on default is covered above.
+    render(<PlanToggle trialEligible={false} />);
     const group = screen.getByRole("radiogroup", { name: "Choose your plan" });
 
     // Monthly -> Annual -> Free -> Weekly, wrapping like a native radio group.
@@ -154,7 +169,9 @@ describe("PlanToggle plan selection", () => {
 
 describe("PlanToggle checkout disclosure", () => {
   it("keeps the auto-renewal terms inside the checkout form, next to the button", () => {
-    render(<PlanToggle />);
+    // No trial, so the picker defaults to Monthly and "Get Monthly" is on
+    // screen without needing to tap a card first.
+    render(<PlanToggle trialEligible={false} />);
     const form = pickerForm();
     const terms = within(form).getByText(
       "This subscription renews automatically"
@@ -170,6 +187,9 @@ describe("PlanToggle checkout disclosure", () => {
 
   it("restates the terms for the plan actually selected", () => {
     render(<PlanToggle />);
+    // The trial default is Weekly (see above); select Monthly explicitly to
+    // check its terms first.
+    fireEvent.click(card(/^Monthly/));
     // Monthly bills on day one: no free-days promise in the picker's terms.
     expect(
       within(pickerForm()).getByText(
