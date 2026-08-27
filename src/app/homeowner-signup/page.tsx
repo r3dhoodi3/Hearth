@@ -352,6 +352,15 @@ export default function HomeownerSignUpPage(props: {
             purpose="create and secure your account, sign you in, and contact you about your home."
             sensitive="Your password is sensitive information. It's stored only as a scrambled hash that we can't reverse, and it's used for nothing but signing you in."
           />
+          {/* The primary submit sits directly under the agreement it acts on,
+              and above the Google / Apple buttons, so on a 390px phone the
+              button that finishes the form the reader just filled in is the
+              next thing they reach - not something below two social buttons
+              they have to scroll past. The social buttons keep their own
+              agreement line underneath them. */}
+          <button className="btn-primary w-full" disabled={busy}>
+            {busy ? "Creating account…" : "Sign up"}
+          </button>
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
             <span className="text-xs text-stone-500 dark:text-stone-400">or</span>
@@ -378,9 +387,6 @@ export default function HomeownerSignUpPage(props: {
             </Link>
             .
           </p>
-          <button className="btn-primary w-full" disabled={busy}>
-            {busy ? "Creating account…" : "Sign up"}
-          </button>
         </form>
 
         {error && (

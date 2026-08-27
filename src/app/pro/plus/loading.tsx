@@ -30,7 +30,16 @@ export default function Loading() {
         ))}
       </div>
 
-      {/* ProPlanToggle: Free / Yearly / Monthly columns. */}
+      {/* ProPlanToggle's trial block: button, the one line under it, then the
+          auto-renewal disclosure. */}
+      <div className="space-y-2 rounded-2xl border border-stone-200 p-4 dark:border-white/10">
+        <Skeleton className="h-11 w-full rounded-lg" />
+        <Skeleton className="mx-auto h-4 w-64" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+      </div>
+
+      {/* ProPlanToggle: Free / Yearly / Monthly columns. The two paid columns
+          are the selector, so no column carries a button of its own. */}
       <div className="grid gap-3 sm:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="card space-y-2">
@@ -41,9 +50,15 @@ export default function Loading() {
               <SkeletonLine width="w-5/6" />
               <SkeletonLine width="w-2/3" />
             </div>
-            <Skeleton className="h-10 w-full rounded-lg" />
           </div>
         ))}
+      </div>
+
+      {/* The single checkout block: price recap, disclosure, one button. */}
+      <div className="space-y-2 rounded-2xl border border-stone-200 p-4 dark:border-white/10">
+        <Skeleton className="mx-auto h-7 w-40" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-11 w-full rounded-lg" />
       </div>
 
       <Skeleton className="mx-auto h-3 w-40" />

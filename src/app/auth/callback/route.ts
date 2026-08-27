@@ -10,6 +10,7 @@ import {
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import {
   contractorRowExists,
+  isFirstHomeSetupPath,
   propertyRowExists,
   resolveAuthRole,
 } from "@/lib/contractor";
@@ -111,16 +112,28 @@ export async function GET(request: NextRequest) {
             ? true
             : await contractorRowExists(data.user.id);
 
-        // Does the same account also own a home? Only asked of a pro, because
-        // that is the only case where the answer changes anything: it tells a
-        // pro-who-also-owns-a-home (both sides are really theirs, so `next`
-        // stands and no stamp is rewritten) apart from a pro who wandered in
-        // through the homeowner door (bounced to /pro as before). Skipped
-        // entirely for everyone else, so this costs one query for pros and
-        // nothing at all for the common homeowner sign-in.
-        const hasPropertyRow = hasContractorRow
-          ? await propertyRowExists(data.user.id)
-          : false;
+        // Does the same account also own a home? Asked in two cases, and
+        // skipped otherwise, so an ordinary sign-in already headed somewhere
+        // else still costs nothing:
+        //
+        //   - Of a pro, where it tells a pro-who-also-owns-a-home (both sides
+        //     are really theirs, so `next` stands and no stamp is rewritten)
+        //     apart from a pro who wandered in through the homeowner door
+        //     (bounced to /pro as before).
+        //   - Whenever `next` is the claim-your-home wizard, whatever side
+        //     they are on. Google and Apple use one button for both sign-up
+        //     and sign-in, and /homeowner-signup builds it with
+        //     next=/onboarding, so an EXISTING homeowner tapping "Continue
+        //     with Apple" landed on the add-another-home screen and got the
+        //     free-plan cap wall for doing nothing but signing in. This lookup
+        //     is what lets resolveAuthRole recognize them and send them to
+        //     their dashboard instead. Without it the answer was false for
+        //     every account with no contractors row, which is precisely the
+        //     homeowners the wall was hitting.
+        const hasPropertyRow =
+          hasContractorRow || isFirstHomeSetupPath(next)
+            ? await propertyRowExists(data.user.id)
+            : false;
 
         // Everything about who they are and where they go, decided in one
         // pure function (src/lib/roleRouting.ts, re-exported from

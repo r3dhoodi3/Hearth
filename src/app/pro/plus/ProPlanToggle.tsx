@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { startProCheckoutAction } from "./actions";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
@@ -92,6 +92,42 @@ export default function ProPlanToggle({
 }) {
   const [plan, setPlan] = useState<Plan>("yearly");
   const copy = PLAN_COPY[plan];
+  // Arrow-key order for the radio group below. Visual order differs by
+  // breakpoint (the yearly hero comes first on a phone), so the keyboard walks
+  // the plans in cadence order and stays predictable at every width.
+  const ORDER: Plan[] = ["yearly", "monthly"];
+  const cardRefs = useRef<Record<Plan, HTMLButtonElement | null>>({
+    yearly: null,
+    monthly: null,
+  });
+
+  // Roving tabindex: one tab stop for the whole group, arrows move the
+  // selection the way a native radio group does. Space and Enter are already
+  // handled by the underlying <button>, which fires onClick and selects.
+  function onGroupKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const forward = e.key === "ArrowRight" || e.key === "ArrowDown";
+    const back = e.key === "ArrowLeft" || e.key === "ArrowUp";
+    if (!forward && !back) return;
+    e.preventDefault();
+    const at = ORDER.indexOf(plan);
+    const next =
+      (at + (forward ? 1 : ORDER.length - 1) + ORDER.length) % ORDER.length;
+    setPlan(ORDER[next]);
+    cardRefs.current[ORDER[next]]?.focus();
+  }
+
+  // Radio semantics written once, so the two cards cannot drift apart.
+  const radioProps = (key: Plan, label: string) => ({
+    type: "button" as const,
+    role: "radio",
+    "aria-checked": plan === key,
+    "aria-label": label,
+    tabIndex: plan === key ? 0 : -1,
+    ref: (el: HTMLButtonElement | null) => {
+      cardRefs.current[key] = el;
+    },
+    onClick: () => setPlan(key),
+  });
 
   // Shared shell for the two selectable columns. The hero keeps its elevated
   // look whether or not it is the current selection; the ring tracks selection,
@@ -109,9 +145,41 @@ export default function ProPlanToggle({
 
   return (
     <div id="pricing" className="space-y-4">
+      {/* The trial, offered once, at the top, as its own one-tap checkout. It
+          posts plan=monthly: both Pro cadences trial, so the tap that only
+          wants "free days" gets the smaller commitment behind it, and the
+          cards below still let a pro pick yearly. The terms directly under the
+          button are the terms of the plan this button actually buys. Only
+          rendered when the trial is real, so a returning member never sees
+          free days they will not get. */}
+      {trialEligible && (
+        <form action={startProCheckoutAction} className="card-hero space-y-2">
+          <input type="hidden" name="plan" value="monthly" />
+          <CheckoutButton label={`Start ${PRO_PLAN.trialDays} free days`} />
+          <p className="text-center text-sm text-stone-600 dark:text-stone-300">
+            {PRO_PLAN.trialDays} days free, then {PLAN_COPY.monthly.price}
+            /month. Cancel anytime before the trial ends.
+          </p>
+          {/* Same disclosure the picker below carries, for the same reason:
+              this button starts a Stripe checkout, so the recurring terms have
+              to be on screen next to it before any billing information is
+              collected (ROSCA 15 U.S.C. 8403(1)) and in visual proximity to
+              the request for consent (Cal. Bus. & Prof. Code 17602(a)(1)).
+              Hard-coded to pro_monthly because the hidden field above is. */}
+          <AutoRenewalTerms plan="pro_monthly" introEligible={trialEligible} />
+        </form>
+      )}
+
       {/* One row, three columns from sm up. On a phone they stack with the
-          yearly hero first (order-1), then Free, then Monthly. */}
-      <div className="grid items-stretch gap-3 sm:grid-cols-3">
+          yearly hero first (order-1), then Free, then Monthly. The two paid
+          columns ARE the selector (role=radio), so there is one primary button
+          for the whole page, in the checkout block below. */}
+      <div
+        role="radiogroup"
+        aria-label="Choose your membership"
+        onKeyDown={onGroupKeyDown}
+        className="grid items-stretch gap-3 sm:grid-cols-3"
+      >
         {/* --- Free: a real column --- */}
         <div className="order-2 flex h-full flex-col rounded-xl border border-stone-200 bg-white p-4 text-left sm:order-1 dark:border-white/10 dark:bg-stone-800">
           <p className="text-sm font-medium text-stone-700 dark:text-stone-300">
@@ -144,9 +212,10 @@ export default function ProPlanToggle({
 
         {/* --- Yearly: the hero, preselected --- */}
         <button
-          type="button"
-          onClick={() => setPlan("yearly")}
-          aria-pressed={plan === "yearly"}
+          {...radioProps(
+            "yearly",
+            `Yearly, ${PLAN_COPY.yearly.price} a year, best value`
+          )}
           className={`relative order-1 sm:order-2 ${columnClass("yearly")}`}
         >
           <span className="absolute -top-2.5 left-4 whitespace-nowrap rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-medium text-white">
@@ -183,9 +252,10 @@ export default function ProPlanToggle({
 
         {/* --- Monthly: the full-price reference --- */}
         <button
-          type="button"
-          onClick={() => setPlan("monthly")}
-          aria-pressed={plan === "monthly"}
+          {...radioProps(
+            "monthly",
+            `Monthly, ${PLAN_COPY.monthly.price} a month`
+          )}
           className={`order-3 ${columnClass("monthly")}`}
         >
           <span className="text-sm font-medium text-stone-700 dark:text-stone-300">

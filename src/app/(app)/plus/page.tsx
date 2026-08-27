@@ -476,19 +476,13 @@ export default async function PlusPage(
         <h1 className="text-xl font-semibold text-stone-900 sm:text-3xl dark:text-stone-100">
           Know what&apos;s coming before it costs you
         </h1>
-        {/* One short line above the columns, because the columns themselves now
-            carry every price. Prices are never restated here: the three columns
-            state each one once, and the auto-renewal disclosure inside the
-            checkout form restates the selected plan's terms next to the button
-            that starts the charge. The trial belongs to Monthly only, so this
-            line names the plan it belongs to rather than implying both. */}
-        <p className="mt-1 text-sm font-medium text-bark-700 sm:mt-2 dark:text-stone-300">
-          {trialEligible
-            ? `Monthly starts with ${PLUS_PLAN.trialDays} free days. Cancel anytime.`
-            : "Cancel anytime."}
-        </p>
+        {/* The trial line that used to sit here is gone: the trial button at
+            the top of PlanToggle now states the same three facts (free days,
+            price after, cancel before it ends) in the one place a reader is
+            about to act on them. Repeating billing mechanics above it was the
+            clutter the page was carrying. */}
         {/* Desktop only: on a phone this paragraph is the thing standing
-            between the reader and the three buttons, and the columns say the
+            between the reader and the trial button, and the cards say the
             same thing in fewer words. */}
         <p className="mt-2 hidden text-sm text-stone-500 sm:block dark:text-stone-400">
           {COLD_START_FREE_POSTING
@@ -501,8 +495,8 @@ export default async function PlusPage(
 
       <PlanToggle trialEligible={trialEligible} />
 
-      {/* The full comparison stays available but folded, under the card. The
-          card already carries the seven things Plus adds; this is the
+      {/* The full comparison stays available but folded, closed by default,
+          under the cards. Each card already carries four lines; this is the
           row-by-row version for anyone who wants to check the free tier's
           limits, and it costs no height until it's opened. */}
       <details className="group">
@@ -510,7 +504,7 @@ export default async function PlusPage(
           <span className="mr-1 inline-block transition-transform group-open:rotate-90">
             ▸
           </span>
-          Compare everything
+          See everything included
         </summary>
         <div className="card mt-3 overflow-hidden p-0">
           {/* Tighter cells and smaller text below sm so all three columns fit
@@ -538,11 +532,6 @@ export default async function PlusPage(
             </tbody>
           </table>
         </div>
-        <p className="mt-2 px-1 text-[11px] text-stone-500 dark:text-stone-400">
-          Free shows your 10-year total, the monthly set-aside, and full detail
-          on your soonest one or two systems. Plus adds every system&apos;s
-          timeline, the year-by-year spend chart, and the running-costs section.
-        </p>
       </details>
 
       <p className="text-center text-xs text-stone-500 dark:text-stone-400">

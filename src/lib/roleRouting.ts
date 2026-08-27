@@ -79,6 +79,82 @@ export function isSignupConfirmationPath(path: string): boolean {
   return isUnder(path, "/pro/onboarding") || isUnder(path, "/onboarding");
 }
 
+// The claim-your-home wizard: the destination /homeowner-signup builds for a
+// brand-new account (oauthNextPath there). An account that already owns a home
+// has finished it, and for them that same page is the "add another home"
+// screen - which on the free plan is the cap wall. See destinationForSignIn
+// below.
+export function isFirstHomeSetupPath(path: string): boolean {
+  return isUnder(path, "/onboarding");
+}
+
+// One query-string value off a relative path. No `new URL(path, base)`: a base
+// would have to be invented here, and this file deliberately knows nothing
+// about the request. Returns null when there is no query string or no such
+// key.
+function queryParam(path: string, key: string): string | null {
+  const q = path.indexOf("?");
+  if (q === -1) return null;
+  const hash = path.indexOf("#", q);
+  const query = hash === -1 ? path.slice(q + 1) : path.slice(q + 1, hash);
+  return new URLSearchParams(query).get(key);
+}
+
+// A destination the signup funnel parked inside /onboarding?next=..., safe to
+// follow. Same relative-path contract as safeNextPath (src/lib/safeNext.ts),
+// re-checked rather than imported because this value never went through it:
+// the OUTER ?next= was validated by the route, its inner one was not.
+// /onboarding inside /onboarding is rejected too, since following it walks
+// straight back into the page this rewrite exists to avoid.
+function innerNext(path: string): string | null {
+  const inner = queryParam(path, "next");
+  if (!inner) return null;
+  if (!inner.startsWith("/") || inner.startsWith("//")) return null;
+  if (isFirstHomeSetupPath(inner)) return null;
+  return inner;
+}
+
+// ===========================================================================
+// A STALE FIRST-HOME DESTINATION. SIGNING IN NEVER EVALUATES THE HOME CAP.
+//
+// Google and Apple have ONE button for both sign-up and sign-in
+// (GoogleSignInButton/AppleSignInButton), and /homeowner-signup builds it with
+// next=/onboarding. An EXISTING homeowner who tapped "Continue with Apple"
+// there therefore came back to the claim-your-home wizard, and for an account
+// that already owns a home that page is the "add another home" screen: on the
+// free plan it renders the cap wall, "Your first home is free. Adding another
+// home is part of Hearth Plus." Someone who did nothing but sign in was told
+// to upgrade, with no way on except a link to /plus.
+//
+// The cap is a rule about the add-a-home ACTION, so no sign-in landing may go
+// near it. Three cases, in order:
+//   - ?add=home is the one explicit "I am adding a home" intent in the app
+//     (ProNav, setPreferredSideAction). Asked for, so honored - cap wall
+//     included, which is exactly where that wall belongs.
+//   - a destination the funnel parked in the inner ?next=, notably a household
+//     QR invite (/join/...), is handed over directly. That is what /onboarding
+//     itself does with that URL (see its page.tsx), so nothing about the
+//     invite flow changes.
+//   - otherwise their dashboard, which getActiveProperty() resolves to the
+//     active home or the first one, so an owner at or over the cap still lands
+//     on a real home.
+//
+// Only ever narrows a destination that no longer applies: an account with no
+// home of its own is untouched and still goes to onboarding. Exported because
+// both halves of the same door need it - /auth/callback through
+// resolveAuthRole below, and /auth/confirm (magic link, email confirmation)
+// directly, since that route decides no role and needs none to apply this.
+// ===========================================================================
+export function destinationForSignIn(
+  next: string,
+  hasPropertyRow: boolean
+): string {
+  if (!hasPropertyRow) return next;
+  if (!isFirstHomeSetupPath(next)) return next;
+  if (queryParam(next, "add") === "home") return next;
+  return innerNext(next) ?? "/dashboard";
+}
+
 // What an account actually HAS, which is what every layout and landing
 // decision gates on. One account may hold both sides at once: a pro who also
 // owns a home has a contractors row AND properties rows, and neither cancels
@@ -158,9 +234,12 @@ export type AuthRoleDecision = {
 export function resolveAuthRole(input: {
   metadataRole?: string | null;
   hasContractorRow: boolean;
-  // Does this account also own a home? Only consulted alongside a contractors
-  // row, to recognize the account that has BOTH sides. Defaults to false, so
-  // every caller that never asks keeps the old single-side behavior.
+  // Does this account already own a home? Two consumers: alongside a
+  // contractors row it recognizes the account that has BOTH sides, and on its
+  // own it says the claim-a-home wizard is a finished step for this person
+  // (destinationForSignIn). Defaults to false, so every caller that never asks
+  // keeps the old behavior: single-side correction, and onboarding still
+  // reachable.
   hasPropertyRow?: boolean;
   next: string;
 }): AuthRoleDecision {
@@ -228,6 +307,14 @@ export function resolveAuthRole(input: {
       redirect = "/dashboard";
     }
   }
+
+  // Never hand an account that already owns a home back to the claim-a-home
+  // wizard, whichever side it is on: that page is the add-another-home screen
+  // for them, and on the free plan it is the cap wall. Full reasoning on
+  // destinationForSignIn above. Applied after the side correction so it sees
+  // the destination they will really get, and a no-op for the brand-new
+  // account this route mostly serves (hasPropertyRow defaults to false).
+  redirect = destinationForSignIn(redirect, hasPropertyRow);
 
   return {
     role,

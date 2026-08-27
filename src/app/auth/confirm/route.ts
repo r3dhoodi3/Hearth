@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/safeNext";
 import { requestOrigin } from "@/lib/requestOrigin";
 import {
+  destinationForSignIn,
+  isFirstHomeSetupPath,
+  propertyRowExists,
+} from "@/lib/contractor";
+import {
   PW_RECOVERY_COOKIE,
   passwordRecoveryCookieOptions,
 } from "@/lib/passwordRecovery";
@@ -22,12 +27,25 @@ export async function GET(request: NextRequest) {
 
   if (token_hash && type) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash });
+    const { data, error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) {
+      // The same stale-first-home rule /auth/callback applies (see
+      // destinationForSignIn in src/lib/roleRouting.ts): an account that
+      // already owns a home must never be handed back to the claim-a-home
+      // wizard, because for them that page is the add-another-home screen and
+      // on the free plan it is the "Adding another home is part of Hearth
+      // Plus" wall. Which of the two routes a link lands on is decided by the
+      // Supabase email template, so a rule that lived in only one of them
+      // would come back the moment a template changed. One extra query, and
+      // only for a link actually pointed at /onboarding.
+      const destination =
+        data.user && isFirstHomeSetupPath(next)
+          ? destinationForSignIn(next, await propertyRowExists(data.user.id))
+          : next;
       // requestOrigin, not request.url: request.url carries the dev server's
       // bind address (`-H 0.0.0.0`) and would strand the browser there.
       const response = NextResponse.redirect(
-        new URL(next, requestOrigin(request))
+        new URL(destination, requestOrigin(request))
       );
       // Same recovery cookie /auth/callback hands out, for the same reason.
       // Which of the two routes a reset link lands on is decided by the

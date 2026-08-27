@@ -136,6 +136,8 @@ export {
   isProPath,
   isHomeownerShellPath,
   isSignupConfirmationPath,
+  isFirstHomeSetupPath,
+  destinationForSignIn,
   resolveAuthRole,
   landingFor,
   ROLE_PICKER_PATH,

@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  destinationForSignIn,
+  isFirstHomeSetupPath,
   isHomeownerShellPath,
   isProPath,
   isSignupConfirmationPath,
@@ -271,6 +275,130 @@ describe("resolveAuthRole", () => {
       termsDoc: null,
     });
   });
+
+  // =========================================================================
+  // SIGNING IN MUST NEVER LAND ON THE ADD-A-HOME FLOW.
+  //
+  // Google and Apple use ONE button for both sign-up and sign-in, and
+  // /homeowner-signup builds it with next=/onboarding (oauthNextPath there).
+  // So an EXISTING homeowner who tapped "Continue with Apple" on that page
+  // came back to /onboarding, which for an account that already owns a home is
+  // the "Add another home" screen - and on the free plan that screen is the
+  // cap wall: "Your first home is free. Adding another home is part of Hearth
+  // Plus." A person who did nothing but sign in was told to upgrade.
+  //
+  // The cap belongs to the explicit add-a-home action alone, so the sign-in
+  // landing never goes near it.
+  // =========================================================================
+  it("sends an existing homeowner signing in to their dashboard, not the claim-a-home page", () => {
+    expect(
+      resolveAuthRole({
+        metadataRole: "homeowner",
+        hasContractorRow: false,
+        hasPropertyRow: true,
+        next: "/onboarding",
+      })
+    ).toEqual({
+      role: "homeowner",
+      needsStamp: false,
+      redirect: "/dashboard",
+      termsDoc: "terms",
+    });
+  });
+
+  it("still sends a brand-new homeowner to the claim-a-home page", () => {
+    // hasPropertyRow false: nothing to land on yet, so onboarding IS the
+    // right destination. This is the case the signup funnel was built for.
+    expect(
+      resolveAuthRole({
+        metadataRole: "homeowner",
+        hasContractorRow: false,
+        hasPropertyRow: false,
+        next: "/onboarding",
+      }).redirect
+    ).toBe("/onboarding");
+    expect(
+      resolveAuthRole({
+        metadataRole: null,
+        hasContractorRow: false,
+        next: "/onboarding?ref=abc",
+      }).redirect
+    ).toBe("/onboarding?ref=abc");
+  });
+
+  it("honors an explicit add-another-home intent", () => {
+    // ?add=home is the one signal that someone MEANT to add a home
+    // (ProNav's "Add your home", setPreferredSideAction). Someone who was
+    // bounced to /signin off that URL and came back through OAuth asked for
+    // it, so they get it - cap wall included, which is where the cap belongs.
+    expect(
+      resolveAuthRole({
+        metadataRole: "homeowner",
+        hasContractorRow: false,
+        hasPropertyRow: true,
+        next: "/onboarding?add=home",
+      }).redirect
+    ).toBe("/onboarding?add=home");
+  });
+
+  it("still delivers a household invite that rode along inside ?next=", () => {
+    // A housemate who already owns a home scans the QR invite while signed
+    // out: /homeowner-signup?next=/join/household/<token> builds
+    // next=/onboarding?next=/join/household/<token>. Handing them straight to
+    // the redemption page is exactly what /onboarding does with that URL.
+    expect(
+      resolveAuthRole({
+        metadataRole: "homeowner",
+        hasContractorRow: false,
+        hasPropertyRow: true,
+        next: "/onboarding?next=%2Fjoin%2Fhousehold%2Fabc",
+      }).redirect
+    ).toBe("/join/household/abc");
+    // And any other destination the funnel parked in there.
+    expect(
+      resolveAuthRole({
+        metadataRole: "homeowner",
+        hasContractorRow: false,
+        hasPropertyRow: true,
+        next: "/onboarding?next=%2Fplus&ref=neighbor",
+      }).redirect
+    ).toBe("/plus");
+  });
+
+  it("never follows an off-site or nested value from the inner ?next=", () => {
+    // The inner value is attacker-influenceable in exactly the way the outer
+    // one is, and it has not been through safeNextPath. Anything that is not
+    // a plain relative path of ours falls back to the dashboard, and
+    // /onboarding inside /onboarding would only walk back into the cap wall.
+    for (const inner of [
+      "https%3A%2F%2Fevil.example.com",
+      "%2F%2Fevil.example.com",
+      "%2Fonboarding",
+      "not-a-path",
+    ]) {
+      expect(
+        resolveAuthRole({
+          metadataRole: "homeowner",
+          hasContractorRow: false,
+          hasPropertyRow: true,
+          next: `/onboarding?next=${inner}`,
+        }).redirect
+      ).toBe("/dashboard");
+    }
+  });
+
+  it("sends a dual-side account that already owns a home to the dashboard too", () => {
+    // The owner's own account: a company row, homes, role=contractor. Signing
+    // in through the homeowner door must not show them the cap wall either.
+    expect(
+      resolveAuthRole({
+        metadataRole: "contractor",
+        hasContractorRow: true,
+        hasPropertyRow: true,
+        next: "/onboarding",
+      }).redirect
+    ).toBe("/dashboard");
+  });
 });
 
 describe("landingFor", () => {
@@ -318,5 +446,78 @@ describe("landingFor", () => {
     expect(landingFor(sides({ hasHome: true }))).toBe("/dashboard");
     // Both sides, no preference: the company row is the more deliberate act.
     expect(landingFor(sides({ hasPro: true, hasHome: true }))).toBe("/pro");
+  });
+});
+
+// The rule above only works if /auth/callback actually ASKS whether this
+// account owns a home before it lets resolveAuthRole decide. That lookup used
+// to be skipped for everyone without a contractors row, which is every
+// ordinary homeowner - so hasPropertyRow was false for exactly the people the
+// cap wall was hitting. A source-text check, the same trick
+// src/lib/homeValueCallers.test.ts uses: the wiring compiles and looks right
+// either way, so nothing else would catch it going back.
+describe("isFirstHomeSetupPath", () => {
+  it("matches the claim-a-home wizard and nothing that merely starts like it", () => {
+    expect(isFirstHomeSetupPath("/onboarding")).toBe(true);
+    expect(isFirstHomeSetupPath("/onboarding?add=home")).toBe(true);
+    expect(isFirstHomeSetupPath("/pro/onboarding")).toBe(false);
+    expect(isFirstHomeSetupPath("/dashboard")).toBe(false);
+  });
+});
+
+describe("destinationForSignIn", () => {
+  it("leaves every destination alone for an account with no home yet", () => {
+    expect(destinationForSignIn("/onboarding", false)).toBe("/onboarding");
+    expect(destinationForSignIn("/onboarding?ref=abc", false)).toBe(
+      "/onboarding?ref=abc"
+    );
+  });
+
+  it("leaves destinations that are not the claim-a-home page alone", () => {
+    expect(destinationForSignIn("/dashboard", true)).toBe("/dashboard");
+    expect(destinationForSignIn("/plus?reason=home_limit", true)).toBe(
+      "/plus?reason=home_limit"
+    );
+    // The pro wizard has its own guard (it redirects an existing contractor to
+    // /pro), and it is not the home cap, so this rule does not touch it.
+    expect(destinationForSignIn("/pro/onboarding", true)).toBe(
+      "/pro/onboarding"
+    );
+  });
+
+  it("redirects an existing homeowner off the claim-a-home page", () => {
+    expect(destinationForSignIn("/onboarding", true)).toBe("/dashboard");
+    expect(destinationForSignIn("/onboarding?ref=neighbor", true)).toBe(
+      "/dashboard"
+    );
+  });
+});
+
+// The rule above only works if the two auth routes actually ASK whether this
+// account owns a home. In /auth/callback that lookup used to be skipped for
+// everyone without a contractors row, which is every ordinary homeowner - so
+// hasPropertyRow was false for exactly the people the cap wall was hitting,
+// and /auth/confirm never asked at all. A source-text check, the same trick
+// src/lib/homeValueCallers.test.ts uses: the wiring compiles and looks right
+// either way, so nothing else would catch it going back.
+describe("auth route wiring", () => {
+  const read = (route: string) =>
+    readFileSync(
+      fileURLToPath(new URL(`../app/auth/${route}/route.ts`, import.meta.url)),
+      "utf8"
+    );
+
+  it("looks up the property row in /auth/callback when the destination is the claim-a-home page", () => {
+    expect(read("callback")).toMatch(
+      /hasContractorRow \|\| isFirstHomeSetupPath\(next\)[\s\S]{0,120}propertyRowExists/
+    );
+  });
+
+  it("applies the same rule in /auth/confirm", () => {
+    const source = read("confirm");
+    expect(source).toContain("isFirstHomeSetupPath(next)");
+    expect(source).toMatch(
+      /destinationForSignIn\(next, await propertyRowExists\(data\.user\.id\)\)/
+    );
   });
 });
