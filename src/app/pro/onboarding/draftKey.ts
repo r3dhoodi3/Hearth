@@ -13,23 +13,34 @@
 // that gets submitted without being read.
 const PREFIX = "hearth.pro-onboarding.v1";
 
+// NO UNSCOPED FALLBACK. This used to return the bare PREFIX when it had no
+// account id, so a render that could not read a user wrote its draft to a key
+// EVERY account on the browser shares. That is both halves of the bug testers
+// hit: the next account to open the wizard reads a stranger's answers out of
+// it, and one round trip through a signed-out render was enough to split a
+// pro's own work across two keys - written to the shared one, looked for under
+// the scoped one, gone.
+//
+// So an id-less caller now gets null and does nothing at all: no read, no
+// write, no delete. Losing the draft for a render with no user behind it is a
+// lost convenience; the shared key was a leak and a loss at once.
 export function proOnboardingDraftKey(
   userId: string | null | undefined
-): string {
+): string | null {
   const id = (userId ?? "").trim();
-  // No account id in hand (a page that never had one) falls back to the bare
-  // prefix. That is the old, unscoped behaviour, and it is the right fallback:
-  // for the one person using their own browser it still saves their work, and
-  // it is the only case where nothing better is available.
-  return id ? `${PREFIX}.${id}` : PREFIX;
+  return id ? `${PREFIX}.${id}` : null;
 }
 
 export function clearProOnboardingDraft(userId: string | null | undefined) {
+  const key = proOnboardingDraftKey(userId);
+  if (!key) return;
   try {
-    localStorage.removeItem(proOnboardingDraftKey(userId));
-    // Also sweep the pre-scoping key. Anyone mid-signup when this shipped has
-    // an unscoped draft sitting in their browser that nothing will ever read
-    // again; clearing it here means it does not sit there until its own expiry.
+    localStorage.removeItem(key);
+    // Also sweep the pre-scoping key. Anyone mid-signup when scoping shipped
+    // has an unscoped draft sitting in their browser that nothing will ever
+    // read again; clearing it here means it does not sit there until its own
+    // expiry. Only ever on behalf of a real account, so a signed-out render
+    // can no longer wipe anything.
     localStorage.removeItem(PREFIX);
   } catch {
     // Private mode, or storage disabled. The draft was only ever a convenience.

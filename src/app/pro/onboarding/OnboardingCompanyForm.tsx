@@ -80,8 +80,13 @@ function text(value: unknown): string {
 // hand-edited value, or junk, so every field is re-derived rather than trusted.
 // A parse failure just means "no draft".
 function readDraft(userId: string): Draft | null {
+  const key = proOnboardingDraftKey(userId);
+  // No account id in hand, so there is no draft that can be proved to belong
+  // to this person. Reading a shared key here is what handed one pro the
+  // previous one's answers; see ./draftKey.ts.
+  if (!key) return null;
   try {
-    const raw = localStorage.getItem(proOnboardingDraftKey(userId));
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
@@ -106,7 +111,14 @@ function readDraft(userId: string): Draft | null {
       step: typeof d.step === "number" ? d.step : 0,
       name: text(d.name),
       phone: text(d.phone),
-      license: text(d.license),
+      // Digits only, and no longer than the field itself accepts. The input
+      // carries pattern="[0-9]{5,8}", and neither that nor maxLength applies
+      // to a value React sets as defaultValue - so a draft written before
+      // this cap (the field used to allow 50 characters) restored a value the
+      // browser then refused to submit, with the pro left staring at a field
+      // that looks filled in and a form that will not advance. Normalize on
+      // the way out of storage instead.
+      license: text(d.license).replace(/\D+/g, "").slice(0, 8),
       referral: text(d.referral),
       cities: stringList(d.cities),
       categories: stringList(d.categories),
@@ -321,15 +333,51 @@ function OnboardingCompanyFormInner({
     defaultReferralCode.trim().length > 0
   );
 
+  // ONE RESTORE, EVER, AND ONLY INTO A FORM NOBODY HAS ANSWERED YET.
+  //
+  // Restoring bumps restoreKey, which REMOUNTS CategoryPicker and
+  // LaunchCityCheckboxes (their picks live in their own state, seeded once
+  // from a prop). A remount throws away whatever the pro has selected and
+  // re-seeds it from the draft snapshot - which is fine on a blank form and is
+  // a bug the moment it happens a beat late. That is the "I picked Plumbing,
+  // used the city list, hit Next, and it said pick a type of work with the
+  // chip cleared" report: the pro's tap landed on a form whose restore had not
+  // run yet (a Suspense boundary hydrates on its own schedule, and this one is
+  // hydrated by the very tap that gets replayed into it), so the restore
+  // wiped it.
+  //
+  // Two guards, because they cover different halves. restoredRef makes it
+  // one-shot no matter what re-runs this effect - a changed userId identity, a
+  // remount, StrictMode's double invoke. The live-values check makes it
+  // harmless even when it does run late: if the form already holds an answer,
+  // the pro is ahead of the draft and the draft has nothing to give them.
+  // Cities are deliberately not consulted - LaunchCityCheckboxes starts on
+  // "All of Orange County", so every untouched form already posts all 36.
+  const restoredRef = useRef(false);
   useEffect(() => {
     // Restore in an effect rather than in the initial state, so the
     // server-rendered blank form and the first client render still match.
     // Reaching this component at all means no contractors row exists yet, so
     // any draft still sitting here belongs to a signup that never landed -
     // exactly what the pro needs back.
-    if (waitlisted) return;
+    if (waitlisted || restoredRef.current) return;
+    const form = formRef.current;
+    if (form) {
+      const live = readValues(form);
+      if (
+        live.name.trim() ||
+        live.phone.trim() ||
+        live.categories.some((c) => c.trim())
+      ) {
+        // Already being filled in by hand. Leave it alone, and never come
+        // back: the draft keeps saving underneath, so nothing is lost.
+        restoredRef.current = true;
+        return;
+      }
+    }
     const saved = readDraft(userId);
     if (!saved) return;
+    restoredRef.current = true;
     setDraft(saved);
     setRestoreKey((k) => k + 1);
     setStep(resumeProOnboardingStep(saved.step, saved));
@@ -339,6 +387,11 @@ function OnboardingCompanyFormInner({
   const persist = useCallback((atStep: number) => {
     const form = formRef.current;
     if (!form) return;
+    const storageKey = proOnboardingDraftKey(userId);
+    // Same rule as readDraft: with no account id there is no key this pro
+    // could ever read back, and the shared one this used to fall back to
+    // belonged to whoever signed in next.
+    if (!storageKey) return;
     const data = new FormData(form);
     const field = (key: string, max: number) =>
       String(data.get(key) ?? "").slice(0, max);
@@ -354,21 +407,40 @@ function OnboardingCompanyFormInner({
       categories: data.getAll("categories").map(String).slice(0, 40),
     };
     try {
-      localStorage.setItem(proOnboardingDraftKey(userId), JSON.stringify(next));
+      localStorage.setItem(storageKey, JSON.stringify(next));
     } catch {
       // Storage full or blocked. Losing the draft is survivable; failing the
       // keystroke is not.
     }
   }, [userId]);
 
+  // ALWAYS SAVE AFTER THE RENDER THE EVENT CAUSED, NEVER DURING IT.
+  //
+  // persist() reads the answers straight off the DOM, and a React event
+  // handler runs BEFORE React has re-rendered anything that handler changed.
+  // Saving from inside one can therefore store the form as it was a moment
+  // ago. The click path already knew this - CategoryPicker's picks are hidden
+  // inputs that only exist after the next render, which is why it deferred -
+  // but the change path saved inline, and the controls it fires for change
+  // what the form POSTS just as much: the "All of Orange County" row swaps 36
+  // hidden city inputs for a list of checkboxes. One helper now, so both paths
+  // are late by the same tick and a draft always mirrors the form the pro can
+  // actually see.
+  const schedulePersist = useCallback(
+    (atStep: number) => {
+      window.setTimeout(() => persist(atStep), 0);
+    },
+    [persist]
+  );
+
   const goTo = useCallback(
     (next: number) => {
       movedRef.current = true;
       setStep(next);
       setError(null);
-      persist(next);
+      schedulePersist(next);
     },
-    [persist]
+    [schedulePersist]
   );
 
   // The gate. Called by the Next/Finish button (which passes its click event so
@@ -439,7 +511,10 @@ function OnboardingCompanyFormInner({
       }}
       onChange={() => {
         setError(null);
-        persist(step);
+        // Deferred for the same reason as the click below: a checkbox that
+        // changes what the form POSTS (the "All of Orange County" row swaps 36
+        // hidden inputs for a list) has not re-rendered yet at this point.
+        schedulePersist(step);
       }}
       onClick={(e) => {
         // Category cards are buttons, so they never fire a change event and
@@ -452,8 +527,7 @@ function OnboardingCompanyFormInner({
           return;
         }
         setError(null);
-        const at = step;
-        window.setTimeout(() => persist(at), 0);
+        schedulePersist(step);
       }}
       className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6 dark:border-white/10 dark:bg-stone-800"
     >
@@ -647,14 +721,20 @@ function OnboardingCompanyFormInner({
               id="license-number"
               name="license_number"
               className="input pl-9"
-              placeholder="LIC-000000-XX"
-              maxLength={50}
+              placeholder="1029384"
+              inputMode="numeric"
+              pattern="[0-9]{5,8}"
+              onChange={(e) => {
+                const stripped = e.target.value.replace(/\s+/g, "");
+                if (stripped !== e.target.value) e.target.value = stripped;
+              }}
+              maxLength={8}
               defaultValue={draft?.license ?? ""}
             />
           </div>
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            Optional. CA license numbers get a verified badge after we check
-            them with the CSLB.
+            Optional. Your CSLB license number, digits only. We check it
+            against the CSLB for a verified badge.
           </p>
         </div>
 

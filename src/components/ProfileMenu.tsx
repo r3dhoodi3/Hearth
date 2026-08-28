@@ -228,10 +228,19 @@ export default function ProfileMenu({
       {shouldRender && (
         <div
           role={switching !== null ? "status" : undefined}
-          className={`absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1.5 shadow-menu dark:border-white/10 dark:bg-stone-700 ${
+          // z-[55]: strictly above ToolsMenu's phone sheet (z-50) and its
+          // scrim (z-40), which live in this same header and can still be
+          // mid-close (shouldRender covers a 120ms fade-out, fully
+          // interactive) the instant this menu opens - without this a tap
+          // meant for a row here, e.g. Household, could land on the sheet's
+          // Ask Hearth tile sitting on top of it instead. Also
+          // pointer-events-none while THIS menu is only fading out
+          // (open false, closing true), so a closed-looking panel can never
+          // itself catch a tap meant for whatever is underneath it.
+          className={`absolute right-0 z-[55] mt-1 w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1.5 shadow-menu dark:border-white/10 dark:bg-stone-700 ${
             open || switching !== null
               ? "motion-safe:animate-fade-scale"
-              : "motion-safe:animate-fade-scale-out"
+              : "pointer-events-none motion-safe:animate-fade-scale-out"
           }`}
         >
           {/* Pending-switch status row. Always mounted - never conditionally

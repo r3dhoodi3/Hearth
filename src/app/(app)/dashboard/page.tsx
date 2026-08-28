@@ -29,6 +29,7 @@ import { addSystemFormAction } from "../profile/actions";
 import SeasonalChecklist from "@/components/SeasonalChecklist";
 import ChecklistProvider from "@/components/ChecklistProvider";
 import ReminderItem from "./ReminderItem";
+import SystemsPhoneList from "./SystemsPhoneList";
 import WalkthroughNudge from "./WalkthroughNudge";
 import HomeAlerts from "@/components/HomeAlerts";
 import WeatherStrip from "@/components/WeatherStrip";
@@ -40,8 +41,10 @@ import {
   FileText,
   CalendarDays,
   ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import { calculateEquity, headlineHomeValue } from "@/lib/homeValue";
+import { plausibleHomeFigure } from "@/lib/parcelSanity";
 import HomeValueAutoFetch from "../value/ValueAutoFetch";
 import ProjectChips from "../contractors/ProjectChips";
 import { estimateSeasonalEnergyCost } from "@/lib/energy";
@@ -458,13 +461,29 @@ export default async function HomePage(
   // cast rather than widening the generated types by hand; if the migration
   // hasn't run yet these just come back undefined and the tile shows the CTA.
   const rawProperty = property as any;
-  const homeValuePurchasePrice: number | null =
-    typeof rawProperty.purchase_price === "number" ? rawProperty.purchase_price : null;
+  // THE BUILDING-RECORD GATE (src/lib/parcelSanity.ts), the same one /value
+  // and /taxes apply. A condo's county record is the whole building's, so its
+  // sale price can be the developer buying the parcel - and with no AVM on
+  // file this tile would compound a $34,000,000 "purchase" into an eight-
+  // figure headline. Measured against the AVM, never against the price itself.
+  const homeValuePurchasePrice: number | null = plausibleHomeFigure(
+    typeof rawProperty.purchase_price === "number" ? rawProperty.purchase_price : null,
+    {
+      unit: rawProperty.unit,
+      propertyType: rawProperty.property_type,
+      sqft: typeof rawProperty.sqft === "number" ? rawProperty.sqft : null,
+      estimate:
+        typeof rawProperty.market_value === "number" ? rawProperty.market_value : null,
+    }
+  );
   const homeValueMortgageBalance: number | null =
     typeof rawProperty.mortgage_balance === "number" ? rawProperty.mortgage_balance : null;
-  const homeValuePurchaseYear: number | null = property.purchase_date
-    ? Number(property.purchase_date.slice(0, 4)) || null
-    : null;
+  // Dropped with the price it belongs to, so the model never runs from a
+  // building's sale date.
+  const homeValuePurchaseYear: number | null =
+    property.purchase_date && homeValuePurchasePrice != null
+      ? Number(property.purchase_date.slice(0, 4)) || null
+      : null;
   const hasHomeValueData =
     homeValuePurchasePrice != null && homeValuePurchaseYear != null;
   // The headline number comes from the SAME shared chooser the /value page
@@ -616,6 +635,34 @@ export default async function HomePage(
 
       {/* Proactive weather + safety-recall alerts; self-hides when there's none */}
       <HomeAlerts propertyId={property.id} />
+
+      {/* PHONE ONLY. The floating Ask Hearth pill is desktop-only (see
+          AskHearthDock's hideOnPhone), so on a phone the assistant lived
+          entirely inside Messages as a pinned row - a tester never found it.
+          This is the door: one compact row right under the weather and
+          alerts, above every number on the page. Desktop is untouched; the
+          pill is already on screen there. */}
+      <Link
+        href="/ask"
+        data-testid="ask-hearth-card"
+        className="card-link flex min-h-11 items-center gap-3 p-4 sm:hidden"
+      >
+        <span className="icon-chip">
+          <Sparkles className="h-5 w-5 text-bark-700 dark:text-stone-300" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-stone-900 dark:text-stone-100">
+            Ask Hearth anything about your home
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-stone-500 dark:text-stone-400">
+            Like: why is my water heater making that noise?
+          </span>
+        </span>
+        <ChevronRight
+          className="h-5 w-5 shrink-0 text-stone-400 dark:text-stone-500"
+          aria-hidden="true"
+        />
+      </Link>
 
       {/* Key stats, kept above the fold so the Health Score is the first
           thing the owner sees. */}
@@ -799,7 +846,7 @@ export default async function HomePage(
         <div className="card space-y-3">
           <div className="rounded-lg bg-bark-50 p-3 dark:bg-bark-700/30">
             <p className="text-xs font-semibold uppercase tracking-wide text-bark-700 dark:text-stone-300">
-              Hearth&apos;s briefing
+              This month&apos;s checklist
             </p>
             {/* Each briefing item with a destination is one full-width row
                 that is entirely tappable, not a bare "→" glyph glued to the
@@ -1174,7 +1221,10 @@ export default async function HomePage(
         </summary>
 
         {sortedSys.length > 0 ? (
-          <ul className="space-y-3">
+          // Phone: the first three rows, then "See all N systems" expands the
+          // rest in place. Desktop renders the same <ul> with every row, as
+          // before - see SystemsPhoneList.
+          <SystemsPhoneList total={sortedSys.length}>
             {sortedSys.map((s) => (
               <SystemRow
                 key={s.id}
@@ -1183,7 +1233,7 @@ export default async function HomePage(
                 photos={photosBySystem.get(s.id) ?? []}
               />
             ))}
-          </ul>
+          </SystemsPhoneList>
         ) : (
           <div className="rounded-xl border border-dashed border-stone-300 p-6 text-center dark:border-stone-700">
             <div className="flex justify-center">

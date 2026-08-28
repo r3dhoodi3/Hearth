@@ -75,6 +75,14 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
     btnRef.current?.focus();
   }
 
+  // PHONE ONLY, and first in the list. On a phone the floating Ask Hearth
+  // pill is not rendered at all (see AskHearthDock's hideOnPhone), so the
+  // assistant's only entry point was a pinned row inside Messages - which a
+  // tester never found. Desktop keeps the pill on every screen and so keeps
+  // this sheet's list exactly as it was: adding a second door next to a
+  // permanently visible one is clutter, not discovery.
+  const askLink = { href: "/ask", label: "Ask Hearth" };
+
   const homeLinks = [
     { href: "/walkthrough", label: "Walk your home" },
     { href: "/home-details", label: "Home details" },
@@ -82,7 +90,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
     { href: "/value", label: "Home value" },
     { href: "/taxes", label: "Property taxes" },
     { href: "/inspection", label: "Home inspection" },
-    { href: "/learn", label: "Learn" },
+    { href: "/learn", label: "Learn about your home" },
   ];
 
   // Straight to the tool for everyone. Each of these pages does its own
@@ -134,7 +142,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
               claim the role either. Tab + Escape work as expected. */}
           <div
             className={`absolute right-0 z-20 mt-1 hidden w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1.5 shadow-menu dark:border-white/10 dark:bg-stone-700 sm:block ${
-              open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
+              open ? "motion-safe:animate-fade-scale" : "pointer-events-none motion-safe:animate-fade-scale-out"
             }`}
           >
             <div className="border-b border-stone-100 pb-1 dark:border-white/10">
@@ -199,7 +207,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
               onClick={closeAndRefocus}
               aria-hidden="true"
               className={`fixed inset-0 z-40 bg-black/40 ${
-                open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
+                open ? "motion-safe:animate-fade-scale" : "pointer-events-none motion-safe:animate-fade-scale-out"
               }`}
             />
             <div
@@ -216,8 +224,14 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
               // (z-40) and the header this sheet is nested in (Nav.tsx's
               // header is z-40, above the tab bar's z-30) - see Nav.tsx for
               // why the header's own z-index has to clear the tab bar.
+              // pointer-events-none while closing: this sheet stays mounted
+              // and interactive for its 120ms fade-out (shouldRender), and at
+              // z-50 it would otherwise still catch a tap meant for something
+              // opening right after it, e.g. the account menu's Household row
+              // - the tap would land on this sheet's own Ask Hearth tile
+              // instead, since that's the first tile in it.
               className={`fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-menu outline-none dark:border-white/10 dark:bg-stone-800 ${
-                open ? "motion-safe:animate-fade-slide-up" : "motion-safe:animate-fade-slide-down"
+                open ? "motion-safe:animate-fade-slide-up" : "pointer-events-none motion-safe:animate-fade-slide-down"
               }`}
             >
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white px-4 py-3 dark:border-white/10 dark:bg-stone-800">
@@ -271,7 +285,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                     Your home
                   </p>
                   <div className="grid grid-cols-3 gap-2">
-                    {homeLinks.map((l) => (
+                    {[askLink, ...homeLinks].map((l) => (
                       <Link
                         key={l.href}
                         href={l.href}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   mapPhotonResults,
+  photonStreetNames,
   normalizeSuggestQuery,
   photonSuggestUrl,
   MIN_SUGGEST_QUERY,
@@ -277,5 +278,71 @@ describe("mapPhotonResults", () => {
       postcode: 92646,
     });
     expect(mapPhotonResults(body(junk))).toEqual([]);
+  });
+});
+
+
+describe("photonStreetNames", () => {
+  it("collects the street of an address result", () => {
+    expect(photonStreetNames(body(BOLSA, KINGS_CANYON))).toEqual([
+      "Bolsa Avenue",
+      "Kings Canyon Drive",
+    ]);
+  });
+
+  it("collects the name of a street centerline, which carries no street field", () => {
+    // Photon's live answer for "1 Hotel Terrace, Santa Ana": the street exists
+    // as a centerline named "Hotel Terrace" and nothing on it is numbered.
+    // Reading only `street` would call a real address invented.
+    const centerline = feature({ name: "Hotel Terrace", city: "Santa Ana" });
+    expect(photonStreetNames(body(centerline))).toEqual(["Hotel Terrace"]);
+  });
+
+  it("collects both fields when a result carries both", () => {
+    // A road intersection: the street it is on, plus its own junction name.
+    const junction = feature({
+      street: "West Chapman Avenue",
+      name: "Chapman-Walnut",
+      city: "Orange",
+    });
+    expect(photonStreetNames(body(junction))).toEqual([
+      "West Chapman Avenue",
+      "Chapman-Walnut",
+    ]);
+  });
+
+  // The difference from mapPhotonResults, and the reason this exists rather
+  // than reusing it. The suggestion list requires a house number and a launch
+  // ZIP - the right gates for "may we offer this to type into the box", the
+  // wrong ones for "does this street exist". Requiring either refused four in
+  // ten real Orange County addresses in a live probe, because OSM's street
+  // coverage is good where its address-point coverage is patchy.
+  it("keeps results with no house number and no usable postcode", () => {
+    const centerline = feature({ street: "Bolsa Chica Road", city: "Huntington Beach" });
+    const farZip = feature({
+      housenumber: "800",
+      street: "Baker Street",
+      postcode: "10001",
+    });
+    expect(photonStreetNames(body(centerline, farZip))).toEqual([
+      "Bolsa Chica Road",
+      "Baker Street",
+    ]);
+    // The suggestion mapper, on the same input, correctly offers neither.
+    expect(mapPhotonResults(body(centerline, farZip))).toEqual([]);
+  });
+
+  it("returns an empty list for anything that is not a FeatureCollection", () => {
+    expect(photonStreetNames(null)).toEqual([]);
+    expect(photonStreetNames(undefined)).toEqual([]);
+    expect(photonStreetNames("<html>502</html>")).toEqual([]);
+    expect(photonStreetNames({ features: "nope" })).toEqual([]);
+    expect(photonStreetNames(body(null, 42, { properties: null }))).toEqual([]);
+  });
+
+  it("ignores non-string field values rather than stringifying them", () => {
+    expect(
+      photonStreetNames(body(feature({ street: ["Main Street"], name: 42 })))
+    ).toEqual([]);
   });
 });

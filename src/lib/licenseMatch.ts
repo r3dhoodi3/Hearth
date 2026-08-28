@@ -170,3 +170,15 @@ export function licenseDigits(raw: string | null | undefined): string {
   if (!raw) return "";
   return String(raw).replace(/\D/g, "");
 }
+
+// A real CSLB license number is 5 to 8 plain digits (most active ones are 6
+// or 7, e.g. 1029384); nothing else belongs in the field. Spaces are ignored
+// entirely rather than treated as invalid, since a pro copy-pasting "1029 384"
+// is not making a mistake. Blank is not validated here - the field is
+// optional, so an empty value is a caller's decision, not this function's.
+export function isValidLicenseNumber(raw: string | null | undefined): boolean {
+  if (!raw) return false;
+  const digits = licenseDigits(String(raw).replace(/\s/g, ""));
+  if (digits !== String(raw).replace(/\s/g, "")) return false;
+  return digits.length >= 5 && digits.length <= 8;
+}

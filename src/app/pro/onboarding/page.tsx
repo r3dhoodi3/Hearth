@@ -2,7 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentContractor, getSides } from "@/lib/contractor";
 import { getUser } from "@/lib/auth";
+import { chooseRoleAction } from "@/app/welcome/role/actions";
 import OnboardingCompanyForm from "./OnboardingCompanyForm";
+
+// Quiet, same weight for every way out, and a real 44px row on a phone.
+const ESCAPE_LINK =
+  "underline underline-offset-2 hover:text-stone-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:hover:text-stone-200";
 
 export default async function ProOnboardingPage(
   props: {
@@ -43,20 +48,43 @@ export default async function ProOnboardingPage(
         defaultEmail={user?.email ?? ""}
         defaultReferralCode={referralCode}
       />
-      {/* Way out for someone who already has a home here and only wandered
-          onto the pro side. The bare pro shell has nothing but sign-out, and
-          this page is now reachable by any signed-in account, so without this
-          a homeowner who clicked the wrong thing would have to sign out. */}
-      {sides.hasHome && (
-        <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
-          <Link
-            href="/dashboard"
-            className="underline hover:text-stone-700 dark:hover:text-stone-200"
-          >
+      {/* WAYS OUT. This page is a dead end for an account with a contractor
+          stamp and no company row: every landing in the app resolves to it,
+          and until Finish setup succeeds there is no row to resolve anywhere
+          else. A save that keeps failing (a schema constraint, a CSLB timeout)
+          therefore trapped a tester behind this one form, sign-out and back in
+          included. So the two real answers sit under it, quietly:
+
+          - a home to go back to, for someone who only wandered onto the pro
+            side and has one already;
+          - otherwise the honest question. It posts to the same guarded
+            chooseRoleAction /welcome/role uses, which stamps homeowner and
+            lands them on the claim-a-home wizard - and which still refuses to
+            move an account that HAS a side, so this can only ever help
+            someone who has built nothing yet.
+
+          Sign out is repeated from the bare shell's header on purpose: this is
+          where someone looks when they are stuck, and the header bar is off
+          screen by the time they have scrolled to the end of the wizard. */}
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-center text-sm text-stone-500 dark:text-stone-400">
+        {sides.hasHome ? (
+          <Link href="/dashboard" className={ESCAPE_LINK}>
             Back to your home
           </Link>
-        </p>
-      )}
+        ) : (
+          <form action={chooseRoleAction}>
+            <input type="hidden" name="role" value="homeowner" />
+            <button type="submit" className={ESCAPE_LINK}>
+              Not a contractor? Set up as a homeowner instead
+            </button>
+          </form>
+        )}
+        <form action="/auth/signout" method="post">
+          <button type="submit" className={ESCAPE_LINK}>
+            Sign out
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -2,10 +2,10 @@ import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
-import { headlineHomeValue, calculateEquity } from "@/lib/homeValue";
 import { assessSystem, scoreBreakdown, scoreBand } from "@/lib/health";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 import { formatAddressLine } from "@/lib/addressLine";
+import { homeValueEquityLine } from "@/lib/homeDigestLine";
 import type { HomeSystem, Issue, Property } from "@/lib/database.types";
 
 export const runtime = "nodejs";
@@ -117,10 +117,6 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 function plural(n: number, word: string): string {
   return n === 1 ? `${n} ${word}` : `${n} ${word}s`;
-}
-
-function usd(n: number): string {
-  return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
 async function runCron(req: NextRequest) {
@@ -292,41 +288,34 @@ async function runCron(req: NextRequest) {
         // Estimated value (and equity when a balance is on file). A negative
         // equity number is real but a one-line digest is the wrong place to
         // break it, so the equity clause only appears when it is positive.
-        if (purchasePrice && purchaseYear) {
-          // The same shared chooser the dashboard tile, /value and /taxes use
-          // (headlineHomeValue in src/lib/homeValue.ts): the stored RentCast
-          // AVM when one has landed for this address, otherwise the capped
-          // purchase-price model. This job used to call estimateHomeValue
-          // directly, so a monthly email could quote a number the owner would
-          // not find anywhere in the app when they clicked through.
-          //
-          // Non-null by construction: both purchasePrice and purchaseYear are
-          // truthy here, which is the fallback's only requirement.
-          const value = headlineHomeValue({
-            marketValue:
-              typeof raw.market_value === "number" ? raw.market_value : null,
-            marketValueLow:
-              typeof raw.market_value_low === "number"
-                ? raw.market_value_low
-                : null,
-            marketValueHigh:
-              typeof raw.market_value_high === "number"
-                ? raw.market_value_high
-                : null,
-            purchasePrice,
-            purchaseYear,
-            state: property.state,
-            currentYear,
-          })!.value;
-          const equity = calculateEquity(value, mortgageBalance);
-          parts.push(
-            mortgageBalance !== null && equity > 0
-              ? `Your home's estimated value is ${usd(value)}, about ${usd(
-                  equity
-                )} of it equity.`
-              : `Your home's estimated value is ${usd(value)}.`
-          );
-        }
+        // The same shared chooser the dashboard tile, /value and /taxes use
+        // (headlineHomeValue in src/lib/homeValue.ts): the stored RentCast
+        // AVM when one has landed for this address, otherwise the capped
+        // purchase-price model, gated the same way /value gates it. This job
+        // used to call estimateHomeValue directly, so a monthly email could
+        // quote a number the owner would not find anywhere in the app when
+        // they clicked through.
+        const valueLine = homeValueEquityLine({
+          purchasePrice,
+          purchaseYear,
+          mortgageBalance,
+          marketValue:
+            typeof raw.market_value === "number" ? raw.market_value : null,
+          marketValueLow:
+            typeof raw.market_value_low === "number"
+              ? raw.market_value_low
+              : null,
+          marketValueHigh:
+            typeof raw.market_value_high === "number"
+              ? raw.market_value_high
+              : null,
+          unit: raw.unit,
+          propertyType: raw.property_type,
+          sqft: typeof raw.sqft === "number" ? raw.sqft : null,
+          state: property.state,
+          currentYear,
+        });
+        if (valueLine) parts.push(valueLine);
 
         // Health score, only meaningful once they have systems on file.
         if (systems.length > 0) {

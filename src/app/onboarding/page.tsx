@@ -155,7 +155,7 @@ export default async function OnboardingPage(
       {!isFirst && (
         <Link
           href="/dashboard"
-          className="mt-4 text-center text-sm text-stone-500 hover:underline dark:text-stone-400"
+          className="mt-4 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:justify-center text-center text-sm text-stone-500 hover:underline dark:text-stone-400"
         >
           Cancel
         </Link>
@@ -178,7 +178,7 @@ export default async function OnboardingPage(
           <form action="/auth/signout" method="post" className="inline">
             <button
               type="submit"
-              className="underline hover:text-stone-700 dark:hover:text-stone-200"
+              className="max-sm:inline-flex max-sm:min-h-11 max-sm:items-center underline hover:text-stone-700 dark:hover:text-stone-200"
             >
               Sign out
             </button>

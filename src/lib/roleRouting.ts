@@ -184,12 +184,36 @@ export type Sides = {
   hasPro: boolean;
   hasHome: boolean;
   preferred: Role | null;
+  // Did BOTH row lookups actually run? False means at least one of them
+  // errored, so `hasPro: false, hasHome: false` is "we could not look", not
+  // "this account has built nothing".
+  //
+  // No routing decision here reads it, and it must not start to: sending a
+  // person somewhere is recoverable, and every landing self-corrects. It
+  // exists for the one caller that REFUSES on the absence of a row -
+  // chooseRoleAction (src/app/welcome/role/actions.ts), which will not re-run
+  // a role choice for an established account and would otherwise fail open on
+  // a DB hiccup. Optional so the pure helpers and their tests can keep
+  // building a Sides from the three fields that decide a landing; getSides()
+  // in src/lib/contractor.ts always sets it.
+  checked?: boolean;
 };
 
 // The role picker. Named here because landingFor() returns it and every caller
 // that redirects to landingFor() has to recognize it (see /welcome/role, which
 // must not bounce a visitor back to itself).
 export const ROLE_PICKER_PATH = "/welcome/role";
+
+// The stamped landing preference, narrowed to a Role. Anything else - absent,
+// misspelled, a legacy value - is no answer at all, and callers must treat it
+// as "we never asked" rather than as "homeowner".
+//
+// One definition because two places read the same stamp off the same account:
+// getSides() in src/lib/contractor.ts, and the homeowner shell, which needs the
+// preference without paying for a home count it has already done itself.
+export function preferredRole(value: unknown): Role | null {
+  return value === "contractor" || value === "homeowner" ? value : null;
+}
 
 // Where to drop this account when no destination was asked for. The preferred
 // side wins whenever the account actually has it; otherwise whichever side

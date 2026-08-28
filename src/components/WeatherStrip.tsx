@@ -230,8 +230,15 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
       {/* shrink-0 + nowrap: the city is the only part allowed to give ground
           (it truncates on desktop and drops out entirely on a phone - see
           below), so the temperature and high/low never wrap onto a second line
-          to make room for it, the chevron, or the unit switch. */}
-      <span className="shrink-0 whitespace-nowrap font-medium text-stone-900 dark:text-stone-100">
+          to make room for it, the chevron, or the unit switch.
+          Below sm there is no city left to give ground, and the worst case
+          still does not fit: "108° Partly cloudy", "H 108° L 79°" and the
+          clock come to about 300px inside a 318px row, before the chevron.
+          So on a phone THIS is the one element allowed to shrink, and it
+          truncates from the right - the number survives, the word (which the
+          icon beside it already says) is what gets an ellipsis. Everything
+          after it, the clock included, keeps its full width. */}
+      <span className="shrink-0 whitespace-nowrap font-medium text-stone-900 max-sm:min-w-0 max-sm:shrink max-sm:truncate dark:text-stone-100">
         {convertTemp(weather.tempF, unit)}&deg; {word}
       </span>
       <span className="shrink-0 whitespace-nowrap text-stone-500 dark:text-stone-400">
@@ -249,12 +256,19 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
       <time
         dateTime={now ? now.toISOString() : undefined}
         aria-label="Local time at your home"
-        className="inline-block min-w-[4.5rem] shrink-0 whitespace-nowrap tabular-nums text-stone-500 dark:text-stone-400"
+        // max-sm:min-w-[3.5rem]: the phone variant is "12:58PM", without the
+        // separator dot or the space before the meridiem, so it reserves less
+        // room. Same purpose at both widths - the reserved width never
+        // depends on whether `now` has landed yet.
+        className="inline-block min-w-[4.5rem] shrink-0 whitespace-nowrap tabular-nums text-stone-500 max-sm:min-w-[3.5rem] dark:text-stone-400"
       >
         {clockFull ? (
           <>
             <span className="hidden sm:inline">&middot; {clockFull}</span>
-            <span className="sm:hidden">&middot; {clockCompact}</span>
+            {/* No separator dot below sm: at 390px the row is already over
+                budget with the longest plausible values, and a decorative
+                middle dot is the cheapest thing on it to lose. */}
+            <span className="sm:hidden">{clockCompact}</span>
           </>
         ) : (
           " "
@@ -284,13 +298,19 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
   //
   // h-10 / min-w-[2.5rem] keeps each half a 40px tap target; h-10 is also
   // exactly the height the py-2.5 row already was, so adding this changed no
-  // vertical rhythm. The horizontal room it needs on a phone comes out of the
-  // city, which is hidden below sm for that reason (see summary above).
-  const unitToggle = (
+  // vertical rhythm.
+  //
+  // WHERE it sits differs by width. On desktop it is on the row, as it always
+  // was. On a phone it costs 94px (82 + its margin) of a 342px row, which is
+  // what was pushing the clock underneath it - so on a phone it moves into the
+  // week panel this row expands into, and the row gets those 94px back. A home
+  // with no daily forecast has no panel to move it into, so there it stays on
+  // the row at every width (`expandable` below).
+  const unitToggle = (extra: string) => (
     <div
       role="group"
       aria-label="Temperature units"
-      className="mr-3 flex shrink-0 overflow-hidden rounded-full border border-stone-200 dark:border-white/10"
+      className={`flex shrink-0 overflow-hidden rounded-full border border-stone-200 dark:border-white/10 ${extra}`}
     >
       {(["F", "C"] as const).map((u) => (
         <button
@@ -342,10 +362,25 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
             {summary}
           </div>
         )}
-        {unitToggle}
+        {/* Phone: hidden here and re-rendered inside the open week panel
+            below, so the row keeps its full width for the temperatures and
+            the clock. Unless there is no week to open, in which case this is
+            the only place it can live. */}
+        {unitToggle(expandable ? "mr-3 max-sm:hidden" : "mr-3")}
       </div>
 
       {expandable && open && (
+        <>
+        {/* The phone's home for the unit switch (see unitToggle above). Two
+            real 40px targets, labelled, in the panel the row already opens -
+            the only cost of getting it off a 342px row that could not hold
+            it and the clock at the same time. */}
+        <div className="flex items-center justify-between gap-3 border-t border-stone-200 px-4 py-2 sm:hidden dark:border-white/10">
+          <span className="text-xs text-stone-500 dark:text-stone-400">
+            Units
+          </span>
+          {unitToggle("")}
+        </div>
         <ul className="divide-y divide-stone-100 border-t border-stone-200 px-4 dark:divide-white/5 dark:border-white/10">
           {daily.map((d, i) => {
             // Daily rows carry no day/night, so they always read as daytime.
@@ -386,6 +421,7 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
             );
           })}
         </ul>
+        </>
       )}
     </div>
   );

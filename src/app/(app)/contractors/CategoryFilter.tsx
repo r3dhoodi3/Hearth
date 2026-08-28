@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { SERVICE_CATEGORIES, REMODEL_PROJECTS } from "@/lib/constants";
+import { useEffect, useState } from "react";
+import { SERVICE_CATEGORIES } from "@/lib/constants";
 import { useDraftJob } from "./DraftJobContext";
-import { categoryForKey, projectKey } from "./categoryOptionKey";
+import { categoryForKey, projectOptions } from "./categoryOptionKey";
 
 // The "what do you need?" picker for posting a job. Lists every service category
 // a contractor can offer, plus common projects that map to one of them, so a
@@ -40,6 +40,19 @@ export default function CategoryFilter({
   const value = ctx ? ctx.category : localValue; // canonical category
   const setValue = (v: string) => (ctx ? ctx.setCategory(v) : setLocalValue(v));
 
+  // A fresh ?category= (a project chip tapped on this same page - see
+  // ProjectChips) lands as a new `category` prop, but a searchParams-only
+  // navigation does not remount this component or its DraftJobProvider:
+  // React reuses both across it. Without this, the chip updates the URL and
+  // highlights itself while the select underneath silently keeps showing
+  // "Choose what you need". Only take the new value when the owner hasn't
+  // made their own pick yet, so a chip tapped after they've already chosen
+  // something never stomps on it.
+  useEffect(() => {
+    if (!ctx || !ctx.categoryTouched) setValue(category);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category]);
+
   // Which exact <option> the select shows as chosen. Only ever set by our own
   // onChange below - never by an external change to `value` (a fresh
   // ?category= prefill, or DescriptionField's photo-draft guess) - so those
@@ -75,9 +88,12 @@ export default function CategoryFilter({
             </option>
           ))}
         </optgroup>
+        {/* projectOptions(), not REMODEL_PROJECTS directly: two of those
+            entries repeat a Services label word for word ("Garage door",
+            "Landscaping") and were showing up twice in this one dropdown. */}
         <optgroup label="Popular projects">
-          {REMODEL_PROJECTS.map((p, i) => (
-            <option key={projectKey(i)} value={projectKey(i)}>
+          {projectOptions().map((p) => (
+            <option key={p.key} value={p.key}>
               {p.label}
             </option>
           ))}

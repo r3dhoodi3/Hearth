@@ -124,8 +124,24 @@ describe("address-suggest cannot be turned into a flood at Photon", () => {
     // accounts is blocking the source, and the source is Hearth's shared
     // Vercel egress IPs - so the punishment lands on the whole deployment.
     expect(route).toContain('SUGGEST_GLOBAL_BUCKET = "suggest-global-min"');
-    expect(route).toContain("SUGGEST_GLOBAL_PER_MINUTE = 600");
     expect(route).toContain("p_window_seconds: 60");
+
+    // The size of the ceiling is asserted as a RELATION to the per-user
+    // budget, not as a literal. It used to be 600, which is exactly ten users'
+    // worth of the 60/min per-user limit - so ten real people typing at the
+    // same time could trip it on each other, and the only symptom is a
+    // suggestion list that silently stops appearing. A ceiling a plausible
+    // number of real users can reach is not protecting Photon from anything;
+    // it has to sit above what the per-user budgets legitimately sum to.
+    const perUser = Number(
+      route.match(/addr-suggest:\$\{user\.id\}`,\s*p_limit: (\d+)/)?.[1]
+    );
+    const owner = Number(route.match(/SUGGEST_GLOBAL_PER_MINUTE = (\d+)/)?.[1]);
+    expect(perUser).toBeGreaterThan(0);
+    expect(owner).toBeGreaterThan(perUser * 10);
+    // Still a hard stop, and still far below anything Komoot would read as
+    // abuse - the 10-minute response cache means real typing never gets close.
+    expect(owner).toBeLessThanOrEqual(2000);
   });
 
   it("returns an empty list and never calls Photon once the ceiling trips", async () => {

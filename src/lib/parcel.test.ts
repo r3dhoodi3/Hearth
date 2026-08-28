@@ -100,6 +100,49 @@ describe("lookupParcel source semantics", () => {
     expect(writes.map((w) => w.source)).toEqual(["none"]);
   });
 
+  // Measured against the live API on 2026-08-28: RentCast answers an address
+  // it holds no record for with HTTP 404 and
+  // {"error":"resource/not-found","message":"No data found for address..."},
+  // NOT with an empty 200 array. Four real Orange County addresses returned
+  // 404 in every format tried (typed-out and USPS-abbreviated, with and
+  // without city/state), while a known-good address returned 200 in ~1s - so
+  // this is the shape of a MISS, and treating it as an outage told five of ten
+  // testers "we couldn't reach the county records right now" about an address
+  // the county records had answered plainly.
+  it('a 404 is a true miss: "none", and cached as one', async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(404, {
+          status: 404,
+          error: "resource/not-found",
+          message: "No data found for address '1920 Main Street, 92614'",
+        })
+      )
+    );
+    const facts = await lookupParcel("1920 Main Street", "92614");
+    expect(facts.source).toBe("none");
+    // Cached, so a retype of the same unknown address does not re-bill a
+    // lookup out of a 50-a-month quota. This is the whole practical
+    // difference between a miss and an outage.
+    expect(writes.map((w) => w.source)).toEqual(["none"]);
+  });
+
+  // The rule the two tests either side of this one enforce together: only a
+  // 404 may be cached as a miss. Every other non-ok status is an outage.
+  it("never caches a non-404 error status as a miss", async () => {
+    for (const status of [401, 403, 429, 500, 502, 503]) {
+      writes = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => jsonResponse(status, { error: "nope" }))
+      );
+      const facts = await lookupParcel("17361 Ash St", "92708");
+      expect(facts.source, `status ${status}`).toBe("unavailable");
+      expect(writes, `status ${status}`).toEqual([]);
+    }
+  });
+
   it('a record with no address echo is also a miss, not "unavailable"', async () => {
     vi.stubGlobal(
       "fetch",
@@ -157,6 +200,82 @@ describe("lookupParcel source semantics", () => {
     expect(writes).toEqual([]);
   });
 
+  // The other half of the 2026-08-28 measurement: two of eight live calls
+  // never opened a socket at all, rejecting in ~270ms with an ETIMEDOUT
+  // AggregateError, and both succeeded immediately on a second attempt. No
+  // timeout value helps a connection that is refused in a quarter second - a
+  // retry does.
+  it("retries once when the connection fails, and uses the second answer", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls++;
+        if (calls === 1) throw new TypeError("fetch failed");
+        return jsonResponse(200, [RECORD]);
+      })
+    );
+    const facts = await lookupParcel("17361 Ash St", "92708");
+    expect(calls).toBe(2);
+    expect(facts.source).toBe("rentcast");
+    expect(facts.year_built).toBe(1968);
+  });
+
+  it("retries once on an abort, and uses the second answer", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls++;
+        if (calls === 1) {
+          const err = new Error("The operation was aborted.");
+          err.name = "AbortError";
+          throw err;
+        }
+        return jsonResponse(200, [RECORD]);
+      })
+    );
+    const facts = await lookupParcel("17361 Ash St", "92708");
+    expect(calls).toBe(2);
+    expect(facts.source).toBe("rentcast");
+  });
+
+  // A status is an answer. Retrying one spends a second billed call to be told
+  // the same thing - and on a 429 it pushes further into the ceiling that
+  // caused it.
+  it.each([
+    ["404 (no such address)", 404],
+    ["401 (bad or expired key)", 401],
+    ["429 (quota exhausted)", 429],
+    ["500 (provider outage)", 500],
+  ])("never retries a %s", async (_label, status) => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls++;
+        return jsonResponse(status, { error: "nope" });
+      })
+    );
+    await lookupParcel("17361 Ash St", "92708");
+    expect(calls).toBe(1);
+  });
+
+  it("gives up after two failed attempts rather than looping", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls++;
+        throw new TypeError("fetch failed");
+      })
+    );
+    const facts = await lookupParcel("17361 Ash St", "92708");
+    expect(calls).toBe(2);
+    expect(facts.source).toBe("unavailable");
+    expect(writes).toEqual([]);
+  });
+
   it('an unparseable body is "unavailable" and is not cached', async () => {
     vi.stubGlobal(
       "fetch",
@@ -171,6 +290,56 @@ describe("lookupParcel source semantics", () => {
     const facts = await lookupParcel("17361 Ash St", "92708");
     expect(facts.source).toBe("unavailable");
     expect(writes).toEqual([]);
+  });
+
+  // fetch() resolves as soon as the HEADERS arrive - the body is streamed
+  // after that, and res.json() waits for all of it. The abort timer used to
+  // be cleared the instant those headers landed, so a body that stalled
+  // mid-stream was bounded by nothing at all: the await never returned, and
+  // the whole request behind it (a claim, or a job post's lazy ownership
+  // re-check) hung with it. Fake timers here so the 15s budget can be walked
+  // past without the test actually waiting for it.
+  it('a body that never arrives is "unavailable" and is not cached', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          // Never settles, and never rejects either.
+          json: () => new Promise(() => {}),
+        }))
+      );
+      const pending = lookupParcel("17361 Ash St", "92708");
+      await vi.advanceTimersByTimeAsync(20_000);
+      const facts = await pending;
+      expect(facts.source).toBe("unavailable");
+      expect(writes).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an AVM body that never arrives is "unavailable" and is not cached', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          json: () => new Promise(() => {}),
+        }))
+      );
+      const pending = lookupMarketValue("17361 Ash St", "92708");
+      await vi.advanceTimersByTimeAsync(20_000);
+      const facts = await pending;
+      expect(facts.source).toBe("unavailable");
+      expect(writes).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('with no key configured nothing is looked up and the source is "none"', async () => {
@@ -224,6 +393,20 @@ describe("lookupMarketValue source semantics", () => {
     expect(writes.map((w) => w.source)).toEqual(["none"]);
   });
 
+  // Same rule as the property record: a 404 is RentCast saying it has no
+  // estimate for this address, which is an answer worth remembering for a day
+  // rather than an outage worth re-billing on every visit to /value.
+  it('a 404 is a real miss: "none", and is cached', async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(404, { error: "resource/not-found" }))
+    );
+    const facts = await lookupMarketValue("17361 Ash St", "92708");
+    expect(facts.source).toBe("none");
+    expect(facts.market_value).toBeNull();
+    expect(writes.map((w) => w.source)).toEqual(["none"]);
+  });
+
   it.each([
     ["401 (bad or expired key)", 401],
     ["429 (quota exhausted)", 429],
@@ -265,9 +448,10 @@ describe("lookupMarketValue source semantics", () => {
 
 // ---------------------------------------------------------------------------
 // Source-text checks. The refusal gates are one-line conditions whose exact
-// SHAPE is the fix: rewriting `=== "none"` as `!== "rentcast"` (or as a truthy
-// check on blank facts) compiles, passes every other test, works perfectly
-// while RentCast is up, and re-creates the outage the moment a key goes bad.
+// SHAPE is the fix: rewriting an explicit `=== "no_match"` as `!== "match"`
+// (or as a truthy check on blank facts) compiles, passes every other test,
+// works perfectly while the sources are up, and re-creates the outage the
+// moment one of them goes down.
 // ---------------------------------------------------------------------------
 function src(rel: string): string {
   return readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
@@ -276,8 +460,31 @@ function src(rel: string): string {
 describe("the onboarding refusal gates", () => {
   const onboarding = src("../app/onboarding/actions.ts");
 
-  it("refuses the Continue step only on an explicit source === \"none\"", () => {
-    expect(onboarding).toContain('publicFacts.source === "none"');
+  // 2026-08-28: the Continue step used to refuse on `publicFacts.source ===
+  // "none"`, i.e. on RentCast having no record. Measuring RentCast against
+  // four plausible Orange County addresses (all four a hard 404) showed its
+  // silence is not evidence about whether a home exists, so the refusal moved
+  // to the geocoder. This shape must not come back.
+  it("never refuses on a records miss", () => {
+    expect(onboarding).not.toContain('publicFacts.source === "none"');
+    expect(onboarding).not.toContain('facts.source === "none"');
+  });
+
+  it("refuses only on an explicit geocoder no_match", () => {
+    // `=== "no_match"` and nothing looser. `!== "match"` would swallow
+    // "unavailable" - a Photon timeout, a 500, an empty answer - back into a
+    // refusal, which is the 2026-08-24 outage with a different vendor's name
+    // on it.
+    expect(onboarding).toContain('verdict === "no_match"');
+    expect(onboarding).not.toContain('verdict !== "match"');
+    expect(onboarding).not.toContain("!verdict");
+  });
+
+  it("spends a geocoder call only when there is no county record", () => {
+    // A found record IS confirmation the address is real; asking Photon to
+    // agree would be a second lookup to learn nothing.
+    expect(onboarding).toContain('publicFacts.source !== "rentcast"');
+    expect(onboarding).toContain('claimFacts?.source === "rentcast"');
   });
 
   it("routes the claim-time decision through the tested gate", () => {
@@ -287,11 +494,12 @@ describe("the onboarding refusal gates", () => {
     expect(onboarding).toContain('gate.reason === "lookup_blocked"');
   });
 
-  it("never refuses on a negated or falsy source check", () => {
-    // Any of these would swallow "unavailable" back into a refusal.
-    expect(onboarding).not.toContain('source !== "rentcast"');
-    expect(onboarding).not.toContain("!facts.source");
-    expect(onboarding).not.toContain("!publicFacts.source");
+  it("attaches parcel facts only when a record was actually found", () => {
+    // Now that a miss walks on to the claim, every parcel-derived value on an
+    // unedited claim still comes out of a hidden form field - so a hand-made
+    // POST for an address nothing has a record for could otherwise arrive
+    // carrying a parcel number, a sale price and an assessed value.
+    expect(onboarding).toContain('claimFacts.source === "rentcast"');
   });
 
   it("gates the ownership write on the shared recording rule", () => {
@@ -300,8 +508,18 @@ describe("the onboarding refusal gates", () => {
     // shouldRecordOwnershipCheck in ownershipMatch.ts.
     expect(onboarding).toContain("shouldRecordOwnershipCheck(facts)");
     // And the third lookupParcel call is gone: the ownership check reuses the
-    // facts the gate already fetched.
-    expect(onboarding).toContain("const facts = claimFacts;");
+    // facts the gate already fetched - and drops them when the record turns
+    // out to describe a different street than the one being claimed (see
+    // parcelFactsMatchClaim / src/lib/addressMatch.ts).
+    expect(onboarding).toContain(
+      "const facts = parcelFactsMatchClaim ? claimFacts : null;"
+    );
+    // Three lookupParcel calls in the whole file, and no more: one in
+    // lookupParcelAction (the Continue step), and two in claimPropertyAction
+    // (the corrected-address lookup and the unedited re-check, only one of
+    // which ever runs). A fourth would be the ownership check re-asking a
+    // question the gate already answered.
+    expect(onboarding.match(/await lookupParcel\(/g)?.length ?? 0).toBeLessThanOrEqual(3);
   });
 });
 
@@ -366,5 +584,38 @@ describe("parcel.ts caching", () => {
     expect(parcel).toContain(
       "RentCast returned HTTP ${res.status} for address lookup"
     );
+  });
+
+  // Order is the fix. `if (!res.ok)` matches a 404 too, so the 404 branch only
+  // means anything while it comes first - move it after and every unknown
+  // address is an "outage" again, with the tests above the only thing to say
+  // so. Checked on both call sites (property record and AVM).
+  it("classifies a 404 before falling into the not-ok branch", () => {
+    const miss1 = parcel.indexOf("res.status === 404");
+    const notOk1 = parcel.indexOf("if (!res.ok)");
+    const miss2 = parcel.indexOf("res.status === 404", miss1 + 1);
+    const notOk2 = parcel.indexOf("if (!res.ok)", notOk1 + 1);
+    expect(miss1).toBeGreaterThan(-1);
+    expect(miss2).toBeGreaterThan(miss1);
+    expect(notOk2).toBeGreaterThan(notOk1);
+    expect(miss1).toBeLessThan(notOk1);
+    expect(miss2).toBeLessThan(notOk2);
+  });
+
+  it("bounds the retry so two attempts cannot stack two full timeouts", () => {
+    const attempt = Number(
+      parcel.match(/RENTCAST_ATTEMPT_TIMEOUT_MS = ([\d_]+)/)?.[1].replace(/_/g, "")
+    );
+    const total = Number(
+      parcel.match(/RENTCAST_TOTAL_BUDGET_MS = ([\d_]+)/)?.[1].replace(/_/g, "")
+    );
+    expect(attempt).toBeGreaterThan(0);
+    // A real answer measured at 0.5-2.3s, so the per-attempt budget is
+    // generous without being a page-long wait.
+    expect(attempt).toBeLessThanOrEqual(12_000);
+    // The whole point of a shared deadline: the ceiling is well under two
+    // attempts' worth, and claimPropertyAction can make two of these calls.
+    expect(total).toBeGreaterThan(attempt);
+    expect(total).toBeLessThan(attempt * 2);
   });
 });

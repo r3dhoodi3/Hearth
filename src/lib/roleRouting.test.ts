@@ -8,6 +8,7 @@ import {
   isProPath,
   isSignupConfirmationPath,
   landingFor,
+  preferredRole,
   resolveAuthRole,
   ROLE_PICKER_PATH,
   type Sides,
@@ -447,6 +448,66 @@ describe("landingFor", () => {
     // Both sides, no preference: the company row is the more deliberate act.
     expect(landingFor(sides({ hasPro: true, hasHome: true }))).toBe("/pro");
   });
+
+  // ==========================================================================
+  // THE NEITHER-ROW RULE, all three answers, spelled out on its own.
+  //
+  // The bug: an account that signed up through /contractor-signup and bailed
+  // before company setup has NO contractors row, so every "which side is
+  // this?" question answered "not a pro" and /dashboard handed them the
+  // homeowner claim-your-home wizard. Nothing but the signup-side stamp knows
+  // the difference at that point, so with neither row present the stamp is the
+  // answer - and where there is no stamp either, the app asks instead of
+  // guessing. src/app/(app)/layout.tsx routes its no-active-home case through
+  // exactly this.
+  // ==========================================================================
+  describe("with neither a home nor a company row", () => {
+    const blank = (preferred: Sides["preferred"]) =>
+      landingFor({ hasPro: false, hasHome: false, preferred });
+
+    it("sends a contractor stamp to the company wizard, not the home one", () => {
+      expect(blank("contractor")).toBe("/pro/onboarding");
+    });
+
+    it("sends a homeowner stamp to the claim-a-home wizard", () => {
+      expect(blank("homeowner")).toBe("/onboarding");
+    });
+
+    it("asks when there is no stamp at all", () => {
+      expect(blank(null)).toBe(ROLE_PICKER_PATH);
+    });
+
+    it("still lets a row outrank the stamp", () => {
+      // The rule above is only for the neither-row case. A company row means
+      // /pro whatever the stamp says, and a home means /dashboard - the pro
+      // who came to /dashboard on purpose to add a home is not rerouted.
+      expect(
+        landingFor({ hasPro: true, hasHome: false, preferred: "homeowner" })
+      ).toBe("/pro");
+      expect(
+        landingFor({ hasPro: false, hasHome: true, preferred: "contractor" })
+      ).toBe("/dashboard");
+    });
+  });
+});
+
+describe("preferredRole", () => {
+  it("narrows the two real answers and nothing else", () => {
+    expect(preferredRole("contractor")).toBe("contractor");
+    expect(preferredRole("homeowner")).toBe("homeowner");
+  });
+
+  it("treats anything else as no answer rather than as homeowner", () => {
+    // The whole point: landingFor() sends null to the role picker, so a typo,
+    // a legacy value or a missing stamp must never read as a side.
+    expect(preferredRole(undefined)).toBeNull();
+    expect(preferredRole(null)).toBeNull();
+    expect(preferredRole("")).toBeNull();
+    expect(preferredRole("Contractor")).toBeNull();
+    expect(preferredRole("pro")).toBeNull();
+    expect(preferredRole(1)).toBeNull();
+    expect(preferredRole({ role: "contractor" })).toBeNull();
+  });
 });
 
 // The rule above only works if /auth/callback actually ASKS whether this
@@ -620,5 +681,73 @@ describe("auth route wiring", () => {
     const confirm = read("confirm");
     expect(confirm).toMatch(/safeNextPath\(destination\) \?\? "\/dashboard"/);
     expect(confirm).toMatch(/new URL\(safeDestination, requestOrigin\(request\)\)/);
+  });
+});
+
+// landingFor() has always known where a stamped-but-row-less account belongs;
+// the homeowner shell just never asked it. Its no-active-home branch was a
+// flat redirect("/onboarding"), which is how a contractor mid-signup ended up
+// in the claim-your-home wizard. Source text for the same reason as the block
+// above: the layout compiles and looks right either way.
+describe("homeowner shell wiring", () => {
+  const layout = readFileSync(
+    fileURLToPath(new URL("../app/(app)/layout.tsx", import.meta.url)),
+    "utf8"
+  );
+
+  it("routes the no-home case through landingFor once no row can decide it", () => {
+    expect(layout).toMatch(
+      /if \(contractor \|\| homes\.length > 0\) redirect\("\/onboarding"\)/
+    );
+    expect(layout).toMatch(/landingFor\(\{[\s\S]{0,200}preferredRole\(/);
+  });
+});
+
+// ===========================================================================
+// THE STAMPED-BUT-EMPTY ACCOUNT MUST ALWAYS BE ABLE TO CHANGE ITS MIND.
+//
+// A contractor-signup account whose company save keeps failing carries a
+// "contractor" stamp and owns no row at all, so landingFor() sends every
+// landing in the app to /pro/onboarding - correctly, since that is where its
+// side gets built. The trap was that the two screens that could have let it
+// out gated on the stamp too: /welcome/role redirected away whenever
+// landingFor() returned anything but itself, and chooseRoleAction refused any
+// account that already had a stamp. Sign-out and back in changed nothing,
+// because none of it was session state.
+//
+// Both now gate on a ROW instead, which is the only thing that makes a side
+// real, and /pro/onboarding carries its own way out. Source text for the same
+// reason as the blocks above: every one of these compiles and looks right
+// while doing the wrong thing.
+// ===========================================================================
+describe("role picker reachability", () => {
+  const read = (path: string) =>
+    readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
+
+  it("renders /welcome/role for anyone with neither row", () => {
+    const page = read("../app/welcome/role/page.tsx");
+    expect(page).toMatch(
+      /if \(sides\.hasPro \|\| sides\.hasHome\) redirect\(landingFor\(sides\)\)/
+    );
+    // The old stamp-shaped gate, which is what closed the door.
+    expect(page).not.toContain("landing !== ROLE_PICKER_PATH");
+  });
+
+  it("lets chooseRoleAction re-answer for an account with neither row", () => {
+    const action = read("../app/welcome/role/actions.ts");
+    expect(action).toMatch(
+      /if \(sides\.hasPro \|\| sides\.hasHome\) redirect\(landingFor\(sides\)\)/
+    );
+    // It must still be a dead end for an established account: nothing may
+    // decide on the stamp alone any more.
+    expect(action).not.toContain("existingRole");
+  });
+
+  it("gives /pro/onboarding a way out that does not need the save to work", () => {
+    const page = read("../app/pro/onboarding/page.tsx");
+    expect(page).toContain("Not a contractor? Set up as a homeowner instead");
+    expect(page).toMatch(/action=\{chooseRoleAction\}/);
+    expect(page).toMatch(/name="role" value="homeowner"/);
+    expect(page).toMatch(/action="\/auth\/signout" method="post"/);
   });
 });

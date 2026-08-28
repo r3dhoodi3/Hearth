@@ -30,10 +30,29 @@ const MIN_DESCRIPTION = 20;
 // (keep the helper mounted, toggle `invisible` instead of unmounting) -
 // don't "fix" this by switching to pointerdown-based submission; that
 // papers over layout instability instead of removing it.
-export default function PostJobButton() {
+export default function PostJobButton({
+  // The reason the LAST attempt was rejected, if there was one. postJobAction
+  // sends every failure back to /contractors with the typed values plus an
+  // ?error= code (see postJobErrors.ts), and the page turns that code into
+  // this sentence. Rendered in the same slot as the client-side check below,
+  // so a rejected post always says something right where the owner is looking
+  // instead of silently resetting the form.
+  serverError = null,
+}: {
+  serverError?: string | null;
+}) {
   const { pending } = useFormStatus();
   const [error, setError] = useState<string | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  // While a submit is actually in flight, the server's message is about the
+  // PREVIOUS attempt, so it is hidden for exactly that long. It must NOT be
+  // suppressed by a latch that a passing submit sets once and never clears:
+  // the failure path is a redirect back to /contractors?...&error=..., which
+  // re-renders this same component with a NEW serverError prop, and a latched
+  // "the server message is stale" flag would swallow the very message the
+  // owner is waiting for. (The form's key is ?posted=, which does not change
+  // on a failure redirect, so the component is updated, not remounted.)
+  const shownError = error ?? (pending ? null : serverError);
 
   function check(e: React.MouseEvent<HTMLButtonElement>) {
     const form = btnRef.current?.closest("form");
@@ -66,9 +85,9 @@ export default function PostJobButton() {
 
   return (
     <div className="space-y-2">
-      {error && (
+      {shownError && (
         <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">
-          {error}
+          {shownError}
         </p>
       )}
       <button

@@ -34,8 +34,58 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
   return nodes;
 }
 
-export default function Markdown({ text }: { text: string }) {
+// A STILL-ARRIVING answer is markdown caught mid-word: "**Getting ready for
+// winter" has no closing "**" yet, so renderInline above (which needs both
+// halves to match) leaves the raw asterisks on screen until the rest of the
+// token lands. Same for a backtick, and for a list marker or heading hash that
+// has been written but has no text after it yet.
+//
+// This closes those open tokens for the length of one paint, so a streaming
+// reply reads as the formatted text it is about to be rather than flickering
+// through its own syntax. Only used while a reply streams (see `partial`
+// below); a FINISHED answer is rendered exactly as it always was, so a stray
+// asterisk somebody actually typed still shows as an asterisk.
+function closeOpenMarks(text: string): string {
   const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const last = lines[lines.length - 1];
+  if (last === undefined) return text;
+
+  // A marker with nothing after it yet ("- ", "1.", "###") is one keystroke of
+  // syntax, not content: hold it back rather than rendering an empty bullet.
+  if (/^\s*(?:[-*]|\d+\.|#{1,6})\s*$/.test(last)) {
+    return lines.slice(0, -1).join("\n");
+  }
+
+  // Strip the list/heading marker before counting, so "- **warm" counts the
+  // bold token and not the bullet's asterisk.
+  const body = last.replace(/^\s*(?:[-*]\s+|\d+\.\s+|#{1,6}\s+)/, "");
+  let fixed = last;
+  if ((body.match(/`/g)?.length ?? 0) % 2 === 1) {
+    // An opener with no text after it yet closes onto itself and renders as a
+    // pair of literal backticks, so drop it instead of completing it.
+    fixed = fixed.endsWith("`") ? fixed.slice(0, -1) : `${fixed}\``;
+  }
+  if ((body.match(/\*\*/g)?.length ?? 0) % 2 === 1) {
+    fixed = fixed.endsWith("**") ? fixed.slice(0, -2) : `${fixed}**`;
+  } else if (/(^|[^*])\*$/.test(fixed)) {
+    // A lone trailing "*" is either an italic that just opened or the first
+    // half of a "**" still being typed. Either way it is syntax, not text.
+    fixed = fixed.slice(0, -1);
+  }
+
+  return [...lines.slice(0, -1), fixed].join("\n");
+}
+
+export default function Markdown({
+  text,
+  partial = false,
+}: {
+  text: string;
+  // True while this text is still being streamed in. See closeOpenMarks.
+  partial?: boolean;
+}) {
+  const source = partial ? closeOpenMarks(text) : text;
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
   const blocks: React.ReactNode[] = [];
   let list: { ordered: boolean; items: string[] } | null = null;
   let key = 0;

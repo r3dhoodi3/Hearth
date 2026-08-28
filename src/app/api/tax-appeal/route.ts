@@ -6,6 +6,7 @@ import { reasonToClientPayload } from "@/lib/aiReason";
 import { getActiveProperty } from "@/lib/property";
 import { headlineHomeValue } from "@/lib/homeValue";
 import { generateText, hasClaudeKey, isRateLimitError } from "@/lib/claude";
+import { isImplausibleHomeFigure } from "@/lib/parcelSanity";
 
 export const runtime = "nodejs";
 
@@ -66,6 +67,33 @@ export async function POST() {
   if (purchasePrice == null || purchaseYear == null) {
     return NextResponse.json(
       { error: "Set up your home value first so the letter has an estimate to cite." },
+      { status: 400 }
+    );
+  }
+
+  // THE BUILDING-RECORD GATE (src/lib/parcelSanity.ts). A condo or
+  // multi-family county record covers the whole building, so the assessed
+  // value and the purchase price this letter would cite can both be the
+  // building's, not the unit's - the same $34M purchase price and $36M
+  // assessment a tester was shown on /value and /taxes for a $799,000 condo.
+  // Checked here, before any model call and before countAiUsage below, so an
+  // implausible figure never gets counted against the owner's daily usage
+  // and never reaches the letter prompt.
+  const sanityContext = {
+    unit: raw.unit,
+    propertyType: raw.property_type,
+    sqft: typeof raw.sqft === "number" ? raw.sqft : null,
+    estimate: typeof raw.market_value === "number" ? raw.market_value : null,
+  };
+  if (
+    isImplausibleHomeFigure(assessedValue, sanityContext) ||
+    isImplausibleHomeFigure(purchasePrice, sanityContext)
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "County records for this address cover the whole building, not your unit, so we can't draft an appeal from them.",
+      },
       { status: 400 }
     );
   }

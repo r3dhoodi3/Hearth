@@ -28,6 +28,11 @@ vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
 }));
 
+// Mutable fixture the Supabase stub below reads home_systems from. Hoisted so
+// it exists before page.tsx (and therefore the mocked module) is imported;
+// most tests want an empty home, the "Your systems" ones fill it in.
+const fixtures = vi.hoisted(() => ({ systems: [] as Record<string, unknown>[] }));
+
 vi.mock("@/lib/subscription", () => ({
   hasPlus: vi.fn(async () => true),
 }));
@@ -88,7 +93,14 @@ const openIssue = {
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
-    from: (table: string) => chain(table === "issues" ? [openIssue] : []),
+    from: (table: string) =>
+      chain(
+        table === "issues"
+          ? [openIssue]
+          : table === "home_systems"
+            ? fixtures.systems
+            : []
+      ),
   })),
 }));
 
@@ -204,6 +216,83 @@ describe("Hearth's briefing rows", () => {
     expect(row!.textContent).not.toContain("→");
     // The whole sentence is inside the tap target, not just the CTA words.
     expect(row!.textContent).toContain("issue needs attention");
+  });
+});
+
+// A phone has no floating Ask Hearth pill (AskHearthDock is desktop-only), and
+// the assistant otherwise lives as a pinned row inside Messages, which a tester
+// never found. The dashboard now carries a door to it, above every number.
+describe("Ask Hearth entry point", () => {
+  it("renders a phone-only Ask Hearth card that clears 44px", async () => {
+    const { getByTestId } = await renderDashboard();
+    const card = getByTestId("ask-hearth-card");
+    expect(card.getAttribute("href")).toBe("/ask");
+    expect(card.classList.contains("sm:hidden")).toBe(true);
+    expect(card.classList.contains("min-h-11")).toBe(true);
+    expect(card.textContent).toContain("Ask Hearth anything about your home");
+  });
+
+  it("sits above the stat grid, not buried under it", async () => {
+    const { getByTestId, container } = await renderDashboard();
+    const card = getByTestId("ask-hearth-card");
+    const score = Array.from(container.querySelectorAll("p")).find(
+      (p) => p.textContent === "Home Health Score"
+    );
+    expect(score).toBeTruthy();
+    expect(
+      card.compareDocumentPosition(score!) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+});
+
+// Seven system cards is several screens of scroll on a 390px phone, at the
+// very bottom of the page. Below sm the list stops after three with a button
+// that expands it in place; desktop still renders every row in one <ul>.
+describe("Your systems on a phone", () => {
+  const SEVEN = [
+    "roof",
+    "hvac",
+    "water_heater",
+    "windows",
+    "siding",
+    "gutters",
+    "foundation",
+  ].map((system_type, i) => ({
+    id: `sys-${i}`,
+    property_id: "prop-1",
+    system_type,
+    install_year: 2015,
+    condition_rating: 4,
+    material_or_model: null,
+    confirmed_at: "2026-01-01",
+    created_at: "2026-01-01",
+  }));
+
+  afterEach(() => {
+    fixtures.systems = [];
+  });
+
+  it("hides every row past the third below sm, and offers to show the rest", async () => {
+    fixtures.systems = SEVEN;
+    const { container, getByRole } = await renderDashboard();
+
+    const list = container.querySelector("#systems ul");
+    expect(list).toBeTruthy();
+    // The rows are all rendered; CSS hides the tail until asked for.
+    expect(list!.className).toContain("max-sm:[&>*:nth-child(n+4)]:hidden");
+
+    const button = getByRole("button", { name: /See all 7 systems/ });
+    expect(button.className).toContain("sm:hidden");
+    expect(button.className).toContain("min-h-11");
+  });
+
+  it("leaves a short list alone - no collapse, no button", async () => {
+    fixtures.systems = SEVEN.slice(0, 3);
+    const { container, queryByRole } = await renderDashboard();
+
+    const list = container.querySelector("#systems ul");
+    expect(list!.className).not.toContain("nth-child");
+    expect(queryByRole("button", { name: /See all/ })).toBeNull();
   });
 });
 

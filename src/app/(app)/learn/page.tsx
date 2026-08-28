@@ -157,7 +157,7 @@ const CATEGORY: Record<string, string> = {
   driveway: "Roof & exterior",
   garage_door: "Roof & exterior",
   foundation: "Structural",
-  hvac: "HVAC & heating",
+  hvac: "Heating and cooling (HVAC)",
   water_heater: "Plumbing",
   plumbing: "Plumbing",
   sump_pump: "Plumbing",

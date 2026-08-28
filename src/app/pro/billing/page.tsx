@@ -156,8 +156,9 @@ export default async function ProBillingPage(props: {
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Billing</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          You pay per lead you apply to. If the homeowner picks someone else,
-          the fee comes back as wallet credit.
+          You pay per lead you apply to. Ghost protection and the
+          first-application guarantee can return some of that as wallet
+          credit; see Activity below for how each one works.
         </p>
         <table className="mt-3 w-full max-w-md text-sm">
           <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
@@ -377,12 +378,14 @@ export default async function ProBillingPage(props: {
         {txns.length > 0 && (
           <p className="text-xs text-stone-500 dark:text-stone-400">
             Ghost protection: if the homeowner never responds within{" "}
-            {GHOST_PROTECTION_DAYS} days, your apply fee comes back to this
-            wallet on its own as credit for your next application. If they
-            choose you after that, the same fee is re-charged. If they pick
-            another pro, your fee comes back as credit too, good for 60 days.
-            Every return is wallet credit you spend on leads, never cash back
-            to your card.
+            {GHOST_PROTECTION_DAYS} days, you always get the fee back as
+            credit, every time, no limit. If they come back and choose you
+            after that, the same fee is re-charged. Separately, the
+            first-application guarantee: if they do respond but pick someone
+            else, you get that one back as credit too, but only on your very
+            first paid application. After that, a lost bid is a lost fee.
+            Either way it is Hearth credit in your wallet, not money back to
+            your card.
           </p>
         )}
       </section>

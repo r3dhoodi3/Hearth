@@ -8,13 +8,15 @@ import { getSides } from "@/lib/contractor";
 // Switches which side of Hearth this account lands on, from the profile menu
 // in either nav (Nav.tsx / ProNav.tsx post to it).
 //
-// This is the ONE sanctioned way to change an established user_metadata.role.
-// /welcome/role's chooseRoleAction deliberately refuses to touch a role that
-// already exists - it exists only to give a role-less OAuth account its first
-// one - and that guard stays exactly as it is. The difference here is that
-// this action can only ever move someone to a side they demonstrably ALREADY
-// HAVE (a contractors row, or a home), so it grants nothing: it only records
-// which of their two existing sides they want to open on next time.
+// This is the ONE sanctioned way to change the side an ESTABLISHED account
+// lands on. /welcome/role's chooseRoleAction refuses that outright: it stops
+// the moment either row exists, so it only ever serves someone who has built
+// nothing yet (no side at all, or a stamp with nothing behind it). The
+// difference here is that this action can only ever move someone to a side
+// they demonstrably ALREADY HAVE (a contractors row, or a home), so it grants
+// nothing: it only records which of their two existing sides they want to open
+// on next time. Between the two, no path can hand an account a side it has not
+// actually set up.
 export async function setPreferredSideAction(formData: FormData) {
   // Re-auth server-side rather than trusting the form: this is reachable by a
   // crafted POST, so identity comes from the verified session only.

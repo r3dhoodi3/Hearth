@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { isUnreadSince } from "@/lib/unread";
+import { plainPreview } from "@/lib/previewText";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import AskHearthRow from "@/components/AskHearthRow";
@@ -212,11 +213,17 @@ export default async function ProChatsPage(props: {
                         unread ? "font-medium text-stone-800 dark:text-stone-200" : "text-stone-500 dark:text-stone-400"
                       }`}
                     >
+                      {/* plainPreview (@/lib/previewText): one line, with
+                          markdown and any machine-readable [[TAG]] action
+                          block taken out. A message body that reduces to
+                          nothing falls back to the job category, same as a
+                          thread with no messages at all. */}
                       {last
                         ? `${last.sender_role === "contractor" ? "You: " : ""}${
                             last.body.startsWith("[img]")
                               ? "Photo"
-                              : last.body
+                              : plainPreview(last.body) ||
+                                labelFor(JOB_CATEGORIES, l.category)
                           }`
                         : labelFor(JOB_CATEGORIES, l.category)}
                     </p>

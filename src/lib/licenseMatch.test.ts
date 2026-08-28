@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isValidLicenseNumber,
   licenseDigits,
   licenseNameMatches,
   normalizeBusinessName,
@@ -145,5 +146,31 @@ describe("licenseDigits", () => {
     expect(licenseDigits(null)).toBe("");
     expect(licenseDigits(undefined)).toBe("");
     expect(licenseDigits("no digits here")).toBe("");
+  });
+});
+
+describe("isValidLicenseNumber", () => {
+  it("accepts real CSLB-shaped numbers, 5 to 8 plain digits", () => {
+    expect(isValidLicenseNumber("1029384")).toBe(true);
+    expect(isValidLicenseNumber("12345")).toBe(true);
+    expect(isValidLicenseNumber("12345678")).toBe(true);
+  });
+
+  it("strips spaces before checking length", () => {
+    expect(isValidLicenseNumber("1029 384")).toBe(true);
+    expect(isValidLicenseNumber(" 270663 ")).toBe(true);
+  });
+
+  it("rejects too short, too long, or non-digit input", () => {
+    expect(isValidLicenseNumber("1234")).toBe(false);
+    expect(isValidLicenseNumber("123456789")).toBe(false);
+    expect(isValidLicenseNumber("LIC-000000-XX")).toBe(false);
+    expect(isValidLicenseNumber("270-663")).toBe(false);
+  });
+
+  it("rejects nothing to check", () => {
+    expect(isValidLicenseNumber(null)).toBe(false);
+    expect(isValidLicenseNumber(undefined)).toBe(false);
+    expect(isValidLicenseNumber("")).toBe(false);
   });
 });

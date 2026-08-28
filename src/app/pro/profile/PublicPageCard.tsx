@@ -183,11 +183,22 @@ export default function PublicPageCard({
                 </p>
               </>
             ) : (
-              <input
-                name="license_number"
-                className="input"
-                placeholder="LIC-000000-XX"
-              />
+              <>
+                <input
+                  name="license_number"
+                  className="input"
+                  placeholder="1029384"
+                  inputMode="numeric"
+                  pattern="[0-9]{5,8}"
+                  onChange={(e) => {
+                    const stripped = e.target.value.replace(/\s+/g, "");
+                    if (stripped !== e.target.value) e.target.value = stripped;
+                  }}
+                />
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  Your CSLB license number, digits only.
+                </p>
+              </>
             )}
           </div>
           <div>

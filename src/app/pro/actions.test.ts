@@ -145,12 +145,18 @@ beforeEach(() => {
 });
 
 describe("saveCompanyAction: contractors write failure", () => {
-  it("first-time setup: a launch_cities check-constraint violation never throws, and nothing downstream runs", async () => {
+  it("first-time setup: a launch_cities check-constraint violation never throws, never redirects, and nothing downstream runs", async () => {
     insertError = LAUNCH_CITIES_SUBSET_ERROR;
 
-    let caught: unknown = null;
-    try {
-      await saveCompanyAction(
+    // No redirect here either - see the comment on this branch in actions.ts.
+    // A tester found this the hard way: redirect("/pro/onboarding") while
+    // already ON /pro/onboarding is the same same-path App Router footgun the
+    // profile branch below was already fixed for, and it left the wizard
+    // itself unmounted behind the error banner (no form, no Back button)
+    // until a manual reload. setFlash() + revalidatePath() on the SAME path
+    // keeps the wizard mounted with whatever the pro already typed.
+    await expect(
+      saveCompanyAction(
         fd({
           name: "Ivy Plumbing",
           contact_phone: "7145550100",
@@ -158,25 +164,15 @@ describe("saveCompanyAction: contractors write failure", () => {
           service_cities_present: "1",
           service_cities: ["Irvine"],
         })
-      );
-    } catch (e) {
-      caught = e;
-    }
-
-    // The only thing allowed to have been thrown is the redirect signal -
-    // Next's own navigation mechanism, not a crash. Anything else (in
-    // particular the old `new Error(error.message)`) fails this assertion.
-    expect(caught).toBeInstanceOf(RedirectSignal);
-    expect((caught as RedirectSignal).path).toBe("/pro/onboarding");
+      )
+    ).resolves.toBeUndefined();
 
     expect(setFlash).toHaveBeenCalledWith(
       "We couldn't save your service area just now. Pick specific cities and try again, or come back a little later.",
       "error"
     );
-    // setFlash before redirect, matching every other floor in this action.
-    expect(vi.mocked(setFlash).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(redirect).mock.invocationCallOrder[0]
-    );
+    expect(redirect).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith("/pro/onboarding");
 
     // Nothing downstream of the failed insert ran: no admin-client write
     // (license pending status, side stamp), and the insert was attempted
@@ -241,5 +237,89 @@ describe("saveCompanyAction: contractors write failure", () => {
     );
     expect(redirect).not.toHaveBeenCalled();
     expect(createAdminClient).not.toHaveBeenCalled();
+  });
+});
+
+// The write-failure branch above was fixed for the same-path footgun; the
+// VALIDATION floors earlier in the same action still ended in
+// redirect("/pro/onboarding"), which is the identical bug on a path the pro
+// reaches far more often - an empty company name or a missed city is an
+// ordinary typo, not a database outage. Each one left the wizard stranded on
+// its loading.tsx boundary with the error banner and no form under it.
+//
+// The profile half is deliberately unchanged: /pro/profile is a real
+// navigation for a pro who submitted from anywhere else, so those still
+// redirect.
+describe("saveCompanyAction: validation floors", () => {
+  it("onboarding, no city picked: flashes in place, never a same-path redirect", async () => {
+    await expect(
+      saveCompanyAction(
+        fd({
+          name: "Ivy Plumbing",
+          contact_phone: "7145550100",
+          // The form asked the city question and the pro answered nothing.
+          service_cities_present: "1",
+        })
+      )
+    ).resolves.toBeUndefined();
+
+    expect(setFlash).toHaveBeenCalledWith(
+      "Pick at least one city you serve.",
+      "error"
+    );
+    expect(redirect).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith("/pro/onboarding");
+    // The action really stopped: without the explicit `return` the missing
+    // redirect() throw would let it fall through and create the company.
+    expect(lastInsert).toBeNull();
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("onboarding, blank company name: flashes in place, never a same-path redirect", async () => {
+    await expect(
+      saveCompanyAction(fd({ name: "   ", contact_phone: "7145550100" }))
+    ).resolves.toBeUndefined();
+
+    expect(setFlash).toHaveBeenCalledWith("Enter your company name.", "error");
+    expect(redirect).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith("/pro/onboarding");
+    expect(lastInsert).toBeNull();
+  });
+
+  it("onboarding, a bad review link: flashes in place, never a same-path redirect", async () => {
+    await expect(
+      saveCompanyAction(
+        fd({
+          name: "Ivy Plumbing",
+          contact_phone: "7145550100",
+          yelp_url: "https://not-yelp.example.com/biz/ivy-plumbing",
+        })
+      )
+    ).resolves.toBeUndefined();
+
+    expect(setFlash).toHaveBeenCalledWith(
+      expect.stringContaining("Yelp business page link"),
+      "error"
+    );
+    expect(redirect).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith("/pro/onboarding");
+    expect(lastInsert).toBeNull();
+  });
+
+  it("profile save keeps its redirect: /pro/profile is a real navigation", async () => {
+    existingContractor = {
+      id: "contractor-1",
+      name: "Acme Plumbing",
+      license_number: null,
+      license_verified_status: "unverified",
+      service_state: null,
+    };
+
+    await expect(
+      saveCompanyAction(fd({ name: "   ", contact_phone: "7145550100" }))
+    ).rejects.toThrow("REDIRECT:/pro/profile");
+
+    expect(setFlash).toHaveBeenCalledWith("Enter your company name.", "error");
+    expect(lastUpdate).toBeNull();
   });
 });

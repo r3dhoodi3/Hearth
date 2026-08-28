@@ -11,6 +11,12 @@ import {
   type HomeOnboardingDraft,
 } from "./draft";
 import { PROPERTY_TYPES, FOUNDER } from "@/lib/constants";
+import { sameStreetAddress } from "@/lib/addressMatch";
+import {
+  BUILDING_RECORD_NOTICE,
+  isImplausibleHomeFigure,
+} from "@/lib/parcelSanity";
+import { defaultPropertyType, FALLBACK_PROPERTY_TYPE } from "@/lib/propertyType";
 import {
   isLaunchZip,
   LAUNCH_AREA_LABEL,
@@ -114,10 +120,26 @@ export default function OnboardingForm({
   // aria-activedescendant, so a screen reader announces the option the sighted
   // user sees highlighted.
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
-  // The city from a picked suggestion, used only as the fallback default for
-  // the optional City box on the ready step when the records lookup didn't
-  // return one. The lookup's city wins whenever it has one.
+  // The city and state from a picked suggestion, used only as the fallback
+  // default for the optional City/State boxes on the ready step when the
+  // records lookup didn't return them. The lookup's own values win whenever
+  // it has them.
   const [pickedCity, setPickedCity] = useState<string | null>(null);
+  const [pickedState, setPickedState] = useState<string | null>(null);
+  // The street line the homeowner actually entered or picked from the
+  // suggestion list, kept as it was at the moment Continue ran. The street box
+  // itself can be rewritten (the county's canonical spelling is normally
+  // better), so this is the record of what they asked for - and the address
+  // the mismatch panel below offers to keep.
+  const [pickedLine1, setPickedLine1] = useState("");
+  // The property-type dropdown, held in state rather than left uncontrolled.
+  // As a defaultValue it silently reverted to the records lookup's answer
+  // whenever the ready section remounted (an Edit ZIP and a second Continue,
+  // a draft restore), so a condo owner's manual change to "Condo" could be
+  // thrown away between choosing it and pressing claim.
+  const [propertyType, setPropertyType] = useState<string>(
+    FALLBACK_PROPERTY_TYPE
+  );
   // Set right before the street box is changed by something other than a
   // keystroke - picking a suggestion, or the lookup writing back the county's
   // canonical line. Without it, filling the box would immediately fire a
@@ -204,6 +226,21 @@ export default function OnboardingForm({
     // parseHomeOnboardingDraft already downgrades the rest to "address".
     if (saved.step === "ready" && saved.facts) {
       setFacts(saved.facts);
+      // The saved facts' property_type is NOT the records lookup's answer any
+      // more by the time it is written: persistReady mirrors the dropdown into
+      // it on every change, so this restores whatever was actually on screen.
+      // defaultPropertyType is only consulted when there is nothing saved.
+      setPropertyType(
+        saved.facts.property_type ??
+          defaultPropertyType(null, saved.unit.trim().length > 0)
+      );
+      // The saved street IS the answer they gave to the mismatch panel, if it
+      // ever showed: taking the county's line resolved it, keeping their own
+      // left it standing. Seeding pickedLine1 from it means a restored "keep
+      // mine" draft re-shows the panel with their address named in it, and a
+      // restored "use the county record" draft does not - which is exactly
+      // what each of those two choices meant.
+      setPickedLine1(saved.street);
       setStep("ready");
     }
   }, []);
@@ -331,6 +368,7 @@ export default function OnboardingForm({
     setStreet(s.line1);
     setZip(s.zip);
     setPickedCity(s.city);
+    setPickedState(s.state);
     setSuggestions([]);
     setActiveSuggestion(-1);
     setError(null);
@@ -364,6 +402,8 @@ export default function OnboardingForm({
     setError(null);
     setNotFound(false);
     setPickedCity(null);
+    setPickedLine1("");
+    setPropertyType(FALLBACK_PROPERTY_TYPE);
     setSuggestions([]);
     setActiveSuggestion(-1);
     setStep("address");
@@ -472,31 +512,50 @@ export default function OnboardingForm({
         return;
       }
       const nextFacts = result.facts;
-      setFacts(nextFacts);
+      // The property-type dropdown's starting value. A unit number means this
+      // is one dwelling inside a building, and RentCast answers a street line
+      // with the BUILDING's record - which is why a real condo at unit 204
+      // came back as "Apartment" and pre-filled Multi-family. See
+      // src/lib/propertyType.ts. Written into the facts that get saved, so a
+      // reload restores what the dropdown actually showed.
+      const nextType = defaultPropertyType(
+        nextFacts.property_type,
+        u.length > 0
+      );
+      const factsForDraft = { ...nextFacts, property_type: nextType };
+      setPropertyType(nextType);
+      setFacts(factsForDraft);
+      // What they actually asked for, kept so the mismatch panel below can
+      // offer it back by name.
+      setPickedLine1(s);
       // The line below is set programmatically, so don't let it re-trigger a
       // suggestion search for the value that was just filled in.
       suppressSuggestRef.current = true;
       // Show the county's canonical street line in the (still editable) street
-      // box, rather than only in a read-only summary. RentCast normalizes
-      // "17361 ash street" to "17361 Ash St", which is usually an improvement
-      // and occasionally wrong - a new build the assessor still files under
-      // the lot number, a street the county spells differently. Either way the
-      // person who lives there is the authority, so what gets claimed is
-      // whatever is in this field when they press the button.
-      setStreet(nextFacts.address_line1);
+      // box - but ONLY when it is the same address they picked. RentCast
+      // normalizes "17361 ash street" to "17361 Ash St", which is an
+      // improvement worth taking. It also sometimes answers with a NEIGHBOUR:
+      // a tester picked "1770 South Harbor Boulevard" and got a record for
+      // 2170 S Harbor Blvd, which this box then swapped in silently, so every
+      // screen after it showed an address she had never typed. When the two
+      // describe different properties her line stays, and the panel below asks
+      // which one she means.
+      const sameAddress = sameStreetAddress(s, nextFacts.address_line1);
+      const claimedLine = sameAddress ? nextFacts.address_line1 : s;
+      setStreet(claimedLine);
       // Save the looked-up facts with the draft. A lookup can spend a billed
       // parcel call (./actions.ts), so a reload restores what came back rather
       // than quietly buying it again.
       persist({
         step: "ready",
-        // The canonical line, matching what the street box now shows - so a
-        // reload restores the same value the field was seeded with instead of
-        // reverting to what was typed before the lookup.
-        street: nextFacts.address_line1,
+        // The line the street box now shows - so a reload restores the same
+        // value the field was seeded with instead of reverting to what was
+        // typed before the lookup.
+        street: claimedLine,
         unit: u,
         zip: z,
         addressLine1: nextFacts.address_line1,
-        facts: nextFacts,
+        facts: factsForDraft,
       });
       setDraft({ ...draftRef.current, savedAt: Date.now() });
       // Autofocus only if the name field is about to render empty - a name
@@ -573,6 +632,39 @@ export default function OnboardingForm({
   // something different, and claimPropertyAction records the claim as
   // unverified rather than matching against the building's owner of record.
   const hasUnit = unit.trim().length > 0;
+
+  // The record we found is a DIFFERENT property from the one in the street
+  // box. Only ever asked about a record that actually came back ("rentcast"),
+  // and only on the confirm step. Compared against the street box rather than
+  // a stored answer, so the box IS the answer: keeping their line leaves the
+  // mismatch standing (and claimPropertyAction, which runs the same comparison
+  // server-side, stores no parcel facts), and taking the county's resolves it.
+  const addressMismatch =
+    step === "ready" &&
+    facts != null &&
+    facts.source === "rentcast" &&
+    street.trim().length > 0 &&
+    !sameStreetAddress(street, facts.address_line1);
+
+  // The county's sale price or assessment for this address is the whole
+  // BUILDING's, not this home's (src/lib/parcelSanity.ts). Nothing on this
+  // screen prints either number, but both ride along in hidden fields and both
+  // are about to be refused server-side, so the confirm step says so rather
+  // than letting them turn up missing later with no explanation.
+  const buildingFiguresHidden =
+    facts != null &&
+    (() => {
+      const context = {
+        unit,
+        propertyType,
+        sqft: facts.sqft,
+        estimate: facts.market_value,
+      };
+      return (
+        isImplausibleHomeFigure(facts.purchase_price, context) ||
+        isImplausibleHomeFigure(facts.assessed_value, context)
+      );
+    })();
 
   // The list only ever exists over the editable address phase. Guarded on the
   // step as well as on the array so nothing can leave a stale list rendered
@@ -927,6 +1019,26 @@ export default function OnboardingForm({
                 </p>
               )}
 
+              {/* The records source answered and has no record for this
+                  address. A DIFFERENT thing from the outage above, and the
+                  copy has to say so: "couldn't reach" blames an outage that
+                  did not happen, and "couldn't find" reads as though the
+                  address were wrong, when the address is fine and RentCast's
+                  coverage of the launch metro is simply patchy (four plausible
+                  Orange County addresses came back empty in one measured
+                  night). This used to be a refusal; it is a manual-entry note
+                  now, because a gap in one vendor's data is not grounds to
+                  turn a homeowner away. "yet" is doing real work: the same
+                  address may well be in the data next month, and the lazy
+                  ownership re-check on first job post is left free to find
+                  that out. */}
+              {facts.source === "none" && (
+                <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-700 dark:border-stone-700 dark:bg-stone-800/60 dark:text-stone-300">
+                  We don&apos;t have county records for this address yet. Add
+                  what you know and we&apos;ll take it from there.
+                </p>
+              )}
+
               {/* ADVISORY, not the value being claimed. This is what the
                   county record says; the fields above are what actually gets
                   saved, and they win. Before, this box was the only place the
@@ -961,7 +1073,58 @@ export default function OnboardingForm({
                         .join(" · ")}
                     </p>
                   )}
+                {/* The county's price and assessment for this address are the
+                    building's. They are not shown here and will not be stored;
+                    saying so now beats letting them turn up missing on /value
+                    and /taxes with no explanation. */}
+                {buildingFiguresHidden && (
+                  <p className="mt-1 text-xs">{BUILDING_RECORD_NOTICE}</p>
+                )}
               </div>
+
+              {/* THE RECORD IS A DIFFERENT PROPERTY. Two plain buttons, no
+                  hidden field: the street box is the answer, and
+                  claimPropertyAction runs the same comparison server-side, so
+                  keeping their own line stores it with none of the other
+                  property's facts attached. */}
+              {addressMismatch && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                  <p>
+                    We found a county record for {facts.address_line1}, which
+                    isn&apos;t the address you picked. Keep your address (
+                    {pickedLine1 || street})?
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn-secondary max-sm:min-h-11"
+                      onClick={() => {
+                        suppressSuggestRef.current = true;
+                        const mine = pickedLine1 || street;
+                        setStreet(mine);
+                        persist({ street: mine });
+                      }}
+                    >
+                      Keep mine
+                    </button>
+                    <button
+                      type="button"
+                      className="max-sm:inline-flex max-sm:min-h-11 max-sm:items-center text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
+                      onClick={() => {
+                        suppressSuggestRef.current = true;
+                        setStreet(facts.address_line1);
+                        persist({ street: facts.address_line1 });
+                      }}
+                    >
+                      Use the county record
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs">
+                    Keeping yours saves the home at the address you picked,
+                    with none of that record&apos;s details on it.
+                  </p>
+                </div>
+              )}
 
               {/* address_line1 is NOT hidden here - it is the visible,
                   editable street box at the top of this form.
@@ -1063,7 +1226,7 @@ export default function OnboardingForm({
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   {hasUnit
                     ? "We use this for your account and on jobs you post, so pros know who they're talking to."
-                    : "We check this against the county's owner-of-record for this address, so pros know a job here is real."}
+                    : "We check this against the county's owner-of-record (the name the county has on file as the owner) for this address, so pros know a job here is real."}
                 </p>
               </div>
 
@@ -1087,7 +1250,16 @@ export default function OnboardingForm({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
                       <label className="label">State</label>
-                      <input name="state" className="input" defaultValue={facts.state ?? ""} />
+                      {/* pickedState is the fallback for a records lookup
+                          that returned no state: the suggestion the
+                          homeowner tapped already named one, and re-typing
+                          it would be busywork. The lookup's own value
+                          always wins. */}
+                      <input
+                        name="state"
+                        className="input"
+                        defaultValue={facts.state ?? pickedState ?? ""}
+                      />
                     </div>
                     <div>
                       <label className="label">City</label>
@@ -1162,10 +1334,19 @@ export default function OnboardingForm({
                     </div>
                     <div>
                       <label className="label">Property type</label>
+                      {/* CONTROLLED, not defaultValue. As an uncontrolled
+                          select this reverted to the records lookup's answer
+                          every time the ready section remounted - an Edit ZIP
+                          and a second Continue, a draft restore - so a condo
+                          owner's change from Multi-family to Condo could be
+                          silently thrown away between choosing it and pressing
+                          claim. Held in state, it survives every remount and
+                          is what the form actually posts. */}
                       <select
                         name="property_type"
                         className="select"
-                        defaultValue={facts.property_type ?? "single_family"}
+                        value={propertyType}
+                        onChange={(e) => setPropertyType(e.target.value)}
                       >
                         {PROPERTY_TYPES.map((t) => (
                           <option key={t.value} value={t.value}>
@@ -1225,7 +1406,7 @@ export default function OnboardingForm({
                 <button
                   type="button"
                   onClick={startOver}
-                  className="text-sm text-stone-500 hover:underline dark:text-stone-400"
+                  className="max-sm:inline-flex max-sm:min-h-11 max-sm:items-center text-sm text-stone-500 hover:underline dark:text-stone-400"
                 >
                   Start over with a different address
                 </button>
@@ -1268,7 +1449,7 @@ export default function OnboardingForm({
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="text-sm text-stone-500 hover:underline dark:text-stone-400"
+              className="max-sm:inline-flex max-sm:min-h-11 max-sm:items-center text-sm text-stone-500 hover:underline dark:text-stone-400"
             >
               Sign out
             </button>

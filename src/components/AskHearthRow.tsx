@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
+import { plainPreview } from "@/lib/previewText";
 
 // The pinned "Ask Hearth" entry at the top of a conversation list. On a phone
 // the assistant lives INSIDE Messages rather than in its own bottom tab or a
@@ -88,7 +89,14 @@ export default function AskHearthRow({
           setPreview(null);
           return;
         }
-        const body = (last.content ?? "").replace(/\s+/g, " ").trim();
+        // The STORED content, not the rendered bubble: an assistant reply
+        // carries markdown and the machine-readable [[TAG]]{...}[[/TAG]]
+        // action blocks the chat strips before it renders (parseAssistant in
+        // AskHearth.tsx). This row printed all of it, so a preview could read
+        // `**Here's what I'd do:** [[OPTIONS]]{"options":[...]}[[/OPTIONS]]`.
+        // plainPreview (@/lib/previewText) is the display-only version of that
+        // strip, with no React or chat UI behind it.
+        const body = plainPreview(last.content);
         const text = body || (last.image ? "Photo" : "");
         setPreview(
           text ? `${last.role === "user" ? "You: " : ""}${text}` : null

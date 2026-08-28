@@ -280,7 +280,8 @@ export default async function ProBusinessPage() {
             {dollars(spentCents)}
           </p>
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            Ghost-protection credits already added back
+            Refunded automatically when a homeowner never replies (ghost
+            protection)
           </p>
         </div>
         <div className="card">

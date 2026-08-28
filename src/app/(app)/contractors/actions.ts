@@ -16,6 +16,7 @@ import {
   JOB_CATEGORIES,
   ISSUE_CATEGORIES,
   BUDGET_RANGES,
+  TIMING_OPTIONS,
   COLD_START_FREE_POSTING,
   BONUS_EXPIRY_DAYS,
   isMajorCategory,
@@ -37,6 +38,7 @@ import {
   OUT_OF_AREA_POST_MESSAGE,
 } from "@/lib/serviceArea";
 import { isAllowedValue } from "@/lib/formFields";
+import { POST_JOB_ERRORS, type PostJobErrorCode } from "./postJobErrors";
 import { isOwnedStoragePath } from "@/lib/ownedStoragePath";
 import type { Json } from "@/lib/database.types";
 
@@ -106,9 +108,71 @@ function validPhotoUrls(formData: FormData, propertyId: string): string[] {
 // unassigned (contractor_id null) so matching pros can apply to it. The chosen
 // pro is selected later from the applicants.
 export async function postJobAction(formData: FormData) {
+  // Read the typed fields FIRST, before any gate can turn the owner around.
+  // Every failure below sends them back to /contractors carrying these values
+  // in the query string (the page prefills category/timing/desc/issue from
+  // searchParams) plus an ?error= code the page renders under the Post job
+  // button. The old code redirected to a bare "/contractors" from four
+  // branches, which reset the form to blank with nothing on screen explaining
+  // why - the exact "Posting..., then a blank form, no error" two testers
+  // reported on 2026-08-28.
+  const category = (formData.get("category") as string) || "";
+  const issueIdRaw = (formData.get("issue_id") as string) || null;
+  const timing = (formData.get("timing") as string) || null;
+  const message = ((formData.get("message") as string) || "").trim() || null;
+
+  // Which issue id gets echoed back on a failure round trip. Starts as the raw
+  // form value, shape-checked only (it is about to be put in a URL and then
+  // rendered back into a hidden input, so a value that isn't uuid-shaped is
+  // simply not carried), and is replaced by the OWNERSHIP-VERIFIED id further
+  // down as soon as that check has run. Nothing but the round trip reads it.
+  let keepIssueId =
+    issueIdRaw && /^[0-9a-f-]{36}$/i.test(issueIdRaw) ? issueIdRaw : null;
+
+  // The budget band is carried back too, so a major-tier post doesn't lose its
+  // pick on the way to a description error. Checked against the same list the
+  // authoritative read further down uses, so a forged value is never echoed
+  // into the URL.
+  const budgetKeepRaw = (formData.get("budget_range") as string) || "";
+  const keepBudget = isAllowedValue(BUDGET_RANGES, budgetKeepRaw)
+    ? budgetKeepRaw
+    : "";
+
+  // Same rule as keepBudget, applied to the other two <select> fields. The
+  // out_of_area / rate_hour / rate_day gates fire BEFORE the authoritative
+  // category check further down, so without an allow-list here a forged
+  // category or timing rode into the failure URL and straight back into the
+  // prefilled form. Both are drop-down values, so a value that isn't on the
+  // list is not "what the owner typed" - it is simply not carried.
+  const keepCategory = isAllowedValue(JOB_CATEGORIES, category)
+    ? category
+    : "";
+  const keepTiming = isAllowedValue(TIMING_OPTIONS, timing) ? timing : "";
+
+  // Where a rejected post goes: back to the form with everything still in it
+  // and a visible reason. Never a bare "/contractors".
+  const failPost = (code: PostJobErrorCode) => {
+    const keep = new URLSearchParams();
+    if (keepCategory) keep.set("category", keepCategory);
+    if (keepTiming) keep.set("timing", keepTiming);
+    // Capped: the description is free text with no length limit at the
+    // source, and this one goes into a URL that a redirect puts in a
+    // Location header. A multi-megabyte paste would blow past what proxies
+    // and browsers accept, turning a plain validation error into a broken
+    // request. The textarea's own maxLength (DescriptionField) is the
+    // client-side half; this is the half that actually holds.
+    if (message) keep.set("desc", message.slice(0, 1000));
+    if (keepIssueId) keep.set("issue", keepIssueId);
+    if (keepBudget) keep.set("budget", keepBudget);
+    keep.set("error", code);
+    return `/contractors?${keep.toString()}`;
+  };
+
   const property = await getActiveProperty();
-  if (!property)
-    throw new Error("Couldn't find your home. Try again from the dashboard.");
+  // No active home. /contractors itself sends this case to onboarding, so send
+  // it there rather than throwing into the generic "Something went sideways"
+  // boundary, which tells the owner nothing they can act on.
+  if (!property) redirect("/onboarding");
 
   // Launch-area gate (0124, widened to nine cities by 0126 and to all of
   // Orange County by 0129). Onboarding only accepts launch-area ZIPs now, but
@@ -118,9 +182,19 @@ export async function postJobAction(formData: FormData) {
   // invisible forever - the homeowner deserves the honest answer at post time
   // instead. The message is the shared one in src/lib/serviceArea.ts, so the
   // area only has to change in one place.
+  //
+  // Deliberately the TypeScript launchCityForZip and NOT the SQL
+  // launch_city_for_zip() RPC: the DB copy is only the PRO half of the gate
+  // (open_jobs_for_me / apply_to_lead read it), and the live database is one
+  // migration behind the app on that map more often than not. Reading the SQL
+  // one here would mean a homeowner in a ZIP added by 0129 is turned away
+  // until someone pastes 0129 in, which is precisely the kind of DB-lag
+  // failure the post path must not have. src/lib/serviceArea.ts is the single
+  // source of truth for the ZIP map; the .sql file is checked against it by
+  // src/lib/serviceArea.test.ts.
   if (!launchCityForZip(property.zip ?? "")) {
-    setFlash(OUT_OF_AREA_POST_MESSAGE, "error");
-    redirect("/contractors");
+    await setFlash(OUT_OF_AREA_POST_MESSAGE, "error");
+    redirect(failPost("out_of_area"));
   }
   const supabase = await createClient();
 
@@ -146,8 +220,8 @@ export async function postJobAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    setFlash("You're posting jobs too quickly, please wait a bit.", "error");
-    redirect("/contractors");
+    await setFlash(POST_JOB_ERRORS.rate_hour, "error");
+    redirect(failPost("rate_hour"));
   }
   // Daily cap on top of the hourly one (security audit finding #3): the hourly
   // limiter alone still lets one account post up to 8 * 24 = 192 times a day,
@@ -163,11 +237,8 @@ export async function postJobAction(formData: FormData) {
     p_window_seconds: 86400,
   });
   if (allowedDay === false) {
-    setFlash(
-      "You've reached today's posting limit. Please try again tomorrow.",
-      "error"
-    );
-    redirect("/contractors");
+    await setFlash(POST_JOB_ERRORS.rate_day, "error");
+    redirect(failPost("rate_day"));
   }
 
   // Lazy ownership check (migration 0093): a property claimed before this
@@ -272,8 +343,9 @@ export async function postJobAction(formData: FormData) {
     }
   }
 
-  const category = formData.get("category") as string;
-  const issueIdRaw = (formData.get("issue_id") as string) || null;
+  // category / issueIdRaw / timing / message are read at the very top of this
+  // action, so the failure redirects above can carry them back to the form.
+  //
   // The issue id rides in on the form, so it is as forgeable as every other
   // field, and NOTHING downstream re-derives it: it is written straight onto
   // the lead as issue_id (see leadRow below), and that column is what
@@ -300,8 +372,10 @@ export async function postJobAction(formData: FormData) {
       .maybeSingle();
     return data?.id ?? null;
   })();
-  const timing = (formData.get("timing") as string) || null;
-  const message = ((formData.get("message") as string) || "").trim() || null;
+  // From here on a failure round trip echoes the VERIFIED id (or nothing at
+  // all, if a stale one was dropped), which is what the later gates always
+  // did.
+  keepIssueId = issueId;
 
   // Existing issue photos the owner removed from the pre-attached preview
   // before posting (ExistingJobPhotos.tsx). Since a job posted from an issue
@@ -390,18 +464,12 @@ export async function postJobAction(formData: FormData) {
     issueSeverity = issue?.severity ?? null;
   }
 
-  // The redirect on either validation gate below carries what the owner typed
-  // back as query params (the page already prefills category/timing/desc/
-  // issue from searchParams), so a rejected post keeps the text fields.
-  // Contact fields re-prefill from the saved profile as usual.
-  const keepParamsQuery = () => {
-    const keep = new URLSearchParams();
-    if (category) keep.set("category", category);
-    if (timing) keep.set("timing", timing);
-    if (message) keep.set("desc", message);
-    if (issueId) keep.set("issue", issueId);
-    return keep.toString();
-  };
+  // The redirect on every validation gate below goes through failPost() (top
+  // of this action), which carries what the owner typed back as query params
+  // (the page already prefills category/timing/desc/issue from searchParams)
+  // plus an ?error= code the page renders as a sentence under the Post job
+  // button. Contact fields re-prefill from the saved profile as usual.
+  //
   // Photos are the one thing the round-trip can't keep: they live in
   // PhotoUpload's client state, which the redirect remounts empty. So the
   // already-uploaded objects are removed from storage (they'd be unreachable
@@ -424,22 +492,17 @@ export async function postJobAction(formData: FormData) {
   // the setFlash + redirect style this action uses.
   if (!isAllowedValue(JOB_CATEGORIES, category)) {
     await cleanupOrphanPhotos();
-    setFlash("Please pick a valid job category.", "error");
-    redirect("/contractors");
+    await setFlash(POST_JOB_ERRORS.category, "error");
+    redirect(failPost("category"));
   }
 
   // Pros pay to apply, so a posting has to give them something to go on:
   // require a real description (at least 20 characters) before it goes live.
   if ((issueDescription ?? "").trim().length < 20) {
     await cleanupOrphanPhotos();
-    setFlash(
-      photoUrls.length
-        ? "Please describe the job in at least 20 characters so pros know what they're applying to. Your photos weren't kept, so please re-attach them."
-        : "Please describe the job in at least 20 characters so pros know what they're applying to.",
-      "error"
-    );
-    const query = keepParamsQuery();
-    redirect(query ? `/contractors?${query}` : "/contractors");
+    const code = photoUrls.length ? "description_photos" : "description";
+    await setFlash(POST_JOB_ERRORS[code], "error");
+    redirect(failPost(code));
   }
 
   // Major-tier jobs (0114) need a real budget so pros can bid seriously - no
@@ -449,12 +512,8 @@ export async function postJobAction(formData: FormData) {
   // page, can't bypass it).
   if (isMajor && !budgetRange) {
     await cleanupOrphanPhotos();
-    setFlash(
-      "Pros need a budget range to bid seriously on projects this size. Please pick one and post again.",
-      "error"
-    );
-    const query = keepParamsQuery();
-    redirect(query ? `/contractors?${query}` : "/contractors");
+    await setFlash(POST_JOB_ERRORS.budget, "error");
+    redirect(failPost("budget"));
   }
 
   // Scrub contact info out of the description before it's stored anywhere:
@@ -596,7 +655,24 @@ export async function postJobAction(formData: FormData) {
       .select("id, created_at")
       .single());
   }
-  if (error) throw new Error(error.message);
+  // A failed insert used to `throw new Error(error.message)`, which lands in
+  // the generic "Something went sideways" boundary with the whole form gone
+  // and the raw Postgres text as the only clue. Every other floor in this
+  // action tells the owner something specific and keeps what they typed, and
+  // so does this one now. The carrier issue this submit may have just created
+  // is dropped first so a failed post leaves nothing behind.
+  if (error) {
+    console.error(
+      "postJobAction: contractor_leads insert failed:",
+      error.message
+    );
+    if (photoIssueId && photoIssueId !== issueId) {
+      await supabase.from("issues").delete().eq("id", photoIssueId);
+    }
+    await cleanupOrphanPhotos();
+    await setFlash(POST_JOB_ERRORS.failed, "error");
+    redirect(failPost("failed"));
+  }
 
   // Second half of the double-submit guard. The pre-insert check above is
   // check-then-act: two truly concurrent submits (two tabs, a network retry

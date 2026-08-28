@@ -106,6 +106,9 @@ interface PhotonProperties {
   street?: unknown;
   city?: unknown;
   postcode?: unknown;
+  // Only photonStreetNames reads this: a street centerline carries its name
+  // here and has no `street` field of its own.
+  name?: unknown;
 }
 
 function str(v: unknown): string {
@@ -178,5 +181,44 @@ export function mapPhotonResults(
     out.push({ line1, city, state: "CA", zip });
   }
 
+  return out;
+}
+
+// Every street name Photon mentioned, from any kind of result. Used by the
+// address existence check (src/lib/addressVerify.ts), which is what stands
+// between a made-up address and a claimed home now that a records miss no
+// longer refuses one.
+//
+// BOTH `street` and `name` are collected, and both are load-bearing. An
+// address node and a road intersection carry the street in `street`; a street
+// centerline carries it in `name` and has no `street` at all. Photon answered
+// a live probe for "1 Hotel Terrace" with a centerline named exactly "Hotel
+// Terrace" and nothing else on that street, so reading only `street` would
+// have called a real Santa Ana address invented.
+//
+// Deliberately NOT mapPhotonResults, on two counts. That function feeds the
+// suggestion list, so it requires a house number and drops anything whose
+// postcode is not a launch ZIP. Both are the right gates for "may we offer
+// this to type into the box" and the wrong ones for "does this street exist":
+// OSM's address-POINT coverage is patchy where its street coverage is good,
+// and its nodes routinely carry a stale postcode or none at all. Filtering on
+// either here refuses real homes - measured at four in ten before this was
+// relaxed.
+//
+// No deduplication: the caller only asks whether ANY name matches.
+export function photonStreetNames(body: unknown): string[] {
+  const features = (body as { features?: unknown } | null)?.features;
+  if (!Array.isArray(features)) return [];
+
+  const out: string[] = [];
+  for (const feature of features) {
+    const props = (feature as { properties?: PhotonProperties } | null)
+      ?.properties;
+    if (!props || typeof props !== "object") continue;
+    const street = str(props.street);
+    if (street) out.push(street);
+    const name = str(props.name);
+    if (name) out.push(name);
+  }
   return out;
 }

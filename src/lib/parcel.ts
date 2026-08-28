@@ -59,12 +59,14 @@ export interface ParcelFacts {
   // this union has three members:
   //   "rentcast"    - the records source answered and knows this address.
   //   "none"        - the records source answered and has NO such address (a
-  //                   true miss), or no RENTCAST_API_KEY is configured so
-  //                   nothing was looked up at all.
-  //   "unavailable" - we could not ask: a non-ok HTTP status (a bad or expired
-  //                   key returns 401, an exhausted quota 429, an outage 5xx),
-  //                   a timeout/abort, a network error, or a body we couldn't
-  //                   parse. This is NOT evidence about the address, so it must
+  //                   true miss: an HTTP 404, or an empty result), or no
+  //                   RENTCAST_API_KEY is configured so nothing was looked up
+  //                   at all.
+  //   "unavailable" - we could not ask: a non-ok HTTP status OTHER than 404 (a
+  //                   bad or expired key returns 401, an exhausted quota 429,
+  //                   an outage 5xx), a timeout/abort, a network error, or a
+  //                   body we couldn't parse. Not evidence about the address,
+  //                   so it must
   //                   never be treated as "this home does not exist" and must
   //                   never be cached - see lookupParcel below and the refusal
   //                   gates in src/app/onboarding/actions.ts. On 2026-08-24 a
@@ -426,36 +428,179 @@ function deriveSystemFacts(
   return Object.keys(facts).length > 0 ? facts : null;
 }
 
+// How long one attempt at reaching RentCast may take, and the hard ceiling on
+// all attempts for a single lookup together.
+//
+// The per-attempt budget used to be 8s with no retry. Both numbers moved for
+// one reason, measured on 2026-08-28 against the live API: a healthy answer
+// comes back in 0.5-2.3s, so 8s was never the thing timing out - what actually
+// failed was the CONNECTION, rejecting in ~270ms with an ETIMEDOUT
+// AggregateError (one of the addresses DNS resolves to refusing the handshake).
+// Two of eight calls failed that way and both succeeded on an immediate retry.
+// No timeout, however generous, helps a socket that never opens; a second
+// attempt does.
+const RENTCAST_ATTEMPT_TIMEOUT_MS = 10_000;
+// The total, so a retry can never stack two full timeouts onto a page that a
+// homeowner is watching. claimPropertyAction can make two lookups back to
+// back, so this number is doubled on the slowest possible claim.
+const RENTCAST_TOTAL_BUDGET_MS = 15_000;
+// Do not start a second attempt with less runway than this: a 1-second retry
+// is a near-certain second failure that only delays the manual-entry fallback.
+const RENTCAST_MIN_RETRY_MS = 2_000;
+
+// What rentcastFetch hands back: the status classification its callers need,
+// plus a body reader that is still covered by the lookup's time budget.
+//
+// The body reader is the whole point of this wrapper existing instead of a
+// bare Response. fetch() resolves as soon as the HEADERS arrive; the body is
+// streamed afterwards, and res.json() waits for all of it. The abort timer
+// used to be cleared the moment the headers landed, so from that instant on
+// nothing bounded the read at all: a RentCast response whose body stalled
+// mid-stream left the caller awaiting res.json() forever, and with it the
+// whole request - a homeowner's claim, or a job post's lazy ownership
+// re-check - with no timeout anywhere above it. json() below keeps the same
+// deadline running over the body.
+type RentcastResponse = {
+  ok: boolean;
+  status: number;
+  json: () => Promise<unknown>;
+};
+
+// One RentCast GET, with a single retry on a failure to reach them at all.
+//
+// Returns the response whatever its status - a 404 and a 401 are both real
+// answers from RentCast and mean very different things, so classifying them is
+// the caller's job. Returns null only when no attempt produced a response:
+// an abort (the per-attempt timeout), a DNS/TLS/connect failure, a dropped
+// socket. That, and only that, is "we could not ask".
+//
+// A non-ok STATUS is never retried. A 401 will be 401 again, a 429 is a
+// ceiling that a retry pushes further into, a 404 is a settled answer, and a
+// 200 is done - retrying any of them would spend a second billed call to learn
+// nothing.
+async function rentcastFetch(
+  url: string,
+  apiKey: string,
+  label: string
+): Promise<RentcastResponse | null> {
+  const deadline = Date.now() + RENTCAST_TOTAL_BUDGET_MS;
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const remaining = deadline - Date.now();
+    if (attempt > 1 && remaining < RENTCAST_MIN_RETRY_MS) break;
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.min(RENTCAST_ATTEMPT_TIMEOUT_MS, Math.max(remaining, 1))
+    );
+    try {
+      const res = await fetch(url, {
+        headers: { "X-Api-Key": apiKey, Accept: "application/json" },
+        signal: controller.signal,
+      });
+      return {
+        ok: res.ok,
+        status: res.status,
+        json: () => readJsonWithinDeadline(res, controller, deadline, label),
+      };
+    } catch (err) {
+      lastError = err;
+    } finally {
+      // Only the header wait is bounded by this timer; the body gets its own
+      // slice of the same deadline inside readJsonWithinDeadline.
+      clearTimeout(timeout);
+    }
+  }
+
+  // AbortError (the per-attempt timeout) or a network failure, twice over.
+  console.error(`RentCast ${label} could not be reached:`, lastError);
+  return null;
+}
+
+// res.json() raced against whatever is left of the lookup's 15s budget. On
+// timeout the response is aborted (so the socket is released rather than left
+// held open by a body that never finishes) and this throws - which every
+// caller already treats as "we could not get an answer", i.e. "unavailable",
+// never "no such address". Same classification a mid-stream network failure
+// would get, which is exactly what a body that never arrives is.
+async function readJsonWithinDeadline(
+  res: Response,
+  controller: AbortController,
+  deadline: number,
+  label: string
+): Promise<unknown> {
+  const remaining = deadline - Date.now();
+  const budget = Math.max(remaining, 1);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      res.json(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(
+            new Error(`RentCast ${label} body did not arrive within the budget`)
+          );
+        }, budget);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // Fetches property facts from RentCast's /v1/properties endpoint, which
 // matches a single address against county assessor records. Three outcomes,
 // and they are deliberately not the same thing:
 //   - a ParcelFacts with source "rentcast": the record was found.
-//   - null: RentCast answered and has no such address (empty array, or a
-//     record shape with no address echo). A TRUE miss, safe to cache and safe
-//     to refuse an onboarding claim on.
+//   - null: RentCast answered and has no such address - an HTTP 404
+//     ("resource/not-found"), an empty array, or a record shape with no
+//     address echo. A TRUE miss, safe to cache and safe to refuse an
+//     onboarding claim on.
 //   - a ParcelFacts with source "unavailable": we never got an answer -
-//     non-ok HTTP (401 bad key, 429 quota, 5xx outage), an abort/timeout, a
-//     network error, or an unparseable body. Not evidence about the address.
+//     a non-ok HTTP status other than 404 (401 bad key, 429 quota, 5xx
+//     outage), an abort/timeout, a network error, or an unparseable body. Not
+//     evidence about the address.
 async function fetchFromRentcast(
   street: string,
   zip: string,
   apiKey: string
 ): Promise<ParcelFacts | null> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8_000);
+  const address = `${street.trim()}, ${zip}`;
+  const url = `https://api.rentcast.io/v1/properties?address=${encodeURIComponent(address)}`;
+  const res = await rentcastFetch(url, apiKey, "address lookup");
+  if (!res) return unavailableFacts(street, zip);
+
+  // A 404 IS RentCast's answer, not a failure to get one. Their /v1/properties
+  // returns 404 with {"error":"resource/not-found","message":"No data found
+  // for address '...'"} for an address it holds no record for - it does NOT
+  // return an empty 200 array, which is what this code assumed until
+  // 2026-08-28. Every unknown address therefore came back "unavailable", which
+  // is wrong three ways at once, and all three showed up in one persona run:
+  //   1. The homeowner was told "we couldn't reach the county records right
+  //      now" - a claim that we had an outage, when in fact we asked and were
+  //      told no. Verified against the live API for four real Orange County
+  //      addresses: all four are a 404, in every address format tried.
+  //   2. "unavailable" is deliberately never cached (see lookupParcel), so
+  //      every retype of the same unknown address re-billed a lookup out of a
+  //      50-a-month quota. A 404 is an answer and now gets the 24h miss cache.
+  //   3. The "the records source has to actually know this address" gate in
+  //      src/app/onboarding/actions.ts refuses only on source "none", so
+  //      routing every miss to "unavailable" left that gate unreachable for
+  //      the live source: "123 Fake St" walked straight through it.
+  // Checked BEFORE the !res.ok branch below, which is only for the statuses
+  // that really are "we could not ask".
+  if (res.status === 404) return null;
+
+  if (!res.ok) {
+    // 401 (bad/expired key), 429 (quota), 5xx (outage): we could not ask, so
+    // the answer is "unavailable", never "no such address".
+    console.error(`RentCast returned HTTP ${res.status} for address lookup`);
+    return unavailableFacts(street, zip);
+  }
+
   try {
-    const address = `${street.trim()}, ${zip}`;
-    const url = `https://api.rentcast.io/v1/properties?address=${encodeURIComponent(address)}`;
-    const res = await fetch(url, {
-      headers: { "X-Api-Key": apiKey, Accept: "application/json" },
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      // 401 (bad/expired key), 429 (quota), 5xx (outage): we could not ask, so
-      // the answer is "unavailable", never "no such address".
-      console.error(`RentCast returned HTTP ${res.status} for address lookup`);
-      return unavailableFacts(street, zip);
-    }
     const body: unknown = await res.json();
     const record: RentcastRecord | undefined = Array.isArray(body)
       ? body[0]
@@ -510,13 +655,12 @@ async function fetchFromRentcast(
       source: "rentcast",
     };
   } catch (err) {
-    // AbortError (the 8s timeout), DNS/network failure, or a body that isn't
-    // JSON: degrade to manual entry, marked "unavailable" so onboarding lets
-    // the homeowner through instead of telling them their house isn't real.
+    // A 200 whose body isn't JSON, or a shape that blew up on the way through:
+    // degrade to manual entry, marked "unavailable" so onboarding lets the
+    // homeowner through instead of telling them their house isn't real.
+    // Reaching RentCast at all is rentcastFetch's problem, not this block's.
     console.error("RentCast address lookup could not complete:", err);
     return unavailableFacts(street, zip);
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -639,19 +783,23 @@ async function fetchMarketValueFacts(
   const key = process.env.RENTCAST_API_KEY;
   if (!key) return BLANK_MARKET_VALUE;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8_000);
+  const address = `${lookupStreet(street, unit)}, ${zip}`;
+  const url = `https://api.rentcast.io/v1/avm/value?address=${encodeURIComponent(address)}`;
+  const res = await rentcastFetch(url, key, "AVM lookup");
+  if (!res) return UNAVAILABLE_MARKET_VALUE;
+
+  // Same 404 rule as the property record above, for the same reason: RentCast
+  // answers 404 when it has no estimate for an address, and that IS an answer.
+  // Treating it as "unavailable" made every unvalued address re-bill the AVM
+  // endpoint on each visit to /value instead of being remembered for a day.
+  if (res.status === 404) return BLANK_MARKET_VALUE;
+
+  if (!res.ok) {
+    console.error(`RentCast returned HTTP ${res.status} for AVM lookup`);
+    return UNAVAILABLE_MARKET_VALUE;
+  }
+
   try {
-    const address = `${lookupStreet(street, unit)}, ${zip}`;
-    const url = `https://api.rentcast.io/v1/avm/value?address=${encodeURIComponent(address)}`;
-    const res = await fetch(url, {
-      headers: { "X-Api-Key": key, Accept: "application/json" },
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      console.error(`RentCast returned HTTP ${res.status} for AVM lookup`);
-      return UNAVAILABLE_MARKET_VALUE;
-    }
     const body: unknown = await res.json();
     // A 200 that isn't even an object is a shape we don't recognize, not an
     // answer about this address - same call the property-record path makes on
@@ -675,13 +823,11 @@ async function fetchMarketValueFacts(
       source: "rentcast",
     };
   } catch (err) {
-    // AbortError (the 8s timeout), DNS/network failure, unparseable body:
-    // degrade to null, never throw - but marked "unavailable" so it isn't
-    // cached as if RentCast had said "no estimate for this address".
+    // An unparseable body: degrade to null, never throw - but marked
+    // "unavailable" so it isn't cached as if RentCast had said "no estimate
+    // for this address". Timeouts and network failures are rentcastFetch's.
     console.error("RentCast AVM lookup could not complete:", err);
     return UNAVAILABLE_MARKET_VALUE;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

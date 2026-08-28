@@ -11,6 +11,7 @@ import Image from "next/image";
 import Logo from "@/components/Logo";
 import HeroDemoPlayerLazy from "@/components/HeroDemoPlayerLazy";
 import HeroPhotoCycler from "@/components/HeroPhotoCycler";
+import PhoneLanding from "@/components/PhoneLanding";
 import ThemeToggle from "@/components/ThemeToggle";
 import StructuredData from "@/components/StructuredData";
 import { TrendingUp, Bell, MessageSquare, Wrench } from "lucide-react";
@@ -236,7 +237,7 @@ export default async function Home(props: {
     },
     {
       q: "Where does my home's info come from?",
-      a: "When you enter your address, we look it up against public county records to pre-fill your home's year built, size, and other facts. You can correct anything that's off once you're in.",
+      a: "When we have county records for your address, we pre-fill your home's year built, size, and other facts. You can correct anything that's off once you're in.",
     },
     {
       q: "What happens if I cancel or delete my account?",
@@ -355,8 +356,16 @@ export default async function Home(props: {
           body), no gradient. */}
       <div className="bg-hearth-50 dark:bg-stone-900">
         <div className="mx-auto max-w-5xl px-6 pt-6">
+          {/* PHONE ONLY (sm:hidden, see PhoneLanding.tsx). Below `sm` this
+              block IS the landing page: wordmark, one line, two buttons.
+              Everything below it in this file carries `max-sm:hidden` so the
+              marketing page stays exactly as it was from `sm` up and is only
+              ever hidden on phones, never deleted. Someone on a phone
+              downloaded the app already; they need a way in, not a pitch. */}
+          <PhoneLanding />
+
           {/* Slim header: wordmark left, theme switch + quiet pro door right */}
-          <header className="flex items-center justify-between">
+          <header className="flex items-center justify-between max-sm:hidden">
             <span className="inline-flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100">
               <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
             </span>
@@ -388,7 +397,7 @@ export default async function Home(props: {
               warm home on the right. Below lg it collapses to one column and
               the photo stacks under the copy, so mobile keeps the old
               centered read. */}
-          <div className="mt-14 grid items-center gap-10 sm:mt-20 lg:grid-cols-2 lg:gap-12">
+          <div className="mt-14 grid items-center gap-10 max-sm:hidden sm:mt-20 lg:grid-cols-2 lg:gap-12">
             <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
               <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-stone-900 dark:text-stone-100 sm:text-6xl sm:tracking-[-0.03em] [text-wrap:balance]">
                 Know what your home needs before it costs you
@@ -446,7 +455,7 @@ export default async function Home(props: {
               HeroDemoPlayerLazy so the player's chunk stays out of this
               page's first-load JS; the poster paints at the same size either
               way, so there is no shift when it arrives. */}
-          <section className="mt-16 flex flex-col items-center sm:mt-20">
+          <section className="mt-16 flex flex-col items-center max-sm:hidden sm:mt-20">
             <div className="w-full max-w-xl">
               <HeroDemoPlayerLazy />
             </div>
@@ -460,7 +469,7 @@ export default async function Home(props: {
           post-a-job form on /contractors lands pre-filled (it reads
           ?category=). Chips reuse the header link's neutral outline shape,
           rounded full, and stay plain text labels - no trade pictograms. */}
-      <section className="mt-12 sm:mt-16">
+      <section className="mt-12 max-sm:hidden sm:mt-16">
         <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
           Find a pro for
         </h2>
@@ -483,7 +492,7 @@ export default async function Home(props: {
       {/* Trust strip: three already-true signals in the green "all clear"
           pill, the same tone as the hero reassurance row. No invented
           numbers - only what Hearth actually does today. */}
-      <section className="mt-8">
+      <section className="mt-8 max-sm:hidden">
         <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
           What we check
         </h2>
@@ -496,7 +505,7 @@ export default async function Home(props: {
 
       {/* How it works: steps on the left, a flat photo of real work on the
           right. Collapses to one column below lg (steps, then photo). */}
-      <section className="mt-16 sm:mt-24">
+      <section className="mt-16 max-sm:hidden sm:mt-24">
         <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
           <div>
             <h2 className="text-center text-2xl font-semibold text-stone-900 dark:text-stone-100 [text-wrap:balance] lg:text-left">
@@ -529,7 +538,7 @@ export default async function Home(props: {
       </section>
 
       {/* Value */}
-      <section className="mt-16 sm:mt-24">
+      <section className="mt-16 max-sm:hidden sm:mt-24">
         <h2 className="text-center text-2xl font-semibold text-stone-900 dark:text-stone-100 [text-wrap:balance]">
           What Hearth watches for you
         </h2>
@@ -547,7 +556,7 @@ export default async function Home(props: {
       </section>
 
       {/* Trust band, same as the /pros version. */}
-      <section className="mt-16 rounded-2xl bg-stone-900 px-6 py-8 dark:bg-stone-950 text-center sm:mt-24">
+      <section className="mt-16 rounded-2xl bg-stone-900 px-6 py-8 max-sm:hidden dark:bg-stone-950 text-center sm:mt-24">
         <h2 className="text-2xl font-semibold text-white [text-wrap:balance]">
           Real people, real answers
         </h2>
@@ -584,7 +593,7 @@ export default async function Home(props: {
           product really does. No invented stats, no "vetted" claims.
           FAQ_ITEMS also backs the FAQPage JSON-LD below, so the structured
           data can't say something these cards don't. */}
-      <section className="mt-16 sm:mt-24">
+      <section className="mt-16 max-sm:hidden sm:mt-24">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
@@ -606,7 +615,7 @@ export default async function Home(props: {
 
       {/* Closing CTA: one more clear door in before the pro band switches
           audience. The only other filled primary button is the hero's. */}
-      <section className="mt-16 text-center sm:mt-24">
+      <section className="mt-16 text-center max-sm:hidden sm:mt-24">
         <h2 className="mx-auto max-w-xl text-2xl font-semibold text-stone-900 dark:text-stone-100 [text-wrap:balance]">
           Know what your home needs before it costs you
         </h2>
@@ -625,7 +634,7 @@ export default async function Home(props: {
       {/* Pro band: the supply-side door gets its own pitch, not a whisper
           link. Outline button on purpose: the filled primary on this page is
           reserved for the homeowner CTAs. */}
-      <section className="mt-16 rounded-2xl bg-stone-900 px-6 py-8 dark:bg-stone-950 text-center sm:mt-24">
+      <section className="mt-16 rounded-2xl bg-stone-900 px-6 py-8 max-sm:hidden dark:bg-stone-950 text-center sm:mt-24">
         {/* stone-400 in BOTH modes: this band's fill is always dark (stone-900
             / stone-950), so the light-mode stone-500 the other eyebrows use
             would sit too dark against it. */}
@@ -648,7 +657,7 @@ export default async function Home(props: {
         </Link>
       </section>
 
-      <footer className="mt-16 border-t border-stone-200 pt-8 sm:mt-24 dark:border-white/10">
+      <footer className="mt-16 border-t border-stone-200 pt-8 max-sm:hidden sm:mt-24 dark:border-white/10">
         <div className="grid gap-8 text-left sm:grid-cols-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
@@ -776,6 +785,20 @@ export default async function Home(props: {
           <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth · Your home,
           looked after
         </p>
+      </footer>
+
+      {/* PHONE ONLY footer. Two links, not four: "I'm a contractor" and
+          "Emergency help" already sit in PhoneLanding a few hundred pixels
+          up this same short screen, and repeating them down here would read
+          as a mistake rather than a footer. Terms has no other phone door,
+          so it gets one. */}
+      <footer className="mt-16 flex items-center justify-center gap-5 text-sm text-stone-500 sm:hidden dark:text-stone-400">
+        <Link href="/privacy" className="py-1 hover:text-bark-700 dark:hover:text-stone-300">
+          Privacy
+        </Link>
+        <Link href="/terms" className="py-1 hover:text-bark-700 dark:hover:text-stone-300">
+          Terms
+        </Link>
       </footer>
       </div>
     </main>

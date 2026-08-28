@@ -102,6 +102,19 @@ export default function AskHearthDock({
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const openRef = useRef(open);
   openRef.current = open;
+  // Is this viewport below sm right now? Starts false so the server's markup
+  // and the first client render agree (a hydration mismatch otherwise), then
+  // the effect below tells the truth. Only consulted when hideOnPhone is set.
+  const [phone, setPhone] = useState(false);
+
+  useEffect(() => {
+    if (!hideOnPhone) return;
+    const mq = window.matchMedia("(max-width: 639px)");
+    const apply = () => setPhone(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, [hideOnPhone]);
 
   // The lazily fetched opener. `settled` (not "is it non-empty") is the gate,
   // because AskHearth reads `greeting` once, when it mounts, to seed its first
@@ -200,6 +213,15 @@ export default function AskHearthDock({
   }, [hiddenHere, pendingQuestion]);
 
   if (hiddenHere) return null;
+
+  // On a phone with hideOnPhone the pill has no visual form at all - the Tools
+  // sheet's "Ask Hearth" row and the pinned row in Messages are the way in.
+  // The wrapper below is display:none there, which still leaves a 0x0 button
+  // in the DOM for anything that walks it; rendering nothing is what was
+  // meant. This is a plain early return, NOT an unmount: every hook above has
+  // already run, so the "hearth:ask-question" listener stays registered and a
+  // question forwarded from elsewhere still opens /ask with it prefilled.
+  if (hideOnPhone && phone) return null;
 
   return (
     // Desktop is exactly where it was (bottom-4 right-4). The phone rules are

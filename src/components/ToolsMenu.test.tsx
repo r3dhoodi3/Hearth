@@ -17,7 +17,7 @@ function openMenu(hasPlus = false) {
 }
 
 describe("ToolsMenu phone sheet", () => {
-  it("renders the same links, in the same order, as the desktop dropdown", () => {
+  it("leads its home group with Ask Hearth, then the same links as the desktop dropdown", () => {
     openMenu();
 
     // Both the desktop dropdown and the phone sheet are mounted at once
@@ -30,6 +30,7 @@ describe("ToolsMenu phone sheet", () => {
 
     expect(hrefs).toEqual([
       "/emergency",
+      "/ask",
       "/walkthrough",
       "/home-details",
       "/documents",
@@ -41,6 +42,17 @@ describe("ToolsMenu phone sheet", () => {
       "/quote-check",
       "/home-report",
     ]);
+  });
+
+  // The phone sheet is the only Ask Hearth entry point that needed adding:
+  // desktop still floats the Ask Hearth pill on every screen (AskHearthDock),
+  // so its dropdown stays exactly as it was.
+  it("adds Ask Hearth to the phone sheet only, never to the desktop dropdown", () => {
+    openMenu();
+    const dialog = screen.getByRole("dialog", { name: "Tools" });
+    const askLinks = screen.getAllByRole("link", { name: "Ask Hearth" });
+    expect(askLinks).toHaveLength(1);
+    expect(dialog.contains(askLinks[0])).toBe(true);
   });
 
   it("shows the Plus chip on member-gated tools for a non-Plus account", () => {

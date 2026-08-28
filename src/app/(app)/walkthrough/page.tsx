@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getActiveProperty } from "@/lib/property";
 import { createClient } from "@/lib/supabase/server";
 import { homeHealthScore, scoreBand } from "@/lib/health";
@@ -10,7 +11,15 @@ import SystemCaptureCard from "./SystemCaptureCard";
 // (confirmed_at is null - migration 0056) or owner-CONFIRMED. Each estimated
 // system gets a "snap the data plate" card (SystemCaptureCard) so a walk
 // through the house turns every guess into a real fact, one scan at a time.
-export default async function WalkthroughPage() {
+export default async function WalkthroughPage(props: {
+  searchParams: Promise<{ mode?: string }>;
+}) {
+  // ?mode=manual opens every card straight on its typing form, for the owner
+  // who is not standing in front of the furnace with a phone. A query
+  // parameter rather than client state so the choice survives a reload and
+  // can be linked to from anywhere (the dashboard nudge does).
+  const { mode } = await props.searchParams;
+  const manual = mode === "manual";
   const property = (await getActiveProperty())!;
   const supabase = await createClient();
 
@@ -47,6 +56,41 @@ export default async function WalkthroughPage() {
         </p>
       </div>
 
+      {/* The choice, up front. The photo path is still the default and is
+          unchanged; this only says out loud that typing is allowed, which
+          used to be a small link you found after opening a camera. Both
+          options are plain links so the answer lives in the URL. */}
+      {estimated.length > 0 && (
+        <div
+          role="group"
+          aria-label="How to add your details"
+          className="flex flex-wrap gap-2"
+        >
+          <Link
+            href="/walkthrough"
+            aria-current={manual ? undefined : "page"}
+            className={`inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-medium ${
+              manual
+                ? "border-stone-200 bg-white text-stone-700 hover:border-bark-500 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"
+                : "border-bark-600 bg-bark-600 text-white dark:border-bark-500 dark:bg-bark-500"
+            }`}
+          >
+            Take photos
+          </Link>
+          <Link
+            href="/walkthrough?mode=manual"
+            aria-current={manual ? "page" : undefined}
+            className={`inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-medium ${
+              manual
+                ? "border-bark-600 bg-bark-600 text-white dark:border-bark-500 dark:bg-bark-500"
+                : "border-stone-200 bg-white text-stone-700 hover:border-bark-500 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"
+            }`}
+          >
+            Type it in instead
+          </Link>
+        </div>
+      )}
+
       <div className={`card-hero inline-flex items-center gap-4 border ${band.tone}`}>
         <div>
           <p className="stat-label">Home Health Score</p>
@@ -62,7 +106,12 @@ export default async function WalkthroughPage() {
         {estimated.length > 0 ? (
           <ul className="space-y-3">
             {estimated.map((s) => (
-              <SystemCaptureCard key={s.id} system={s} propertyId={property.id} />
+              <SystemCaptureCard
+                key={s.id}
+                system={s}
+                propertyId={property.id}
+                startManual={manual}
+              />
             ))}
           </ul>
         ) : (

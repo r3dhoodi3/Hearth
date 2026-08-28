@@ -526,6 +526,30 @@ export async function saveCompanyAction(formData: FormData) {
 
   const existing = await getCurrentContractor();
 
+  // Where a validation refusal below goes: back to the form the pro actually
+  // submitted from, with the reason in a flash. The two halves are NOT
+  // symmetrical, and that asymmetry is the whole point:
+  //
+  //   - an existing pro edits from /pro/profile, so a redirect there is a
+  //     real navigation away from wherever they were.
+  //   - onboarding submits from /pro/onboarding, so redirect("/pro/onboarding")
+  //     is a SAME-PATH App Router redirect - the footgun that leaves the route
+  //     stuck on its loading.tsx boundary instead of resolving back to the real
+  //     page. That is what a tester saw as the wizard disappearing behind the
+  //     error banner (no form, no Back button) until a manual reload.
+  //     setFlash() then revalidatePath() on that same path keeps the wizard
+  //     mounted with whatever the pro already typed - exactly what the failed-
+  //     insert branch at the bottom of this action does.
+  //
+  // Every call site must `return` after awaiting this: on the /pro/profile
+  // half redirect() throws and the return is unreachable, but on the
+  // onboarding half there is nothing to throw and the action has to stop.
+  const backToForm = async (message: string) => {
+    await setFlash(message, "error");
+    if (existing) redirect("/pro/profile");
+    revalidatePath("/pro/onboarding");
+  };
+
   // Server-side floor under the browser's `required`: a post that asked the
   // city question but carries no city must not create a company, must not
   // land on the waitlist panel, and must not blank an existing pro's stored
@@ -534,8 +558,8 @@ export async function saveCompanyAction(formData: FormData) {
   // pick one - to whichever form they actually submitted, now that the profile
   // editor asks this question too.
   if (hasCityWrite && citySelection.cities.length === 0) {
-    await setFlash("Pick at least one city you serve.", "error");
-    redirect(existing ? "/pro/profile" : "/pro/onboarding");
+    await backToForm("Pick at least one city you serve.");
+    return;
   }
 
   // Server-side floor under the browser's `required`, same discipline as the
@@ -543,8 +567,8 @@ export async function saveCompanyAction(formData: FormData) {
   // would otherwise create (or rename to) a nameless listing on the job board
   // and the public /p/<id> page.
   if (!fields.name) {
-    await setFlash("Enter your company name.", "error");
-    redirect(existing ? "/pro/profile" : "/pro/onboarding");
+    await backToForm("Enter your company name.");
+    return;
   }
 
   // MODERATION: the business name is unreviewed free text rendered verbatim on
@@ -568,8 +592,8 @@ export async function saveCompanyAction(formData: FormData) {
   // introduced, not to the value already stored.
   const nameChanged = fields.name !== (existing?.name ?? null);
   if (nameChanged && !isAcceptablePublicText(fields.name)) {
-    await setFlash(COMPANY_NAME_REJECTED, "error");
-    redirect(existing ? "/pro/profile" : "/pro/onboarding");
+    await backToForm(COMPANY_NAME_REJECTED);
+    return;
   }
 
   // Trial-abuse signals (src/lib/risk, migration 0130). A pro who burned a free
@@ -598,7 +622,6 @@ export async function saveCompanyAction(formData: FormData) {
   // is written when validation fails. Kept out of `fields` and written via the
   // (as any) casts below because the columns land in 0110 and aren't in the
   // generated types.
-  const reviewLinkBack = existing ? "/pro/profile" : "/pro/onboarding";
   const yelpEntry = formData.get("yelp_url");
   const googleEntry = formData.get("google_reviews_url");
   const hasReviewLinkWrite = yelpEntry !== null || googleEntry !== null;
@@ -606,16 +629,16 @@ export async function saveCompanyAction(formData: FormData) {
   if (yelpEntry !== null) {
     const r = validateYelpUrl(String(yelpEntry));
     if (!r.ok) {
-      await setFlash(r.error, "error");
-      redirect(reviewLinkBack);
+      await backToForm(r.error);
+      return;
     }
     reviewLinkWrite.yelp_url = r.value;
   }
   if (googleEntry !== null) {
     const r = validateGoogleReviewsUrl(String(googleEntry));
     if (!r.ok) {
-      await setFlash(r.error, "error");
-      redirect(reviewLinkBack);
+      await backToForm(r.error);
+      return;
     }
     reviewLinkWrite.google_reviews_url = r.value;
   }
@@ -1026,12 +1049,18 @@ export async function saveCompanyAction(formData: FormData) {
     }
   }
   if (error) {
-    // Onboarding has nowhere to revalidate in place - this account has no
-    // contractors row yet, so there is no /pro/profile to refresh. Same
-    // redirect-back-to-the-form-just-submitted pattern the floors above this
-    // function already use (e.g. "Pick at least one city you serve.").
+    // No redirect here, for the exact reason the update branch above gave up
+    // its own redirect: this action is always submitted FROM /pro/onboarding,
+    // so redirect("/pro/onboarding") is a same-path App Router redirect - the
+    // footgun that leaves the route stuck on its loading.tsx boundary instead
+    // of resolving back to the real page. That is what a tester saw as the
+    // wizard disappearing behind the error banner (no form, no Back button)
+    // until a manual reload. setFlash() then revalidatePath() on this same
+    // path keeps the wizard mounted with whatever the pro already typed,
+    // exactly like the update branch does for /pro/profile.
     await setFlash(contractorsWriteFailureFlash(error), "error");
-    redirect("/pro/onboarding");
+    revalidatePath("/pro/onboarding");
+    return;
   }
 
   // A supplied license number is only "on file", not checked: queue it as

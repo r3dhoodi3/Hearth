@@ -247,10 +247,12 @@ export default function ApplyJobButton({
       )}
       <p className="text-xs text-stone-500 dark:text-stone-400">
         Applying charges the {fee} lead fee from your wallet. If the homeowner
-        never responds and no one is picked, ghost protection puts it back in
-        your wallet as credit after {GHOST_PROTECTION_DAYS} days. Not chosen?
-        Your fee comes back as wallet credit too, good for 60 days. Returns are
-        always credit toward future leads, never cash back to your card.
+        never responds, ghost protection puts it back in your wallet as
+        credit after {GHOST_PROTECTION_DAYS} days, every time, no limit. If
+        they respond but pick someone else, you get that fee back as credit
+        too, but only on your very first paid application; after that, a lost
+        bid is a lost fee. Returns are always credit toward future leads,
+        never cash back to your card.
       </p>
       {/* Said at the moment of the charge, not after it: the price on this
           card is a one-time thing, and a pro deciding whether to spend it

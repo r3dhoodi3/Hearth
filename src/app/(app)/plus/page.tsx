@@ -81,7 +81,7 @@ const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
     ? [
         {
           label: "Open job postings",
-          free: "Unlimited while Hearth is new",
+          free: "Unlimited during launch",
           plus: "Unlimited",
         },
       ]

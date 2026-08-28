@@ -39,6 +39,13 @@ export type Msg = {
   // markdown with no link support, so a URL sitting in `content` would be
   // dead text; this renders as a real tappable link underneath instead.
   link?: { href: string; label: string };
+  // True when this assistant message is not the whole answer: the stream
+  // ended (a network drop, a server recompile, an idle timeout) before the
+  // terminal line arrived, and this is whatever text had already come in.
+  // Persisted so a reload shows the partial answer instead of treating the
+  // question as unanswered; a later UI could use this to say the answer was
+  // cut short.
+  partial?: boolean;
 };
 type Job = { category: string; timing: string; summary: string };
 
@@ -885,9 +892,19 @@ export default function AskHearth({
     let streamed = "";
     let settled = false;
 
-    const withContent = (content: string, link?: AskLink | null): Msg[] => [
+    const withContent = (
+      content: string,
+      link?: AskLink | null,
+      partial?: boolean
+    ): Msg[] => [
       ...base,
-      { role: "assistant", content, ts, ...(link ? { link } : {}) },
+      {
+        role: "assistant",
+        content,
+        ts,
+        ...(link ? { link } : {}),
+        ...(partial ? { partial: true } : {}),
+      },
     ];
     // The empty placeholder goes up immediately: the bubble appearing IS the
     // signal that the answer has started.
@@ -960,20 +977,31 @@ export default function AskHearth({
       if (!settled) throw new Error("The answer ended before it finished.");
     } catch (e) {
       // Keep what arrived if there is anything worth keeping: half an answer
-      // the reader has already started reading beats replacing it with an
-      // apology. With nothing to keep, say the same thing the non-streaming
-      // path says. Either way the question goes back in the composer, so
-      // asking again is one tap rather than typing it all out.
+      // the reader has already started reading beats losing it to a "No
+      // answer came back" orphan on the next reload. Persist it once, marked
+      // partial, as the real assistant turn - the conversation then ends on
+      // an assistant message like any other, so the orphan check below (which
+      // only fires when the newest message is a user turn) never flags it.
       const salvaged = streamed.trim();
-      const updated = withContent(
-        salvaged ||
-          (isTimeoutError(e)
+      if (salvaged) {
+        const updated = withContent(salvaged, null, true);
+        applyMessages(updated);
+        persist(updated);
+      } else {
+        // Nothing worth keeping arrived: same apology the non-streaming path
+        // gives, shown on screen but NOT persisted. The user's question stays
+        // the newest saved message, so a reload still treats it as
+        // unanswered and offers Retry / Delete, and the question goes back in
+        // the composer so asking again is one tap rather than typing it all
+        // out.
+        const updated = withContent(
+          isTimeoutError(e)
             ? "That took too long. Try again."
-            : "Something went wrong, try again.")
-      );
-      applyMessages(updated);
-      persist(updated);
-      setInput(question);
+            : "Something went wrong, try again."
+        );
+        applyMessages(updated);
+        setInput(question);
+      }
     } finally {
       if (paintTimer) clearTimeout(paintTimer);
       // Losing the idle race does not stop the pending read, and a reader left
@@ -1272,6 +1300,12 @@ export default function AskHearth({
 
   // One message bubble (text + optional photo + action buttons).
   function bubble(m: Msg, i: number, isLast = false) {
+    // This bubble is the reply currently filling in. Its markdown is caught
+    // mid-token ("**Getting ready for winter" with no closing "**" yet), which
+    // the renderer would otherwise show as raw asterisks for a paint or two -
+    // see closeOpenMarks in Markdown.tsx. Same renderer as a finished reply,
+    // just told the text is not finished.
+    const streaming = isLast && loading && m.role === "assistant";
     const parsed =
       m.role === "assistant"
         ? parseAssistant(m.content)
@@ -1315,7 +1349,7 @@ export default function AskHearth({
             }`}
           >
             {m.role === "assistant" ? (
-              <Markdown text={parsed.text} />
+              <Markdown text={parsed.text} partial={streaming} />
             ) : (
               parsed.text
             )}
@@ -1327,7 +1361,7 @@ export default function AskHearth({
         {m.role === "user" && isLast && unanswered && (
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <span className="text-xs text-stone-500 dark:text-stone-400">
-              No answer came back.
+              That took too long. Try asking again.
             </span>
             <button
               type="button"

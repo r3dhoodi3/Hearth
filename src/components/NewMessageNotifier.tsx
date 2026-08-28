@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { plainPreview } from "@/lib/previewText";
 
 type Toast = { id: string; name: string; body: string; href: string };
 
@@ -60,10 +61,13 @@ export default function NewMessageNotifier({
         }
       }
 
-      // First 15 characters of the message, with a photo shown as "Photo".
+      // First few words of the message, with a photo shown as "Photo".
+      // Through plainPreview (@/lib/previewText) so markdown and any
+      // machine-readable [[TAG]] action block are gone before the slice, not
+      // cut in half by it.
       const preview = (body: string) => {
         if (body.startsWith("[img]")) return "Photo";
-        return body.slice(0, 15) + (body.length > 15 ? "…" : "");
+        return plainPreview(body, 15);
       };
 
       const next: Toast[] = fresh.map((m: any) => {

@@ -212,13 +212,24 @@ export function deriveOwnershipStatus(
 // reach (source "unavailable" - a 401 from a bad key, a 429, a 5xx, a
 // timeout). Writing "unverified" there would freeze an outage into a
 // permanent verdict: the home stays unverified forever, and its job posts
-// never get the fan-out that verified homes get. A miss or a real record is a
-// verdict worth keeping; an outage is a "come back later".
+// never get the fan-out that verified homes get. A real record is a verdict
+// worth keeping; an outage is a "come back later".
 //
 // Null facts (a lookup that was rate-limited or threw) are the same "come back
 // later", and are already handled the same way.
+//
+// SO IS A MISS (source "none"), as of 2026-08-28, and that one is a change.
+// A miss carries no owner of record at all, so there is nothing to match a
+// name against and no verdict to keep - recording it writes "unverified" on
+// the strength of having asked a source that had never heard of the address.
+// That was harmless while a miss refused the claim outright and could never
+// reach this code; now that a miss walks on to manual entry (see
+// src/lib/parcelGate.ts) it is the common case, and RentCast's coverage of the
+// launch metro is patchy enough that the same address may well be in the data
+// next month. Leaving ownership_checked_at null is what keeps the lazy
+// re-check on first job post eligible to find out.
 export function shouldRecordOwnershipCheck(
   facts: { source: string } | null | undefined
 ): boolean {
-  return facts != null && facts.source !== "unavailable";
+  return facts != null && facts.source === "rentcast";
 }

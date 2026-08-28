@@ -3,6 +3,10 @@ import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import { stateName } from "@/lib/forecast";
 import { headlineHomeValue } from "@/lib/homeValue";
+import {
+  BUILDING_RECORD_NOTICE,
+  plausibleHomeFigure,
+} from "@/lib/parcelSanity";
 import TaxForm from "./TaxForm";
 import AppealLetter from "./AppealLetter";
 
@@ -32,16 +36,41 @@ export default async function TaxesPage() {
   // run yet in this database, these come back undefined and the page shows
   // the setup form, exactly like "not set yet".
   const raw = property as any;
-  const assessedValue: number | null =
+  const storedAssessedValue: number | null =
     typeof raw.assessed_value === "number" ? raw.assessed_value : null;
   const assessedYear: number | null =
     typeof raw.assessed_year === "number" ? raw.assessed_year : null;
-  const purchasePrice: number | null =
+  const storedPurchasePrice: number | null =
     typeof raw.purchase_price === "number" ? raw.purchase_price : null;
 
-  const purchaseYear: number | null = property.purchase_date
-    ? Number(property.purchase_date.slice(0, 4)) || null
-    : null;
+  // THE BUILDING-RECORD GATE (src/lib/parcelSanity.ts). A condo's county
+  // record covers the whole building, so both numbers this page is built on
+  // can belong to the parcel rather than the unit. A tester in a mixed-use
+  // building was shown a $36,410,541 "County assessed value" and a
+  // $39,836,419 Prop 13 baseline under a green "Your assessment looks in
+  // line" - a verdict computed from two of the building's numbers, about a
+  // condo. Both go through the same gate, measured against the AVM, which is
+  // priced for the unit.
+  const sanityContext = {
+    unit: raw.unit,
+    propertyType: raw.property_type,
+    sqft: typeof raw.sqft === "number" ? raw.sqft : null,
+    estimate: typeof raw.market_value === "number" ? raw.market_value : null,
+  };
+  const assessedValue = plausibleHomeFigure(storedAssessedValue, sanityContext);
+  const purchasePrice = plausibleHomeFigure(storedPurchasePrice, sanityContext);
+  // Either figure was on file and the gate refused it. Drives the one honest
+  // line below, in place of the number and in place of the verdict.
+  const figuresHidden =
+    (storedAssessedValue != null && assessedValue == null) ||
+    (storedPurchasePrice != null && purchasePrice == null);
+
+  // Dropped with the price it belongs to: a purchase year with no purchase
+  // price behind it is the building's sale date, not this home's.
+  const purchaseYear: number | null =
+    property.purchase_date && !(storedPurchasePrice != null && purchasePrice == null)
+      ? Number(property.purchase_date.slice(0, 4)) || null
+      : null;
 
   const currentYear = new Date().getFullYear();
   const hasAssessment = assessedValue != null && assessedYear != null;
@@ -123,6 +152,14 @@ export default async function TaxesPage() {
       {!hasAssessment && (
         <div className="space-y-4">
           <div className="card space-y-2 text-center">
+            {/* Said first when there IS a county figure on file that the
+                building-record gate refused. Without this the page reads as
+                if the county had nothing, which is not what happened. */}
+            {figuresHidden && (
+              <p className="text-sm text-stone-600 dark:text-stone-300">
+                {BUILDING_RECORD_NOTICE}
+              </p>
+            )}
             <p className="text-sm text-stone-600 dark:text-stone-300">
               Grab your county assessment notice (or your most recent
               property tax bill). It lists an assessed value for your home
@@ -148,6 +185,14 @@ export default async function TaxesPage() {
               actually worth, Hearth needs what you paid and the year you
               bought, which live on the home value page.
             </p>
+            {/* The purchase price the county has IS on file here; it just
+                describes the building. Say so rather than letting this read
+                as "you never told us". */}
+            {figuresHidden && (
+              <p className="text-sm text-stone-600 dark:text-stone-300">
+                {BUILDING_RECORD_NOTICE}
+              </p>
+            )}
             <Link href="/value" className="btn-primary inline-block">
               Set up your home value
             </Link>

@@ -161,7 +161,7 @@ export default function Nav({
             themeToggle
             links={[
               { href: "/account", label: "Edit profile" },
-              { href: "/issues", label: "Issues" },
+              { href: "/issues", label: "Report a problem" },
               { href: "/account/household", label: "Household" },
               { href: "/account/notifications", label: "Notifications" },
               { href: "/account/privacy", label: "Your privacy rights" },

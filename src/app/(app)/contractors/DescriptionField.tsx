@@ -160,6 +160,12 @@ export default function DescriptionField({
         className="textarea"
         rows={3}
         minLength={20}
+        // A ceiling on the box, far above anything a real description needs.
+        // The server never trusts it (postJobAction caps the value it echoes
+        // into a failure URL at 1000 characters of its own accord, since a
+        // redirect Location header is not a place for an unbounded paste) -
+        // this just stops the box from becoming somewhere to paste a novel.
+        maxLength={2000}
         value={value}
         onChange={(e) => {
           setValue(e.target.value);

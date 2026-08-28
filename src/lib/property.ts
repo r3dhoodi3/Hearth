@@ -139,6 +139,11 @@ const PROPERTY_COLUMN_NAMES = [
   "beds",
   "baths",
   "lot_size_sqft",
+  // Read by the building-record sanity gate (src/lib/parcelSanity.ts): a condo
+  // or multi-family record is the BUILDING's, so its purchase price and county
+  // assessment must not be shown as this home's. Was absent from this list, so
+  // every page read it as undefined and the gate had only the unit to go on.
+  "property_type",
   "purchase_date",
   "ownership_status",
   "ownership_checked_at",

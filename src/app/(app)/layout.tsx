@@ -4,7 +4,11 @@ import {
   getProperties,
   homesForSwitcher,
 } from "@/lib/property";
-import { getCurrentContractor } from "@/lib/contractor";
+import {
+  getCurrentContractor,
+  landingFor,
+  preferredRole,
+} from "@/lib/contractor";
 import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
 import { hasPlus } from "@/lib/subscription";
@@ -37,7 +41,36 @@ export default async function AppLayout({
     // asked for the company row pays nothing extra.
     getCurrentContractor(),
   ]);
-  if (!active) redirect("/onboarding");
+  if (!active) {
+    // No claimed home. Sending EVERYONE here to the claim-a-home wizard is
+    // right for a homeowner and wrong for a pro who signed up through
+    // /contractor-signup and never finished company setup: with no contractors
+    // row yet, the signup-side stamp is the only thing that says which side
+    // they are on, and /dashboard silently deciding "homeowner" is how a
+    // contractor ended up being asked to claim a house.
+    //
+    // A ROW still outranks the stamp, exactly as everywhere else:
+    //   - a contractors row means they came here on purpose (ProNav's "Add
+    //     your home" points at /dashboard), so the wizard is the right answer
+    //     and nothing changes for them;
+    //   - homes that exist but resolved to no active one is a homeowner with a
+    //     data problem, not a side question, and /onboarding is still where
+    //     that lands today.
+    // Only the neither-row case is routed by the stamp, through the same
+    // landingFor() every other signed-in landing uses - contractor to
+    // /pro/onboarding, homeowner to /onboarding, no answer at all to the role
+    // picker rather than a guess.
+    if (contractor || homes.length > 0) redirect("/onboarding");
+    redirect(
+      landingFor({
+        hasPro: false,
+        hasHome: false,
+        preferred: preferredRole(
+          user?.user_metadata?.role ?? user?.app_metadata?.role
+        ),
+      })
+    );
+  }
 
   // Prefer the name from auth metadata (set at sign-up, always present) and fall
   // back to the profile row, then email.

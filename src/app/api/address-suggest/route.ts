@@ -72,7 +72,16 @@ function cacheSet(key: string, suggestions: AddressSuggestion[]): void {
 // account, so no number of signups can add up to a flood from Hearth's egress
 // IPs. See the reasoning at the call site below.
 const SUGGEST_GLOBAL_BUCKET = "suggest-global-min";
-const SUGGEST_GLOBAL_PER_MINUTE = 600;
+// The per-user limit below is 60/min. Ten people typing at once is therefore
+// worth up to 600/min of legitimate traffic - which is EXACTLY what this
+// ceiling used to be, so ten real homeowners in one household test could take
+// the suggestion list away from each other and the only symptom would be an
+// empty list. A ceiling that a plausible number of real users reaches is not a
+// ceiling, it is a bug with a rate limiter's face. Doubled to leave headroom
+// above what the per-user budgets can legitimately add up to, while still
+// stopping far short of anything Komoot would read as abuse - and the 10-minute
+// response cache below means real typing never gets close.
+const SUGGEST_GLOBAL_PER_MINUTE = 1200;
 
 // The last minute-window this process logged the trip in. A tripped ceiling
 // means every keystroke from every signed-in account arrives here, so logging
@@ -153,11 +162,11 @@ export async function GET(req: NextRequest) {
     // long as they decide it does. 60 a minute times enough signups is an
     // outage we cannot appeal.
     //
-    // 600 a minute owner-wide is ten simultaneous people typing at full tilt,
-    // which the launch metro will not produce for years, and it is a hard stop
-    // well below anything Komoot would notice as abuse. Same failure mode as
-    // everything else here: an empty list, and the typed address still goes
-    // through untouched.
+    // The ceiling has to sit ABOVE what the per-user budgets can legitimately
+    // sum to, or it fires on real people instead of on a flood - see
+    // SUGGEST_GLOBAL_PER_MINUTE above, which is why it is no longer 600. Same
+    // failure mode as everything else here: an empty list, and the typed
+    // address still goes through untouched.
     const { data: allowedGlobal } = await admin.rpc("rate_limit_hit", {
       p_bucket: SUGGEST_GLOBAL_BUCKET,
       p_limit: SUGGEST_GLOBAL_PER_MINUTE,

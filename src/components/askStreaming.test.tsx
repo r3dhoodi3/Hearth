@@ -185,7 +185,50 @@ describe("a streamed answer", () => {
     expect(screen.queryByText(/OPTIONS/)).not.toBeInTheDocument();
   });
 
-  it("keeps the text that arrived when the connection drops mid-answer", async () => {
+  // Markdown caught mid-token: "**Getting ready for winter" has no closing
+  // "**" yet, and the renderer needs both halves to match - so the raw
+  // asterisks were sitting on screen for as long as the rest of the line took
+  // to arrive. The growing bubble goes through the same renderer as a finished
+  // reply, told the text is still partial.
+  it("renders bold as bold while the answer is still streaming, never as asterisks", async () => {
+    const stream = makeStream();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.response));
+
+    render(<AskHearth fill />);
+    await ask("How do I get ready for winter?");
+
+    // The closing "**" has not arrived yet.
+    stream.push(delta("**Getting ready for winter"));
+    await settle();
+
+    expect(document.querySelector("strong")?.textContent).toBe(
+      "Getting ready for winter"
+    );
+    expect(document.body.textContent).not.toContain("**");
+
+    // The rest of the line lands: still one bold heading, still no asterisks.
+    stream.push(delta("**\n\n- Drain the hose bibs."));
+    await settle();
+
+    expect(document.querySelector("strong")?.textContent).toBe(
+      "Getting ready for winter"
+    );
+    expect(document.body.textContent).not.toContain("**");
+
+    stream.push(
+      done({
+        answer: "**Getting ready for winter**\n\n- Drain the hose bibs.",
+      })
+    );
+    await settle();
+
+    expect(document.querySelector("strong")?.textContent).toBe(
+      "Getting ready for winter"
+    );
+    expect(screen.getByText("Drain the hose bibs.")).toBeInTheDocument();
+  });
+
+  it("keeps the text that arrived when the connection drops mid-answer, and persists it as a partial answer", async () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
@@ -202,13 +245,19 @@ describe("a streamed answer", () => {
     expect(
       screen.getByText("It is probably the expansion tank.")
     ).toBeInTheDocument();
-    // The question goes back in the composer so retrying is one tap.
-    expect(screen.getByPlaceholderText("Ask anything")).toHaveValue(
-      "What is that noise?"
+
+    // Persisted once, marked partial, so a reload shows this answer instead
+    // of an orphaned question with "That took too long. Try asking again."
+    const stored = JSON.parse(
+      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
     );
+    const last = stored[stored.length - 1];
+    expect(last.role).toBe("assistant");
+    expect(last.content).toBe("It is probably the expansion tank.");
+    expect(last.partial).toBe(true);
   });
 
-  it("says so plainly when the connection drops before a single word", async () => {
+  it("says so plainly when the connection drops before a single word, without persisting the apology", async () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
@@ -221,6 +270,22 @@ describe("a streamed answer", () => {
     expect(
       screen.getByText("Something went wrong, try again.")
     ).toBeInTheDocument();
+    // Nothing arrived worth keeping, so the question goes back in the
+    // composer for a one-tap retry.
+    expect(screen.getByPlaceholderText("Ask anything")).toHaveValue(
+      "Anything there?"
+    );
+
+    // The apology itself is NOT saved: the user's question stays the newest
+    // persisted message, so a reload still treats this as unanswered
+    // (Retry / Delete) instead of showing a saved apology as a real answer.
+    const stored = JSON.parse(
+      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+    );
+    expect(stored[stored.length - 1]).toMatchObject({
+      role: "user",
+      content: "Anything there?",
+    });
   });
 });
 

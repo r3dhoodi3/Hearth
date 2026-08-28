@@ -44,7 +44,15 @@ export default function Error({
           <Link href="/" className="btn-secondary">
             Go home
           </Link>
-          <Link href="/dashboard" className="btn-secondary">
+          {/* /get-started, not /dashboard: this boundary catches errors from
+              BOTH sides of the app (a failed Finish setup in the pro signup
+              wizard renders it too), and a hard link to the homeowner
+              dashboard sent a contractor with no company row yet into the
+              claim-your-home wizard. /get-started resolves the side on the
+              server with the same landingFor() every other landing uses, so a
+              pro mid-signup comes back to /pro/onboarding and a homeowner
+              still lands on /dashboard. */}
+          <Link href="/get-started" className="btn-secondary">
             Your dashboard
           </Link>
         </div>

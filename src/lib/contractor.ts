@@ -5,6 +5,7 @@ import { getUser, getVerifiedUser } from "@/lib/auth";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import type { Contractor } from "@/lib/database.types";
 import type { AuthRoleDecision, Role, Sides } from "@/lib/roleRouting";
+import { preferredRole as narrowPreferredRole } from "@/lib/roleRouting";
 
 // Every contractors column any caller of getCurrentContractor() actually
 // reads, and nothing else. Traced from all ~60 call sites: the pro layout and
@@ -64,11 +65,29 @@ const CONTRACTOR_COLUMNS = [
   "insurance_expires",
 ].join(", ");
 
+// The contractors lookup, plus whether it actually ran.
+//
+// `checked` is false ONLY when the query could not be completed - a DB outage,
+// a permissions failure, a connection reset. It is true for a clean "no such
+// row", which is a real answer.
+//
+// The distinction exists because almost every caller may safely conflate the
+// two ("no evidence they're a pro" is the safe default for opening a side),
+// but one caller may not: chooseRoleAction (src/app/welcome/role/actions.ts)
+// REFUSES to re-run the role choice for an established account, and decides
+// that from the absence of a row. A failed read that looks like "no rows"
+// there is a fail-OPEN: it would let the picker re-stamp an account whose
+// contractors row it simply could not see.
+export type ContractorLookup = {
+  contractor: Contractor | null;
+  checked: boolean;
+};
+
 // The current user's contractor company, or null if they aren't a pro.
 // A user is treated as a contractor iff a contractors row links to their uid.
 // Cached per request so repeated calls don't re-query.
-export const getCurrentContractor = cache(
-  async (): Promise<Contractor | null> => {
+export const getContractorLookup = cache(
+  async (): Promise<ContractorLookup> => {
     // Deliberately NOT src/lib/auth.ts's getUser(): that helper trusts
     // getSession(), which reads the user id straight off the (unverified)
     // cookie. Below we hand that id to the admin client, which bypasses RLS
@@ -89,8 +108,9 @@ export const getCurrentContractor = cache(
     // round trip to Supabase's auth server. getVerifiedUser() is
     // React-cache()-wrapped, so every one of those call sites now shares ONE
     // verification per request instead of paying its own.
+    // No signed-in user is a settled answer, not a failed read.
     const user = await getVerifiedUser();
-    if (!user) return null;
+    if (!user) return { contractor: null, checked: true };
 
     // Admin client, not the user client: 0067 stripped column-level SELECT on
     // contractors down to the public columns, so a user-client `select *`
@@ -120,17 +140,38 @@ export const getCurrentContractor = cache(
     // falls back to the old wide select instead, exactly as before. Any other
     // error keeps the previous behavior too (null, no throw).
     if (error) {
-      if (!isMissingSchemaError(error)) return null;
-      const { data: wide } = await supabase
+      // Anything that is NOT the missing-column fingerprint is a read we could
+      // not complete: null, as before, but flagged so the one caller that
+      // refuses on "no row" can tell the difference.
+      if (!isMissingSchemaError(error)) {
+        console.error("getCurrentContractor lookup failed:", error.message ?? error);
+        return { contractor: null, checked: false };
+      }
+      const { data: wide, error: wideError } = await supabase
         .from("contractors")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
-      return wide ?? null;
+      if (wideError) {
+        console.error(
+          "getCurrentContractor wide fallback failed:",
+          wideError.message ?? wideError
+        );
+        return { contractor: null, checked: false };
+      }
+      return { contractor: wide ?? null, checked: true };
     }
 
-    return (data as Contractor | null) ?? null;
+    return { contractor: (data as Contractor | null) ?? null, checked: true };
   }
+);
+
+// The row itself, for the ~60 call sites that only ever ask "is there a
+// company, and what is in it". Shares getContractorLookup()'s per-request
+// cache, so nothing pays an extra query for the narrower answer.
+export const getCurrentContractor = cache(
+  async (): Promise<Contractor | null> =>
+    (await getContractorLookup()).contractor
 );
 
 // Cheap role check - reuses the cached contractor lookup.
@@ -150,6 +191,7 @@ export {
   destinationForSignIn,
   resolveAuthRole,
   landingFor,
+  preferredRole,
   ROLE_PICKER_PATH,
 } from "@/lib/roleRouting";
 
@@ -190,8 +232,10 @@ export const getRole = cache(async (): Promise<Role | null> => {
 //
 // A read failure reads as "no home". Same posture as getCurrentContractor():
 // the cost of being wrong is one misrouted request that self-corrects, and
-// every caller only ever OPENS a side on the strength of a row.
-async function hasHomeSide(): Promise<boolean> {
+// every caller only ever OPENS a side on the strength of a row. `checked`
+// carries the same distinction ContractorLookup does, for the one caller that
+// refuses on the absence of a row rather than opening on its presence.
+async function hasHomeSide(): Promise<{ hasHome: boolean; checked: boolean }> {
   const supabase = await createClient();
   // No .eq("user_id", ...): the "properties member select" policy (0048) is
   // what makes a shared home visible, and filtering by owner would hide it.
@@ -200,9 +244,9 @@ async function hasHomeSide(): Promise<boolean> {
     .select("id", { count: "exact", head: true });
   if (error) {
     console.error("hasHomeSide failed:", error.message ?? error);
-    return false;
+    return { hasHome: false, checked: false };
   }
-  return (count ?? 0) > 0;
+  return { hasHome: (count ?? 0) > 0, checked: true };
 }
 
 // Both sides of the current account plus the side they prefer to land on.
@@ -211,19 +255,26 @@ async function hasHomeSide(): Promise<boolean> {
 // costs one extra count query and nothing else.
 export const getSides = cache(async (): Promise<Sides> => {
   const user = await getUser();
-  if (!user) return { hasPro: false, hasHome: false, preferred: null };
+  if (!user) {
+    return { hasPro: false, hasHome: false, preferred: null, checked: true };
+  }
 
-  const meta = (user.user_metadata?.role ?? user.app_metadata?.role) as
-    | string
-    | undefined;
-  const preferred =
-    meta === "contractor" || meta === "homeowner" ? meta : null;
+  const preferred = narrowPreferredRole(
+    user.user_metadata?.role ?? user.app_metadata?.role
+  );
 
-  const [contractor, hasHome] = await Promise.all([
-    getCurrentContractor(),
+  const [pro, home] = await Promise.all([
+    getContractorLookup(),
     hasHomeSide(),
   ]);
-  return { hasPro: contractor !== null, hasHome, preferred };
+  return {
+    hasPro: pro.contractor !== null,
+    hasHome: home.hasHome,
+    preferred,
+    // Both halves had to actually run for a false/false answer to mean "this
+    // account has built nothing". See Sides.checked in ./roleRouting.
+    checked: pro.checked && home.checked,
+  };
 });
 
 // Does a contractors row link to this auth user? Admin client, keyed on the

@@ -8,6 +8,7 @@ import {
   FOUNDER,
   LEAD_TIER_FEES,
   MAJOR_INTRO_FEE,
+  GHOST_PROTECTION_DAYS,
   COLD_START_FREE_ALERTS,
   PRO_PLAN,
 } from "@/lib/constants";
@@ -49,10 +50,16 @@ function Check({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-// Canonical first-application guarantee sentence. Used verbatim everywhere the
-// guarantee is described on this page so the terms can never drift.
+// Two DIFFERENT credits, kept as two separate canonical sentences so they can
+// never blur into one guarantee. Ghost protection is unlimited and repeats
+// every time; the first-application guarantee is a one-time credit. Used
+// verbatim everywhere either is described on this page so the terms can
+// never drift.
+const GHOST_PROTECTION_GUARANTEE = `If the homeowner never responds within ${GHOST_PROTECTION_DAYS} days, you always get the fee back as credit, every time, no limit.`;
 const FIRST_APPLICATION_GUARANTEE =
-  "Not chosen on your first application? The fee comes back automatically as wallet credit you can spend on any job within 60 days. It's credit toward future leads, not cash back to your card.";
+  "If they do respond but pick someone else, you get that one back as credit too, but only on your very first paid application. After that, a lost bid is a lost fee.";
+const CREDIT_NOT_CASH_LINE =
+  "Either way it is Hearth credit in your wallet, not money back to your card.";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -232,6 +239,11 @@ export default async function ProsLanding(props: {
               other pros already have. On Hearth you see the price first and
               only pay when you choose to apply.
             </p>
+            <p className="mt-2 max-w-xl text-sm text-stone-500 dark:text-stone-400">
+              Most leads cost ${LEAD_TIER_FEES.light} to ${LEAD_TIER_FEES.major}{" "}
+              depending on the trade; your first big-ticket lead is $
+              {MAJOR_INTRO_FEE}.
+            </p>
             <Link
               href={signupHref}
               className="btn-primary mt-8 px-6 py-3 text-base shadow-md"
@@ -272,26 +284,25 @@ export default async function ProsLanding(props: {
       <div className="mt-14 grid gap-4 sm:grid-cols-2">
         <section className="rounded-2xl border border-bark-100 bg-bark-50 p-6 text-center shadow-sm dark:border-bark-700 dark:bg-bark-700/20">
           <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-            Ghost protection: if the lead is dead, your fee comes back as
-            credit.
+            Ghost protection: no reply, no risk. Every time.
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
-            If a homeowner doesn&apos;t respond within 7 days, your apply fee
-            comes back to your wallet automatically as credit toward your next
-            application. You don&apos;t have to fill out a form, open a support
-            ticket, or argue with anyone. It&apos;s credit, not cash back to
-            your card.
+            {GHOST_PROTECTION_GUARANTEE} You don&apos;t have to fill out a
+            form, open a support ticket, or argue with anyone.
           </p>
         </section>
         <section className="rounded-2xl border border-bark-100 bg-bark-50 p-6 text-center shadow-sm dark:border-bark-700 dark:bg-bark-700/20">
           <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-            Your first application is protected.
+            Your very first application is protected too.
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
             {FIRST_APPLICATION_GUARANTEE} Licensed pros get this once.
           </p>
         </section>
       </div>
+      <p className="mx-auto mt-4 max-w-xl text-center text-xs text-stone-500 dark:text-stone-400">
+        {CREDIT_NOT_CASH_LINE}
+      </p>
 
       {/* Trust band: a real reachable team is the trust signal a national
           lead platform can never offer. */}
@@ -461,25 +472,22 @@ export default async function ProsLanding(props: {
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
               <span>
                 Max 3 pros per job, so you&apos;re never competing against a crowd
-                of other pros. You never lose
-                money on a job you didn&apos;t get: if the homeowner picks
-                someone else, your fee comes back on its own as wallet credit,
-                good for 60 days.
+                of other pros.
               </span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
-              <span>
-                Ghost protection: if the homeowner doesn&apos;t respond
-                within 7 days, your fee comes back automatically as wallet
-                credit for your next application.
-              </span>
+              <span>Ghost protection: {GHOST_PROTECTION_GUARANTEE}</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
               <span>
                 {FIRST_APPLICATION_GUARANTEE} Licensed pros get this once.
               </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
+              <span>{CREDIT_NOT_CASH_LINE}</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />

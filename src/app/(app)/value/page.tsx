@@ -9,6 +9,10 @@ import {
   calculateEquity,
   headlineHomeValue,
 } from "@/lib/homeValue";
+import {
+  BUILDING_RECORD_NOTICE,
+  plausibleHomeFigure,
+} from "@/lib/parcelSanity";
 import ValueForm from "./ValueForm";
 import ValueAutoFetch from "./ValueAutoFetch";
 import RefreshValue from "./RefreshValue";
@@ -76,7 +80,7 @@ export default async function ValuePage() {
   // migration has not run yet in this database, these just come back
   // undefined and the page degrades exactly like "not set yet".
   const raw = property as any;
-  const purchasePrice: number | null =
+  const storedPurchasePrice: number | null =
     typeof raw.purchase_price === "number" ? raw.purchase_price : null;
   const mortgageBalance: number | null =
     typeof raw.mortgage_balance === "number" ? raw.mortgage_balance : null;
@@ -87,11 +91,31 @@ export default async function ValuePage() {
   const marketValueHigh: number | null =
     typeof raw.market_value_high === "number" ? raw.market_value_high : null;
 
+  // THE BUILDING-RECORD GATE (src/lib/parcelSanity.ts). A condo's county
+  // record is the whole building's, so its last recorded sale can be the
+  // developer buying the parcel: a tester in a mixed-use building read
+  // "Bought for $34,000,000 in 2017, down $33,201,000 since" under a $799,000
+  // estimate. The AVM is the estimate the gate measures against, never the
+  // purchase price itself, so a bad price can never raise its own ceiling.
+  const purchasePrice = plausibleHomeFigure(storedPurchasePrice, {
+    unit: raw.unit,
+    propertyType: raw.property_type,
+    sqft: typeof raw.sqft === "number" ? raw.sqft : null,
+    estimate: marketValue,
+  });
+  // A stored figure that the gate refused. Drives the one honest line below,
+  // in place of the number: staying silent would read as "we have nothing",
+  // which is not what happened.
+  const purchasePriceHidden = storedPurchasePrice != null && purchasePrice == null;
+
   // purchase_date already exists on properties (since migration 0001); only
   // the year matters here, so it is stored as YYYY-01-01 and parsed back out.
-  const purchaseYear: number | null = property.purchase_date
-    ? Number(property.purchase_date.slice(0, 4)) || null
-    : null;
+  // Ignored along with the price when the gate refused it: a purchase year
+  // with no purchase price is the building's sale date, not this home's.
+  const purchaseYear: number | null =
+    property.purchase_date && !purchasePriceHidden
+      ? Number(property.purchase_date.slice(0, 4)) || null
+      : null;
 
   const currentYear = new Date().getFullYear();
   const hasPurchaseData = purchasePrice != null && purchaseYear != null;
@@ -166,6 +190,15 @@ export default async function ValuePage() {
       {!hasPurchaseData && !usingMarketValue && (
         <div className="space-y-4">
           <div className="card space-y-2 text-center">
+            {/* The building-record case first: this owner has a county sale
+                price on file, it is just not theirs, and telling them we
+                "just need" a number without saying why would leave them
+                wondering where the one they saw went. */}
+            {purchasePriceHidden && (
+              <p className="text-sm text-stone-600 dark:text-stone-300">
+                {BUILDING_RECORD_NOTICE}
+              </p>
+            )}
             <p className="text-sm text-stone-600 dark:text-stone-300">
               We just need what you paid and the year you bought your home.
               From there we track your home&apos;s estimated value and your
@@ -220,6 +253,14 @@ export default async function ValuePage() {
                   </>
                 )}
               </p>
+            ) : purchasePriceHidden ? (
+              /* The county DID hand back a sale price - it just belongs to the
+                 whole building, not this unit. Say that plainly where the
+                 number would have been, rather than showing it or pretending
+                 there was nothing on file. */
+              <p className="text-xs text-bark-700 dark:text-stone-300">
+                {BUILDING_RECORD_NOTICE}
+              </p>
             ) : (
               <p className="text-xs text-bark-700 dark:text-stone-300">
                 Add what you paid and the year you bought, and you&apos;ll
@@ -270,7 +311,7 @@ export default async function ValuePage() {
                 ? "Your mortgage balance is higher than your estimated value right now. This can happen with a recent purchase or a slow local market, and it usually corrects as you pay down the loan and prices rise."
                 : mortgageBalance
                 ? `Estimated value minus your ${money(mortgageBalance)} mortgage balance.`
-                : "Estimated value, since no mortgage balance is on file."}
+                : "We're showing your full home value as equity because you haven't added a mortgage yet. Add your loan balance for a real number."}
             </p>
           </div>
 

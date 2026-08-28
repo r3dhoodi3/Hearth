@@ -305,7 +305,7 @@ export default async function ForecastPage() {
               {upgradeSavings && (
                 <div className="rounded-lg bg-bark-50 p-3 dark:bg-bark-700/30">
                   <p className="text-sm text-bark-700 dark:text-stone-300">
-                    Your HVAC is about {upgradeSavings.hvacAge} years old, and
+                    Your heating and cooling (HVAC) is about {upgradeSavings.hvacAge} years old, and
                     older units waste energy. A modern high-efficiency unit
                     could trim roughly{" "}
                     <span className="font-semibold">

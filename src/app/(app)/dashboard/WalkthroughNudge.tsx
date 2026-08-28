@@ -49,12 +49,21 @@ export default function WalkthroughNudge({ count }: { count: number }) {
           Confirm your home&apos;s details, each one makes your answers and
           score more accurate.
         </p>
-        <Link
-          href="/walkthrough"
-          className="btn-primary mt-2 inline-block text-sm"
-        >
-          Walk your home
-        </Link>
+        {/* Two ways in, said out loud. The photo walk is the good version,
+            but "I am not walking around my house with my phone right now" is
+            a normal answer, and it used to be a thing you could only find by
+            starting the walk anyway. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Link href="/walkthrough" className="btn-primary inline-block text-sm">
+            Walk your home
+          </Link>
+          <Link
+            href="/walkthrough?mode=manual"
+            className="btn-secondary inline-block text-sm"
+          >
+            Type it in instead
+          </Link>
+        </div>
       </div>
       <button
         type="button"

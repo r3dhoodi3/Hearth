@@ -20,6 +20,9 @@ import {
   shouldRecordOwnershipCheck,
 } from "@/lib/ownershipMatch";
 import { claimAddressGate } from "@/lib/parcelGate";
+import { plausibleHomeFigure } from "@/lib/parcelSanity";
+import { sameStreetAddress } from "@/lib/addressMatch";
+import { verifyAddressExists } from "@/lib/addressVerify";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { ownsPlus, getExtraHomeSlots } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
@@ -307,29 +310,39 @@ export async function lookupParcelAction(
       (unit ?? "").trim().slice(0, MAX_UNIT) || null
     );
 
-  // The records source ran and knows nothing about this address. Refuse it
-  // rather than walking on to the confirm step with an empty form, which is
-  // what "123 Fake St, 92648" used to do: every fact blank, the address
-  // echoed back as if it had been found, and a home created for a house that
-  // does not exist. Everything downstream - the ownership match, the pro
-  // matching, the health score, the alerts - is about a real parcel, so the
-  // honest answer here is no.
+  // IS THIS A REAL ADDRESS?
   //
-  // Guarded on hasRecordsSource() because source "none" has two meanings (see
-  // blankFacts in src/lib/parcel.ts): "the county has no such address" and
-  // "no RENTCAST_API_KEY is configured, so nothing was looked up". Only the
-  // first is a refusal. Without the guard, an environment with no key would
-  // reject every address in Orange County.
+  // A records MISS is no longer the test. It used to be: source "none" from a
+  // configured RentCast refused the address outright, on the reading that the
+  // county would know every real home. It does not. On 2026-08-27 five of ten
+  // personas were stopped on plausible Orange County addresses, and the
+  // follow-up measured four of them straight against the API - 1920 Main St
+  // Irvine, 800 Baker St Costa Mesa, 1201 Magnolia Ave Anaheim, 1620 E 1st St
+  // Santa Ana - each a hard 404 in every address format tried, while a
+  // known-good address answered in a second. RentCast's coverage of the launch
+  // metro is patchy, so refusing on its silence turns one vendor's data gap
+  // into a locked front door.
   //
-  // Written as an explicit `=== "none"` on purpose, NOT as "anything that
-  // isn't rentcast". source "unavailable" (a 401 from a bad key, a 429, a 5xx,
-  // a timeout - see ParcelFacts in src/lib/parcel.ts) means we never got an
-  // answer, and on 2026-08-24 a bad key on the host turned that into a day of
-  // real homeowners being told their address does not exist. An "unavailable"
-  // now walks on to the confirm step with blank facts and a plain note, which
-  // is the manual-entry fallback parcel.ts has always promised.
-  if (publicFacts.source === "none" && hasRecordsSource()) {
-    return { ok: false, error: ADDRESS_NOT_FOUND_MESSAGE, notFound: true };
+  // So a miss now walks on to the confirm step as manual entry, with copy that
+  // says exactly that (OnboardingForm.tsx), no parcel facts attached, and
+  // ownership left unverified rather than recorded (shouldRecordOwnershipCheck
+  // in src/lib/ownershipMatch.ts).
+  //
+  // The fake-address job moves to the geocoder, which is a better fit for it:
+  // Photon knows all four of those addresses with a house number and knows no
+  // invented one. Only asked when RentCast did NOT confirm the address - a
+  // record IS confirmation, and there is no sense spending a second lookup to
+  // re-learn it.
+  //
+  // FAILS OPEN by construction: verifyAddressExists returns "unavailable" for
+  // a timeout, a non-ok status, or an empty answer, and only "no_match"
+  // refuses. Conflating "we couldn't check" with "this does not exist" is the
+  // 2026-08-24 outage, and it is not getting repeated with a new vendor.
+  if (publicFacts.source !== "rentcast") {
+    const verdict = await verifyAddressExists(street.trim(), zip.trim());
+    if (verdict === "no_match") {
+      return { ok: false, error: ADDRESS_NOT_FOUND_MESSAGE, notFound: true };
+    }
   }
 
   return { ok: true, facts: publicFacts };
@@ -521,44 +534,52 @@ export async function claimPropertyAction(
   // the ownership check further down already makes.
   //
   // The decision itself is claimAddressGate (src/lib/parcelGate.ts), which is
-  // where its reasoning and its tests live. In short: only an explicit
-  // `source: "none"` from a CONFIGURED source refuses as "no such address". A
-  // lookup that threw, or one that came back "unavailable" (401/429/5xx/
-  // timeout - see ParcelFacts in src/lib/parcel.ts) keeps the tolerant
-  // behavior, because "we couldn't check" is not "this address does not
-  // exist" - that conflation is what refused every real address for a day on
-  // 2026-08-24. The one intolerant case is an EDITED street whose re-lookup
-  // the rate limiter refused: nothing has ever looked at that string, so
-  // storing it would create a home from unverified typing.
+  // where its reasoning and its tests live. In short: the GEOCODER decides
+  // whether the address is real, and only its explicit "no_match" refuses. A
+  // records miss does not refuse any more - RentCast's coverage of the launch
+  // metro was measured on 2026-08-28 and is patchy enough that its silence
+  // says nothing about whether a home exists (see lookupParcelAction above).
+  // Neither does a records outage, or a geocoder outage, or a lookup that
+  // threw: "we couldn't check" is not "this address does not exist", and that
+  // conflation is what refused every real address for a day on 2026-08-24. The
+  // one other intolerant case is an EDITED street whose re-lookup the rate
+  // limiter refused: no records call has ever been spent on that string, so
+  // there are no facts to attach to it.
   //
   // claimFacts is also what the ownership check at the end of this action
   // uses, instead of a third lookupParcel with identical arguments. Each call
-  // waits out its own 8s timeout when the source is down, and three of them
-  // meant up to 24 seconds on the claim button.
+  // waits out its own timeout when the source is down, and three of them meant
+  // the better part of a minute on the claim button.
   // =========================================================================
   let claimFacts: ParcelFacts | null = relookupFacts;
-  if (hasRecordsSource()) {
-    if (!addressEdited) {
-      try {
-        claimFacts = await lookupParcel(addressLine1, claimZip);
-      } catch (err) {
-        console.error("Claim-time address verification lookup failed:", err);
-        claimFacts = null;
-      }
+  if (hasRecordsSource() && !addressEdited) {
+    try {
+      claimFacts = await lookupParcel(addressLine1, claimZip);
+    } catch (error) {
+      console.error("Claim-time address verification lookup failed:", error);
+      claimFacts = null;
     }
-    const gate = claimAddressGate({
-      hasRecordsSource: true,
-      addressEdited,
-      relookupBlocked,
-      facts: claimFacts,
-    });
-    if (gate.action === "refuse") {
-      return err(
-        gate.reason === "lookup_blocked"
-          ? "Too many address lookups right now. Please try again in a bit."
-          : ADDRESS_NOT_FOUND_MESSAGE
-      );
-    }
+  }
+  // Same rule as the Continue step: a confirmed county record IS proof the
+  // address is real, so the geocoder is only asked when there is no record.
+  // Both calls hit the same 10-minute verdict cache (src/lib/addressVerify.ts),
+  // so a normal signup asks Photon once, not twice.
+  const addressVerdict =
+    claimFacts?.source === "rentcast"
+      ? ("match" as const)
+      : await verifyAddressExists(addressLine1, claimZip);
+  const gate = claimAddressGate({
+    hasRecordsSource: hasRecordsSource(),
+    addressEdited,
+    relookupBlocked,
+    addressVerdict,
+  });
+  if (gate.action === "refuse") {
+    return err(
+      gate.reason === "lookup_blocked"
+        ? "Too many address lookups right now. Please try again in a bit."
+        : ADDRESS_NOT_FOUND_MESSAGE
+    );
   }
 
   // A parcel-derived field: from the fresh lookup when the address was edited,
@@ -566,32 +587,81 @@ export async function claimPropertyAction(
   // columns are numeric, integer and text respectively.
   const factString = (v: number | string | null | undefined): string | null =>
     v === null || v === undefined ? null : String(v);
+  // =========================================================================
+  // DOES THE RECORD WE FOUND ACTUALLY DESCRIBE THE ADDRESS BEING CLAIMED?
+  //
+  // A tester picked "1770 South Harbor Boulevard" from the suggestion list.
+  // RentCast answered with a record for 2170 S Harbor Blvd - a real record,
+  // for a different property - and the form swapped it in silently, so the
+  // claim step and every page after it showed an address she had never typed.
+  // The confirm step now keeps HER line in the street box and offers the
+  // county's as a choice (OnboardingForm.tsx); this is the server half, and it
+  // is deliberately not a posted flag but a comparison the server makes for
+  // itself, so a hand-made post cannot decide it either way.
+  //
+  // sameStreetAddress (src/lib/addressMatch.ts) compares house number and
+  // street tokens and ignores the unit, so "1770 South Harbor Boulevard" and
+  // "1770 S Harbor Blvd Unit 204" are the same address and "2170 S Harbor
+  // Blvd" is not.
+  //
+  // An UNEDITED claim needs no comparison: unedited means the street being
+  // claimed IS the line the lookup returned, so the facts describe it by
+  // definition. Only an edited one - which is what keeping your own address
+  // over the county's amounts to - is checked.
+  //
+  // THERE ALSO HAS TO BE A RECORD. The `source === "rentcast"` half applies to
+  // both branches as of 2026-08-28, and it is load-bearing now in a way it was
+  // not before: a records miss used to be refused outright a few lines up, so
+  // no claim could reach here without a real record behind it. Misses walk on
+  // now, and every parcel-derived value on an unedited claim is read back out
+  // of a HIDDEN FORM FIELD - which a hand-made POST fills in with whatever it
+  // likes. Without this, "123 Fake St" could arrive carrying an assessor's
+  // parcel number, a sale price and an assessed value that no source ever
+  // returned. If nothing was found, nothing is written.
+  //
+  // When it does not match, every parcel-derived field below lands as null.
+  // The home is still theirs to claim; it just arrives with none of another
+  // property's numbers on it. The visible fields they can see and correct -
+  // city, state, year built, size, beds, baths, lot size, property type - are
+  // unaffected, same as everywhere else on this screen.
+  const parcelFactsMatchClaim =
+    claimFacts != null &&
+    claimFacts.source === "rentcast" &&
+    (!addressEdited ||
+      sameStreetAddress(addressLine1, claimFacts.address_line1));
+
   const parcelNum = (
     key: string,
     value: number | null | undefined,
     min: number,
     max: number
   ) =>
-    boundedNumber(
-      addressEdited ? factString(value) : formData.get(key),
-      min,
-      max
-    );
+    !parcelFactsMatchClaim
+      ? null
+      : boundedNumber(
+          addressEdited ? factString(value) : formData.get(key),
+          min,
+          max
+        );
   const parcelInt = (
     key: string,
     value: number | null | undefined,
     min: number,
     max: number
   ) =>
-    boundedInt(addressEdited ? factString(value) : formData.get(key), min, max);
+    !parcelFactsMatchClaim
+      ? null
+      : boundedInt(addressEdited ? factString(value) : formData.get(key), min, max);
   const parcelText = (
     key: string,
     value: string | null | undefined,
     max: number
   ) =>
-    addressEdited
-      ? (value ?? "").trim().slice(0, max) || null
-      : cappedFieldOrNull(formData, key, max);
+    !parcelFactsMatchClaim
+      ? null
+      : addressEdited
+        ? (value ?? "").trim().slice(0, max) || null
+        : cappedFieldOrNull(formData, key, max);
 
   // Every number on the claim is client input (the confirm step posts the
   // RentCast figures as hidden fields, and the owner can edit the visible
@@ -627,7 +697,10 @@ export async function claimPropertyAction(
   // Both blobs are parcel-derived, so an edited address takes them from the
   // fresh lookup and never parses the posted copy at all.
   let propertyTaxHistory: { year: number; amount: number }[] | null = null;
-  if (addressEdited) {
+  if (!parcelFactsMatchClaim) {
+    // Another property's tax history, same as every other parcel fact here.
+    propertyTaxHistory = null;
+  } else if (addressEdited) {
     propertyTaxHistory = relookupFacts?.property_tax_history ?? null;
   } else {
     try {
@@ -638,7 +711,11 @@ export async function claimPropertyAction(
     }
   }
   let systemFacts: Record<string, string> | null = null;
-  if (addressEdited) {
+  if (!parcelFactsMatchClaim) {
+    // The other building's roof and foundation. The starter systems seed
+    // blank instead, which is what they did before RentCast was wired up.
+    systemFacts = {};
+  } else if (addressEdited) {
     systemFacts = relookupFacts?.system_facts ?? {};
   } else {
     try {
@@ -664,6 +741,39 @@ export async function claimPropertyAction(
   const propertyType = isAllowedValue(PROPERTY_TYPES, rawPropertyType)
     ? rawPropertyType
     : null;
+
+  // THE BUILDING-RECORD GATE (src/lib/parcelSanity.ts), applied at the WRITE,
+  // not only at the read. RentCast returns the building's record for a street
+  // line, so a condo claim can arrive carrying the parcel's own sale price and
+  // county assessment: a real tester's home was stored with a $34,000,000
+  // purchase price and a $36,410,541 assessed value, which /value and /taxes
+  // then printed as hers. Storing them and hiding them later would leave the
+  // wrong numbers on the row for every future reader (the digest cron, the
+  // appeal letter, an export), so they are refused here as well.
+  //
+  // The AVM is what the gate measures against, never the purchase price, so a
+  // bad price can't raise its own ceiling. Read once, and reused by
+  // extendedRow below.
+  const claimMarketValue = parcelNum(
+    "market_value",
+    relookupFacts?.market_value,
+    0,
+    1_000_000_000
+  );
+  const sanityContext = {
+    unit,
+    propertyType,
+    sqft: int("sqft", 1, 1_000_000),
+    estimate: claimMarketValue,
+  };
+  const claimPurchasePrice = plausibleHomeFigure(
+    parcelNum("purchase_price", relookupFacts?.purchase_price, 0, 1_000_000_000),
+    sanityContext
+  );
+  const claimAssessedValue = plausibleHomeFigure(
+    parcelNum("assessed_value", relookupFacts?.assessed_value, 0, 1_000_000_000),
+    sanityContext
+  );
 
   const baseRow = {
     user_id: user.id,
@@ -695,29 +805,25 @@ export async function claimPropertyAction(
     // Frozen facts, all four: the last recorded sale and the county
     // assessment are statements about a specific parcel, not about whatever
     // street line the form happens to be carrying.
-    purchase_date: validPurchaseDate(
-      addressEdited
-        ? (relookupFacts?.purchase_date ?? null)
-        : (formData.get("purchase_date") as string) || null
-    ),
-    purchase_price: parcelNum(
-      "purchase_price",
-      relookupFacts?.purchase_price,
-      0,
-      1_000_000_000
-    ),
-    assessed_value: parcelNum(
-      "assessed_value",
-      relookupFacts?.assessed_value,
-      0,
-      1_000_000_000
-    ),
-    assessed_year: parcelInt(
-      "assessed_year",
-      relookupFacts?.assessed_year,
-      1700,
-      2100
-    ),
+    // The sale DATE goes only where the sale PRICE goes: a purchase year with
+    // no price behind it is the building's transfer date, and /value would
+    // still model from it.
+    purchase_date:
+      claimPurchasePrice == null
+        ? null
+        : validPurchaseDate(
+            addressEdited
+              ? (relookupFacts?.purchase_date ?? null)
+              : (formData.get("purchase_date") as string) || null
+          ),
+    purchase_price: claimPurchasePrice,
+    assessed_value: claimAssessedValue,
+    // Same rule for the assessment year: it labels a figure that is not being
+    // stored.
+    assessed_year:
+      claimAssessedValue == null
+        ? null
+        : parcelInt("assessed_year", relookupFacts?.assessed_year, 1700, 2100),
   };
   // Written as a spread-in delta, not a field on the row, so a single-family
   // claim (by far the common case) posts exactly the same shape it always has
@@ -740,12 +846,8 @@ export async function claimPropertyAction(
     hoa_fee: parcelNum("hoa_fee", relookupFacts?.hoa_fee, 0, 100_000),
     county: parcelText("county", relookupFacts?.county, MAX_COUNTY),
     property_tax_history: propertyTaxHistory,
-    market_value: parcelNum(
-      "market_value",
-      relookupFacts?.market_value,
-      0,
-      1_000_000_000
-    ),
+    // Already read above, where the sanity gate needed it as its yardstick.
+    market_value: claimMarketValue,
     market_value_low: parcelNum(
       "market_value_low",
       relookupFacts?.market_value_low,
@@ -930,7 +1032,14 @@ export async function claimPropertyAction(
       // third lookupParcel call with identical arguments: the gate ran either
       // the corrected-address lookup or the cached re-check, and both of them
       // answered this exact question already.
-      const facts = claimFacts;
+      // Null when the record we found describes a DIFFERENT street than the
+      // one being claimed (parcelFactsMatchClaim above): that record's owner
+      // of record belongs to another property, so matching a name against it
+      // would be worse than not checking. A null here leaves
+      // ownership_checked_at null, which is exactly right - this home has
+      // never been checked, and the lazy re-check on first job post stays
+      // eligible to try again.
+      const facts = parcelFactsMatchClaim ? claimFacts : null;
       // Record nothing unless there is a verdict worth keeping.
       // shouldRecordOwnershipCheck (src/lib/ownershipMatch.ts) says no for a
       // null lookup AND for source "unavailable", because

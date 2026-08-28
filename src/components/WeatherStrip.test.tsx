@@ -286,8 +286,11 @@ describe("WeatherStrip units", () => {
     expect(dayRow).toHaveTextContent("68°");
     expect(dayRow).toHaveTextContent("--");
 
+    // Two copies of the switch exist while the week is open: the row's (hidden
+    // below sm) and the panel's (hidden from sm up). jsdom applies no CSS, so
+    // both are in the document - tap the row's.
     fireEvent.click(
-      screen.getByRole("button", { name: "Show temperatures in Celsius" })
+      screen.getAllByRole("button", { name: "Show temperatures in Celsius" })[0]
     );
 
     expect(screen.getByText("22° Sunny")).toBeInTheDocument();
@@ -311,6 +314,68 @@ describe("WeatherStrip units", () => {
     expect(
       screen.getByRole("button", { name: "Show temperatures in Celsius" })
     ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  // At 390px the row cannot hold the temperatures, the clock AND an 82px unit
+  // switch: the switch was landing on top of the clock. On a phone it moves
+  // into the week panel the row expands into; on desktop it stays on the row.
+  // jsdom evaluates no media queries, so the classes are what to assert.
+  it("keeps the unit switch off the row on a phone when there is a week to move it into", async () => {
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: [],
+      current: weatherWithWeek,
+      hasLocation: true,
+    });
+    render(<WeatherStrip propertyId="p1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /forecast/i }));
+
+    const groups = screen.getAllByRole("group", { name: "Temperature units" });
+    expect(groups).toHaveLength(2);
+    // The row's copy is phone-hidden; the panel's is desktop-hidden.
+    expect(groups[0].className).toContain("max-sm:hidden");
+    expect(groups[1].closest("div.sm\\:hidden")).toBeTruthy();
+  });
+
+  // A home whose lookup returned no daily rows has no panel to move the
+  // switch into, so it stays on the row at every width.
+  it("keeps the unit switch on the row when there is no week to expand", async () => {
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: [],
+      current: realWeather,
+      hasLocation: true,
+    });
+    render(<WeatherStrip propertyId="p1" />);
+    const group = await screen.findByRole("group", {
+      name: "Temperature units",
+    });
+    expect(group.className).not.toContain("max-sm:hidden");
+  });
+
+  // The clock is what the switch was covering, so it is the thing that must
+  // never give ground: the condition word beside the temperature is the only
+  // element allowed to shrink below sm, and the phone clock drops the
+  // separator dot and the space before AM/PM to buy width back.
+  it("lets the condition word, not the clock, give ground at 390px", async () => {
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: [],
+      current: realWeather,
+      hasLocation: true,
+    });
+    render(<WeatherStrip propertyId="p1" />);
+    const word = await screen.findByText("72° Sunny");
+    expect(word.className).toContain("max-sm:truncate");
+    expect(word.className).toContain("max-sm:shrink");
+
+    const clock = screen.getByLabelText("Local time at your home");
+    expect(clock.className).toContain("shrink-0");
+    // Both variants are in the DOM (no media queries in jsdom); the phone one
+    // is the sm:hidden span, and it carries no separator dot.
+    const phoneClock = clock.querySelector("span.sm\\:hidden");
+    expect(phoneClock).toBeTruthy();
+    expect(phoneClock!.textContent).not.toContain("·");
   });
 
   it("falls back to Fahrenheit when localStorage throws", async () => {

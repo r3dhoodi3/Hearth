@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getSides, landingFor, ROLE_PICKER_PATH } from "@/lib/contractor";
+import { getSides, landingFor } from "@/lib/contractor";
 import { safeNextPath } from "@/lib/safeNext";
 import { chooseRoleAction } from "./actions";
 
@@ -40,18 +40,24 @@ export default async function WelcomeRolePage(
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
-  // Anyone who ALREADY has a role should never see the picker: send them
-  // straight to their side of the app. This makes revisiting the URL harmless
-  // - it can never flip an established account's role (the action enforces the
-  // same guard on submit).
+  // Anyone who already HAS a side should never see the picker: send them
+  // straight to it. This makes revisiting the URL harmless - it can never flip
+  // an established account (the action enforces the same guard on submit).
   //
-  // Asked as "does landingFor still send them here?" rather than by repeating
-  // its rules: landingFor returns this page for exactly the accounts with no
-  // side and no preference, so the picker renders for those and only those,
-  // and the two can never disagree into a redirect loop.
+  // A ROW, not the stamp. This used to redirect whenever landingFor() returned
+  // anything but this page, which meant a stamp alone was enough to bounce
+  // someone off it - and that trapped exactly the person this page is for. A
+  // contractor-signup account whose company save keeps failing carries a
+  // "contractor" stamp and owns nothing: every landing sent it to
+  // /pro/onboarding, and the one screen that could have let it change its mind
+  // bounced it back there. With neither row there is nothing built to protect,
+  // so the question gets asked again. The stamp still decides the DEFAULT
+  // landing everywhere else; it just no longer closes this door.
+  //
+  // Still no loop: landingFor() only returns this page for an account with no
+  // side, and this redirect is now reached only when a side exists.
   const sides = await getSides();
-  const landing = landingFor(sides);
-  if (landing !== ROLE_PICKER_PATH) redirect(landing);
+  if (sides.hasPro || sides.hasHome) redirect(landingFor(sides));
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">

@@ -23,6 +23,13 @@ import { describe, expect, it } from "vitest";
 // If it goes red, someone has gone around the chooser again.
 
 const APP_DIR = fileURLToPath(new URL("../app", import.meta.url));
+// This test file lives in src/lib itself, so its own directory IS src/lib -
+// used below to reach src/lib/homeDigestLine.ts, which is where the
+// home-digest cron's headlineHomeValue() call actually lives now (moved out
+// of the route module: a Next.js route file may only export its HTTP
+// handlers and a small set of config names, so the shared value-line builder
+// had to move to its own module).
+const LIB_DIR = fileURLToPath(new URL(".", import.meta.url));
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -58,8 +65,23 @@ const HEADLINE_VALUE_SITES = [
   "api/cron/home-digest/route.ts",
 ];
 
+// Where each site's actual headlineHomeValue() call lives, when it is not
+// the site's own route/page file. Only home-digest indirects through a
+// helper module today; every other site calls the chooser directly.
+const HEADLINE_VALUE_CALL_SITE: Record<string, string> = {
+  "api/cron/home-digest/route.ts": `${LIB_DIR}homeDigestLine.ts`,
+};
+
 function appSource(rel: string): string {
   return readFileSync(`${APP_DIR}/${rel}`, "utf8");
+}
+
+// The source actually searched for the headlineHomeValue()/market_value
+// assertions below: the override path when one is registered, the site's own
+// file otherwise.
+function callSiteSource(rel: string): string {
+  const override = HEADLINE_VALUE_CALL_SITE[rel];
+  return withoutComments(readFileSync(override ?? `${APP_DIR}/${rel}`, "utf8"));
 }
 
 describe("the single chooser for a home's headline value", () => {
@@ -76,7 +98,7 @@ describe("the single chooser for a home's headline value", () => {
 
   for (const rel of HEADLINE_VALUE_SITES) {
     it(`${rel} asks headlineHomeValue for the number`, () => {
-      const src = withoutComments(appSource(rel));
+      const src = callSiteSource(rel);
       expect(src).toMatch(/headlineHomeValue\s*\(/);
     });
 
@@ -90,4 +112,15 @@ describe("the single chooser for a home's headline value", () => {
       expect(src).toMatch(/market_value_high\b/);
     });
   }
+
+  it("api/cron/home-digest/route.ts gets its value line from the shared homeDigestLine helper", () => {
+    // The route no longer calls headlineHomeValue itself (see the override
+    // above); this pins that it still reaches the chooser indirectly, by
+    // importing the one function in src/lib/homeDigestLine.ts that calls it,
+    // rather than quietly growing a second, divergent value calculation.
+    const src = withoutComments(appSource("api/cron/home-digest/route.ts"));
+    expect(src).toMatch(
+      /import\s*\{\s*homeValueEquityLine\s*\}\s*from\s*["']@\/lib\/homeDigestLine["']/
+    );
+  });
 });

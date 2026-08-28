@@ -3,14 +3,18 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSides, landingFor } from "@/lib/contractor";
+import { setFlash } from "@/lib/flash";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import { safeNextPath } from "@/lib/safeNext";
 
-// Commits the role choice made on /welcome/role for a brand-new OAuth user who
-// arrived with none (see src/app/auth/callback/route.ts for how they get here).
-// Mirrors the two signup pages' post-choice behavior: stamp the role into
-// user_metadata, record the matching terms acceptance, and drop them into the
-// right onboarding flow.
+// Commits the role choice made on /welcome/role, for anyone who has not built
+// a side yet: the brand-new OAuth user who arrived with no stamp at all (see
+// src/app/auth/callback/route.ts for how they get here), and the person who
+// carries a stamp but nothing else and wants to change their mind. Mirrors the
+// two signup pages' post-choice behavior: stamp the role into user_metadata,
+// record the matching terms acceptance, and drop them into the right
+// onboarding flow.
 export async function chooseRoleAction(formData: FormData) {
   // Re-auth server-side rather than trusting anything the form carried: this
   // is a "use server" action reachable by a crafted POST, so the caller's
@@ -21,15 +25,43 @@ export async function chooseRoleAction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
-  // Idempotency + safety guard: if this user already has a role, never touch
-  // it - just send them home. This is the security-relevant line. The picker
-  // exists only to give a role-less user one; it must never be able to flip
-  // an established homeowner into a contractor (or vice versa), whether from a
-  // double submit, a bookmarked URL, or a forged request.
-  const existingRole = (user.user_metadata?.role ??
-    user.app_metadata?.role) as string | undefined;
-  if (existingRole === "contractor" || existingRole === "homeowner") {
-    redirect(existingRole === "contractor" ? "/pro" : "/dashboard");
+  // Idempotency + safety guard, and the security-relevant line: this picker
+  // must never flip an ESTABLISHED account from one side to the other, whether
+  // from a double submit, a bookmarked URL, or a forged request.
+  //
+  // What makes an account established is a ROW - a contractors row, or a home
+  // - not the stamp. The guard used to key on the stamp alone, and that made
+  // the choice unrepeatable for someone who had made no progress on it: a
+  // contractor-signup account whose company save keeps failing owns nothing
+  // but the word "contractor" in its metadata, and this action answered a
+  // request to become a homeowner by redirecting to /pro, which redirects to
+  // the company wizard it is trying to leave. With neither row there is
+  // nothing built to protect and nothing to take away, so the choice is theirs
+  // to make again; the moment either row exists, this returns to being a dead
+  // end. Anything to do with a side an account genuinely holds still belongs
+  // to setPreferredSideAction (src/lib/sideActions.ts).
+  const sides = await getSides();
+  if (sides.hasPro || sides.hasHome) redirect(landingFor(sides));
+
+  // The guard above is a ROW check, and a row check that could not run is not
+  // the same as a row that is not there. If the contractors (or properties)
+  // lookup errored, getSides() reports hasPro/hasHome false for a reason that
+  // has nothing to do with this account - and this action would then happily
+  // re-stamp someone who does own a side, which is exactly what the guard
+  // exists to prevent.
+  //
+  // Only refused when a role stamp already exists. An account with no stamp
+  // and no rows has demonstrably built nothing on either side, so there is
+  // nothing a stale read could be hiding and no reason to block the brand-new
+  // OAuth user this page is mostly for on a transient DB hiccup. With a stamp
+  // on file there IS something that might exist behind the failed read, so
+  // say so plainly and let them retry.
+  if (sides.checked === false && sides.preferred) {
+    await setFlash(
+      "We couldn't check your account just now. Try again in a minute.",
+      "error"
+    );
+    redirect("/welcome/role");
   }
 
   // Only the two real roles are accepted; anything else is a malformed or

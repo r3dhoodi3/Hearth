@@ -9,7 +9,7 @@ import { FileText, Bell, Search, type LucideIcon } from "lucide-react";
 // not have to know the exact page name.
 const ROUTES = [
   { label: "Home", href: "/dashboard", keywords: ["home", "dashboard", "health", "score", "systems"] },
-  { label: "Issues", href: "/issues", keywords: ["issue", "problem", "repair", "broken", "leak"] },
+  { label: "Report a problem", href: "/issues", keywords: ["issue", "issues", "problem", "repair", "broken", "leak"] },
   { label: "Post a Job", href: "/contractors", keywords: ["job", "quote", "contractor", "pro", "hire", "estimate"] },
   { label: "Messages", href: "/chats", keywords: ["message", "chat", "quote", "pro"] },
   { label: "Documents", href: "/documents", keywords: ["document", "warranty", "manual", "receipt", "vault", "paperwork", "label"] },
@@ -132,19 +132,24 @@ export default async function SearchPage(
         {/* The nav has an inline search box on desktop, but it is hidden on
             mobile in favor of a link to this page, so this page needs its
             own input too. GET form, no JS required. */}
-        <form action="/search" method="GET" role="search" className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400">
-            <Search className="h-4 w-4" aria-hidden="true" />
+        <form action="/search" method="GET" role="search" className="flex items-center gap-2">
+          <span className="relative flex-1">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 dark:text-stone-400">
+              <Search className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <input
+              type="search"
+              name="q"
+              defaultValue={q}
+              autoFocus={!q}
+              placeholder="Type, then press Search"
+              aria-label="Search"
+              className="w-full rounded-xl border border-stone-200 bg-white py-2.5 pl-9 pr-3 text-base sm:text-sm text-stone-900 placeholder:text-stone-500 focus:border-bark-500 focus:outline-none dark:border-white/10 dark:bg-stone-800 dark:text-stone-100"
+            />
           </span>
-          <input
-            type="search"
-            name="q"
-            defaultValue={q}
-            autoFocus={!q}
-            placeholder="Search your home and Hearth"
-            aria-label="Search"
-            className="w-full rounded-xl border border-stone-200 bg-white py-2.5 pl-9 pr-3 text-base sm:text-sm text-stone-900 placeholder:text-stone-500 focus:border-bark-500 focus:outline-none dark:border-white/10 dark:bg-stone-800 dark:text-stone-100"
-          />
+          <button type="submit" className="btn-primary shrink-0">
+            Search
+          </button>
         </form>
 
         {q && (

@@ -64,16 +64,24 @@ function scoreMessage(before: number, after: number): string {
 export default function SystemCaptureCard({
   system,
   propertyId,
+  startManual = false,
 }: {
   system: HomeSystem;
   propertyId: string;
+  // Open straight on the typing form instead of the photo tile, for the
+  // "Type it in instead" path (?mode=manual - see the page). Only the
+  // starting phase differs; the photo path below is untouched and is one tap
+  // away from here (Cancel goes back to it).
+  startManual?: boolean;
 }) {
   const [phase, setPhase] = useState<"idle" | "working" | "review" | "confirmed">(
-    "idle"
+    startManual ? "review" : "idle"
   );
   const [note, setNote] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(
+    startManual ? BLANK_SUGGESTION : null
+  );
   const [delta, setDelta] = useState<{ before: number; after: number } | null>(
     null
   );
@@ -261,12 +269,16 @@ export default function SystemCaptureCard({
             disabled={phase === "working"}
             label="Open the camera"
           />
+          {/* A real button on the card, not a whispered link under it: the
+              photo path is the good one, but people get here standing in a
+              basement with no data plate they can read, and the way out has
+              to be visible before the camera opens rather than after. */}
           <button
             type="button"
             onClick={skipToManual}
-            className="block text-xs text-stone-500 hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400 dark:hover:text-stone-300"
+            className="btn-secondary w-full sm:w-auto"
           >
-            No photo handy? Enter details by hand
+            Skip photo, type it in
           </button>
         </>
       )}

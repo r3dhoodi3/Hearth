@@ -9,6 +9,7 @@ import {
   formatResponseTime,
 } from "@/lib/responseTime";
 import {
+  BUDGET_RANGES,
   JOB_CATEGORIES,
   TIMING_OPTIONS,
   labelFor,
@@ -23,6 +24,7 @@ import {
   cancelDirectRequestAction,
   postDirectPubliclyAction,
 } from "./actions";
+import { postJobErrorMessage } from "./postJobErrors";
 import SubmitButton from "@/components/SubmitButton";
 import CategoryFilter from "./CategoryFilter";
 import ProjectChips from "./ProjectChips";
@@ -70,6 +72,13 @@ export default async function ContractorsPage(
       desc?: string;
       timing?: string;
       directsent?: string;
+      // Why the last post attempt was rejected. postJobAction sets it on
+      // every failure path (see postJobErrors.ts); the sentence is rendered
+      // under the Post job button.
+      error?: string;
+      // The budget band a rejected post carried back, so the pick survives
+      // the round trip along with the text fields.
+      budget?: string;
     }>;
   }
 ) {
@@ -90,13 +99,26 @@ export default async function ContractorsPage(
   if (!property) redirect("/onboarding");
 
   const category = searchParams.category ?? "";
+  // A rejected post comes back here with everything the owner typed plus an
+  // ?error= code. Resolved server-side so the reason is in the HTML the phone
+  // renders, with no cookie, toast, or timer between the failure and the
+  // words on screen.
+  const postError = postJobErrorMessage(searchParams.error);
   const issueId = searchParams.issue ?? "";
 
   // Pre-fill the budget dropdown with a sane bracket when the job arrives tied
   // to a known system or issue (both carry ?category=). Falls back to "" (the
   // "Prefer not to say" option) for a fresh manual post or a category we keep
   // no cost range for, and stays user-changeable either way.
-  const budgetDefault = budgetBracketForCategory(category) ?? "";
+  // searchParams.budget wins when a rejected post carried the owner's own
+  // pick back (postJobAction only ever writes a value from BUDGET_RANGES, and
+  // it is re-checked here because a URL is a URL). Otherwise the
+  // category-derived bracket, as before.
+  const budgetDefault = BUDGET_RANGES.some(
+    (b) => b.value === searchParams.budget
+  )
+    ? (searchParams.budget as string)
+    : budgetBracketForCategory(category) ?? "";
 
   // The owner's posted jobs (with the chosen pro's info, if one is picked yet).
   // Cast to any[]: the generated types don't model the contractor_leads ->
@@ -385,16 +407,69 @@ export default async function ContractorsPage(
           page (too much scrolling) to here, where they are one tap into the
           form directly below - each chip reloads this page with ?category=x,
           which prefills "What do you need?". Desktop still has them on the
-          dashboard, so this copy is sm:hidden and shares the same component. */}
-      <section className="space-y-3 sm:hidden">
-        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-          Thinking about a project?
-        </h2>
-        <p className="text-sm text-stone-500 dark:text-stone-400">
-          Popular upgrades. Tap one to fill in the form below.
-        </p>
-        <ProjectChips />
-      </section>
+          dashboard, so this copy is sm:hidden and shares the same component.
+          Collapsed by default behind a <details>: all 22 chips shown open
+          overwhelmed the page above the form, so phone visitors now open
+          them on purpose instead of scrolling past them first. */}
+      <details className="sm:hidden">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
+          Popular projects
+          <span aria-hidden="true" className="text-stone-400">▾</span>
+        </summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            Popular upgrades. Tap one to fill in the form below.
+          </p>
+          <ProjectChips />
+        </div>
+      </details>
+
+      {searchParams.posted && (
+        // The confirmation that a post actually landed. Three things about it
+        // are deliberate, and each one is a thing that went wrong when this
+        // banner lived at the bottom of the page:
+        //
+        //   ABOVE the form, not below it. The form resets on every ?posted
+        //   (its key is tied to that param), so a reader who tapped Post is
+        //   looking straight at a blank form. The explanation has to be in
+        //   that same eyeful, not 2000px further down past My Pros and the
+        //   upsell.
+        //
+        //   It does not fade. The old one was a FadingBanner that deleted
+        //   itself 7 seconds after mount, and the smooth scroll that was
+        //   supposed to reveal it was still fighting Next's scroll-to-top
+        //   while that timer ran. It stays until the owner navigates.
+        //
+        //   It says where the job went. "Job posted" is not enough: a tester
+        //   who saw exactly that still could not find their job, because the
+        //   phone dashboard's Open jobs card is hidden and Your jobs is far
+        //   below the fold. The link to #your-jobs is the answer to the
+        //   question the banner otherwise leaves open. The same anchor backs
+        //   the phone-only "N open jobs / View" strip at the top of this page,
+        //   whose count comes from the leads query above and so includes the
+        //   job that was just posted (postJobAction revalidates /contractors
+        //   before it redirects).
+        <ScrollIntoViewOnMount>
+          <div className="scroll-mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 shadow-sm dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
+            <p className="font-medium">
+              Your job is live. Pros can see it now.
+            </p>
+            <p className="mt-1">
+              Find it under{" "}
+              <Link
+                href="#your-jobs"
+                className="focus-ring font-medium underline underline-offset-2"
+              >
+                Your jobs
+              </Link>{" "}
+              further down this page. We&apos;ll notify you the moment a pro
+              applies. Honest note: Hearth is still new in some areas, so if
+              applications are slow it&apos;s our pro coverage catching up, not
+              a problem with your post.
+            </p>
+          </div>
+        </ScrollIntoViewOnMount>
+      )}
 
       <form
         key={searchParams.posted ?? "new"}
@@ -491,7 +566,7 @@ export default async function ContractorsPage(
 
         <StrongPostMeter />
 
-        <PostJobButton />
+        <PostJobButton serverError={postError} />
         <p className="text-xs text-stone-500 dark:text-stone-400">
           Your contact stays private. Only the pro you choose from the applicants
           gets your name, address, and contact details.
@@ -565,25 +640,14 @@ export default async function ContractorsPage(
         </div>
       )}
 
-      {searchParams.posted && (
-        // The form above resets on every ?posted (its key is tied to that
-        // param), so without this the reader is left staring at a blank,
-        // reset form with no visible sign their post went through - this
-        // banner renders well below the fold on a long page. Scrolling it
-        // into view on mount is what actually surfaces the confirmation.
-        <ScrollIntoViewOnMount>
-          <FadingBanner
-            delay={2500}
-            fadeMs={4500}
-            className="scroll-mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 shadow-sm dark:border-green-900 dark:bg-green-950/40 dark:text-green-200"
-          >
-            Job posted. Matching pros can now apply, and we&apos;ll notify you
-            the moment one does. Honest note: Hearth is still new in some areas,
-            so if applications are slow it&apos;s our pro coverage catching up,
-            not a problem with your post.
-          </FadingBanner>
-        </ScrollIntoViewOnMount>
-      )}
+      {/* The success banner used to live HERE, below the form, My Pros and
+          the upsell, wrapped in a FadingBanner that removed itself 7 seconds
+          after mount and reached only by a smooth scroll racing Next's own
+          scroll-to-top after the redirect. On a phone that meant a reader who
+          had just tapped Post saw a blank, reset form and, often, no banner at
+          all - three testers on 2026-08-28 read that as the post silently
+          failing, and one of them had actually posted successfully. It now
+          renders directly above the form and stays put; see there. */}
 
       {searchParams.directsent && (
         <ScrollIntoViewOnMount>
@@ -1070,7 +1134,7 @@ export default async function ContractorsPage(
 
       <p className="text-center text-sm text-stone-500 dark:text-stone-400">
         <Link href="/issues" className="hover:underline">
-          ← Back to issues
+          ← Back
         </Link>
       </p>
     </div>
