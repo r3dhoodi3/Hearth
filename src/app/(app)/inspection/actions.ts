@@ -50,7 +50,8 @@ export async function saveInspectionFindingsAction(
   formData: FormData
 ): Promise<SaveFindingsResult> {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property)
+    throw new Error("Couldn't find your home. Try again from the dashboard.");
   const supabase = await createClient();
 
   const rawSystems = parseJsonArray(formData.get("systems_json"));

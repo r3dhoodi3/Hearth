@@ -156,6 +156,87 @@ describe("WeatherStrip", () => {
   });
 });
 
+describe("WeatherStrip clock", () => {
+  it("renders the local time after mount, in the property's zone, and ticks to the next minute", async () => {
+    vi.useFakeTimers();
+    // 23:42:17 UTC on this date is 3:42:17 PM in America/Los_Angeles (PST,
+    // UTC-8) - the zone WeatherStrip resolves to today, since neither a
+    // property state/zip nor a geocoded timezone are wired onto the payload
+    // yet (see the comment above `zone` in WeatherStrip.tsx). :17 seconds
+    // keeps the initial render short of the next minute boundary, so the
+    // tick assertion below has something to advance past.
+    vi.setSystemTime(new Date("2026-01-05T23:42:17Z"));
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: [],
+      current: realWeather,
+      hasLocation: true,
+    });
+    render(<WeatherStrip propertyId="p1" />);
+
+    // Flush the fetchHomeAlerts microtask so `weather` (and the clock inside
+    // its render output) actually mounts. Fake timers only replace
+    // setTimeout/setInterval/Date, not the Promise microtask queue, so this
+    // doesn't need any timer advancement.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const clock = screen.getByLabelText("Local time at your home");
+    expect(clock).toHaveTextContent("3:42 PM");
+    expect(clock.getAttribute("datetime")).toMatch(/^2026-01-05T23:42:17/);
+
+    // Advance to the next minute boundary (23:43:00Z). The effect's
+    // setTimeout is aligned to that boundary rather than a flat 60s from
+    // mount, so 43s (not a full minute) is what it takes to tick here.
+    act(() => {
+      vi.advanceTimersByTime(43_000);
+    });
+
+    expect(clock).toHaveTextContent("3:43 PM");
+  });
+
+  it("uses the payload's timezone for the clock when one is given, instead of the launch-area default", async () => {
+    vi.useFakeTimers();
+    // Same instant as the test above (23:42:17 UTC), but this payload
+    // carries a real geocoded zone from the route. In January, America/Denver
+    // is Mountain Standard Time (UTC-7), so 23:42:17 UTC is 4:42 PM there -
+    // a different hour than the America/Los_Angeles default (3:42 PM),
+    // which is the point of this test.
+    vi.setSystemTime(new Date("2026-01-05T23:42:17Z"));
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: [],
+      current: { ...realWeather, timezone: "America/Denver" },
+      hasLocation: true,
+    });
+    render(<WeatherStrip propertyId="p1" />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const clock = screen.getByLabelText("Local time at your home");
+    expect(clock).toHaveTextContent("4:42 PM");
+  });
+
+  it("keeps a fixed min-width on the clock element whether or not it has content yet, so filling in the time never shifts the row", async () => {
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: [],
+      current: realWeather,
+      hasLocation: true,
+    });
+    render(<WeatherStrip propertyId="p1" />);
+    const clock = await screen.findByLabelText("Local time at your home");
+    // Same reserved-width class whether the clock is showing a real time or
+    // (in the brief pre-mount window this test can't directly observe,
+    // since RTL flushes effects synchronously) still empty - the width
+    // never depends on whether `now` has a value yet.
+    expect(clock.className).toMatch(/min-w-\[4\.5rem\]/);
+  });
+});
+
 describe("temperature conversion", () => {
   it("rounds Fahrenheit through unchanged and converts to whole Celsius", () => {
     expect(convertTemp(72, "F")).toBe(72);

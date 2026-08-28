@@ -35,7 +35,7 @@ describe("LaunchCityCheckboxes", () => {
     // Collapsed: no city boxes on screen, just the disclosure.
     expect(screen.queryByLabelText("Irvine")).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Choose specific cities instead" })
+      screen.getByRole("button", { name: "Pick specific cities instead" })
     ).toBeInTheDocument();
   });
 
@@ -49,7 +49,7 @@ describe("LaunchCityCheckboxes", () => {
   it("opens the list and posts only the checked cities once narrowed", () => {
     const { form } = renderInForm();
     fireEvent.click(
-      screen.getByRole("button", { name: "Choose specific cities instead" })
+      screen.getByRole("button", { name: "Pick specific cities instead" })
     );
     expect(screen.getByLabelText("All of Orange County")).not.toBeChecked();
     // Nothing checked yet, so nothing posts, and every box is required.
@@ -94,6 +94,22 @@ describe("LaunchCityCheckboxes", () => {
     expect(postedCities(form)).toEqual(["Irvine"]);
   });
 
+  it("switching to specific starts every box unchecked when every city was previously stored", () => {
+    // Mirrors an onboarding draft resumed after a pro left "All" checked:
+    // the draft re-posts every launch city, so defaultCities arrives full
+    // rather than empty. Opening the disclosure must still start from zero,
+    // not from all 36 pre-checked (the bug testers hit on phone).
+    const { form } = renderInForm({ defaultCities: [...LAUNCH_CITIES] });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Pick specific cities instead" })
+    );
+    expect(screen.getByLabelText("All of Orange County")).not.toBeChecked();
+    expect(screen.getByLabelText("Irvine")).not.toBeChecked();
+    expect(screen.getByLabelText("Huntington Beach")).not.toBeChecked();
+    expect(postedCities(form)).toEqual([]);
+    expect(screen.getByLabelText("Irvine")).toBeRequired();
+  });
+
   it("shows every launch city under one of the four regions when open", () => {
     renderInForm({ defaultCities: ["Irvine"] });
     for (const label of ["North", "Central", "Coastal", "South"]) {
@@ -107,7 +123,7 @@ describe("LaunchCityCheckboxes", () => {
   it("drops required while the wizard has the step off screen", () => {
     renderInForm({ defaultCities: [], requireOne: false });
     fireEvent.click(
-      screen.getByRole("button", { name: "Choose specific cities instead" })
+      screen.getByRole("button", { name: "Pick specific cities instead" })
     );
     expect(screen.getByLabelText("Irvine")).not.toBeRequired();
   });

@@ -11,6 +11,16 @@ import GuideCta from "@/components/GuideCta";
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// STATIC (ISR marker). Nothing in this page or in src/app/guides/layout.tsx
+// reads cookies(), headers(), searchParams or the database: the session-aware
+// CTA moved to the browser (src/components/SessionCta.tsx), so this page is
+// prerendered once and served from the edge cache. As on /pricing, the
+// explicit revalidate is a marker rather than a requirement - it makes the
+// static intent visible in `next build` output and gives a future data read
+// ISR instead of silently dropping the route back to per-request rendering.
+// Anything added here that reads cookies()/headers()/searchParams undoes it.
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: "Electrical panel upgrade cost: typical range and when you need one",
   description:
@@ -231,7 +241,7 @@ export default function ElectricalPanelUpgradeCostGuide() {
         </section>
 
         <section>
-          <p className="text-xs leading-relaxed text-stone-400 dark:text-stone-500">
+          <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-500">
             Data as of July 2026. The cost range reflects Hearth&apos;s in-app
             planning figure for an electrical panel upgrade. All figures are
             general estimates, not quotes, and actual prices vary by home,

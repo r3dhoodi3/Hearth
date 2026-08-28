@@ -50,7 +50,7 @@ function FileCard({
         {file.name}
       </span>
       {file.size != null && (
-        <span className="shrink-0 text-[10px] text-stone-400 dark:text-stone-500">
+        <span className="shrink-0 text-[10px] text-stone-500 dark:text-stone-500">
           {bytesLabel(file.size)}
         </span>
       )}

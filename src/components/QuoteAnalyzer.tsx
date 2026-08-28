@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ReceiptText } from "lucide-react";
 import { JOB_CATEGORIES } from "@/lib/constants";
 import AiNotice from "@/components/AiNotice";
+import { QUOTE_TASTE_PAYWALL } from "@/lib/freeAiTaste";
 import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
@@ -155,6 +156,10 @@ export default function QuoteAnalyzer({
   const [restoring, setRestoring] = useState(true);
   const [resultMeta, setResultMeta] = useState<{ analyzedAt: string; filename: string | null } | null>(null);
   const [pendingRemote, setPendingRemote] = useState(false);
+  // The one free check is gone: either the server said so (HTTP 403) or this
+  // mount just spent it on a successful free-taste analysis. The form is
+  // replaced rather than left there to fail.
+  const [spent, setSpent] = useState(false);
   const [failedRemote, setFailedRemote] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -368,7 +373,13 @@ export default function QuoteAnalyzer({
         return;
       }
       if (resp.status === 403) {
-        setError("This feature is part of Hearth Plus.");
+        // The free check is gone. This used to be a bare "This feature is part
+        // of Hearth Plus." in the red error line: the one cold, benefit-free
+        // wall left in the app, and it landed at the worst possible moment (a
+        // second contractor bid in hand). Now the form is replaced by the same
+        // banner the /plus?reason=quote page shows, in the same voice.
+        setSpent(true);
+        setError(null);
         return;
       }
 
@@ -379,6 +390,10 @@ export default function QuoteAnalyzer({
           analyzedAt: new Date().toISOString(),
           filename: mode === "photo" ? fileName : null,
         });
+        // A free-taste check that actually succeeded IS the credit being
+        // spent, so the form gives way to the upsell card under the result
+        // rather than inviting a second attempt that can only be refused.
+        if (freeTaste) setSpent(true);
       } else if (data?.reason === "rate_limited") {
         setError("Hearth has hit today's free usage limit. Please try again later.");
       } else if (data?.reason === "busy") {
@@ -476,6 +491,25 @@ export default function QuoteAnalyzer({
         </p>
       )}
 
+      {/* THE DOOR, in place of the form once the free check is spent. With a
+          result on screen the compact card under it already carries the same
+          pitch, so this renders only when there is nothing else asking: one
+          upgrade prompt at a time, never two. */}
+      {spent ? (
+        result ? null : (
+          <div className="card space-y-3 border-bark-100 bg-bark-50 text-center dark:border-bark-700 dark:bg-bark-700/40">
+            <p className="text-sm text-bark-700 dark:text-stone-300">
+              {QUOTE_TASTE_PAYWALL.message}
+            </p>
+            <Link
+              href={QUOTE_TASTE_PAYWALL.link}
+              className="btn-primary inline-block"
+            >
+              Get Hearth Plus
+            </Link>
+          </div>
+        )
+      ) : (
       <div className="card space-y-4">
         {/* Two toggle buttons, not role="tab": we don't implement the tab
             keyboard contract (arrow keys move between tabs), so aria-pressed
@@ -661,6 +695,7 @@ export default function QuoteAnalyzer({
           </>
         )}
       </div>
+      )}
 
       {result && (
         <div className="card space-y-5">
@@ -932,7 +967,8 @@ export default function QuoteAnalyzer({
               </p>
               {copyFallback && (
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Couldn&apos;t copy automatically, so the text above is selected: press Ctrl+C (or Cmd+C) to copy it.
+                  Couldn&apos;t copy automatically. The text above is
+                  selected, tap and hold to copy it.
                 </p>
               )}
             </div>

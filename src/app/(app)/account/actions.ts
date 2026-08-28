@@ -71,44 +71,96 @@ export async function saveAccountAction(formData: FormData) {
     redirect("/account");
   }
 
-  // Read the current consent flag first: sms_consent_at should only move
-  // forward on a false -> true transition (a fresh grant), never on a save
-  // that leaves consent already-true untouched, and never on a revocation -
-  // that would erase the record of when consent was originally given (TCPA -
-  // see src/lib/notify.ts). Best effort: if migration 0073 hasn't reached
-  // this database yet the select 42703s, `current` stays null, and
-  // priorConsent just defaults to false - harmless, since the update below
+  // Read the current consent flag AND the stored phone first: sms_consent_at
+  // should only move forward on a false -> true transition (a fresh grant),
+  // never on a save that leaves consent already-true untouched, and never on a
+  // revocation - that would erase the record of when consent was originally
+  // given (TCPA - see src/lib/notify.ts). Best effort: if migration 0073
+  // hasn't reached this database yet the select 42703s, `current` stays null,
+  // and priorConsent just defaults to false - harmless, since the update below
   // degrades the exact same way.
   const { data: current } = await supabase
     .from("users")
-    .select("sms_consent")
+    .select("sms_consent, phone")
     .eq("id", user.id)
     .maybeSingle();
   const priorConsent = current?.sms_consent === true;
 
-  const consentFields: { sms_consent: boolean; sms_consent_at?: string } = {
-    sms_consent,
-  };
+  // CONSENT IS PER NUMBER, not per account. Somebody consented to texts at the
+  // number they gave; typing a different one puts a phone that has never
+  // agreed to anything on the account, and carrying the old flag over would
+  // have Hearth texting a stranger who may now hold that number. TCPA damages
+  // are per text, so the flag drops with the number and has to be re-granted.
+  //
+  // Only when a stored row was actually read (`current`): if the select
+  // 42703'd or the row is missing there is no prior number to compare against,
+  // and inventing a change would silently switch consent off on a database
+  // that is only mid-migration.
+  // Trimmed on both sides: the submitted value already went through
+  // cappedFieldOrNull's trim, so comparing it against an untrimmed stored
+  // string would read pure whitespace as a new number and switch texts off on
+  // a save that changed nothing.
+  const priorPhone =
+    typeof current?.phone === "string" ? current.phone.trim() : null;
+  const phoneChanged = !!current && (priorPhone ?? "") !== (phone ?? "");
+
+  const consentFields: {
+    sms_consent: boolean;
+    sms_consent_at?: string | null;
+  } = { sms_consent };
   if (sms_consent && !priorConsent) {
     consentFields.sms_consent_at = new Date().toISOString();
   }
-
-  // Name + phone + SMS consent - the public profile row (best effort). On
-  // the missing-column fingerprint (migration 0073 not yet applied to this
-  // database) retry without the consent fields so saving the account never
-  // breaks. Same pattern as the contractor_leads insert in
-  // src/app/(app)/contractors/actions.ts.
-  let { error: profileError } = await supabase
-    .from("users")
-    .update({ full_name, phone, ...consentFields })
-    .eq("id", user.id);
-  if (profileError && isMissingSchemaError(profileError)) {
-    ({ error: profileError } = await supabase
-      .from("users")
-      .update({ full_name, phone })
-      .eq("id", user.id));
+  if (phoneChanged) {
+    // Overwrites whatever the two lines above decided, on purpose: a save that
+    // both moves the number and ticks the box cannot prove which number was
+    // being agreed to. One more save on the settled number turns texts back
+    // on, and that one IS unambiguous.
+    consentFields.sms_consent = false;
+    consentFields.sms_consent_at = null;
   }
-  if (profileError) throw new Error(profileError.message);
+
+  // Name + phone on the caller's OWN session client: they are the two columns
+  // an account is meant to be able to rewrite freely, and "users self update"
+  // plus migration 0139's guard trigger both allow them.
+  const { error: profileError } = await supabase
+    .from("users")
+    .update({ full_name, phone })
+    .eq("id", user.id);
+  if (profileError) {
+    console.error("saveAccountAction: profile update failed", profileError);
+    setFlash("Couldn't save your details just now. Please try again.", "error");
+    redirect("/account");
+  }
+
+  // SMS CONSENT GOES THROUGH THE ADMIN CLIENT, and that is the point of the
+  // split. Migration 0139 locks sms_consent / sms_consent_at (alongside the
+  // free-taste counters, email, and the referral columns) against any update
+  // that is not the service role: a consent record the consenting account can
+  // rewrite at will is not a record, and TCPA damages are per text. So the
+  // decision is made HERE, from the verified session, and the write is scoped
+  // to that same user.id - never an id from the form.
+  //
+  // The false -> true rule is unchanged: sms_consent_at only moves on a fresh
+  // grant, never on a re-save and never on a revocation, so the date consent
+  // was originally given survives.
+  //
+  // Best effort, and separately: a database without 0073 answers the
+  // missing-column fingerprint, in which case there is nothing to store and
+  // the name/phone save above still stands. Consent defaults to off in that
+  // state, which is the safe direction.
+  const { error: consentError } = await createAdminClient()
+    .from("users")
+    .update(consentFields)
+    .eq("id", user.id);
+  if (consentError && !isMissingSchemaError(consentError)) {
+    console.error("saveAccountAction: consent update failed", consentError);
+    setFlash(
+      "Saved your details, but your text-message setting didn't stick. Please try that again.",
+      "error"
+    );
+    redirect("/account");
+  }
 
   // Mirror the name into auth metadata too. This is what the toolbar reads, so
   // it's reliable even if the users-table write didn't land - and it's always
@@ -128,7 +180,18 @@ export async function saveAccountAction(formData: FormData) {
     redirect("/account");
   }
 
-  setFlash("Account updated.");
+  // Say so when the number change switched texts off, rather than letting
+  // somebody discover it by never getting a reminder. Only when there was
+  // something to lose - a person who has never turned texts on does not need
+  // to be told to turn them back on.
+  if (phoneChanged && (priorConsent || sms_consent)) {
+    setFlash(
+      "Account updated. Text messages are off for your new number - tick the text-message box again to turn them back on.",
+      "info"
+    );
+  } else {
+    setFlash("Account updated.");
+  }
   // Revalidate the whole layout tree so the toolbar (in the app layout, not the
   // page) picks up the new name everywhere.
   revalidatePath("/", "layout");

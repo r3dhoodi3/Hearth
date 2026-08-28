@@ -221,6 +221,7 @@ export default function AskHearthDock({
               href="/chats?lead=ask-hearth"
               onClick={close}
               title="Open full screen in Messages"
+              aria-label="Open full screen in Messages"
               className="focus-ring leading-none hover:text-bark-700 dark:hover:text-stone-300"
             >
               <Maximize2 className="h-4 w-4" aria-hidden="true" />
@@ -231,6 +232,7 @@ export default function AskHearthDock({
               type="button"
               onClick={close}
               title="Minimize"
+              aria-label="Minimize Ask Hearth"
               className="focus-ring -m-2 p-2 leading-none hover:text-stone-700 dark:hover:text-stone-200"
             >
               <X className="h-4 w-4" aria-hidden="true" />

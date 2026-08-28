@@ -1,5 +1,8 @@
 import type { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { sendNotification } from "@/lib/notify";
+import { billingTerms } from "@/lib/billingTerms";
+import { PLUS_PLAN, PRO_PLAN, formatUsd } from "@/lib/constants";
 
 // The route pulls in the service-role client, the Stripe client, the notifier
 // and the risk modules, all of which import "server-only" and are unresolvable
@@ -28,6 +31,9 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 vi.mock("@/lib/notify", () => ({ sendNotification: vi.fn(async () => true) }));
+// The mocked notifier, typed, so the dunning tests can read what the route
+// actually asked to be sent.
+const notify = vi.mocked(sendNotification);
 vi.mock("@/lib/subscription", () => ({ isLiveProPlanRow: () => false }));
 vi.mock("@/lib/risk/signals", () => ({
   recordCardSignal: vi.fn(async () => {}),
@@ -50,6 +56,19 @@ let depositSessions: Record<string, unknown>[] = [];
 // plan name actually written to the subscriptions row.
 let tableUpdates: { table: string; payload: Record<string, unknown> }[] = [];
 
+// What .from("subscriptions")...maybeSingle() reads back. Null by default,
+// which is every pre-existing test's "no stored row" path; the dunning tests
+// below set it so the route has a membership to act on.
+let subscriptionRow: Record<string, unknown> | null = null;
+
+// What .from("notifications")...maybeSingle() reads back, i.e. whether the dup
+// guard finds a notice already sent for this key.
+let existingNotification: Record<string, unknown> | null = null;
+
+// Every .in(column, values) applied after an .update(), so a test can assert
+// the status write is SCOPED rather than unconditional.
+let updateFilters: { column: string; values: unknown[] }[] = [];
+
 // The thin slice of the PostgREST builder this route uses on the deposit path:
 // .from(...).select(...).eq(...).maybeSingle(). Everything reads back empty,
 // which is the "no Pro boost" path - the deposit itself still applies.
@@ -68,7 +87,21 @@ function fakeAdmin() {
         like: chain,
         limit: chain,
         order: chain,
-        maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        // Awaiting the builder itself (the update path does) yields this
+        // object, whose `error` is undefined - i.e. a successful write.
+        in: (column: string, values: unknown[]) => {
+          updateFilters.push({ column, values });
+          return api;
+        },
+        maybeSingle: () => {
+          if (table === "subscriptions") {
+            return Promise.resolve({ data: subscriptionRow, error: null });
+          }
+          if (table === "notifications") {
+            return Promise.resolve({ data: existingNotification, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        },
         insert: () => Promise.resolve({ data: null, error: null }),
         upsert: () => Promise.resolve({ data: null, error: null }),
         update: (payload: Record<string, unknown>) => {
@@ -104,6 +137,9 @@ beforeEach(() => {
   rpcCalls = [];
   depositSessions = [];
   tableUpdates = [];
+  updateFilters = [];
+  subscriptionRow = null;
+  existingNotification = null;
   constructEvent.mockReset();
 });
 
@@ -390,5 +426,263 @@ describe("the stored plan follows the billing interval, weekly included", () => 
     // Only overwrite the plan when the payload carries items we can read: a
     // partial event must not blank out a live member's cadence.
     expect(await planWrittenFor(null)).toBeUndefined();
+  });
+});
+
+// ===========================================================================
+// DUNNING
+// ===========================================================================
+// Before these two events were handled, a subscriber whose card started
+// failing looked identical in-app to a happy one until
+// customer.subscription.deleted finally fired - across a full Smart Retry
+// window, up to a month later. Nobody was told: not the member, not the owner.
+
+describe("invoice.payment_failed flags the membership and warns the member", () => {
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    notify.mockClear();
+  });
+
+  function failedInvoice(
+    over: Record<string, unknown> = {},
+    eventId = "evt_fail_1"
+  ) {
+    return {
+      id: eventId,
+      type: "invoice.payment_failed",
+      data: {
+        object: {
+          id: "in_test_1",
+          subscription: "sub_test_1",
+          billing_reason: "subscription_cycle",
+          ...over,
+        },
+      },
+    };
+  }
+
+  async function run(event: Record<string, unknown>) {
+    constructEvent.mockReturnValue(event);
+    const { POST } = await import("./route");
+    return POST(post());
+  }
+
+  it("marks the subscriptions row past_due", async () => {
+    subscriptionRow = { user_id: "u_1", plan: "monthly", status: "active" };
+    const res = await run(failedInvoice());
+
+    expect(res.status).toBe(200);
+    const write = tableUpdates.find((u) => u.table === "subscriptions");
+    expect(write?.payload.status).toBe("past_due");
+  });
+
+  it("scopes that write so a late event cannot un-cancel or un-recover a row", async () => {
+    // Stripe does not guarantee event ordering, and
+    // customer.subscription.updated is the authority on status - it also fires
+    // for this failure and sets the row back to active the moment a retry
+    // succeeds. An UNSCOPED past_due write would walk a canceled row backwards
+    // or overwrite a recovery that already landed.
+    subscriptionRow = { user_id: "u_1", plan: "monthly", status: "active" };
+    await run(failedInvoice());
+
+    const statusFilter = updateFilters.find((f) => f.column === "status");
+    expect(statusFilter?.values).toEqual(["active", "trialing"]);
+  });
+
+  it("sends one notice pointing at the page that opens the billing portal", async () => {
+    subscriptionRow = { user_id: "u_1", plan: "monthly", status: "active" };
+    await run(failedInvoice());
+
+    expect(notify).toHaveBeenCalledTimes(1);
+    const sent = notify.mock.calls[0][1] as Record<string, any>;
+    expect(sent.userId).toBe("u_1");
+    expect(sent.kind).toBe("payment_failed");
+    expect(sent.title).toBe(
+      "Your Hearth Plus payment didn't go through, update your card"
+    );
+    // /plus is where manageBillingAction (the Stripe Customer Portal session)
+    // lives; there is no standalone portal route in this app.
+    expect(sent.url.startsWith("/plus?")).toBe(true);
+    // A billing warning is never an SMS.
+    expect(sent.phone).toBeNull();
+  });
+
+  it("keys the notice on the INVOICE, so Smart Retries do not spam", async () => {
+    // Stripe fires invoice.payment_failed once per retry attempt over a
+    // multi-week window - each with a NEW event id but the SAME invoice id.
+    // Keying on the event id would send four copies of the same bad news.
+    subscriptionRow = { user_id: "u_1", plan: "monthly", status: "active" };
+    await run(failedInvoice());
+    const firstUrl = (notify.mock.calls[0][1] as Record<string, any>).url;
+    expect(firstUrl).toContain("invoice=in_test_1");
+
+    // Second retry, different event id, same invoice: the dup guard now finds
+    // the row the first one wrote.
+    notify.mockClear();
+    existingNotification = { id: "n_1" };
+    await run(failedInvoice({}, "evt_fail_2"));
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("is idempotent on a duplicate delivery of the very same event id", async () => {
+    subscriptionRow = { user_id: "u_1", plan: "monthly", status: "active" };
+    await run(failedInvoice());
+    expect(notify).toHaveBeenCalledTimes(1);
+
+    notify.mockClear();
+    existingNotification = { id: "n_1" };
+    await run(failedInvoice());
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("names the right product for a contractor membership", async () => {
+    subscriptionRow = { user_id: "u_2", plan: "pro_monthly", status: "active" };
+    await run(failedInvoice());
+
+    const sent = notify.mock.calls[0][1] as Record<string, any>;
+    expect(sent.title).toContain("Hearth Pro");
+    expect(sent.url.startsWith("/pro/plus?")).toBe(true);
+  });
+
+  it("does nothing at all for a one-off invoice with no subscription", async () => {
+    subscriptionRow = { user_id: "u_1", plan: "monthly", status: "active" };
+    const res = await run(failedInvoice({ subscription: null, parent: null }));
+
+    expect(res.status).toBe(200);
+    expect(tableUpdates.filter((u) => u.table === "subscriptions")).toEqual([]);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("still 200s when there is no stored row to flag", async () => {
+    // An unknown subscription must never fail the webhook: a non-2xx makes
+    // Stripe redeliver the whole event, re-running every money handler beside
+    // this one.
+    subscriptionRow = null;
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await run(failedInvoice());
+
+    expect(res.status).toBe(200);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("still flags past_due when the plan name is unreadable, but stays quiet", async () => {
+    // A notice quoting the wrong product or price is worse than no notice;
+    // the internal flag has no such problem.
+    subscriptionRow = { user_id: "u_1", plan: "legacy_thing", status: "active" };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await run(failedInvoice());
+
+    expect(
+      tableUpdates.find((u) => u.table === "subscriptions")?.payload.status
+    ).toBe("past_due");
+    expect(notify).not.toHaveBeenCalled();
+  });
+});
+
+describe("customer.subscription.trial_will_end quotes the real price", () => {
+  // Trial end is 2027-01-01T00:00:00Z.
+  const TRIAL_END_SEC = Date.UTC(2027, 0, 1) / 1000;
+
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    notify.mockClear();
+  });
+
+  function trialEvent(over: Record<string, unknown> = {}) {
+    return {
+      id: "evt_trial_1",
+      type: "customer.subscription.trial_will_end",
+      data: {
+        object: {
+          id: "sub_test_1",
+          status: "trialing",
+          trial_end: TRIAL_END_SEC,
+          items: {
+            data: [
+              {
+                id: "si_1",
+                quantity: 1,
+                metadata: {},
+                price: { id: "price_base", recurring: { interval: "week" } },
+              },
+            ],
+          },
+          ...over,
+        },
+      },
+    };
+  }
+
+  async function run(event: Record<string, unknown>) {
+    constructEvent.mockReturnValue(event);
+    const { POST } = await import("./route");
+    return POST(post());
+  }
+
+  it("states the price that will actually be charged, read from constants", async () => {
+    // THE POINT. Nothing here writes a dollar figure by hand: the sentence is
+    // billingTerms', which derives it from PLUS_PLAN, so a price edit in
+    // src/lib/constants.ts moves this notice with it and the two can never
+    // quote different numbers to the same person.
+    subscriptionRow = { user_id: "u_1", plan: "weekly" };
+    await run(trialEvent());
+
+    expect(notify).toHaveBeenCalledTimes(1);
+    const sent = notify.mock.calls[0][1] as Record<string, any>;
+    const terms = billingTerms("weekly", true);
+    expect(sent.body).toContain(formatUsd(PLUS_PLAN.weekly));
+    expect(sent.body).toBe(`${terms.recurring} ${terms.cancel}`);
+  });
+
+  it("uses the Pro price for a contractor trial", async () => {
+    subscriptionRow = { user_id: "u_2", plan: "pro_monthly" };
+    await run(trialEvent());
+
+    const sent = notify.mock.calls[0][1] as Record<string, any>;
+    expect(sent.body).toContain(formatUsd(PRO_PLAN.monthly));
+    expect(sent.title).toContain("Hearth Pro");
+  });
+
+  it("names the date the trial ends", async () => {
+    subscriptionRow = { user_id: "u_1", plan: "weekly" };
+    await run(trialEvent());
+
+    const sent = notify.mock.calls[0][1] as Record<string, any>;
+    expect(sent.title).toBe("Your Hearth Plus free trial ends on January 1, 2027");
+  });
+
+  it("shares its dup key with the renewal-reminders cron", async () => {
+    // The cron's case-1 trial notice writes kind "renewal_reminder" at
+    // `${cancelPath}?renewal=<trial end date>`. Matching both means a member
+    // hears about the ending trial exactly once, from whichever path got there
+    // first, instead of twice in slightly different words.
+    subscriptionRow = { user_id: "u_1", plan: "weekly" };
+    await run(trialEvent());
+
+    const sent = notify.mock.calls[0][1] as Record<string, any>;
+    expect(sent.kind).toBe("renewal_reminder");
+    expect(sent.url).toBe("/plus?renewal=2027-01-01");
+  });
+
+  it("is idempotent on a duplicate delivery", async () => {
+    subscriptionRow = { user_id: "u_1", plan: "weekly" };
+    existingNotification = { id: "n_1" };
+    await run(trialEvent());
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("says nothing when the event carries no trial end date", async () => {
+    subscriptionRow = { user_id: "u_1", plan: "weekly" };
+    const res = await run(trialEvent({ trial_end: null }));
+
+    expect(res.status).toBe(200);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("never 500s when there is no stored row", async () => {
+    subscriptionRow = null;
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await run(trialEvent())).status).toBe(200);
+    expect(notify).not.toHaveBeenCalled();
   });
 });

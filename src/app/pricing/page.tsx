@@ -66,6 +66,11 @@ const FREE_FEATURES = [
   "Your first maintenance plan, built from your home's systems",
   "Your 10-year cost forecast total and the monthly amount to set aside",
   "A one-time free quote check to see whether a quote is fair",
+  // Mirrors the two new /plus comparison rows. Storing documents is free and
+  // uncapped; the numbers here are the AI READ of them, and they must match
+  // FREE_DOC_READS / FREE_INSPECTION_READS in src/lib/freeAiTaste.ts.
+  "Two free AI document reads and one free inspection report import",
+  "Your home's value estimate and how much equity you have",
   COLD_START_FREE_POSTING
     ? "Post jobs and get quotes from local pros, unlimited while Hearth is new"
     : "Post up to 3 jobs at a time and get quotes from local pros",
@@ -78,7 +83,9 @@ const PLUS_FEATURES = [
   "A maintenance plan auto-built for your home and kept up to date",
   "The full per-system cost forecast and repair-fund breakdown",
   "Unlimited quote analyzer: it reads every quote, flags padding, and drafts the message back",
+  "Unlimited AI document reads and inspection report imports",
   "A shareable home report for resale and insurance",
+  "A monthly refresh of your home value, with the year-by-year trend",
   "Track up to 5 homes in one place",
   "Every proactive alert, on every channel",
 ];
@@ -140,8 +147,8 @@ export default function PricingPage() {
           {/* The real caps, named in the same column as the capabilities, so
               "free" is a plan rather than a teaser. */}
           <p className="mt-auto pt-4 text-sm text-stone-500 dark:text-stone-400">
-            Caps: one home, one plan build, one quote check, 3 Ask Hearth
-            questions a day (text only).
+            Caps: one home, one plan build, one quote check, one home value
+            estimate, 3 Ask Hearth questions a day (text only).
           </p>
         </div>
 
@@ -277,7 +284,8 @@ export default function PricingPage() {
           What stays free, forever
         </h2>
         <p className="mt-2 text-base leading-relaxed text-stone-600 dark:text-stone-300">
-          Tracking your first home, your reminders, your document vault, your
+          Tracking your first home, your reminders, your document vault (adding
+          and storing anything you like, however much of it), your
           first maintenance plan, and posting jobs to local pros are free to use
           and always will be. You never need a card for any of it, and you can
           get a lot out of Hearth without ever paying a cent. Plus is there only

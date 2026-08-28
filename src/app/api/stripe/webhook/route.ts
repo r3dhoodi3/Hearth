@@ -17,6 +17,128 @@ import {
 // Notification kind for the post-purchase auto-renewal acknowledgment.
 const ACK_KIND = "renewal_acknowledgment";
 
+// Dunning: the notice a member gets when a renewal charge is declined. Its own
+// kind, deliberately NOT one of the Plus-gated kinds in src/lib/notifyGating.ts
+// - withholding "your card was declined" from someone whose card was declined
+// in order to sell them an upgrade would be indefensible, and it is a billing
+// notice, which that module already carves out on principle.
+const DUNNING_KIND = "payment_failed";
+
+// The SAME kind the renewal-reminders cron writes
+// (src/app/api/cron/renewal-reminders/route.ts). customer.subscription.trial_will_end
+// and that cron's case-1 "trial ending" branch are two roads to one message, so
+// they share a kind AND a url shape (`${cancelPath}?renewal=<trial end date>`).
+// Whichever arrives first writes the row; the other one's dup guard then finds
+// it and does nothing, so a trialing member gets exactly one heads-up instead
+// of two saying the same thing in slightly different words.
+const TRIAL_REMINDER_KIND = "renewal_reminder";
+
+// Statuses a live subscriptions row can hold when a dunning failure is genuine
+// news. Anything else (already past_due, canceled, unpaid, incomplete) is
+// either the same news twice or a later, more final state that a late-arriving
+// failure event must not walk backwards over.
+const DUNNING_OVERWRITABLE_STATUSES = ["active", "trialing"];
+
+// The subscription id on an invoice. It lives at invoice.subscription in older
+// Stripe API versions and under invoice.parent.subscription_details in newer
+// ones, and either may be an id string or an expanded object - read whichever
+// is present rather than pinning a version.
+function subscriptionIdFromInvoice(invoice: any): string | null {
+  const raw =
+    invoice?.subscription ??
+    invoice?.parent?.subscription_details?.subscription ??
+    null;
+  return typeof raw === "string" ? raw : (raw?.id ?? null);
+}
+
+// Normalize a stored plan string to the union billingTerms understands. Mirrors
+// toPaidPlan in the renewal-reminders cron: anything unrecognized returns null
+// and the caller stays silent rather than guessing, because a billing notice
+// quoting the wrong product or price is worse than no notice at all.
+function toPaidPlan(plan: string | null | undefined): PaidPlan | null {
+  if (plan === "weekly" || plan === "monthly" || plan === "yearly") return plan;
+  if (plan === "pro_monthly" || plan === "pro_yearly") return plan;
+  return null;
+}
+
+// Same rendering the renewal-reminders cron uses, so a date in a trial notice
+// reads identically whichever path sent it. UTC on purpose: the server's local
+// zone is not the member's, and a date that shifts by a day depending on which
+// region the function ran in is worse than a consistent one.
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+// Write a notification exactly once for a given (user, kind, url) key.
+//
+// This is the dup guard sendRenewalAcknowledgment and the renewal-reminders
+// cron already use, lifted into one place for the dunning paths. It keys on the
+// `notifications` table rather than on processed_stripe_events, and that is a
+// deliberate difference from the money paths:
+//
+//   - The money paths claim a bare Stripe EVENT id, because crediting a
+//     deposit twice is a real loss and the claim must be atomic.
+//   - A notice needs the opposite property. Stripe Smart Retries fire
+//     invoice.payment_failed once per retry attempt over a multi-week window,
+//     each with a NEW event id but the SAME invoice id, and nobody wants four
+//     copies of "your card was declined". Keying the url on the invoice (or the
+//     trial end date) collapses both the retries AND any duplicate delivery of
+//     one event id into a single message, which an event-id claim would not.
+//   - `notifications` is migration 0001. processed_stripe_events is 0060. On a
+//     live database missing the newer table this still works.
+//
+// Best-effort throughout: a failed notice is logged, never a 500. Stripe
+// redelivering the whole event to retry a notification would risk re-running
+// the money handlers beside it, which is a far worse trade.
+async function notifyOnce(
+  admin: any,
+  input: {
+    userId: string;
+    kind: string;
+    title: string;
+    body: string;
+    url: string;
+  }
+): Promise<void> {
+  try {
+    const { data: existing } = await admin
+      .from("notifications")
+      .select("id")
+      .eq("user_id", input.userId)
+      .eq("kind", input.kind)
+      .eq("url", input.url)
+      .limit(1)
+      .maybeSingle();
+    if (existing) return;
+
+    const { data: user } = await admin
+      .from("users")
+      .select("email")
+      .eq("id", input.userId)
+      .maybeSingle();
+
+    await sendNotification(admin, {
+      userId: input.userId,
+      kind: input.kind,
+      title: input.title,
+      body: input.body,
+      url: input.url,
+      email: user?.email ?? null,
+      // Never SMS. Both of these are billing documents meant to be re-read,
+      // and charging someone's phone plan to warn them about a charge is a
+      // poor trade (the renewal cron makes the same call).
+      phone: null,
+    });
+  } catch (err) {
+    console.error(`${input.kind} notification failed:`, err);
+  }
+}
+
 // Stripe needs the raw body + Node runtime to verify the signature.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -1533,14 +1655,9 @@ export async function POST(req: NextRequest) {
   // real cycles: proration and other mid-cycle update invoices don't count.
   if (event.type === "invoice.payment_succeeded") {
     const invoice = event.data.object as any;
-    // The subscription id lives at invoice.subscription in older Stripe API
-    // versions and under invoice.parent.subscription_details in newer ones:
-    // read whichever is present.
-    const rawSub =
-      invoice.subscription ??
-      invoice.parent?.subscription_details?.subscription ??
-      null;
-    const subscriptionId = typeof rawSub === "string" ? rawSub : rawSub?.id ?? null;
+    // Shared with the invoice.payment_failed branch below, so the two cannot
+    // drift on which Stripe API shape they understand.
+    const subscriptionId = subscriptionIdFromInvoice(invoice);
     // subscription_create and subscription_cycle are the normal cycles.
     // subscription_update counts too when money actually moved (amount_paid
     // over zero): a monthly-to-yearly upgrade bills the $120 on an update
@@ -1627,6 +1744,184 @@ export async function POST(req: NextRequest) {
         }
       } catch (err) {
         console.error("grant_membership_credit failed:", err);
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // DUNNING: a renewal charge was declined.
+  // -------------------------------------------------------------------------
+  // Before this existed, a churning subscriber looked identical in-app to a
+  // happy one until customer.subscription.deleted finally fired - which, across
+  // a full Smart Retry window, can be a month after the first decline. The
+  // member saw nothing, and neither did the owner.
+  //
+  // Two things happen here, both best-effort, neither able to fail the webhook:
+  //   1. The subscriptions row is flipped to past_due, so every surface that
+  //      already reads that column (isLiveProPlanRow, the renewal cron, the
+  //      account pages) stops treating the membership as healthy.
+  //   2. The member gets ONE in-app notice per failed invoice pointing at the
+  //      page whose "Manage billing" button opens the Stripe Customer Portal,
+  //      which is where a card is actually replaced.
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object as any;
+    const subscriptionId = subscriptionIdFromInvoice(invoice);
+    // A one-off invoice with no subscription has no membership to flag and no
+    // renewal to save - nothing to do.
+    if (subscriptionId) {
+      try {
+        const admin = createAdminClient();
+        // Matched ONLY by stripe_subscription_id, never by customer id: one
+        // Stripe customer can hold both the homeowner Plus and the Pro
+        // subscription, and a failed Plus renewal must not mark the Pro
+        // membership past_due.
+        const { data: subRow } = await (admin as any)
+          .from("subscriptions")
+          .select("user_id, plan, status")
+          .eq("stripe_subscription_id", subscriptionId)
+          .maybeSingle();
+
+        if (!subRow?.user_id) {
+          console.error(
+            "invoice.payment_failed: no subscriptions row for",
+            subscriptionId,
+            "- nothing to flag"
+          );
+        } else {
+          // Conditional update. The row is a MIRROR of Stripe, and
+          // customer.subscription.updated is the authority on its status - it
+          // fires for this same failure and will also set the row back to
+          // active the moment a retry succeeds. Stripe does not guarantee
+          // event ordering, so this write is scoped to the statuses where
+          // "the card just failed" is genuinely new information. That keeps a
+          // late-arriving failure from walking a canceled row backwards into
+          // past_due, or from overwriting a recovery that already landed.
+          const { error: statusError } = await (admin as any)
+            .from("subscriptions")
+            .update({ status: "past_due", updated_at: new Date().toISOString() })
+            .eq("stripe_subscription_id", subscriptionId)
+            .in("status", DUNNING_OVERWRITABLE_STATUSES);
+          if (statusError) {
+            // Graceful degradation: a live database without the column (or the
+            // row locked down another way) still gets the notice below. Never
+            // 500 over bookkeeping.
+            console.error(
+              "invoice.payment_failed: could not mark past_due:",
+              statusError.message ?? statusError
+            );
+          }
+
+          const plan = toPaidPlan(subRow.plan);
+          if (plan) {
+            // introEligible false: this member is past signup and is being
+            // billed at the standard recurring price, so the terms quoted back
+            // to them must be the standard ones, not trial or intro copy.
+            const terms = billingTerms(plan, false);
+            // There is no standalone Customer Portal ROUTE in this app - the
+            // portal session is minted by manageBillingAction, the server
+            // action behind the "Manage billing" button on the membership
+            // page. So the link goes to that page (/plus for homeowners,
+            // /pro/plus for contractors, straight off terms.cancelPath), which
+            // is one click from the portal and works whether or not the member
+            // still has a live Stripe customer.
+            //
+            // The invoice id in the url is the dup key: Smart Retries fire
+            // this event repeatedly for ONE failed invoice, and the member
+            // should hear about it once. A genuinely new failed cycle carries
+            // a new invoice id and re-arms the notice.
+            const url = `${terms.cancelPath}?billing=past_due&invoice=${invoice.id}`;
+            await notifyOnce(admin, {
+              userId: subRow.user_id,
+              kind: DUNNING_KIND,
+              title: `Your ${terms.product} payment didn't go through, update your card`,
+              body:
+                `We couldn't charge the card on file for your ${terms.product} membership. ` +
+                `Open your ${terms.product} page and use Manage billing to update your card, ` +
+                `and we'll retry the charge automatically. ${terms.cancel}`,
+              url,
+            });
+          } else {
+            // An unrecognized stored plan name means the copy would have to
+            // guess at the product and the price. The row is still flagged
+            // past_due above; only the message is withheld.
+            console.error(
+              "invoice.payment_failed: unrecognized plan on the subscriptions row for",
+              subscriptionId,
+              "- flagged past_due, no notice sent"
+            );
+          }
+        }
+      } catch (err) {
+        console.error("invoice.payment_failed handling threw:", err);
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // TRIAL ENDING: Stripe's 3-days-out heads-up.
+  // -------------------------------------------------------------------------
+  // Required reading for the member and the one number the trial-to-paid
+  // conversion rate depends on. The price quoted comes from billingTerms, which
+  // derives everything from PLUS_PLAN / PRO_PLAN in src/lib/constants.ts, so
+  // this notice can never quote a number the card is not actually charged - the
+  // whole reason no price is written here by hand.
+  if (event.type === "customer.subscription.trial_will_end") {
+    const subscription = event.data.object as any;
+    const trialEndSec = subscription?.trial_end;
+    if (subscription?.id && typeof trialEndSec === "number") {
+      try {
+        const admin = createAdminClient();
+        const { data: subRow } = await (admin as any)
+          .from("subscriptions")
+          .select("user_id, plan")
+          .eq("stripe_subscription_id", subscription.id)
+          .maybeSingle();
+
+        if (!subRow?.user_id) {
+          console.error(
+            "customer.subscription.trial_will_end: no subscriptions row for",
+            subscription.id
+          );
+        } else {
+          // The stored plan is the authority on WHICH product this is, since
+          // the billing interval alone cannot tell Plus monthly from Pro
+          // monthly. planFromItems is the fallback for the one case the stored
+          // name cannot cover: a homeowner row written before its cadence was
+          // known. A pro_ row is never re-derived from the interval here -
+          // same conservative rule the subscription.updated branch follows.
+          const plan =
+            toPaidPlan(subRow.plan) ??
+            (subRow.plan?.startsWith("pro_")
+              ? null
+              : toPaidPlan(planFromItems(subscription)));
+          if (plan) {
+            // introEligible true: this subscription IS on the trial right now,
+            // so terms.recurring is the "after the free trial, $X is charged
+            // and renews until you cancel" sentence - the exact wording shown
+            // before checkout, which is what makes the two impossible to
+            // drift apart.
+            const terms = billingTerms(plan, true);
+            const trialEnd = new Date(trialEndSec * 1000);
+            const url = `${terms.cancelPath}?renewal=${trialEnd
+              .toISOString()
+              .slice(0, 10)}`;
+            await notifyOnce(admin, {
+              userId: subRow.user_id,
+              kind: TRIAL_REMINDER_KIND,
+              title: `Your ${terms.product} free trial ends on ${fmtDate(trialEnd)}`,
+              body: `${terms.recurring} ${terms.cancel}`,
+              url,
+            });
+          } else {
+            console.error(
+              "customer.subscription.trial_will_end: unrecognized plan for",
+              subscription.id,
+              "- no notice sent"
+            );
+          }
+        }
+      } catch (err) {
+        console.error("customer.subscription.trial_will_end handling threw:", err);
       }
     }
   }

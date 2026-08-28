@@ -175,7 +175,7 @@ export default function ProfileMenu({
         aria-expanded={open}
         aria-busy={switching !== null || undefined}
         aria-label={name ? `Account menu for ${name}` : "Account menu"}
-        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-bark-50 dark:text-stone-200 dark:hover:bg-stone-800"
+        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-bark-50 max-sm:min-h-11 dark:text-stone-200 dark:hover:bg-stone-800"
       >
         {name ? (
           // Initials monogram - the first letter of the name in brand colors.

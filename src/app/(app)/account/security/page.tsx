@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { getUserProfile } from "@/lib/user";
-import { getPasswordStatus, providerLabel } from "@/lib/auth";
+import { getPasswordStatus, getVerifiedUser, providerLabel } from "@/lib/auth";
 import AccountSecurityPanel from "@/components/AccountSecurityPanel";
 import AccountTabs from "../AccountTabs";
 import {
@@ -27,10 +26,11 @@ export default async function AccountSecurityPage() {
   // exact same address. After an email change on another device, a cached or
   // mirrored value would show the old address, the button would enable on it,
   // and the server would reject it forever (M7).
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getVerifiedUser() IS that live auth-server read (it wraps the same
+  // supabase.auth.getUser() call); the only difference is that React's cache()
+  // makes this page, getPasswordStatus() below, and the layout's contractor
+  // lookup share one verification instead of paying three.
+  const user = await getVerifiedUser();
   const email = user?.email ?? null;
 
   // Read on every load, so the Password card shows the set-a-password flow to

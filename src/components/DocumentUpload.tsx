@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { SYSTEM_TYPES } from "@/lib/constants";
 import { saveDocumentAction } from "@/lib/document-actions";
@@ -10,6 +11,7 @@ import { FilePreviewThumb } from "@/components/FilePreview";
 import Lightbox from "@/components/Lightbox";
 import AiNotice from "@/components/AiNotice";
 import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
+import { FREE_TASTE_PAYWALL, tasteMeterLabel } from "@/lib/freeAiTaste";
 
 // What /api/extract-document does while the owner waits: read the file, then
 // pull the facts (brand, model, dates) off it into the editable form.
@@ -59,7 +61,20 @@ type Note = { text: string; tone: "error" | "ok" | "working" };
 // (below). Extraction only needs the bytes, not a stored object, so picking a
 // file and then canceling or navigating away leaves nothing orphaned in the
 // private bucket.
-export default function DocumentUpload({ propertyId }: { propertyId: string }) {
+//
+// `freeReadsLeft` is the meter: how many of the 2 lifetime free AI reads this
+// account has left (src/lib/freeAiTaste.ts). It is null for a Plus or trialing
+// member, and null when the counter could not be read, and in both cases no
+// meter and no door is shown. At zero the picker is replaced by the Plus door
+// carrying the SAME sentence /api/extract-document would have sent, so the
+// refusal is never a surprise and never arrives cold.
+export default function DocumentUpload({
+  propertyId,
+  freeReadsLeft = null,
+}: {
+  propertyId: string;
+  freeReadsLeft?: number | null;
+}) {
   const supabase = createClient();
   const [phase, setPhase] = useState<"idle" | "working" | "review">("idle");
   const [note, setNote] = useState<Note | null>(null);
@@ -73,6 +88,15 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   // Progress bar for the "Reading the document" extraction step.
   const progress = useStagedProgress(READ_STAGES, 12000);
+  // The live meter. Seeded from the server on render and decremented here as
+  // reads succeed, so the count stays honest without a page refresh. Null
+  // means "no meter" (Plus, or the counter could not be read).
+  const [readsLeft, setReadsLeft] = useState<number | null>(freeReadsLeft);
+  // Set when the server refuses (HTTP 402): the door replaces the picker with
+  // the server's own sentence. Belt and braces behind the meter above, for the
+  // tab that was already open when the last read was spent somewhere else.
+  const [locked, setLocked] = useState(false);
+  const doorShowing = locked || readsLeft === 0;
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -143,6 +167,11 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
     setReading(controller);
     let extracted: Extracted | null = null;
     let timedOut = false;
+    // The server said this account is out of free reads (HTTP 402). Handled
+    // like the timeout below: hand the picker back and show the door, rather
+    // than dropping into the blank review form as if extraction had merely
+    // failed.
+    let paywalled = false;
     try {
       const b64 = await toBase64(picked);
       const resp = await fetchWithTimeout(
@@ -155,8 +184,14 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
         },
         90_000
       );
-      const data = await resp.json();
-      extracted = data?.doc ?? null;
+      const data = await resp.json().catch(() => ({}));
+      if (resp.status === 402) {
+        paywalled = true;
+        setReadsLeft(0);
+        setLocked(true);
+      } else {
+        extracted = data?.doc ?? null;
+      }
     } catch (e) {
       if (isTimeoutError(e)) {
         timedOut = true;
@@ -177,6 +212,24 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
       setPreview(null);
       setNote({ text: "That took too long. Try again.", tone: "error" });
       return;
+    }
+
+    if (paywalled) {
+      // The door below carries the message, so no red error note here: this
+      // is not something the owner got wrong.
+      setPhase("idle");
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setFile(null);
+      setPreview(null);
+      setNote(null);
+      return;
+    }
+
+    // A real read landed, so one free read is gone. A failed read is refunded
+    // server side, so the meter only moves when the owner actually got
+    // something back.
+    if (extracted) {
+      setReadsLeft((n) => (n === null ? null : Math.max(0, n - 1)));
     }
 
     // Fall back to a blank, editable form if extraction was unavailable.
@@ -274,7 +327,25 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-white/10 dark:bg-stone-800">
-      {phase !== "review" && (
+      {/* THE DOOR. Shown in place of the picker once the free reads are gone,
+          carrying the same sentence the route sends, so nobody meets a cold
+          refusal after picking a file. Uploads themselves are not gated: the
+          card below points that out, since storing paperwork stays free. */}
+      {phase !== "review" && doorShowing && (
+        <div className="space-y-3 rounded-lg border border-bark-100 bg-bark-50 p-4 text-center dark:border-bark-700 dark:bg-bark-700/40">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
+            {FREE_TASTE_PAYWALL.document.message}
+          </p>
+          <Link
+            href={FREE_TASTE_PAYWALL.document.link}
+            className="btn-primary inline-block"
+          >
+            Get Hearth Plus
+          </Link>
+        </div>
+      )}
+
+      {phase !== "review" && !doorShowing && (
         <>
           <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-stone-200 px-4 py-8 text-center hover:border-bark-500 hover:bg-bark-50 dark:border-white/10">
             <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
@@ -291,6 +362,15 @@ export default function DocumentUpload({ propertyId }: { propertyId: string }) {
               className="hidden"
             />
           </label>
+          {/* THE METER, stated before the tap rather than after the wall: the
+              exact number left, next to the action it applies to. Plus and
+              trialing members get null and see nothing here. */}
+          {readsLeft !== null && readsLeft > 0 && (
+            <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+              {tasteMeterLabel("document", readsLeft)}. Plus reads every
+              document you add.
+            </p>
+          )}
           {/* On phones, shooting the label/receipt right now beats hunting the
               gallery. Same onPick, so extraction works identically. */}
           <TakePhotoButton

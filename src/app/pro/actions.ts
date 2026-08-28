@@ -360,6 +360,36 @@ async function resolveReferralCode(
   }
 }
 
+// Both contractors writes below (the insert on first-time setup, the update on
+// a profile save) used to end in a bare `if (error) throw new Error(...)`,
+// which crashes straight past this file's own setFlash/redirect conventions
+// into Next's generic error boundary - the "Something went sideways" page,
+// with none of the fields the pro just typed still on screen. A write can
+// fail for reasons that have nothing to do with what the pro typed: the one
+// that actually happened live was 0129's widened launch_cities check
+// constraint landing in code before the matching database migration had been
+// pasted in, so a perfectly ordinary city pick violated the narrower
+// constraint still live on the table. Classify the failure into the same
+// honest flash the rest of this function already uses instead of rethrowing.
+function contractorsWriteFailureFlash(error: {
+  code?: string;
+  message?: string;
+}): string {
+  // 23514 is Postgres's check-constraint violation code. Matched by
+  // constraint name too, not the code alone, so some other, unrelated check
+  // constraint on this table doesn't get mistaken for this one and shown the
+  // wrong copy.
+  if (
+    error.code === "23514" &&
+    error.message?.includes("contractors_launch_cities_subset")
+  ) {
+    console.error("[pro] contractors constraint", error.code);
+    return "We couldn't save your service area just now. Pick specific cities and try again, or come back a little later.";
+  }
+  console.error("[pro] contractors write failed", error.code, error.message);
+  return "Couldn't save your company profile just now. Please try again.";
+}
+
 // Create (onboarding) or update (profile) the current user's contractor company.
 export async function saveCompanyAction(formData: FormData) {
   const supabase = await createClient();
@@ -704,7 +734,18 @@ export async function saveCompanyAction(formData: FormData) {
         .update(fields)
         .eq("id", existing.id));
     }
-    if (error) throw new Error(error.message);
+    if (error) {
+      // No redirect here on purpose - same reasoning as the success end of
+      // this block below: a redirect() back to the exact path the form is
+      // already on is the same-path App Router footgun that used to leave
+      // /pro/profile stuck on its loading.tsx boundary. setFlash() then
+      // revalidatePath() on the SAME path is the pattern FlashToast expects
+      // (see its own comment), and it is exactly what the success path
+      // already does two paragraphs down.
+      await setFlash(contractorsWriteFailureFlash(error), "error");
+      revalidatePath("/pro/profile");
+      return;
+    }
 
     // license_verified_status/_at/_verify_detail are trust columns 0078
     // revokes UPDATE on for `authenticated` (self-forged "verified" badges),
@@ -984,7 +1025,14 @@ export async function saveCompanyAction(formData: FormData) {
       console.error("contractors insert failed:", error.message);
     }
   }
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Onboarding has nowhere to revalidate in place - this account has no
+    // contractors row yet, so there is no /pro/profile to refresh. Same
+    // redirect-back-to-the-form-just-submitted pattern the floors above this
+    // function already use (e.g. "Pick at least one city you serve.").
+    await setFlash(contractorsWriteFailureFlash(error), "error");
+    redirect("/pro/onboarding");
+  }
 
   // A supplied license number is only "on file", not checked: queue it as
   // 'pending' (0037) so nothing downstream can claim a verification that
@@ -1217,7 +1265,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
     );
   } else if (result.failureReason === "duplicate_license") {
     await setFlash(
-      "This license number is already verified on another Hearth account. If someone else used your license, file a dispute below and we will investigate.",
+      "This license number is already verified on a different Hearth account. If that's not you, file a dispute below and we'll look into it.",
       "error"
     );
   } else if (result.decision === "verified") {

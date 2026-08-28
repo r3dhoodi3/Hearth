@@ -99,8 +99,8 @@ export default function ComplianceCard({
         </h2>
         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
           Hearth stores your documents and reminds you before they expire.
-          Uploading a document does not verify it; your license number is
-          checked against the CSLB separately.
+          Uploading one doesn&apos;t verify it, your license number is checked
+          separately against California&apos;s license board.
         </p>
       </div>
 

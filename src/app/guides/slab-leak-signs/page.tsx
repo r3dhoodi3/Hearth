@@ -11,10 +11,20 @@ import GuideCta from "@/components/GuideCta";
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// STATIC (ISR marker). Nothing in this page or in src/app/guides/layout.tsx
+// reads cookies(), headers(), searchParams or the database: the session-aware
+// CTA moved to the browser (src/components/SessionCta.tsx), so this page is
+// prerendered once and served from the edge cache. As on /pricing, the
+// explicit revalidate is a marker rather than a requirement - it makes the
+// static intent visible in `next build` output and gives a future data read
+// ISR instead of silently dropping the route back to per-request rendering.
+// Anything added here that reads cookies()/headers()/searchParams undoes it.
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: "Slab leak signs: how to spot one early",
   description:
-    "The early warning signs of a slab leak, why older Fountain Valley and Huntington Beach homes are prone to them, repair options, and when it's an emergency.",
+    "The early warning signs of a slab leak, why older Orange County homes are prone to them, repair options, and when it's an emergency.",
   alternates: {
     canonical: `${SITE_URL}/guides/slab-leak-signs`,
   },
@@ -98,10 +108,11 @@ export default function SlabLeakSignsGuide() {
 
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Why Fountain Valley and Huntington Beach homes are prone to this
+            Why older Orange County homes are prone to this
           </h2>
           <p className="mt-2 leading-relaxed">
-            Much of Fountain Valley and Huntington Beach was built out during
+            Much of Orange County, from Fountain Valley and Huntington Beach
+            to Garden Grove, Anaheim, and Santa Ana, was built out during
             the 1960s and 1970s, when it was standard practice to run copper
             water supply lines directly through the concrete slab rather than
             through walls or an attic. Copper pipe from that era is now well

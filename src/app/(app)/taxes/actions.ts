@@ -19,7 +19,8 @@ export async function saveTaxAssessmentAction(
   formData: FormData
 ): Promise<ActionResult> {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property)
+    throw new Error("Couldn't find your home. Try again from the dashboard.");
 
   const valueRaw = formData.get("assessed_value");
   const yearRaw = formData.get("assessed_year");

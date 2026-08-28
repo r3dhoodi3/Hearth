@@ -55,6 +55,12 @@ type CurrentWeather = {
   // strip labels its rows by comparing dates against this, never by row
   // position - see dayLabel in src/lib/weatherLabels.ts.
   today: string;
+  // The IANA zone Open-Meteo resolved for this location (its top-level
+  // `timezone` field, a side effect of the `timezone=auto` param above) -
+  // the real geocoded zone, not a state guess. Null when the upstream
+  // response didn't carry one; WeatherStrip's timeZoneForProperty falls back
+  // to a state guess, then the launch area's own zone, when this is null.
+  timezone: string | null;
   daily: DailyForecast[];
 };
 
@@ -295,6 +301,10 @@ async function fetchWeather(
             lowF: Math.round(mins[0]),
             city: city ?? loc.name ?? "",
             today: homeToday,
+            timezone:
+              typeof fc?.timezone === "string" && fc.timezone
+                ? fc.timezone
+                : null,
             daily,
           };
         }

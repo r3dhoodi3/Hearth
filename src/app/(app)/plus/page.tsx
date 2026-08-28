@@ -6,8 +6,9 @@ import {
   getBillingOutlook,
   getExtraHomeSlots, isPlusTrialEligible } from "@/lib/subscription";
 import { getProperties } from "@/lib/property";
+import { FREE_TASTE_PAYWALL } from "@/lib/freeAiTaste";
 import { getUser } from "@/lib/auth";
-import { trialDecision } from "@/lib/risk/decision";
+import { trialDecision, TRIAL_DECISION_TTL_MS } from "@/lib/risk/decision";
 import {
   manageBillingAction,
   upgradeToYearlyAction,
@@ -38,6 +39,26 @@ const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
   // Photo diagnosis is the Plus-only half of Ask Hearth; the question count is
   // the other half. Both numbers must match what src/lib/aiUsage.ts enforces.
   { label: "Ask Hearth", free: "3 a day, text only", plus: "15 a day, with photos" },
+  // The first estimate for a home is free and stays free (see the note at the
+  // top of src/app/(app)/value/actions.ts). "Refresh monthly" is the honest
+  // word for what Plus buys: the lookup behind it is cached 30 days, so a
+  // monthly pull is as often as the number can actually move.
+  {
+    label: "Home value",
+    free: "First estimate",
+    plus: "Refresh monthly, with trend and equity",
+  },
+  // The two AI reads that used to be free and unlimited. Both numbers must
+  // match FREE_DOC_READS / FREE_INSPECTION_READS in src/lib/freeAiTaste.ts,
+  // which is what /api/extract-document and /api/ingest-inspection enforce.
+  // Storing documents is still free and uncapped: only the AI read is metered,
+  // which is why the vault row below still says "Included" for both columns.
+  {
+    label: "Document vault AI read",
+    free: "2 free, then Plus",
+    plus: "Unlimited",
+  },
+  { label: "Inspection report import", free: "1 free", plus: "Unlimited" },
   // When the posting cap is on, unlimited postings are a real Plus perk, so
   // the row sits up here with the other upgrades.
   ...(COLD_START_FREE_POSTING
@@ -357,6 +378,12 @@ export default async function PlusPage(
           // A page render is a GET: compute, do not write. The checkout action
           // re-runs the same decision and records it there.
           persist: false,
+          // ...and it may reuse a recent answer rather than re-running the
+          // whole fan-out on every refresh of an upsell page. Render path only:
+          // startPlusCheckoutAction passes no maxAgeMs, so the decision that
+          // actually gates money is always computed fresh. See decision.ts for
+          // what is never cached (high, and any refused checkout).
+          maxAgeMs: TRIAL_DECISION_TTL_MS,
         })
       : null;
   const trialEligible =
@@ -370,20 +397,22 @@ export default async function PlusPage(
   // spent anything. Only looked up when that banner can actually render, and
   // it fails to the GENERIC pitch on any error or missing row: never tell
   // someone they burned a credit we cannot prove they burned.
+  //
+  // Reuses `viewer` (the cached getUser() resolved above) instead of a second
+  // supabase.auth.getUser(), which was a full network hop to Supabase's auth
+  // server just to re-learn an id this render already had. Safe for the same
+  // reason the risk decision above uses it: the row is RLS-protected and the
+  // select is pinned to that id, so the worst a cookie-edited id can do is
+  // mislead the cookie's own holder about their own screen.
   let quoteCreditSpent = false;
-  if (searchParams.reason === "quote") {
+  if (searchParams.reason === "quote" && viewer) {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      const { data: creditRow } = await supabase
-        .from("users")
-        .select("free_quote_used_at")
-        .eq("id", user.id)
-        .maybeSingle();
-      quoteCreditSpent = !!creditRow?.free_quote_used_at;
-    }
+    const { data: creditRow } = await supabase
+      .from("users")
+      .select("free_quote_used_at")
+      .eq("id", viewer.id)
+      .maybeSingle();
+    quoteCreditSpent = !!creditRow?.free_quote_used_at;
   }
 
   return (
@@ -417,7 +446,7 @@ export default async function PlusPage(
         <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
           <p className="text-sm text-bark-700 dark:text-stone-300">
             Hearth Plus builds a maintenance plan tuned to your home&apos;s
-            systems, a few tasks at a time so it never piles up.
+            systems, a few tasks at a time, so it never piles up.
           </p>
         </div>
       )}
@@ -426,8 +455,8 @@ export default async function PlusPage(
         <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
           <p className="text-sm text-bark-700 dark:text-stone-300">
             Hearth Plus forecasts what your home will need over the next 10
-            years and the amount to set aside each month, so a big repair is a
-            plan, not a panic.
+            years, and how much to set aside each month. A big repair
+            becomes a plan, not a panic.
           </p>
         </div>
       )}
@@ -453,8 +482,9 @@ export default async function PlusPage(
       {searchParams.reason === "report" && (
         <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
           <p className="text-sm text-bark-700 dark:text-stone-300">
-            Hearth Plus builds a shareable home report of your systems,
-            documents, and upkeep history, ready for insurers or buyers.
+            Plus builds your requote packet: your home&apos;s facts, upkeep
+            record, and the questions to ask. Hand it to agents and let them
+            compete for you.
           </p>
         </div>
       )}
@@ -468,12 +498,48 @@ export default async function PlusPage(
         </div>
       )}
 
+      {/* Same voice as the rest: name the specific thing gained, no urgency.
+          Your first estimate is free and stays free, so this banner never
+          claims to give back something that was taken away. */}
+      {searchParams.reason === "value" && (
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
+            Your first home value estimate is free. Plus refreshes it monthly
+            with new sales near you, and opens the year-by-year trend and how
+            your equity has built up.
+          </p>
+        </div>
+      )}
+
       {searchParams.reason === "insurance" && (
         <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
           <p className="text-sm text-bark-700 dark:text-stone-300">
             Plus builds your requote packet: your home&apos;s facts, upkeep
             record, and the questions to ask, ready to hand to insurance
             agents so they compete for you.
+          </p>
+        </div>
+      )}
+
+      {/* The two AI reads that now carry a free taste. The wording is the SAME
+          sentence /api/extract-document and /api/ingest-inspection send, and
+          the same one the upload cards show before the tap, so a homeowner who
+          lands here has already read it: see FREE_TASTE_PAYWALL in
+          src/lib/freeAiTaste.ts. Uploading and storing documents is not gated
+          at all - only the AI read is - and the copy says so. */}
+      {searchParams.reason === "documents" && (
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
+            {FREE_TASTE_PAYWALL.document.message} Adding and storing documents
+            stays free.
+          </p>
+        </div>
+      )}
+
+      {searchParams.reason === "inspection" && (
+        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
+            {FREE_TASTE_PAYWALL.inspection.message}
           </p>
         </div>
       )}

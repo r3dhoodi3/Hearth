@@ -2615,9 +2615,9 @@ export default function ProDemoPlayer() {
                   <p className="text-sm text-stone-600">Win work in your trade.</p>
                   <p className="mt-1 text-sm text-stone-500">
                     <span className="align-middle text-2xl font-bold text-green-700" data-x="endStat">1</span>
-                    <span className="align-middle text-sm text-stone-400"> job won this week</span>
+                    <span className="align-middle text-sm text-stone-500"> job won this week</span>
                   </p>
-                  <p className="mt-1 max-w-[15rem] text-xs text-stone-400">
+                  <p className="mt-1 max-w-[15rem] text-xs text-stone-500">
                     Not chosen? Your fee comes back as credit.
                   </p>
                   {/* A REAL link: the end card is a conversion surface, not a
@@ -2709,7 +2709,7 @@ export default function ProDemoPlayer() {
             type="button"
             className={styles.rateBtn}
             onClick={handleCycleRate}
-            aria-label={`Playback speed ${RATES[rateIdx]}x, click to change`}
+            aria-label={`Playback speed ${RATES[rateIdx]}x, change speed`}
           >
             {RATES[rateIdx]}x
           </button>

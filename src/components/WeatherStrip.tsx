@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/Skeleton";
 import { fetchHomeAlerts, type CurrentWeather } from "@/lib/homeAlertsClient";
+import { formatLocalTime, timeZoneForProperty } from "@/lib/localTime";
 import {
   conditionFor,
   dayLabel,
@@ -142,6 +143,34 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
     };
   }, [propertyId]);
 
+  // The clock next to H/L. `now` starts null and stays null through the
+  // first render on both server and client - reading Date.now() straight
+  // into state would make the server's markup disagree with the client's on
+  // the very first paint (a hydration mismatch), the same reason `unit`
+  // above starts at a fixed default instead of reading localStorage during
+  // render. The effect fires once on mount, fills in the real time, then
+  // re-fills it aligned to each minute boundary: an immediate setTimeout to
+  // the next :00, then a plain 60s interval from there - so the displayed
+  // minute changes right when a real clock's would, not up to 59s late.
+  const [now, setNow] = useState<Date | null>(null);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | undefined;
+    function tick() {
+      setNow(new Date());
+    }
+    tick();
+    const msToNextMinute = 60_000 - (Date.now() % 60_000);
+    const toNextMinute = setTimeout(() => {
+      tick();
+      interval = setInterval(tick, 60_000);
+    }, msToNextMinute);
+    return () => {
+      clearTimeout(toNextMinute);
+      if (interval) clearInterval(interval);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div
@@ -178,6 +207,20 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
   // opens an empty drawer is worse than a plain row.
   const expandable = daily.length > 0;
 
+  // The route resolves this home's real IANA zone from Open-Meteo's own
+  // `timezone=auto` response and passes it through as weather.timezone (see
+  // CurrentWeather in src/lib/homeAlertsClient.ts). timeZoneForProperty
+  // prefers that over a state guess, falling back to the launch area's own
+  // zone when neither is available (a home with no location, or a lookup
+  // that didn't return one).
+  const zone = timeZoneForProperty({ tz: weather.timezone });
+  const clockFull = now ? formatLocalTime(now, zone) : null;
+  // Same clock, with the space before the meridiem dropped - used below sm
+  // only, the same width budget that already hides the city there (see the
+  // comment on the city span below). "3:42PM" buys back one character over
+  // "3:42 PM" without losing any information.
+  const clockCompact = clockFull ? clockFull.replace(/\s(?=[AP]M$)/, "") : null;
+
   const summary = (
     <>
       <Icon
@@ -195,6 +238,28 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
         H {convertTemp(weather.highF, unit)}&deg; L{" "}
         {convertTemp(weather.lowF, unit)}&deg;
       </span>
+      {/* The home's local time, same size/color as H/L so it reads as part
+          of the same quiet group rather than a new piece of UI. Reserves its
+          width (min-w) both before mount and while ticking, so filling in
+          the real time - or the hour gaining/losing a digit at the top of
+          the hour - never nudges the temperatures beside it. `now` is null
+          until the effect above fires post-mount, so the placeholder is a
+          plain non-breaking space rather than a real (server/client
+          mismatched) time. */}
+      <time
+        dateTime={now ? now.toISOString() : undefined}
+        aria-label="Local time at your home"
+        className="inline-block min-w-[4.5rem] shrink-0 whitespace-nowrap tabular-nums text-stone-500 dark:text-stone-400"
+      >
+        {clockFull ? (
+          <>
+            <span className="hidden sm:inline">&middot; {clockFull}</span>
+            <span className="sm:hidden">&middot; {clockCompact}</span>
+          </>
+        ) : (
+          " "
+        )}
+      </time>
       {/* Hidden below sm ONLY. At 390px the app shell leaves 342px of row,
           and the unit switch takes ~82 of it: keeping the city there would
           leave it about one character wide, which is an ellipsis pretending to

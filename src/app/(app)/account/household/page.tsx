@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getVerifiedUser } from "@/lib/auth";
 import { formatAddressLine, getProperties } from "@/lib/property";
 import type { HouseholdMember } from "@/lib/database.types";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
@@ -20,9 +21,10 @@ const MAX_MEMBERS_PER_HOME = 4;
 // and the homes shared with me (leave).
 export default async function HouseholdPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getVerifiedUser(): the same live supabase.auth.getUser() check as before,
+  // but React-cache()-shared with the (app) layout's own verification, so this
+  // page no longer opens a second auth round trip of its own.
+  const user = await getVerifiedUser();
   if (!user) redirect("/signin");
 
   const homes = await getProperties();
@@ -77,13 +79,17 @@ export default async function HouseholdPage() {
         </p>
       </div>
 
-      <div className="card p-6">
+      <div className="card space-y-2 p-6">
         <p className="text-sm text-stone-600 dark:text-stone-300">
-          A household member can see and manage the day to day of a shared
-          home: systems, maintenance tasks, issues, photos, documents, job
-          posts, and contractor messages. A member cannot edit the home&apos;s
-          details, remove the home, or invite anyone else. Hearth Plus is a
-          personal subscription, so a member does not inherit the owner&apos;s
+          A member can see and manage the day-to-day: systems, tasks, issues,
+          photos, documents, job posts, and messages.
+        </p>
+        <p className="text-sm text-stone-600 dark:text-stone-300">
+          A member can&apos;t edit the home&apos;s details, remove the home,
+          or invite anyone else.
+        </p>
+        <p className="text-sm text-stone-600 dark:text-stone-300">
+          Plus is personal, so a member doesn&apos;t get the owner&apos;s
           Plus.
         </p>
       </div>
@@ -186,8 +192,8 @@ export default async function HouseholdPage() {
 
             {atCap ? (
               <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-                This home has the maximum of {MAX_MEMBERS_PER_HOME} members.
-                Remove someone to invite another person.
+                You&apos;re at your member limit. Remove someone to invite
+                another person.
               </p>
             ) : (
               <>
@@ -203,7 +209,7 @@ export default async function HouseholdPage() {
                   <SubmitButton className="btn-secondary">Invite</SubmitButton>
                 </form>
 
-                <p className="mt-4 text-center text-xs text-stone-400 dark:text-stone-500">
+                <p className="mt-4 text-center text-xs text-stone-500 dark:text-stone-500">
                   or
                 </p>
                 {/* Fresh QR token minted client-side (migration 0095), a

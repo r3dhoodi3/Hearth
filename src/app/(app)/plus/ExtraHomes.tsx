@@ -85,7 +85,7 @@ export default function ExtraHomes({
             onClick={() => setQty((q) => clamp(q - 1))}
             disabled={qty <= 0}
             aria-label="Fewer homes"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-lg text-stone-700 hover:border-stone-300 disabled:opacity-40 dark:border-white/10 dark:text-stone-300"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-lg text-stone-700 hover:border-stone-300 disabled:opacity-40 max-sm:h-11 max-sm:w-11 dark:border-white/10 dark:text-stone-300"
           >
             −
           </button>
@@ -97,7 +97,7 @@ export default function ExtraHomes({
             onClick={() => setQty((q) => clamp(q + 1))}
             disabled={qty >= EXTRA_HOME.maxExtra}
             aria-label="More homes"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-lg text-stone-700 hover:border-stone-300 disabled:opacity-40 dark:border-white/10 dark:text-stone-300"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-lg text-stone-700 hover:border-stone-300 disabled:opacity-40 max-sm:h-11 max-sm:w-11 dark:border-white/10 dark:text-stone-300"
           >
             +
           </button>

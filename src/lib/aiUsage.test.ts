@@ -50,6 +50,23 @@ describe("daily budgets", () => {
     );
   });
 
+  it("puts the trial between free and paid on both budgets", () => {
+    // A trial that matched Plus would hand the full ceiling to any account
+    // with a spare inbox (trials are free to start and free to start again);
+    // one that matched free would demo nothing.
+    expect(constant("ASK_DAILY_TRIAL")).toBe(8);
+    expect(constant("ASK_DAILY_TRIAL")).toBeGreaterThan(
+      constant("ASK_DAILY_FREE")
+    );
+    expect(constant("ASK_DAILY_TRIAL")).toBeLessThan(constant("ASK_DAILY_PLUS"));
+    expect(constant("DAILY_LIMIT_TRIAL")).toBeGreaterThan(
+      constant("DAILY_LIMIT_FREE")
+    );
+    expect(constant("DAILY_LIMIT_TRIAL")).toBeLessThan(
+      constant("DAILY_LIMIT_PLUS")
+    );
+  });
+
   it("counts the chat in its own fixed-window bucket, not ai_usage", () => {
     expect(aiUsage).toContain("ask-day:${userId}");
     expect(aiUsage).toContain("rate_limit_hit");
@@ -503,5 +520,58 @@ describe("the pro chat refunds what it never answered", () => {
     const shed = proAskRoute.indexOf("overAiGlobalHourlyLimit()");
     const refundAfterShed = proAskRoute.indexOf("refundAiUsage(", shed);
     expect(refundAfterShed).toBeGreaterThan(shed);
+  });
+});
+
+// Which allowance a caller gets is a three-way answer, not a boolean: free,
+// on the trial, or paying. hasPlus() collapses the last two, which is right
+// for "may they use this" and wrong for "how much may they spend" - a trial
+// costs nothing to start and nothing to start again from a fresh email. These
+// are the pure resolvers the counters run on, so the three-way decision is
+// testable without a database.
+describe("which daily allowance a tier gets", () => {
+  it("gives the chat three numbers, not two", async () => {
+    const { askDailyLimitFor, ASK_DAILY_FREE, ASK_DAILY_TRIAL, ASK_DAILY_PLUS } =
+      await import("./aiUsage");
+    expect(askDailyLimitFor("free")).toBe(ASK_DAILY_FREE);
+    expect(askDailyLimitFor("trialing")).toBe(ASK_DAILY_TRIAL);
+    expect(askDailyLimitFor("paid")).toBe(ASK_DAILY_PLUS);
+  });
+
+  it("gives the tool budget three numbers too", async () => {
+    const {
+      toolDailyLimitFor,
+      DAILY_LIMIT_FREE,
+      DAILY_LIMIT_TRIAL,
+      DAILY_LIMIT_PLUS,
+    } = await import("./aiUsage");
+    expect(toolDailyLimitFor("free")).toBe(DAILY_LIMIT_FREE);
+    expect(toolDailyLimitFor("trialing")).toBe(DAILY_LIMIT_TRIAL);
+    expect(toolDailyLimitFor("paid")).toBe(DAILY_LIMIT_PLUS);
+  });
+
+  it("never hands a trial the paid ceiling", async () => {
+    const { askDailyLimitFor, toolDailyLimitFor } = await import("./aiUsage");
+    expect(askDailyLimitFor("trialing")).toBeLessThan(askDailyLimitFor("paid"));
+    expect(askDailyLimitFor("trialing")).toBeGreaterThan(
+      askDailyLimitFor("free")
+    );
+    expect(toolDailyLimitFor("trialing")).toBeLessThan(
+      toolDailyLimitFor("paid")
+    );
+    expect(toolDailyLimitFor("trialing")).toBeGreaterThan(
+      toolDailyLimitFor("free")
+    );
+  });
+
+  it("keeps the old boolean call sites meaning exactly what they meant", async () => {
+    // Every pro-side route still passes a boolean: true was always "the Plus
+    // ceiling", and it still is. Nothing silently changes under them.
+    const { toAiTier } = await import("./aiUsage");
+    expect(toAiTier(true)).toBe("paid");
+    expect(toAiTier(false)).toBe("free");
+    expect(toAiTier("trialing")).toBe("trialing");
+    expect(toAiTier("free")).toBe("free");
+    expect(toAiTier("paid")).toBe("paid");
   });
 });

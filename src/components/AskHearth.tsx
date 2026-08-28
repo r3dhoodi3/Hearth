@@ -11,7 +11,12 @@ import AiNotice from "@/components/AiNotice";
 import Lightbox from "@/components/Lightbox";
 import InlineSpinner from "@/components/InlineSpinner";
 import { track } from "@/lib/analytics";
-import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
+import {
+  fetchWithTimeout,
+  isTimeoutError,
+  readWithTimeout,
+} from "@/lib/fetchWithTimeout";
+import { NDJSON_CONTENT_TYPE, parseNdjsonChunk } from "@/lib/askStream";
 import {
   ASK_PLUS_LINK,
   freeLockText,
@@ -369,13 +374,16 @@ function WaitingPill() {
 const DEFAULT_STORAGE_KEY = "hearth_ask_chat";
 const DEFAULT_RETENTION_KEY = "hearth_ask_retention";
 const SYNC_EVENT = "hearth:ask-updated";
-// Remembered answer to "is this viewer on the free tier?", written from the
-// server's own verdict on every reply (see the meter fields below). It exists
-// for ONE line of copy: the free-allowance hint under an empty composer, which
-// has to be decided BEFORE the first question, when no reply has arrived and
-// the client knows nothing about the plan. Never a gate on anything: the
-// server is the only authority on the allowance, and this is only ever
-// allowed to HIDE a hint, never to grant or refuse a question.
+// Remembered answer to "which plan is this viewer on?", written from the
+// server's own verdict on every reply (see the meter fields below: freeLimit,
+// freeRemaining, askTier). It drives things that both have to be decided
+// BEFORE a reply has ever arrived, so there is nothing else to go on: the
+// free-allowance hint under an empty composer, the trial-aware meter copy,
+// and whether the photo-attach button shows a Plus tag and answers a tap
+// with the lock message instead of the file picker. Never a gate on the
+// actual question: the server is the only authority on the allowance and the
+// photo lock, and this is only ever allowed to HIDE a hint or head off a tap
+// that would be refused anyway, never to grant or refuse one itself.
 const DEFAULT_PLAN_KEY = "hearth_ask_plan";
 
 type Retention = "24h" | "2w" | "1m" | "never";
@@ -387,6 +395,26 @@ const RETENTION_MS: Record<Retention, number> = {
 };
 // Even on "never", cap the history so localStorage can't bloat.
 const MAX_MESSAGES = 200;
+// STREAMING BUDGETS, in two halves, because one number cannot describe a
+// streamed answer. The first covers everything up to the response headers:
+// auth, the rate limits, the home-context queries, and opening the model call.
+// The second is the gap BETWEEN chunks once text is flowing, which is the only
+// thing that actually tells a dead connection apart from a long answer. A
+// single 90-second whole-request budget would either kill a healthy long
+// answer or wait a minute and a half on a socket that died after one word.
+const HEADERS_TIMEOUT_MS = 45_000;
+const STREAM_IDLE_TIMEOUT_MS = 30_000;
+// How often the growing bubble is allowed to re-render. A 200-token answer
+// arrives as a couple of hundred deltas; painting each one is a couple of
+// hundred React renders (with a markdown parse each) for text nobody can read
+// that fast. At 60ms the text still appears to flow and the work drops by
+// more than an order of magnitude.
+const STREAM_PAINT_MS = 60;
+// How close to the bottom of the chat counts as "following along". Inside
+// this, a streamed answer keeps scrolling into view; outside it, the reader
+// has deliberately scrolled up and is left alone.
+const STICK_TO_BOTTOM_PX = 80;
+
 // How many of those messages actually go to the server. The routes already
 // slice to the same number before building the request, so anything past this
 // is bytes uploaded (with any attached photos, on a phone connection) purely
@@ -566,13 +594,18 @@ export default function AskHearth({
   // photo bounced. Lives in component state, so it clears when the panel is
   // closed and the chat unmounts.
   const [photoLocked, setPhotoLocked] = useState(false);
-  // Free homeowners only, and only for the hint under an empty composer: what
-  // the server said about this viewer's plan the LAST time it answered them.
-  // "unknown" until a reply has ever arrived on this device.
-  const [knownPlan, setKnownPlan] = useState<"unknown" | "free" | "plus">(
-    "unknown"
-  );
+  // What the server said about this viewer's plan the LAST time it answered
+  // them: "unknown" until a reply has ever arrived on this device, "trial"
+  // for a Plus trial member (own smaller daily allowance, photos included),
+  // "free" for the uncapped-in-name-only free tier, "plus" for a paid member.
+  const [knownPlan, setKnownPlan] = useState<
+    "unknown" | "free" | "trial" | "plus"
+  >("unknown");
   const endRef = useRef<HTMLDivElement>(null);
+  // The chat's own scroll box (the compact card's and the dock's are the same
+  // element in two layouts). Read only to answer "is the reader still at the
+  // bottom?" while an answer streams in.
+  const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const submitRef = useRef<(t: string) => void>(() => {});
   // Synchronous "a question is already in flight" latch. See submit().
@@ -668,7 +701,9 @@ export default function AskHearth({
       }
       try {
         const p = localStorage.getItem(planKey);
-        setKnownPlan(p === "free" || p === "plus" ? p : "unknown");
+        setKnownPlan(
+          p === "free" || p === "trial" || p === "plus" ? p : "unknown"
+        );
       } catch {
         /* ignore */
       }
@@ -703,7 +738,7 @@ export default function AskHearth({
   // homeowner are frequently the same browser. Writing the pro copilot's
   // silence into the shared key would mark a free homeowner as a member and
   // quietly delete a line of copy they should have seen.
-  function rememberPlan(plan: "free" | "plus") {
+  function rememberPlan(plan: "free" | "trial" | "plus") {
     if (endpoint !== "/api/ask") return;
     setKnownPlan(plan);
     try {
@@ -755,7 +790,26 @@ export default function AskHearth({
     );
   }
 
+  // How many messages the last scroll ran for, so a growing bubble (same
+  // count, more text) can be told apart from a new turn.
+  const scrolledAtRef = useRef(messages.length);
   useEffect(() => {
+    // A NEW TURN always brings the view to it, exactly as it always has. A
+    // bubble that is merely getting longer - a reply streaming in - only
+    // follows when the reader is already at the bottom: this effect now fires
+    // many times per answer, and dragging someone back down every 60ms while
+    // they are scrolled up re-reading something makes the chat unusable.
+    const newTurn = messages.length !== scrolledAtRef.current;
+    scrolledAtRef.current = messages.length;
+    if (!newTurn) {
+      const box = scrollRef.current;
+      if (
+        box &&
+        box.scrollHeight - box.scrollTop - box.clientHeight > STICK_TO_BOTTOM_PX
+      ) {
+        return;
+      }
+    }
     // Scroll to the newest message, but only within the chat's own scroll
     // container (block: nearest) - never the page.
     endRef.current?.scrollIntoView({ block: "nearest" });
@@ -764,6 +818,168 @@ export default function AskHearth({
   async function send(e: React.FormEvent) {
     e.preventDefault();
     submit(input.trim());
+  }
+
+  // The two things every reply shape carries, read in ONE place so the plain
+  // JSON body and the streamed terminal line can never drift on how they are
+  // interpreted.
+  function readLink(data: any): AskLink | null {
+    return data?.link?.href && data?.link?.label
+      ? { href: String(data.link.href), label: String(data.link.label) }
+      : null;
+  }
+
+  // Quiet daily-allowance meter for free users. The server only sends these
+  // fields when the viewer is on the free tier, so a member (and the pro
+  // copilot, whose endpoint never sends them) sees no count at all. A refused
+  // request carries no allowance either, so leave the last known numbers alone
+  // rather than blanking the meter on a 429.
+  function applyAllowance(data: any, ok: boolean, link: AskLink | null) {
+    if (typeof data?.freeLimit === "number") {
+      setFreeLimit(data.freeLimit);
+      setFreeLeft(
+        typeof data.freeRemaining === "number" ? data.freeRemaining : null
+      );
+      // An over-limit reply (the only answer that arrives with a link) has
+      // just said this in a bubble, so the bar below stays quiet.
+      setLockEcho(data.freeRemaining === 0 && !!link);
+      // The server sends the same freeLimit/freeRemaining shape to both free
+      // and trialing homeowners (see askTier in src/app/api/ask/route.ts);
+      // askTier is the only field that tells them apart, so it decides which
+      // plan gets remembered rather than the two both landing on "free".
+      rememberPlan(data.askTier === "trialing" ? "trial" : "free");
+    } else if (ok) {
+      setFreeLeft(null);
+      setFreeLimit(null);
+      // No allowance on a successful answer means a member (or the pro
+      // copilot, whose endpoint never sends one). Remembered so the free
+      // hint under the composer never greets a paying member with a pitch
+      // for something they already bought.
+      rememberPlan("plus");
+    }
+  }
+
+  /**
+   * Read a streamed answer into ONE assistant bubble that fills in as it
+   * arrives. See src/lib/askStream.ts for the line format.
+   *
+   * `base` is the conversation including the question just asked; the bubble
+   * is appended to it and rewritten in place, so however many deltas arrive,
+   * the reply is a single message and never a second one.
+   *
+   * Nothing here is persisted until the terminal line lands. A half-written
+   * answer saved to localStorage would come back after a reload looking like
+   * a finished one, and the reader would have no way to tell.
+   */
+  async function consumeStream(
+    body: ReadableStream<Uint8Array>,
+    base: Msg[],
+    question: string
+  ) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    // One timestamp for the whole reply, so re-rendering the bubble never
+    // moves it inside the retention window.
+    const ts = Date.now();
+    let buffer = "";
+    let streamed = "";
+    let settled = false;
+
+    const withContent = (content: string, link?: AskLink | null): Msg[] => [
+      ...base,
+      { role: "assistant", content, ts, ...(link ? { link } : {}) },
+    ];
+    // The empty placeholder goes up immediately: the bubble appearing IS the
+    // signal that the answer has started.
+    applyMessages(withContent(""));
+
+    // Repaint at most every STREAM_PAINT_MS. Trailing edge, so the last delta
+    // before a pause still lands even if nothing follows it for a while.
+    let paintTimer: ReturnType<typeof setTimeout> | null = null;
+    const paint = () => {
+      if (paintTimer) {
+        clearTimeout(paintTimer);
+        paintTimer = null;
+      }
+      applyMessages(withContent(streamed));
+    };
+    const schedulePaint = () => {
+      if (paintTimer) return;
+      paintTimer = setTimeout(paint, STREAM_PAINT_MS);
+    };
+
+    try {
+      while (!settled) {
+        // The IDLE budget, not a whole-request one: a long answer is allowed
+        // to take as long as it takes, silence is not. See readWithTimeout.
+        const { done, value } = await readWithTimeout(
+          reader,
+          STREAM_IDLE_TIMEOUT_MS
+        );
+        if (done) break;
+        const chunk = parseNdjsonChunk(
+          buffer,
+          decoder.decode(value, { stream: true })
+        );
+        buffer = chunk.rest;
+        for (const line of chunk.lines) {
+          let data: any = null;
+          try {
+            data = JSON.parse(line);
+          } catch {
+            continue; // a line we can't read is not worth failing the answer
+          }
+          if (typeof data?.delta === "string") {
+            streamed += data.delta;
+            schedulePaint();
+            continue;
+          }
+          if (data?.done) {
+            const link = readLink(data);
+            if (link) setLockLink(link);
+            applyAllowance(data, true, link);
+            // The server's `answer` is authoritative over the deltas stitched
+            // together here: it is the same text, and on a failure part-way
+            // through it is the failure line instead.
+            const answer =
+              typeof data.answer === "string" && data.answer
+                ? data.answer
+                : streamed;
+            paint(); // cancels any pending repaint before the final write
+            const updated = withContent(answer, link);
+            applyMessages(updated);
+            persist(updated);
+            settled = true;
+            break;
+          }
+        }
+      }
+      // The body ended without a terminal line: the connection dropped
+      // part-way through. Handled as a failure below, with whatever text
+      // arrived kept.
+      if (!settled) throw new Error("The answer ended before it finished.");
+    } catch (e) {
+      // Keep what arrived if there is anything worth keeping: half an answer
+      // the reader has already started reading beats replacing it with an
+      // apology. With nothing to keep, say the same thing the non-streaming
+      // path says. Either way the question goes back in the composer, so
+      // asking again is one tap rather than typing it all out.
+      const salvaged = streamed.trim();
+      const updated = withContent(
+        salvaged ||
+          (isTimeoutError(e)
+            ? "That took too long. Try again."
+            : "Something went wrong, try again.")
+      );
+      applyMessages(updated);
+      persist(updated);
+      setInput(question);
+    } finally {
+      if (paintTimer) clearTimeout(paintTimer);
+      // Losing the idle race does not stop the pending read, and a reader left
+      // open holds the connection.
+      reader.cancel().catch(() => {});
+    }
   }
 
   // `imageOverride` is only for the retry button below, which re-sends a
@@ -803,20 +1019,40 @@ export default function AskHearth({
     setPendingImage(null);
     setLoading(true);
     try {
-      const res = await fetchWithTimeout(endpoint, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        // Drop the leading canned greeting before sending history to the
-        // model, then send only the tail the server is going to keep anyway.
-        // A month-old conversation on "never" retention is up to 200 messages,
-        // and uploading the 160 the route immediately slices off is pure cost
-        // on a phone connection - worse when some of them carry photos.
-        body: JSON.stringify({
-          messages: next
-            .filter((m, i) => !(i === 0 && m.role === "assistant"))
-            .slice(-MAX_SENT_MESSAGES),
-        }),
-      });
+      const res = await fetchWithTimeout(
+        endpoint,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          // Drop the leading canned greeting before sending history to the
+          // model, then send only the tail the server is going to keep anyway.
+          // A month-old conversation on "never" retention is up to 200
+          // messages, and uploading the 160 the route immediately slices off
+          // is pure cost on a phone connection - worse when some carry photos.
+          body: JSON.stringify({
+            messages: next
+              .filter((m, i) => !(i === 0 && m.role === "assistant"))
+              .slice(-MAX_SENT_MESSAGES),
+          }),
+        },
+        // TIME TO HEADERS ONLY. Everything after the headers is guarded by the
+        // per-chunk idle budget inside consumeStream, because a streamed
+        // answer has no meaningful total duration to cap.
+        HEADERS_TIMEOUT_MS
+      );
+
+      // A STREAMED ANSWER, or the old single JSON body? Every pre-model
+      // refusal (not signed in, out of questions, photo locked, too big) is
+      // still a plain JSON reply with its own status code; only an answer that
+      // reached the model streams. The content type is the only branch.
+      if (
+        res.body &&
+        (res.headers.get("content-type") ?? "").includes(NDJSON_CONTENT_TYPE)
+      ) {
+        await consumeStream(res.body, next, text);
+        return;
+      }
+
       // Burst (429) and busy (503) replies carry their own plain-English
       // answer, so parse the body whatever the status is and only fall back to
       // a generic line if there is no JSON at all.
@@ -827,10 +1063,7 @@ export default function AskHearth({
           : typeof data?.error === "string"
             ? data.error
             : "Something went wrong.";
-      const link: AskLink | null =
-        data?.link?.href && data?.link?.label
-          ? { href: String(data.link.href), label: String(data.link.label) }
-          : null;
+      const link = readLink(data);
       if (link) setLockLink(link);
       const reply: Msg = {
         role: "assistant",
@@ -841,7 +1074,10 @@ export default function AskHearth({
 
       // Photo lock: a free account attached a photo. Nothing was asked and
       // nothing was counted, so drop the user turn back into the composer,
-      // photo and all, and leave the meter exactly where it was.
+      // photo and all, and leave the meter exactly where it was. Also
+      // remember the plan as free (a no-op for endpoints other than
+      // /api/ask - see rememberPlan) so the attach button carries the Plus
+      // tag from here on and this never has to happen again.
       if (data?.locked) {
         const updated: Msg[] = [...before, reply];
         applyMessages(updated);
@@ -849,32 +1085,11 @@ export default function AskHearth({
         setInput(text);
         setPendingImage(sentImage);
         setPhotoLocked(true);
+        rememberPlan("free");
         return;
       }
 
-      // Quiet daily-allowance meter for free users. The server only sends
-      // these fields when the viewer is on the free tier, so a member (and the
-      // pro copilot, whose endpoint never sends them) sees no count at all. A
-      // refused request carries no allowance either, so leave the last known
-      // numbers alone rather than blanking the meter on a 429.
-      if (typeof data?.freeLimit === "number") {
-        setFreeLimit(data.freeLimit);
-        setFreeLeft(
-          typeof data.freeRemaining === "number" ? data.freeRemaining : null
-        );
-        // An over-limit reply (the only answer that arrives with a link) has
-        // just said this in a bubble, so the bar below stays quiet.
-        setLockEcho(data.freeRemaining === 0 && !!link);
-        rememberPlan("free");
-      } else if (res.ok) {
-        setFreeLeft(null);
-        setFreeLimit(null);
-        // No allowance on a successful answer means a member (or the pro
-        // copilot, whose endpoint never sends one). Remembered so the free
-        // hint under the composer never greets a paying member with a pitch
-        // for something they already bought.
-        rememberPlan("plus");
-      }
+      applyAllowance(data, res.ok, link);
 
       // A rejected request (429/503) never reached the model, so hand the
       // typed question back rather than making them retype it.
@@ -1014,10 +1229,26 @@ export default function AskHearth({
   const atFreeLimit = isFreeLocked(freeLeft, freeLimit);
   const plusLink = lockLink ?? ASK_PLUS_LINK;
 
+  // A free homeowner on the /api/ask chat: say so on the button itself,
+  // before the tap, instead of letting them pick a photo only to be refused
+  // after the upload. "unknown" (first turn, nothing remembered yet) keeps
+  // today's behavior - open the picker - so a member is never blocked on a
+  // guess; the pro copilot never gates photos, so this stays off there too.
+  // A trial member keeps photos (that is what the trial is for, see
+  // src/app/api/ask/route.ts), so only "free" gates the button.
+  const photoGate = endpoint === "/api/ask" && knownPlan === "free";
+
   // The conversation ends on a question with no reply, and nothing is in
   // flight: the request it belonged to died with a previous page load. The
   // last bubble gets a retry / delete row instead of sitting there forever.
   const unanswered = !loading && isUnanswered(messages);
+
+  // The waiting pill belongs only in the gap BEFORE the first words arrive.
+  // Once the reply bubble exists and is filling in, the text is its own
+  // progress indicator and a "Thinking…" pill underneath it reads as a second,
+  // stuck request. Same test either way: is the newest message still the
+  // question?
+  const waiting = loading && isUnanswered(messages);
 
   // Has this conversation had a turn yet? Drives the free-allowance hint,
   // which is a "before you start" line and stands down the moment the meter
@@ -1025,18 +1256,19 @@ export default function AskHearth({
   const hasAsked = messages.some((m) => m.role === "user");
   // Quiet line under an empty composer telling a free homeowner what they get.
   // Homeowner chat only (the pro copilot has no daily allowance and talks to a
-  // different endpoint), never for a member, and only until the first answer
-  // arrives, at which point the meter above takes over and says something
-  // truer: the actual count left today. The numbers match ASK_DAILY_FREE and
-  // ASK_DAILY_PLUS in src/lib/aiUsage.ts, which is server-only and cannot be
-  // imported here.
+  // different endpoint), only until the first answer arrives (at which point
+  // the meter above takes over and says something truer: the actual count
+  // left today), and only for "free" - a trial member already gets 8 a day
+  // and photos, and this hint's pitch for Plus makes no sense to someone
+  // already on the trial. The numbers match ASK_DAILY_FREE and ASK_DAILY_PLUS
+  // in src/lib/aiUsage.ts, which is server-only and cannot be imported here.
   const showFreeHint =
     endpoint === "/api/ask" &&
     !hasAsked &&
     !loading &&
     !atFreeLimit &&
     freeLimit === null &&
-    knownPlan !== "plus";
+    knownPlan === "free";
 
   // One message bubble (text + optional photo + action buttons).
   function bubble(m: Msg, i: number, isLast = false) {
@@ -1101,14 +1333,14 @@ export default function AskHearth({
               type="button"
               onClick={retryLastQuestion}
               disabled={atFreeLimit}
-              className="rounded-full border border-bark-500 px-3 py-1 text-xs font-medium text-bark-700 hover:bg-bark-50 disabled:opacity-50 dark:border-bark-700 dark:text-stone-300 dark:hover:bg-stone-700"
+              className="rounded-full border border-bark-500 px-3 py-1 text-xs font-medium text-bark-700 hover:bg-bark-50 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-4 dark:border-bark-700 dark:text-stone-300 dark:hover:bg-stone-700"
             >
               Retry
             </button>
             <button
               type="button"
               onClick={deleteLastQuestion}
-              className="px-1 py-1 text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+              className="px-1 py-1 text-xs text-stone-500 hover:text-red-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-3 dark:text-stone-400 dark:hover:text-red-400"
             >
               Delete
             </button>
@@ -1125,11 +1357,18 @@ export default function AskHearth({
             {m.link.label} &rarr;
           </Link>
         )}
-        <MessageActions
-          job={parsed.job}
-          issue={parsed.issue}
-          reminder={parsed.reminder}
-        />
+        {/* Not while this bubble is still being written: a POSTJOB block whose
+            JSON has closed but whose reply has not would pop a "Get 3 free
+            quotes" card up mid-sentence, on an answer that may still change.
+            On the last message during a load there is nothing to show anyway
+            (a user turn has no actions), so this costs nothing elsewhere. */}
+        {!(isLast && loading) && (
+          <MessageActions
+            job={parsed.job}
+            issue={parsed.issue}
+            reminder={parsed.reminder}
+          />
+        )}
         {/* Tappable quick-reply options, shown on the latest reply so the
             homeowner can drill down without typing. */}
         {parsed.options && isLast && !loading && (
@@ -1185,6 +1424,25 @@ export default function AskHearth({
     </p>
   );
 
+  // Shared between the plain attach control and the gated one below, so the
+  // two can never drift on which icon they show.
+  const photoIcon = (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
+    </svg>
+  );
+
   // The input row: photo attach + text + send. Shared by both views.
   const composer = (
     <div>
@@ -1210,9 +1468,11 @@ export default function AskHearth({
           Couldn&apos;t attach that image. Try a different photo.
         </p>
       )}
-      {/* The camera button stays enabled for everyone: the client never knows
-          the plan, the server decides. Once it has said no to a photo, say so
-          here so the next attempt isn't a mystery. */}
+      {/* The camera button stays enabled for everyone - only the server can
+          actually refuse a photo. This is the one line that explains why:
+          reached either by the Plus-gated button above (known free, before
+          any upload) or by the server's own locked reply (unknown plan,
+          after one). */}
       {photoLocked && !atFreeLimit && (
         <p className="mb-2 text-xs text-stone-500 dark:text-stone-400">
           Photos need Hearth Plus.{" "}
@@ -1242,37 +1502,49 @@ export default function AskHearth({
         </div>
       ) : (
         <form onSubmit={send} className="flex gap-2">
-          <label
-            title="Attach a photo"
-            className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          {photoGate ? (
+            // Free plan, known before the tap: say so on the button instead
+            // of opening the picker and refusing the photo after the upload.
+            // A real, enabled button that explains - never a disabled one
+            // with no reason given.
+            <button
+              type="button"
+              aria-label="Attach a photo, requires Hearth Plus"
+              title="Attach a photo (Hearth Plus)"
+              onClick={() => setPhotoLocked(true)}
+              className="flex items-center gap-1 rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
             >
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="M21 15l-5-5L5 21" />
-            </svg>
-            <span className="sr-only">Attach a photo</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              disabled={loading}
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (f) await onPickImage(f);
-                e.target.value = "";
-              }}
-            />
-          </label>
+              {photoIcon}
+              {/* Matches the dashboard's Plus chip (see ToolsMenu.tsx). The
+                  button's aria-label already says "requires Hearth Plus", so
+                  this is aria-hidden rather than repeating it for a reader. */}
+              <span
+                aria-hidden="true"
+                className="rounded bg-bark-100 px-1.5 text-[11px] font-medium text-bark-700 dark:bg-bark-700 dark:text-stone-300"
+              >
+                Plus
+              </span>
+            </button>
+          ) : (
+            <label
+              title="Attach a photo"
+              className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
+            >
+              {photoIcon}
+              <span className="sr-only">Attach a photo</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={loading}
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (f) await onPickImage(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          )}
           <VoiceButton
             disabled={loading}
             onText={(t) =>
@@ -1312,7 +1584,13 @@ export default function AskHearth({
           bar above says it instead. */}
       {shouldShowMeter(freeLeft, freeLimit) && (
         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-          {meterLabel(freeLeft as number, freeLimit as number)}
+          {knownPlan === "trial"
+            ? // Trial-aware copy: same numbers as meterLabel, but naming the
+              // trial rather than reading as a permanent free allowance.
+              `${freeLeft} of ${freeLimit} question${
+                freeLimit === 1 ? "" : "s"
+              } left today on your trial`
+            : meterLabel(freeLeft as number, freeLimit as number)}
         </p>
       )}
       {/* Before the first question there is no meter to show, and finding out
@@ -1345,9 +1623,12 @@ export default function AskHearth({
         <p className="text-xs text-bark-700 dark:text-stone-300">{headingSubtitle}</p>
 
         {(hasConversation || loading) && (
-          <div className="mt-3 max-h-80 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800">
+          <div
+            ref={scrollRef}
+            className="mt-3 max-h-80 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800"
+          >
             {displayed.map((m, i) => bubble(m, i, i === displayed.length - 1))}
-            {loading && (
+            {waiting && (
               <div className="flex justify-start">
                 <WaitingPill />
               </div>
@@ -1364,7 +1645,7 @@ export default function AskHearth({
                 type="button"
                 onClick={() => submit(q)}
                 disabled={loading || atFreeLimit || !userReady}
-                className="rounded-full border border-bark-100 bg-white px-3 py-1 text-xs text-bark-700 hover:border-bark-500 disabled:opacity-50 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300"
+                className="rounded-full border border-bark-100 bg-white px-3 py-1 text-xs text-bark-700 hover:border-bark-500 disabled:opacity-50 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-4 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300"
               >
                 {q}
               </button>
@@ -1416,9 +1697,9 @@ export default function AskHearth({
         </div>
       </div>
 
-      <div className="flex-1 space-y-2 overflow-y-auto py-2">
+      <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto py-2">
         {messages.map((m, i) => bubble(m, i, i === messages.length - 1))}
-        {loading && (
+        {waiting && (
           <div className="flex justify-start">
             <WaitingPill />
           </div>

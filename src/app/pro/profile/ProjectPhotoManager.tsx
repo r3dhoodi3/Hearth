@@ -137,7 +137,10 @@ export default function ProjectPhotoManager({
                   type="button"
                   onClick={() => remove(i)}
                   aria-label="Remove photo"
-                  className="absolute -right-1.5 -top-1.5 flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-xs text-stone-500 shadow-sm hover:text-stone-800 sm:h-5 sm:w-5 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400 dark:hover:text-stone-100"
+                  // Phone only: the circle stays 32px so it doesn't swallow
+                  // the 96px thumbnail, but an invisible ::after ring pushes
+                  // the real touch area out to 44px (32 + 6 each side).
+                  className="absolute -right-1.5 -top-1.5 flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-xs text-stone-500 shadow-sm hover:text-stone-800 max-sm:after:absolute max-sm:after:-inset-1.5 max-sm:after:content-[''] sm:h-5 sm:w-5 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400 dark:hover:text-stone-100"
                 >
                   ×
                 </button>
@@ -145,7 +148,7 @@ export default function ProjectPhotoManager({
               <button
                 type="button"
                 onClick={() => toggleBefore(i)}
-                className={`mt-1 w-full rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${
+                className={`mt-1 w-full rounded-md border px-1.5 py-0.5 text-[11px] font-medium max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:justify-center ${
                   p.before
                     ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
                     : "border-stone-200 bg-white text-stone-500 hover:bg-stone-50 dark:border-white/10 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"

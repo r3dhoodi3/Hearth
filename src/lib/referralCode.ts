@@ -1,6 +1,7 @@
 import "server-only";
 import { randomInt } from "crypto";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 
 // The current homeowner's personal invite slug (users.referral_code, migration
@@ -54,9 +55,20 @@ export async function getOrCreateReferralCode(): Promise<string | null> {
     // rows and re-reads whatever the first committed. A candidate that happens
     // to collide with ANOTHER user's code trips the unique index (23505) and
     // we simply try a fresh candidate.
+    //
+    // WRITTEN WITH THE ADMIN CLIENT, read with the caller's. Migration 0139
+    // locks referral_code / referred_by against any non-service-role update:
+    // an account that can rewrite its own invite code (or who invited it) is
+    // an account that can rewrite an attribution record, which is harmless
+    // today and a payout bug the day a reward ships. The id is still the
+    // VERIFIED session's user.id from getUser() above, never anything the
+    // browser supplied, and `.eq("id", user.id)` keeps the write on that one
+    // row - so the elevated client buys exactly one thing: permission to set
+    // this column, on this caller's own row.
+    const admin = createAdminClient();
     for (let attempt = 0; attempt < 6; attempt++) {
       const candidate = generateCode();
-      const { data, error } = await (supabase.from("users") as any)
+      const { data, error } = await (admin.from("users") as any)
         .update({ referral_code: candidate })
         .eq("id", user.id)
         .is("referral_code", null)

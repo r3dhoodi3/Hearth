@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { hasAuthCookie } from "@/lib/authCookie";
+import { getVerifiedUser } from "@/lib/auth";
 import { getSides, landingFor } from "@/lib/contractor";
 import { FOUNDER, PLUS_PLAN } from "@/lib/constants";
 import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
@@ -95,6 +97,34 @@ function CheckPill({ label }: { label: string }) {
 // signed-in bounce into a client-side check), this page prerenders with no
 // other work. Until then a revalidate export would be a no-op and force-static
 // would silently break both redirects.
+//
+// AN ANONYMOUS VISITOR DOES NO NETWORK WORK AT ALL HERE, and every step of
+// that is deliberate. This is the highest-traffic route in the product and the
+// overwhelming majority of hits on it are signed out.
+//
+//   - the middleware does NOT check auth here. "/" is first in isPublicPath
+//     (src/lib/supabase/middleware.ts), and updateSession returns before it
+//     ever builds a Supabase client for a public path. That is on purpose and
+//     documented there; do not "fix" it by removing "/" from that list.
+//   - the page asks the CHEAPEST question first: does this request even carry
+//     a Supabase auth cookie (hasAuthCookie, src/lib/authCookie.ts)? That is a
+//     string test over cookie names - no client construction, no GoTrue
+//     initialize/lock, no fetch. No such cookie means there is no session to
+//     find, so nothing further is asked and the landing markup renders
+//     straight away.
+//   - only when a session could exist does it call getVerifiedUser(): the real
+//     verification against Supabase's auth server, React-cache()-wrapped, so
+//     getSides() -> getCurrentContractor() below reuses this one answer
+//     instead of opening a second round trip of its own. A signed-in visitor
+//     used to pay two sequential hops here before the redirect could even be
+//     decided; now it is one.
+//
+// THE COOKIE CHECK IS NOT A TRUST DECISION. It can only ever skip work, never
+// grant anything: no cookie means signed out, which is the answer an unforgeable
+// check would also have produced. A cookie that IS present proves nothing and is
+// believed for nothing - the verified call still decides. Nobody reaches the app
+// through this page; they reach it through the redirect, and everything behind
+// that redirect re-checks for itself.
 export default async function Home(props: {
   searchParams: Promise<{ code?: string }>;
 }) {
@@ -108,10 +138,9 @@ export default async function Home(props: {
     );
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // See the note above: cookie names first, and only then the real check.
+  const signedInPossible = hasAuthCookie((await cookies()).getAll());
+  const user = signedInPossible ? await getVerifiedUser() : null;
 
   if (user) {
     // Their preferred side when they actually have it, otherwise whichever
@@ -527,21 +556,8 @@ export default async function Home(props: {
           what you choose to share.
         </p>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-stone-300">
-          Hearth started close to home. We serve{" "}
-          <Link
-            href="/fountain-valley"
-            className="text-bark-500 hover:underline"
-          >
-            Fountain Valley
-          </Link>
-          ,{" "}
-          <Link
-            href="/huntington-beach"
-            className="text-bark-500 hover:underline"
-          >
-            Huntington Beach
-          </Link>
-          , and homeowners across all of Orange County.
+          Hearth started close to home and now serves homeowners across{" "}
+          {LAUNCH_AREA_LABEL}, California, from Seal Beach to San Clemente.
         </p>
         {/* Contact form works with no session and no owner-fillable fields,
             unlike the old mailto/tel here, so it's always shown - see

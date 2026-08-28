@@ -1,4 +1,7 @@
+import Link from "next/link";
+import { Lock } from "lucide-react";
 import { getActiveProperty } from "@/lib/property";
+import { hasPlus } from "@/lib/subscription";
 import { stateName } from "@/lib/forecast";
 import {
   estimateValueTimeline,
@@ -8,6 +11,17 @@ import {
 } from "@/lib/homeValue";
 import ValueForm from "./ValueForm";
 import ValueAutoFetch from "./ValueAutoFetch";
+import RefreshValue from "./RefreshValue";
+
+// Same honest mask the /forecast page uses for its per-system amounts: real
+// rows, real years, a masked amount. Never blurred fake numbers, and never a
+// number that could read as a bug.
+const MASKED_AMOUNT = "$•,•••";
+
+// How many years of the trend a free account sees listed (masked) before the
+// list is summarised. Enough to make the shape of what Plus opens obvious on a
+// phone without turning a 20-year purchase into a wall of locks.
+const MASKED_TREND_ROWS = 6;
 
 function money(n: number): string {
   return `${n < 0 ? "-" : ""}$${Math.round(Math.abs(n)).toLocaleString()}`;
@@ -39,7 +53,21 @@ function moneyShort(n: number): string {
 }
 
 export default async function ValuePage() {
-  const property = (await getActiveProperty())!;
+  // WHAT PLUS BUYS ON THIS PAGE. The headline value, the confidence range,
+  // what they paid, how much it has gained and their equity are FREE and stay
+  // free: that is the whole truth about the home, and masking it would be
+  // hiding the answer rather than the detail. Plus opens the year-by-year
+  // trend behind it, and the refresh button that can pull a new reading.
+  // Same shape as /forecast, which shows everyone the real 10-year total and
+  // masks the per-system lines.
+  //
+  // The two reads don't depend on each other, so they run together rather
+  // than stacking round trips (same pattern as /forecast).
+  const [propertyOrNull, plus] = await Promise.all([
+    getActiveProperty(),
+    hasPlus(),
+  ]);
+  const property = propertyOrNull!;
 
   // purchase_price, mortgage_balance, and market_value/_low/_high are new
   // columns (migrations 0029 and 0066) that are not yet in
@@ -112,6 +140,11 @@ export default async function ValuePage() {
   // refresh client-side, off this render.
   const needsFetch =
     marketValue == null && !!property.address_line1 && !!property.zip;
+
+  // A refresh re-runs the AVM for this address, so it is only offered when
+  // there is an address to run it on. Selling Plus off a button that could not
+  // work for anyone would be the wrong kind of door.
+  const canRefresh = !!property.address_line1 && !!property.zip;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
@@ -189,8 +222,9 @@ export default async function ValuePage() {
               </p>
             ) : (
               <p className="text-xs text-bark-700 dark:text-stone-300">
-                Add what you paid to see how much you&apos;ve gained since you
-                bought it.
+                Add what you paid and the year you bought, and you&apos;ll
+                also see your appreciation over time and a full value
+                timeline.
               </p>
             )}
             {/* What the number is based on, said plainly. The provider's name
@@ -204,6 +238,22 @@ export default async function ValuePage() {
                 ? `Ballpark based on statewide ${region} price trends, not your neighborhood.`
                 : "Ballpark based on statewide price trends, not your neighborhood."}
             </p>
+            {/* The Plus line, stated BEFORE the button, so a free account
+                reads where the line is instead of tapping into it. The
+                estimate behind this can only really move about once a month
+                (the lookup is cached 30 days), which is what "monthly" means
+                here - not a claim that anything runs on its own. */}
+            {!plus && canRefresh && (
+              <p className="text-xs text-bark-600 dark:text-stone-400">
+                Your first estimate is free. Plus refreshes it monthly with new
+                sales near you.
+              </p>
+            )}
+            {canRefresh && (
+              <div className="flex justify-center pt-1">
+                <RefreshValue isPlus={plus} />
+              </div>
+            )}
           </div>
 
           <div className="card mt-6 space-y-2 text-center">
@@ -233,7 +283,7 @@ export default async function ValuePage() {
             </div>
           )}
 
-          {hasPurchaseData && timeline.length > 1 && (
+          {hasPurchaseData && timeline.length > 1 && plus && (
             <div className="card mt-6 space-y-3">
               <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
                 {usingMarketValue
@@ -280,6 +330,69 @@ export default async function ValuePage() {
                     </span>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* The free version of the same section: real years, in the real
+              order, with the amounts masked rather than faked - the pattern
+              /forecast already uses for its per-system costs. The value and
+              the equity above stay honest and unmasked; what Plus opens is
+              the history behind them, year by year. */}
+          {hasPurchaseData && timeline.length > 1 && !plus && (
+            <div className="card mt-6 space-y-3">
+              <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
+                {usingMarketValue
+                  ? "Value trend over time"
+                  : "Estimated value over time"}
+              </h2>
+              <div className="divide-y divide-stone-100 dark:divide-white/10">
+                {timeline
+                  .slice(-MASKED_TREND_ROWS)
+                  .reverse()
+                  .map((p) => (
+                    <div
+                      key={p.year}
+                      className="flex items-center justify-between gap-3 py-2.5"
+                    >
+                      <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                        {p.year}
+                      </p>
+                      {/* This year's figure is the headline number printed in
+                          a big font two cards up. Masking it here would be
+                          theatre, not a limit, so it stays real and only the
+                          history behind it is what Plus opens. */}
+                      {p.year === currentYear ? (
+                        <p className="whitespace-nowrap text-sm tabular-nums text-stone-600 dark:text-stone-300">
+                          {money(p.value)}
+                        </p>
+                      ) : (
+                        <div className="flex items-center gap-1.5 whitespace-nowrap text-sm text-stone-500 dark:text-stone-500">
+                          <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span className="tabular-nums">{MASKED_AMOUNT}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+              {timeline.length > MASKED_TREND_ROWS && (
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  Plus goes back to {timeline[0].year}, the year you bought it.
+                </p>
+              )}
+              <div className="rounded-lg border border-bark-100 bg-bark-50 p-4 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+                <p className="text-sm text-bark-700 dark:text-stone-300">
+                  The value and equity above are your real numbers. Hearth Plus
+                  opens the year-by-year trend behind them, so you can see how
+                  your equity has built up, and keeps the estimate current with
+                  a monthly refresh.
+                </p>
+                <Link
+                  href="/plus?reason=value"
+                  className="btn-primary mt-3 inline-block"
+                >
+                  See what Plus shows
+                </Link>
               </div>
             </div>
           )}

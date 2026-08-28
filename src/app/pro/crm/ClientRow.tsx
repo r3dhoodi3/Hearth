@@ -120,7 +120,7 @@ export default function ClientRow({
         href={`/pro/crm/${client.id}`}
         className="btn-secondary shrink-0 text-sm"
       >
-        Open
+        Open client
       </Link>
     </li>
   );

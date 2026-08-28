@@ -16,6 +16,16 @@ import GuideCta from "@/components/GuideCta";
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// STATIC (ISR marker). Nothing in this page or in src/app/guides/layout.tsx
+// reads cookies(), headers(), searchParams or the database: the session-aware
+// CTA moved to the browser (src/components/SessionCta.tsx), so this page is
+// prerendered once and served from the edge cache. As on /pricing, the
+// explicit revalidate is a marker rather than a requirement - it makes the
+// static intent visible in `next build` output and gives a future data read
+// ISR instead of silently dropping the route back to per-request rendering.
+// Anything added here that reads cookies()/headers()/searchParams undoes it.
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: "Coastal Southern California home maintenance calendar, month by month",
   description:
@@ -291,8 +301,7 @@ export default function SocalHomeMaintenanceCalendarGuide() {
         Month by month, built around the coastal SoCal climate: AC strain in
         late summer, drywood termite swarm season, Santa Ana winds, and the
         first fall rain. Written for coastal Southern California generally,
-        including Hearth&apos;s home market of Fountain Valley and Huntington
-        Beach.
+        including all of Orange County, where Hearth serves homeowners.
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">

@@ -174,10 +174,11 @@ export async function passwordStatusFor(
   return { hasPassword, provider };
 }
 
+// getVerifiedUser(), not an inline supabase.auth.getUser(): the read still has
+// to be live (the provider list and the identity signals come off the auth
+// server, not the cookie), and this is exactly the same call - it simply shares
+// the one verification the rest of the request already paid for instead of
+// opening a second round trip of its own.
 export const getPasswordStatus = cache(async (): Promise<PasswordStatus> => {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return passwordStatusFor(user);
+  return passwordStatusFor(await getVerifiedUser());
 });

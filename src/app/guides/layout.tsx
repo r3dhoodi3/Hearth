@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getVerifiedUser } from "@/lib/auth";
+import SessionCta from "@/components/SessionCta";
 import Logo from "@/components/Logo";
 
 // Shared shell for the public /guides pages: informational content meant to
@@ -12,43 +12,32 @@ import Logo from "@/components/Logo";
 // a guide link is a tonal whiplash, and dishonest besides - they already
 // started.
 //
-// STAYS DYNAMIC, and this is the one thing keeping the whole /guides section
-// (11 guide pages plus the index) off static generation. The root layout no
-// longer reads the flash cookie (see src/app/layout.tsx and FlashToast), so
-// this getVerifiedUser() call - and the second session read inside GuideCta at
-// the foot of every guide - is now the sole blocker. `export const revalidate`
-// on the guide pages would do nothing while this layout reads the session: a
-// layout's dynamic read opts its whole subtree out.
+// NOW STATIC. This layout used to `await getVerifiedUser()` here, purely to
+// pick between those two labels, and a layout's dynamic read opts its whole
+// subtree out - so one auth round trip cost the guides index and all 12 guide
+// pages their prerender, and put a network hop to Supabase's auth server on
+// the blocking path in front of every guide's content. The old comment in this
+// spot spelled out the fix and asked for it in its own pass: resolve the
+// session in the browser inside one small client component shared by this
+// header and GuideCta. That is src/components/SessionCta.tsx, and this is that
+// pass.
 //
-// Deliberately not changed. Guides are exactly where a signed-in reader lands
-// from search, and the header CTA is the thing this layout exists to get right:
-// prerendering it would ship "Get started free" to someone who already has an
-// account and swap it after hydration. The correct fix, if the static win is
-// ever wanted, is to resolve the session in the browser inside one small client
-// component shared by this header and GuideCta, so the guide BODY prerenders
-// and only the CTA is deferred. That is a bigger change than a revalidate
-// export and it belongs in its own pass.
+// Nothing in this file reads cookies(), headers() or the session any more, and
+// neither does GuideCta (also a client component now), so the guide pages
+// prerender at build time and are served from the CDN. The trade is written up
+// in SessionCta.tsx: a signed-in reader sees "Get started free" until
+// hydration swaps it, which is milliseconds, contained to this one button, and
+// bought at the price of the whole section no longer waking a serverless
+// function to render text that never changes.
 //
-// The honest accounting of what the check costs today: it does cost something.
-// These pages are dynamically rendered, so no static-generation opportunity is
-// lost as long as that stays true, but the auth check
-// itself is a real network round trip to Supabase's auth server, and it sits
-// on the blocking path in front of the guide's own content. What used to make
-// it expensive was paying for it more than once: this layout asked, then
-// GuideCta asked AGAIN further down the same render, sequentially, and the
-// middleware had already asked before either of them ran. Three round trips
-// for one question. Now the middleware skips /guides entirely (it is on the
-// public allowlist, see src/lib/supabase/middleware.ts) and this and GuideCta
-// share one request-cached answer, so a guide render pays the round trip once.
-// getVerifiedUser() is error-safe for anonymous visitors: it just resolves to
-// a null user, never throws.
-export default async function GuidesLayout({
+// KEEP THIS FILE FREE OF cookies(), headers() AND ANY SESSION READ, for the
+// same reason src/app/layout.tsx carries that instruction: one of them here
+// puts all 13 pages back on the dynamic path.
+export default function GuidesLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getVerifiedUser();
-
   return (
     <div className="min-h-screen">
       <header className="mx-auto flex max-w-2xl items-center justify-between px-6 pt-6">
@@ -58,21 +47,7 @@ export default async function GuidesLayout({
         >
           <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
         </Link>
-        {user ? (
-          <Link
-            href="/dashboard"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
-          >
-            Open your dashboard
-          </Link>
-        ) : (
-          <Link
-            href="/get-started"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
-          >
-            Get started free
-          </Link>
-        )}
+        <SessionCta signedOutHref="/get-started" />
       </header>
 
       {children}

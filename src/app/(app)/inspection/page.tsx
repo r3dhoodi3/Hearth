@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import { getVerifiedUser } from "@/lib/auth";
+import { hasPlus } from "@/lib/subscription";
+import { freeTastesLeft } from "@/lib/freeAiTasteServer";
 import InspectionRequest from "./InspectionRequest";
 import InspectionUpload from "./InspectionUpload";
 
@@ -13,15 +16,24 @@ export default async function InspectionPage() {
   const supabase = await createClient();
 
   // Prefill the request form's contact fields from the owner's saved profile,
-  // same as the contractors job-post form.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // same as the contractors job-post form. getVerifiedUser() is the same live
+  // auth-server check this used to make inline, shared through React's cache()
+  // with the (app) layout's, so the page adds no second round trip.
+  const user = await getVerifiedUser();
   const { data: profile } = await supabase
     .from("users")
     .select("full_name, email, phone")
     .eq("id", user?.id ?? "")
     .maybeSingle();
+
+  // The report-read meter for the upload card: how many of the 1 lifetime free
+  // report reads are left, keyed to the VIEWER since that is whose account
+  // /api/ingest-inspection charges. Null for Plus (no meter at all) and null
+  // when the counter cannot be read, so the card never guesses. See
+  // src/lib/freeAiTaste.ts.
+  const isPlus = await hasPlus();
+  const freeReadsLeft =
+    isPlus || !user ? null : await freeTastesLeft(user.id, false, "inspection");
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
@@ -30,9 +42,8 @@ export default async function InspectionPage() {
           Home inspection
         </h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Worth getting when you are buying a home, selling or preparing to
-          list, setting a maintenance baseline on a home you already own, or
-          meeting an insurance requirement.
+          Worth getting if you&apos;re buying, selling, setting a maintenance
+          baseline, or meeting an insurance requirement.
         </p>
       </div>
 
@@ -59,12 +70,12 @@ export default async function InspectionPage() {
             Already have an inspection report? Add it to your home
           </h2>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            Upload photos of the report or paste its text, and Hearth will
-            read it and propose systems and issues for you to confirm before
-            anything is saved.
+            Upload photos of the report, or paste its text. Hearth reads it
+            and suggests systems and issues for you to confirm, nothing saves
+            until you do.
           </p>
         </div>
-        <InspectionUpload />
+        <InspectionUpload freeReadsLeft={freeReadsLeft} />
       </section>
     </div>
   );

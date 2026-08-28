@@ -128,7 +128,7 @@ export default function ThemeToggle({
       type="button"
       onClick={toggle}
       aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-      className="focus-ring flex h-9 w-9 items-center justify-center rounded-full text-stone-500 active:scale-95 hover:bg-bark-50 hover:text-bark-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+      className="focus-ring flex h-9 w-9 items-center justify-center rounded-full text-stone-500 active:scale-95 hover:bg-bark-50 hover:text-bark-700 max-sm:h-11 max-sm:w-11 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
     >
       {dark ? sun : moon}
     </button>

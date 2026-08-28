@@ -220,6 +220,19 @@ export type GenerateTextOptions = {
    */
   cacheSystem?: boolean;
   timeoutMs?: number;
+  /**
+   * Cancel the request when the caller goes away. Honored by streamText only
+   * (nothing needs it on the non-streaming path yet).
+   *
+   * The two chat routes pass `req.signal`. Without it, a homeowner who closes
+   * the tab mid-answer leaves the model call running to completion and
+   * Anthropic bills the whole reply for text nobody will ever read - and,
+   * because ndjsonBody now drops every write after a disconnect, that spend
+   * would have been completely invisible. Node's fetch aborts the underlying
+   * HTTP request, so the tokens stop being generated rather than merely being
+   * ignored.
+   */
+  signal?: AbortSignal;
   /** Name used in the debug cost log. */
   label?: string;
 };
@@ -428,6 +441,40 @@ export function claudeFailureMessage(
 }
 
 /**
+ * The request body, built once and shared by generateText and streamText.
+ *
+ * Both paths MUST send byte-identical requests. They do not just answer the
+ * same question, they answer it against the same prompt cache: a system block
+ * whose cache_control sat in a different place, or a `thinking` field one path
+ * omitted, would be a different prefix and would quietly halve the cache hit
+ * rate of whichever route streamed. One builder, no chance to drift.
+ *
+ * Throws EmptyPromptError (via requireMessages) before any request goes out,
+ * so a caller that streams gets that failure synchronously, in the same shape
+ * the non-streaming path has always thrown it.
+ */
+function buildTextRequest(
+  opts: GenerateTextOptions
+): Anthropic.MessageCreateParamsNonStreaming {
+  const system = buildSystem(opts);
+  const messages = requireMessages(opts);
+  return {
+    model: MODEL,
+    max_tokens: opts.maxTokens ?? 4096,
+    ...(system ? { system } : {}),
+    messages,
+    // Three-state, see the `thinking` doc above: omitting the field is NOT
+    // the same as disabling it on this model.
+    ...(opts.thinking === true
+      ? { thinking: { type: "adaptive" as const } }
+      : opts.thinking === false
+        ? { thinking: { type: "disabled" as const } }
+        : {}),
+    ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
+  };
+}
+
+/**
  * One non-streaming Claude call, returning the reply text plus the two things
  * every caller has to check: why it stopped, and what it cost.
  *
@@ -438,23 +485,8 @@ export function claudeFailureMessage(
 export async function generateText(
   opts: GenerateTextOptions
 ): Promise<ClaudeResult> {
-  const system = buildSystem(opts);
-  const messages = requireMessages(opts);
   const res = await getClaude().messages.create(
-    {
-      model: MODEL,
-      max_tokens: opts.maxTokens ?? 4096,
-      ...(system ? { system } : {}),
-      messages,
-      // Three-state, see the `thinking` doc above: omitting the field is NOT
-      // the same as disabling it on this model.
-      ...(opts.thinking === true
-        ? { thinking: { type: "adaptive" as const } }
-        : opts.thinking === false
-          ? { thinking: { type: "disabled" as const } }
-          : {}),
-      ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
-    },
+    buildTextRequest(opts),
     opts.timeoutMs ? { timeout: opts.timeoutMs } : undefined
   );
 
@@ -464,6 +496,86 @@ export async function generateText(
     stopReason: res.stop_reason,
     usage: toUsage(res.usage),
   };
+}
+
+/**
+ * A streaming call in flight: the text as it arrives, and the whole reply once
+ * it has.
+ *
+ * `textDeltas` yields the model's visible text in the order it is generated,
+ * nothing else (thinking blocks and tool blocks are not text and never appear
+ * here). `final` resolves with exactly what generateText would have returned
+ * for the same options, so a caller can stream for the feel of it and still
+ * make its real decision on the finished text.
+ */
+export type ClaudeStream = {
+  textDeltas: AsyncIterable<string>;
+  final: Promise<ClaudeResult>;
+};
+
+/**
+ * The same call as generateText, delivered as it is written.
+ *
+ * This exists for the two chat routes, where the homeowner or the pro is
+ * watching an empty bubble: a 150-word answer takes about ten seconds to
+ * generate in full, and roughly one second to start. Nothing about the request
+ * changes (see buildTextRequest), so the answer, the cost, and the cache
+ * behaviour are identical - only the delivery differs.
+ *
+ * DELIBERATELY NOT ASYNC. EmptyPromptError has to be thrown before the API
+ * call, and a caller that has already sent response headers cannot turn a
+ * throw back into a 400. Being synchronous up to the point the request opens
+ * lets a route call this first, keep its existing catch for that case, and
+ * only then commit to a streamed response.
+ *
+ * Errors after that point (a 429, a dropped connection, a timeout) surface
+ * from BOTH `textDeltas` and `final`, as the same error classes the
+ * non-streaming path throws, so isRateLimitError still answers correctly.
+ */
+export function streamText(opts: GenerateTextOptions): ClaudeStream {
+  const request = buildTextRequest(opts);
+  // The SDK's per-request options (node_modules/@anthropic-ai/sdk/internal/
+  // request-options.d.ts): `timeout` as before, plus `signal`, which is
+  // forwarded straight to fetch. Built conditionally so a call with neither
+  // still passes `undefined` and stays byte-identical to what generateText
+  // sends - see the request-parity test in src/lib/claude.stream.test.ts.
+  const requestOptions: { timeout?: number; signal?: AbortSignal } = {};
+  if (opts.timeoutMs) requestOptions.timeout = opts.timeoutMs;
+  if (opts.signal) requestOptions.signal = opts.signal;
+  const stream = getClaude().messages.stream(
+    request,
+    Object.keys(requestOptions).length > 0 ? requestOptions : undefined
+  );
+
+  const final = stream.finalMessage().then((msg) => {
+    // Same cost line as the non-streaming path, on the same label, so the two
+    // are indistinguishable in the logs.
+    logUsage(opts.label ?? "streamText", msg.usage);
+    return {
+      text: textOf(msg.content),
+      stopReason: msg.stop_reason,
+      usage: toUsage(msg.usage),
+    };
+  });
+  // A caller that gives up part-way through (the browser navigated away) never
+  // awaits `final`, and an unawaited rejected promise takes the whole Node
+  // process down. The rejection still reaches whoever does await it: this only
+  // marks it as handled.
+  final.catch(() => {});
+
+  async function* textDeltas(): AsyncGenerator<string> {
+    for await (const event of stream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta" &&
+        event.delta.text
+      ) {
+        yield event.delta.text;
+      }
+    }
+  }
+
+  return { textDeltas: textDeltas(), final };
 }
 
 /**

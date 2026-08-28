@@ -42,6 +42,18 @@ describe("GUARDED_SEGMENTS", () => {
     expect(missing).toEqual([]);
   });
 
+  it("guards the blocked-accounts pages on both sides", () => {
+    // Migration 0138's two new routes. Neither needed a new GUARDED_SEGMENTS
+    // entry - the guard is first-segment only, and "account" and "pro" are
+    // both already in the list - but that is exactly the kind of reasoning
+    // that is worth a test rather than a comment: if either parent segment is
+    // ever removed, these two pages would start serving to a signed-out
+    // stranger and nothing else would notice.
+    expect(isGuardedPath("/account/blocks")).toBe(true);
+    expect(isGuardedPath("/pro/blocks")).toBe(true);
+    expect(isHomeownerShellPath("/account/blocks")).toBe(true);
+  });
+
   it("still guards deeper paths and leaves unrouted ones alone", () => {
     // A bad id under a guarded section is still private territory.
     expect(isGuardedPath("/chats/does-not-exist")).toBe(true);

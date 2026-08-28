@@ -12,7 +12,7 @@ vi.mock("./actions", () => ({
 }));
 
 import PlanToggle from "./PlanToggle";
-import { PLUS_PLAN, formatUsd } from "@/lib/constants";
+import { PLUS_PLAN, formatUsd, yearlySavings } from "@/lib/constants";
 
 afterEach(() => {
   cleanup();
@@ -164,6 +164,77 @@ describe("PlanToggle plan selection", () => {
     // Space on a card selects it, the way a <button> already does natively.
     fireEvent.click(card(/^Annual/));
     expect(postedPlan()).toBe("yearly");
+  });
+});
+
+describe("PlanToggle phone description panel", () => {
+  // The panel itself is not hidden by any breakpoint class jsdom would
+  // respect (see the "offers four cards" comment above on why CSS-only
+  // hiding is invisible to these tests) - it queries by aria-live, which is
+  // present regardless of viewport, exactly like the panel itself.
+  function panel(): HTMLElement {
+    return document.querySelector('[aria-live="polite"]') as HTMLElement;
+  }
+
+  it("shows the selected plan's name and price, and updates when another card is tapped", () => {
+    render(<PlanToggle />);
+    expect(
+      within(panel()).getByText(`Weekly, ${formatUsd(PLUS_PLAN.weekly)} a week`)
+    ).toBeInTheDocument();
+
+    fireEvent.click(card(/^Monthly/));
+    expect(
+      within(panel()).getByText(
+        `Monthly, ${formatUsd(PLUS_PLAN.monthly)} a month`
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(panel()).queryByText(
+        `Weekly, ${formatUsd(PLUS_PLAN.weekly)} a week`
+      )
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(card(/^Annual/));
+    expect(
+      within(panel()).getByText(`Annual, ${formatUsd(PLUS_PLAN.yearly)} a year`)
+    ).toBeInTheDocument();
+  });
+
+  it("carries the same Plus bullets as the cards", () => {
+    render(<PlanToggle trialEligible={false} />);
+    expect(
+      within(panel()).getByText("Plan and forecast, in full")
+    ).toBeInTheDocument();
+  });
+});
+
+describe("PlanToggle badges", () => {
+  it("gives the Annual card a Save badge computed from yearlySavings, not a typed number", () => {
+    render(<PlanToggle />);
+    expect(
+      within(card(/^Annual/)).getByText(
+        `Save ${formatUsd(yearlySavings(PLUS_PLAN))}`
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("does not repeat the same claim between the Monthly and Annual badges", () => {
+    render(<PlanToggle />);
+    expect(
+      within(card(/^Monthly/)).getByText("Most popular")
+    ).toBeInTheDocument();
+    expect(
+      within(card(/^Monthly/)).queryByText(/best/i)
+    ).not.toBeInTheDocument();
+    expect(
+      within(card(/^Annual/)).queryByText(/best/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it("never uses an em dash anywhere on the page", () => {
+    render(<PlanToggle />);
+    fireEvent.click(card(/^Annual/));
+    expect(document.body.textContent).not.toMatch(/—/);
   });
 });
 

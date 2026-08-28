@@ -128,7 +128,7 @@ export default function PrivacyPage() {
         Privacy Policy
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-        Last updated August 26, 2026. Plain English, and honest about what
+        Last updated August 28, 2026. Plain English, and honest about what
         actually happens in the app today.
       </p>
 
@@ -684,6 +684,13 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Questions</h2>
+          {/* LAWYER: check whether an in-app contact form plus the Help page is
+              enough for the CCPA/CPRA designated-methods requirement for
+              consumer requests, or whether this page has to publish a
+              monitored email address and a physical mailing address as well.
+              The same question applies to the CAN-SPAM footer placeholder in
+              src/lib/notify.ts and the FOUNDER.email TODO(legal) in
+              src/lib/constants.ts. */}
           <p className="mt-2 leading-relaxed">
             Questions about this policy or your data can be sent through{" "}
             <LegalContact />

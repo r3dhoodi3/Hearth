@@ -10,6 +10,7 @@ import {
   PLUS_INCLUDED_HOMES,
   formatUsd,
   yearlySavings,
+  yearlyAsMonthly,
 } from "@/lib/constants";
 
 // The three cadences Stripe can actually be sent. startPlusCheckoutAction reads
@@ -30,6 +31,11 @@ const WEEKLY_PRICE = formatUsd(PLUS_PLAN.weekly); // $1.99
 const MONTHLY_PRICE = formatUsd(PLUS_PLAN.monthly); // $4.99
 const YEARLY_PRICE = formatUsd(PLUS_PLAN.yearly); // $39.99
 const YEARLY_SAVING = formatUsd(yearlySavings(PLUS_PLAN)); // $19.89
+// The annual price re-read as a monthly figure, for the sub-line under the
+// annual card's price. Kept distinct from YEARLY_SAVING on purpose: the badge
+// above the price already says "Save $19.89", so the line under the price
+// says the other true fact about the same plan instead of repeating it.
+const YEARLY_AS_MONTHLY = formatUsd(yearlyAsMonthly(PLUS_PLAN)); // $3.33
 
 // What Plus adds, in four lines that fit a 110px-wide column at 390px. The
 // full row-by-row grid lives in the "See everything included" disclosure on
@@ -55,12 +61,18 @@ const FREE_BULLETS = [
   "In-app alerts",
 ];
 
-// Four cards: Weekly, Monthly, Annual, Free. Two by two on a phone and one row
-// from sm up - four columns at 390px would leave about 90px a card, which is
-// narrower than the prices themselves read comfortably in. THE CARD IS THE
-// SELECTOR - tapping one moves the accent outline to it and re-labels the
-// single button underneath, so there is exactly one primary action on the page
-// instead of a button per column.
+// Four cards in the DOM - Weekly, Monthly, Annual, Free - but the Free card is
+// `max-sm:hidden`: a reader on the pricing screen is already on Free, so
+// showing it as a fourth choice next to three plans they would be paying for
+// only repeats what they know. It stays in the markup (and in CHOICES, for
+// the keyboard-roving group) because sm and up still shows all four in one
+// row. On a phone the three paid cards alone sit in one row via
+// `grid-cols-3`, about 110px each at 390px - tight enough that the bullet
+// list moves out of the card (`max-sm:hidden` on bulletList) and into the
+// description panel below the row instead. THE CARD IS THE SELECTOR - tapping
+// one moves the accent outline to it and re-labels the single button
+// underneath (and, on a phone, rewrites the panel below), so there is exactly
+// one primary action on the page instead of a button per column.
 //
 // WEEKLY is preselected whenever the trial is on offer, so the picker agrees
 // with the top "Start N free days" button above it instead of contradicting
@@ -140,9 +152,12 @@ export default function PlanToggle({
   // Spans, not a <ul>: these sit inside a <button>, whose content model is
   // phrasing content only, so a real list here would be invalid markup. The
   // card carries an aria-label with the plan and price, and the bullets are
-  // decoration on top of it.
-  const bulletList = (items: string[]) => (
-    <span className="mt-1.5 block space-y-0.5 sm:mt-2 sm:space-y-1">
+  // decoration on top of it. `wrapClassName` is the one thing that differs
+  // between the two places this renders: inside a card it is `max-sm:hidden`
+  // (the phone panel below carries the same list instead), inside the phone
+  // panel it is always visible.
+  const bulletList = (items: string[], wrapClassName: string) => (
+    <span className={wrapClassName}>
       {items.map((f) => (
         <span
           key={f}
@@ -170,6 +185,35 @@ export default function PlanToggle({
           : weeklyTrial
             ? `Start ${PLUS_PLAN.trialDays} days free`
             : "Start weekly";
+
+  // The phone-only description panel below the row of cards. It reads `plan`,
+  // not `choice`: `plan` is already the safe fallback to a real cadence (see
+  // its definition above), so if the group's state is ever "free" on a phone
+  // - which the hidden Free card should make impossible, see the layout
+  // comment above CHOICES - the panel still shows a real plan instead of
+  // rendering nothing or crashing.
+  const PLAN_LABEL: Record<Plan, string> = {
+    weekly: "Weekly",
+    monthly: "Monthly",
+    yearly: "Annual",
+  };
+  const PLAN_PRICE_LINE: Record<Plan, string> = {
+    weekly: `${WEEKLY_PRICE} a week`,
+    monthly: `${MONTHLY_PRICE} a month`,
+    yearly: `${YEARLY_PRICE} a year`,
+  };
+  // One plain sentence per cadence, every number read from PLUS_PLAN /
+  // formatUsd / yearlySavings above rather than typed. Weekly is the only one
+  // that changes shape with the trial, for the same reason the button and the
+  // AutoRenewalTerms summary do: the free days are a fact about weekly, not
+  // about the picker in general.
+  const panelBilling: Record<Plan, string> = {
+    weekly: weeklyTrial
+      ? `${PLUS_PLAN.trialDays} days free, then ${WEEKLY_PRICE} a week. Cancel before the trial ends and you pay nothing.`
+      : `${WEEKLY_PRICE} a week, cancel anytime.`,
+    monthly: `${MONTHLY_PRICE} a month, cancel anytime.`,
+    yearly: `One payment of ${YEARLY_PRICE} a year, that is ${YEARLY_SAVING} less than paying monthly.`,
+  };
 
   return (
     <div id="pricing" className="space-y-4">
@@ -208,14 +252,15 @@ export default function PlanToggle({
             falls back to monthly, the same plan preselected below. */}
         <input type="hidden" name="plan" value={plan} />
 
-        {/* Two by two on a phone, one row from sm up. Four columns at 390px
-            would squeeze each card under 90px, where "$39.99/year" wraps mid
-            price. */}
+        {/* The three paid cards in one row on a phone (Free is
+            `max-sm:hidden` on its own button below); all four in one row from
+            sm up. `grid-cols-3` on the phone width, not a fixed count that
+            would leave a gap where Free used to sit. */}
         <div
           role="radiogroup"
           aria-label="Choose your plan"
           onKeyDown={onGroupKeyDown}
-          className="grid grid-cols-2 items-stretch gap-1.5 sm:grid-cols-4 sm:gap-3"
+          className="grid grid-cols-3 items-stretch gap-1.5 sm:grid-cols-4 sm:gap-3"
         >
           {/* --- Weekly: the one cadence that carries the free days --- */}
           <button {...cardProps("weekly", 0, `Weekly, ${WEEKLY_PRICE} a week`)}>
@@ -226,32 +271,44 @@ export default function PlanToggle({
               Weekly
             </span>
             <span className="mt-0.5 block min-h-10 sm:mt-1 sm:min-h-11">
-              <span className="block text-base font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
+              {/* text-sm on the phone, not text-base: at grid-cols-3 a card is
+                  about 110px wide at 390px, and text-base pushed "$1.99/wk"
+                  close enough to the edge to risk wrapping. sm:text-2xl is
+                  unchanged, so desktop is untouched. */}
+              <span className="block text-sm font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
                 {WEEKLY_PRICE}
                 <span className="text-[11px] font-normal text-stone-500 sm:text-sm dark:text-stone-400">
-                  /week
+                  {/* Short unit on a phone so the price never wraps in a
+                      110px column; the full word from sm up, where there is
+                      room for it. */}
+                  <span className="sm:hidden">/wk</span>
+                  <span className="hidden sm:inline">/week</span>
                 </span>
               </span>
               <span className="block text-[11px] font-medium leading-snug text-bark-700 sm:text-sm dark:text-stone-300">
                 {weeklyTrial ? "Try it, then decide" : "Pay as you go"}
               </span>
             </span>
-            {bulletList(PLUS_BULLETS)}
+            {bulletList(
+              PLUS_BULLETS,
+              "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
+            )}
           </button>
 
           {/* --- Monthly: the anchor, preselected --- */}
           <button {...cardProps("monthly", 1, `Monthly, ${MONTHLY_PRICE} a month`)}>
             <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 dark:text-bark-500">
-              Best for most
+              Most popular
             </span>
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
               Monthly
             </span>
             <span className="mt-0.5 block min-h-10 sm:mt-1 sm:min-h-11">
-              <span className="block text-base font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
+              <span className="block text-sm font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
                 {MONTHLY_PRICE}
                 <span className="text-[11px] font-normal text-stone-500 sm:text-sm dark:text-stone-400">
-                  /month
+                  <span className="sm:hidden">/mo</span>
+                  <span className="hidden sm:inline">/month</span>
                 </span>
               </span>
               {/* No invented number: four weeks at the real weekly price is
@@ -262,7 +319,10 @@ export default function PlanToggle({
                 Cheaper than 4 weeks
               </span>
             </span>
-            {bulletList(PLUS_BULLETS)}
+            {bulletList(
+              PLUS_BULLETS,
+              "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
+            )}
           </button>
 
           {/* --- Annual: the cheapest per month --- */}
@@ -270,30 +330,52 @@ export default function PlanToggle({
             {...cardProps("yearly", 2, `Annual, ${YEARLY_PRICE} a year`)}
             className={`${card("yearly")} shadow-card`}
           >
+            {/* Was "Best value", next to Monthly's "Best for most" - the two
+                said the same thing in different words. This badge instead
+                states the number Monthly's card cannot: what choosing Annual
+                over Monthly actually saves. */}
             <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 dark:text-bark-500">
-              Best value
+              Save {YEARLY_SAVING}
             </span>
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
               Annual
             </span>
             <span className="mt-0.5 block min-h-10 sm:mt-1 sm:min-h-11">
-              <span className="block text-base font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
+              <span className="block text-sm font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
                 {YEARLY_PRICE}
                 <span className="text-[11px] font-normal text-stone-500 sm:text-sm dark:text-stone-400">
-                  /year
+                  <span className="sm:hidden">/yr</span>
+                  <span className="hidden sm:inline">/year</span>
                 </span>
               </span>
-              {/* An honest anchor: twelve charges at the real monthly price
-                  minus the yearly price, computed, never invented. */}
+              {/* The badge above already says "Save $19.89", so this line
+                  says the other honest fact about the same plan instead of
+                  restating it: the yearly price read back as a monthly
+                  figure, computed, never invented. */}
               <span className="block text-[11px] font-medium leading-snug text-bark-700 sm:text-sm dark:text-stone-300">
-                Save {YEARLY_SAVING}
+                About {YEARLY_AS_MONTHLY} a month
               </span>
             </span>
-            {bulletList(PLUS_BULLETS)}
+            {bulletList(
+              PLUS_BULLETS,
+              "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
+            )}
           </button>
 
-          {/* --- Free: the plan they are on today --- */}
-          <button {...cardProps("free", 3, "Free, the plan you have now")}>
+          {/* --- Free: the plan they are on today. Hidden on a phone
+              (`max-sm:hidden`) - a reader on this screen is already on Free,
+              so it does not need to compete with the three plans they would
+              be paying for in a one-row phone layout. Still present and
+              selectable from sm up, and still in CHOICES for the keyboard
+              group below, which only matters on a desktop-width pointer/
+              keyboard combination anyway. The initial `choice` state is
+              always "weekly" or "monthly" (see useState above), never
+              "free", so a phone reader can never load this screen with Free
+              already selected. --- */}
+          <button
+            {...cardProps("free", 3, "Free, the plan you have now")}
+            className={`${card("free")} max-sm:hidden`}
+          >
             {/* Spacer matching the labelled cards' badge line, so all four
                 plan names sit on the same line. */}
             <span className="block min-h-4" aria-hidden />
@@ -308,8 +390,30 @@ export default function PlanToggle({
                 No card, ever
               </span>
             </span>
-            {bulletList(FREE_BULLETS)}
+            {bulletList(FREE_BULLETS, "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1")}
           </button>
+        </div>
+
+        {/* Phone-only panel for "what you get" on the plan currently
+            selected in the row above. sm and up already shows this in every
+            card (the bullet list `bulletList` hides only below sm), so the
+            panel would just repeat it there; on a phone it is the only place
+            the bullets and the plain-English billing line for the selected
+            plan live, and it has room neither card in a 110px column does.
+            `aria-live="polite"` so a screen reader hears the update when a
+            different card is tapped, without interrupting anything already
+            being read. */}
+        <div
+          className="rounded-xl border border-stone-200 bg-white p-3 sm:hidden dark:border-white/10 dark:bg-stone-800"
+          aria-live="polite"
+        >
+          <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+            {PLAN_LABEL[plan]}, {PLAN_PRICE_LINE[plan]}
+          </p>
+          <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">
+            {panelBilling[plan]}
+          </p>
+          {bulletList(PLUS_BULLETS, "mt-2 block space-y-1")}
         </div>
 
         {/* The recurring terms sit INSIDE the checkout form, immediately ABOVE

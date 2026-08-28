@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ImageResponse } from "next/og";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
+import { getVerifiedUser } from "@/lib/auth";
 import { ogFontOption } from "@/lib/ogFont";
 
 export const runtime = "nodejs";
@@ -172,9 +173,10 @@ async function logoDataUri(value: string | null): Promise<string | null> {
 export async function GET(req: NextRequest, props: { params: Promise<{ reviewId: string }> }) {
   const params = await props.params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getVerifiedUser() is the same live supabase.auth.getUser() check, wrapped
+  // in React's cache(); getCurrentContractor() below now goes through it too,
+  // so this request re-verifies once instead of twice.
+  const user = await getVerifiedUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

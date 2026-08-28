@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import { Gift, DollarSign, Bot, Globe, BarChart3, Zap } from "lucide-react";
 import { getCurrentContractor } from "@/lib/contractor";
 import { getUser } from "@/lib/auth";
-import { trialDecision } from "@/lib/risk/decision";
+import { trialDecision, TRIAL_DECISION_TTL_MS } from "@/lib/risk/decision";
 import {
   hasProPlan,
   getProSubscription,
@@ -154,16 +154,20 @@ export default async function ProPlusPage(
               <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
                 Your Hearth Pro renewal terms
               </p>
-              <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
-                Hearth Pro renews automatically until you cancel. Your
-                confirmation email lists the exact amount and the renewal
-                terms; refresh this page in a moment to see your billing dates.
-                Cancel anytime on this page using the &quot;Cancel
-                membership&quot; button. If you started on a free trial, cancel
-                before it ends and you will not be charged; otherwise
-                cancelling takes effect at the end of the period you have
-                already paid for. There is nothing to call or email.
-              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-stone-600 dark:text-stone-300">
+                <li>Hearth Pro renews automatically until you cancel.</li>
+                <li>
+                  Your confirmation email has the exact amount and date.
+                </li>
+                <li>
+                  Cancel anytime with the &quot;Cancel membership&quot; button
+                  on this page. No call or email needed.
+                </li>
+                <li>
+                  On a free trial, cancel before it ends and you won&apos;t be
+                  charged.
+                </li>
+              </ul>
             </div>
           )}
         </div>
@@ -378,6 +382,12 @@ export default async function ProPlusPage(
         // A page render is a GET: compute, do not write. The checkout action
         // re-runs the same decision and records it there.
         persist: false,
+        // ...and it may reuse a recent answer rather than re-running the whole
+        // fan-out on every refresh of an upsell page. Render path only: the
+        // checkout action passes no maxAgeMs, so the decision that actually
+        // gates money is always computed fresh. See decision.ts for what is
+        // never cached (high, and any refused checkout).
+        maxAgeMs: TRIAL_DECISION_TTL_MS,
       })
     : null;
   const trialEligible = !sub && (risk?.allowTrial ?? true);

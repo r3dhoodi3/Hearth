@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { getVerifiedUser } from "@/lib/auth";
+import { useSignedIn } from "@/components/SessionCta";
 
 // Shared closing CTA for the public /guides pages. Every guide page ends with
 // the same pitch: the ranges above are national/typical, Hearth's answer is
@@ -10,26 +12,29 @@ import { getVerifiedUser } from "@/lib/auth";
 // past this pitch, so repeating "get started free" reads as a bug, not a
 // nudge.
 //
-// This component used to answer that question with its own
-// supabase.auth.getUser() call, under a comment claiming it "adds no new
-// rendering cost". That was wrong twice over: an auth round trip is a real
-// network hop, and it was the SECOND one in the same render, because
-// src/app/guides/layout.tsx had already asked the identical question before
-// rendering these children (the middleware made three). The answer now comes
-// from a caller that already has it, or failing that from getVerifiedUser(),
-// which is request-cached, so the guides layout's lookup and this one are the
-// same single round trip rather than two sequential ones.
+// NOW A CLIENT COMPONENT, and that is the whole point. This used to answer the
+// session question on the server - first with its own supabase.auth.getUser()
+// call, later through the request-cached getVerifiedUser() it shared with
+// src/app/guides/layout.tsx. Either way it was a server-side session read
+// sitting in the tree of 14 public, indexable pages, which is what kept every
+// one of them off static generation. It now reads the session in the browser
+// through useSignedIn() (see src/components/SessionCta.tsx for the full
+// reasoning and the honest cost), so the guide BODY prerenders and only this
+// closing card resolves after hydration - which is exactly the fix the old
+// comment here and in the guides layout both asked for.
 //
-// signedIn: pass it when the calling tree already knows (a page that fetched
-// the visitor for its own reasons). Left undefined, the request-cached lookup
-// resolves it, which is what the /guides pages rely on: a layout cannot hand
-// props to a page's descendants in the App Router, so the layout and this
-// component share the cache instead of a prop.
+// It renders the signed-out pitch first and swaps, so a signed-in reader sees
+// the sign-up card for a moment. It sits at the foot of a long article, well
+// below the fold, so the swap is not something a reader watches happen.
+//
+// signedIn: pass it when the calling tree already knows the answer for its own
+// reasons and wants to skip the client lookup entirely. Nothing passes it
+// today; the /guides pages and the city pages all rely on the hook.
 //
 // signedInHref/signedInLabel let a page point a signed-in reader at the
 // in-app screen that answers the same question for their own home; callers
 // that don't pass them get a sensible dashboard default.
-export default async function GuideCta({
+export default function GuideCta({
   signedIn,
   signedInHref = "/dashboard",
   signedInLabel = "See this for your home",
@@ -38,7 +43,8 @@ export default async function GuideCta({
   signedInHref?: string;
   signedInLabel?: string;
 }) {
-  const isSignedIn = signedIn ?? (await getVerifiedUser()) !== null;
+  const resolved = useSignedIn();
+  const isSignedIn = signedIn ?? resolved;
 
   if (isSignedIn) {
     return (

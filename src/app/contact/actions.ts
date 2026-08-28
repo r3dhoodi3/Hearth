@@ -55,6 +55,11 @@ export async function sendContactMessageAction(
   const email = cappedField(formData, "email", FIELD_MAX.email);
   const phone = cappedField(formData, "phone", FIELD_MAX.phone);
   const message = cappedField(formData, "message", FIELD_MAX.message);
+  // Optional context the page carried in from ?topic= (see ContactForm.tsx).
+  // Display text only: it is prefixed onto the stored message so the inbox can
+  // see at a glance that this is, say, a safety report, and it decides nothing
+  // here. Capped hard because it arrives from a query string.
+  const topic = ((formData.get("topic") as string) || "").trim().slice(0, 120);
 
   if (message.length < MIN_MESSAGE) {
     return err("Please write a few more words so we know what you need.");
@@ -131,7 +136,7 @@ export async function sendContactMessageAction(
     name: name || null,
     email: email || null,
     phone: phone || null,
-    message,
+    message: topic ? `[${topic}]\n\n${message}` : message,
     matched_user_id: matchedUserId,
     matched_via: matchedVia,
   });

@@ -110,7 +110,7 @@ export default function HomeSwitcher({
 
           <Link
             href="/onboarding"
-            className="mt-1 block rounded-md px-2 py-1.5 text-sm font-medium text-bark-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
+            className="mt-1 block rounded-md px-2 py-1.5 text-sm font-medium text-bark-700 hover:bg-bark-50 max-sm:flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300 dark:hover:bg-stone-600"
           >
             + Add a home
           </Link>

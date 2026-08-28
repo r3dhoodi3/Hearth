@@ -113,7 +113,7 @@ export default function HouseholdQrCode({ propertyId }: { propertyId: string }) 
           height={192}
         />
       ) : (
-        <div className="mx-auto mt-3 flex h-48 w-48 items-center justify-center rounded-lg border border-stone-100 text-xs text-stone-400 dark:border-white/10 dark:text-stone-500">
+        <div className="mx-auto mt-3 flex h-48 w-48 items-center justify-center rounded-lg border border-stone-100 text-xs text-stone-500 dark:border-white/10 dark:text-stone-500">
           {error ? "Unavailable" : "Loading…"}
         </div>
       )}
@@ -137,7 +137,7 @@ export default function HouseholdQrCode({ propertyId }: { propertyId: string }) 
         <>
           <p className="mt-3 text-xs text-stone-500 dark:text-stone-400">{REFRESH_LABEL}</p>
           {joinUrl && (
-            <p className="mt-3 break-all text-[11px] text-stone-400 dark:text-stone-500">
+            <p className="mt-3 break-all text-[11px] text-stone-500 dark:text-stone-500">
               {joinUrl}
             </p>
           )}

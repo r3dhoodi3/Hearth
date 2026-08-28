@@ -209,12 +209,12 @@ export async function ownsPlus(): Promise<boolean> {
 // the lookup uses the service-role client with that RLS-validated owner id,
 // the same trusted-server pattern the household join flow uses. Cached per
 // request like the other getters.
-const activeHomeOwnerHasPlus = cache(async (): Promise<boolean> => {
+const activeHomeOwnerPlusTier = cache(async (): Promise<PlusTier> => {
   const user = await getUser();
-  if (!user) return false;
+  if (!user) return "free";
 
   const property = await getActiveProperty();
-  if (!property || property.user_id === user.id) return false;
+  if (!property || property.user_id === user.id) return "free";
 
   const admin = createAdminClient();
   const { data } = await admin
@@ -223,8 +223,43 @@ const activeHomeOwnerHasPlus = cache(async (): Promise<boolean> => {
     .eq("user_id", property.user_id);
 
   // Homeowner side only: a pro_ plan never counts as Plus.
-  return (data ?? []).some((row) => !isProPlanName(row.plan) && isLive(row));
+  const live = (data ?? []).filter(
+    (row) => !isProPlanName(row.plan) && isLive(row)
+  );
+  if (live.length === 0) return "free";
+  // A member of a home whose owner is still on the free trial gets the trial's
+  // allowances, not the paid ones: the household must not be a way to hand out
+  // more of a trial than the trial itself carries.
+  return live.some((row) => row.status === "active") ? "paid" : "trialing";
 });
+
+const activeHomeOwnerHasPlus = cache(async (): Promise<boolean> => {
+  return (await activeHomeOwnerPlusTier()) !== "free";
+});
+
+// Which side of the Plus line someone is on, at the resolution money cares
+// about. hasPlus() answers "may they use this", and deliberately says yes to a
+// trial. That is the right answer for a FEATURE gate and the wrong one for a
+// per-day CEILING: a trial is free to start and free to start again from a
+// fresh email, so handing a trialing account the full paid allowance hands it
+// to anyone with a spare inbox. Callers that spend money per request (the
+// chat's daily questions, the AI tool budget) ask for the tier instead and
+// give "trialing" its own, smaller number.
+//
+// Same precedence as hasPlus(): the viewer's own live row first, then the
+// active home's owner. "paid" means an active (invoiced) subscription;
+// "trialing" means live but nothing has been charged yet.
+export type PlusTier = "free" | "trialing" | "paid";
+
+export async function getPlusTier(): Promise<PlusTier> {
+  const sub = await getSubscription();
+  if (sub && isLive(sub)) {
+    // isLive only passes "active" or "trialing", so anything that is not the
+    // trial is a subscription Stripe has actually billed.
+    return sub.status === "trialing" ? "trialing" : "paid";
+  }
+  return activeHomeOwnerPlusTier();
+}
 
 // Whether the current user has Plus BENEFITS on the active property. True
 // when they hold a live Plus subscription themselves, or when the active

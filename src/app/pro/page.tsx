@@ -1051,7 +1051,7 @@ export default async function ProDashboard(
                       {j.ownership_verified && (
                         <span
                           className="chip-ok"
-                          title="The poster's account name matches the county assessor's owner record for this address."
+                          title="The name on this account matches the county's public owner record for this address."
                         >
                           Ownership verified
                         </span>
@@ -1200,9 +1200,8 @@ export default async function ProDashboard(
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400">
               Ghost protection: if the homeowner never responds and no one is
-              picked, your fee comes back automatically after 7 days, as wallet
-              credit for your next application. A single reply from them ends
-              it.
+              picked, your fee comes back as wallet credit after 7 days. One
+              reply from them ends it.
             </p>
           </div>
           <ul className="space-y-2">

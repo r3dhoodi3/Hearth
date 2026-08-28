@@ -74,9 +74,21 @@ function chain(data: unknown) {
   return obj;
 }
 
+// One open issue so the briefing has a real, actionable row to assert on.
+// With every table empty the briefing falls back to its single "Nothing urgent
+// right now" line, which carries no href by design and so exercises none of the
+// tap-target markup below.
+const openIssue = {
+  id: "issue-1",
+  system_id: null,
+  category: "plumbing",
+  severity: "urgent",
+  description: "Leaking under the sink",
+};
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
-    from: (table: string) => chain([]),
+    from: (table: string) => chain(table === "issues" ? [openIssue] : []),
   })),
 }));
 
@@ -139,6 +151,59 @@ describe("dashboard stat grid", () => {
     for (const a of anchors) {
       expect(a.querySelector("a")).toBeNull();
     }
+  });
+
+  // Phone declutter: the home page was 3-4 screens of scroll, so "Open jobs"
+  // (a jobs concept, and the count now sits at the top of /contractors) and
+  // "Home value" (already a permanent entry in the phone Tools sheet) are
+  // hidden below sm. Both stay in the DOM and keep their data - desktop still
+  // renders the full four-card grid - so this asserts the class, not the
+  // hiding: jsdom does not evaluate media queries, and the visual result is a
+  // viewport concern outside this test's reach.
+  it("hides the Open jobs and Home value cards on phone only", async () => {
+    const { container } = await renderDashboard();
+    const anchors = Array.from(container.querySelectorAll("a"));
+    const openJobs = anchors.find((a) => a.textContent?.includes("Open jobs"));
+    const homeValue = anchors.find((a) => a.textContent?.includes("Home value"));
+    expect(openJobs).toBeTruthy();
+    expect(homeValue).toBeTruthy();
+    expect(openJobs!.classList.contains("max-sm:hidden")).toBe(true);
+    expect(openJobs!.classList.contains("card-link")).toBe(true);
+    expect(homeValue!.classList.contains("max-sm:hidden")).toBe(true);
+    expect(homeValue!.classList.contains("card-link")).toBe(true);
+  });
+
+  // Same declutter: twenty-one project chips wrap to about seven rows at
+  // 390px. They live at the top of /contractors on phone now (see
+  // contractors/ProjectChips), and stay here on desktop.
+  it("hides the project chips section on phone only", async () => {
+    const { container } = await renderDashboard();
+    const heading = Array.from(container.querySelectorAll("h2")).find(
+      (h) => h.textContent === "Thinking about a project?"
+    );
+    expect(heading).toBeTruthy();
+    expect(heading!.parentElement!.classList.contains("max-sm:hidden")).toBe(true);
+  });
+});
+
+// The briefing used to end each line with a literal "→" glued to the last word
+// of a wrapped sentence: nothing to aim at, and nothing to visually scan for.
+// Each actionable item is one full-width link row now, at every width.
+describe("Hearth's briefing rows", () => {
+  it("renders an actionable item as a single link row that clears 44px", async () => {
+    const { container } = await renderDashboard();
+    const row = Array.from(container.querySelectorAll("a")).find((a) =>
+      a.textContent?.includes("Find a pro")
+    );
+    expect(row).toBeTruthy();
+    expect(row!.getAttribute("href")).toContain("/contractors?category=plumbing");
+    expect(row!.classList.contains("min-h-11")).toBe(true);
+    expect(row!.classList.contains("flex")).toBe(true);
+    // A real ChevronRight icon, not the old text arrow.
+    expect(row!.querySelector("svg")).toBeTruthy();
+    expect(row!.textContent).not.toContain("→");
+    // The whole sentence is inside the tap target, not just the CTA words.
+    expect(row!.textContent).toContain("issue needs attention");
   });
 });
 

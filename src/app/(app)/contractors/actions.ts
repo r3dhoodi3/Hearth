@@ -25,8 +25,13 @@ import { hasPlus } from "@/lib/subscription";
 import { alertProsForNewLead } from "@/lib/proAlerts";
 import { sendNotification } from "@/lib/notify";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { isBlockedBetween } from "@/lib/blocks";
 import { redactContact } from "@/lib/redact";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
+import {
+  isAcceptablePublicText,
+  REVIEW_COMMENT_REJECTED,
+} from "@/lib/publicText";
 import {
   launchCityForZip,
   OUT_OF_AREA_POST_MESSAGE,
@@ -102,7 +107,8 @@ function validPhotoUrls(formData: FormData, propertyId: string): string[] {
 // pro is selected later from the applicants.
 export async function postJobAction(formData: FormData) {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property)
+    throw new Error("Couldn't find your home. Try again from the dashboard.");
 
   // Launch-area gate (0124, widened to nine cities by 0126 and to all of
   // Orange County by 0129). Onboarding only accepts launch-area ZIPs now, but
@@ -1153,6 +1159,19 @@ export async function saveReviewAction(
     );
   }
 
+  // MODERATION: the comment is unreviewed free text, printed verbatim on
+  // ContractorReviews.tsx, the pro's public page, and the review share card
+  // (src/app/api/review-card/[reviewId]/route.tsx) - the same kind of public
+  // surface as the pro's own business name and about section, so it runs
+  // through the same gate (src/lib/publicText.ts): censor() for profanity and
+  // slurs, plus a phone/email shape check so a review can't be used to route a
+  // homeowner off-platform. An empty comment (rating only) is left alone,
+  // same as isAcceptablePublicText treats an empty string as acceptable and
+  // the way `about` skips the check on an unchanged value.
+  if (comment && !isAcceptablePublicText(comment)) {
+    return err(REVIEW_COMMENT_REJECTED);
+  }
+
   // Check whether this lead already has a review before the upsert, so the pro
   // is notified once, on the first review, not on every later edit.
   const { data: already } = await supabase
@@ -1215,7 +1234,11 @@ export async function saveReviewAction(
               user_id: contractor.user_id,
               kind: "new_review",
               title: "You received a new review",
-              body: "A homeowner just reviewed a completed job. Check your profile to see it.",
+              // Not "a completed job": leave_review() deliberately has NO
+              // status requirement (see migration 0132, part 6), so the
+              // reviewable bar is "a pro was assigned to this job", not
+              // "the pro marked it closed".
+              body: "A homeowner just reviewed a job you were hired for. Check your profile to see it.",
               url: "/pro",
             });
           }
@@ -1253,7 +1276,8 @@ export async function requestProAction(
   formData: FormData
 ): Promise<ActionResult> {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property)
+    throw new Error("Couldn't find your home. Try again from the dashboard.");
 
   // Launch-area gate, same reasoning as postJobAction: a pre-launch-gate home
   // outside the launch cities must not create a request a pro would then pay
@@ -1330,6 +1354,15 @@ export async function requestProAction(
     .eq("id", contractorId)
     .maybeSingle();
   if (!pro || !pro.user_id) {
+    return err("That pro isn't available for direct requests right now.");
+  }
+  // Blocking (migration 0138). A direct request is created by application
+  // code, not by open_jobs_for_me or apply_to_lead, so it is the one path the
+  // database-level block gates cannot cover and the check has to be re-stated
+  // here. Symmetric and deliberately vague: a homeowner must not be able to
+  // use this message to discover that a particular pro blocked them, and vice
+  // versa. isBlockedBetween fails open if 0138 has not been applied yet.
+  if (await isBlockedBetween(user.id, pro.user_id)) {
     return err("That pro isn't available for direct requests right now.");
   }
   // Same launch-market gate as browse_pros and apply_to_lead: /p/<id> is a
@@ -1502,7 +1535,8 @@ export async function cancelDirectRequestAction(formData: FormData) {
 // their mind while still waiting.
 export async function postDirectPubliclyAction(formData: FormData) {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property)
+    throw new Error("Couldn't find your home. Try again from the dashboard.");
 
   // Launch-area gate, same reasoning as postJobAction: converting a direct
   // request into an open posting must not create a board job no pro can see.
@@ -1647,7 +1681,8 @@ export async function rehireProAction(
   formData: FormData
 ): Promise<ActionResult> {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property)
+    throw new Error("Couldn't find your home. Try again from the dashboard.");
   const supabase = await createClient();
 
   const {

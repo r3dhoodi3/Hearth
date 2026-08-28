@@ -188,6 +188,7 @@ function WizardFooter({
         <button
           type="button"
           onClick={onBack}
+          aria-label={`Back to step ${step} of ${PRO_ONBOARDING_STEP_COUNT}`}
           className="btn-secondary flex-1 sm:flex-none sm:px-6"
         >
           Back

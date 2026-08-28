@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
+import { getVerifiedUser } from "@/lib/auth";
+import { freeTastesLeft } from "@/lib/freeAiTasteServer";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 import { stateName } from "@/lib/forecast";
 import DocumentUpload from "@/components/DocumentUpload";
@@ -76,6 +78,16 @@ export default async function DocumentsPage() {
   const property = propertyOrNull!;
   const supabase = await createClient();
 
+  // The AI-read meter for the upload card: how many of the 2 lifetime free
+  // document reads are left. Keyed to the VIEWER, not the home's owner, since
+  // that is whose account /api/extract-document charges. Null for Plus (no
+  // meter at all) and null if the counter cannot be read, so the card never
+  // guesses. See src/lib/freeAiTaste.ts.
+  const viewer = isPlus ? null : await getVerifiedUser();
+  const freeReadsLeft = viewer
+    ? await freeTastesLeft(viewer.id, false, "document")
+    : null;
+
   const { data: docs, error: docsError } = await supabase
     .from("documents")
     .select(
@@ -117,13 +129,13 @@ export default async function DocumentsPage() {
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Documents</h1>
       </header>
       <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
-        Your home&apos;s paperwork in one place. Warranties, manuals, receipts, and
-        model labels all live here. Hearth reads each one and can drop the
-        details straight into your home profile, so you never dig for a manual
-        or a warranty date again.
+        Your home&apos;s paperwork, in one place: warranties, manuals,
+        receipts, model labels. Hearth reads each one and can drop the details
+        straight into your home profile. Never dig for a manual or warranty
+        date again.
       </p>
 
-      <DocumentUpload propertyId={property.id} />
+      <DocumentUpload propertyId={property.id} freeReadsLeft={freeReadsLeft} />
 
       {/* Once the vault has real weight to it, point at what that record is
           FOR. No loss framing: nothing has been taken away, and the home
@@ -264,9 +276,8 @@ export default async function DocumentsPage() {
           Home insurance
         </h2>
         <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
-          Add your renewal date and annual premium from your policy and Hearth
-          will nudge you about 45 days before renewal, while there&apos;s
-          still time to shop around.
+          Add your renewal date and premium, and Hearth nudges you about 45
+          days before renewal, while there&apos;s still time to shop around.
         </p>
 
         {!hasInsurance && (

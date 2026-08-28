@@ -25,12 +25,19 @@ export default function ContactForm({ topic }: { topic: string | null }) {
       className="card"
     >
       {topic && (
-        <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
-          Regarding:{" "}
-          <span className="font-medium text-stone-700 dark:text-stone-300">
-            {topic}
-          </span>
-        </p>
+        <>
+          <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
+            Regarding:{" "}
+            <span className="font-medium text-stone-700 dark:text-stone-300">
+              {topic}
+            </span>
+          </p>
+          {/* Carried into the stored message as a one-line prefix, so a
+              safety report reaches the inbox already labelled instead of
+              arriving as an unexplained message. The action re-caps it; it is
+              display text either way and is never used to decide anything. */}
+          <input type="hidden" name="topic" value={topic} />
+        </>
       )}
 
       {/* Honeypot. A real visitor never sees or reaches this field: it sits

@@ -318,13 +318,38 @@ describe("the AVM refresh action", () => {
 
   it("is metered, since an uncached outage would reach RentCast every call", () => {
     expect(valueActions).toContain("rate_limit_hit");
-    expect(valueActions).toContain("avm:${user.id}");
-    expect(valueActions).toContain("avm-day:${user.id}");
+    expect(valueActions).toContain("avm:${userId}");
+    expect(valueActions).toContain("avm-day:${userId}");
   });
 
   it("spends its own buckets, never the onboarding lookup budget", () => {
-    expect(valueActions).not.toContain("parcel:${user.id}");
-    expect(valueActions).not.toContain("parcel-day:${user.id}");
+    expect(valueActions).not.toContain("parcel:${userId}");
+    expect(valueActions).not.toContain("parcel-day:${userId}");
+  });
+
+  it("meters BOTH paths that can reach RentCast, on the one budget", () => {
+    // There are two: the free first-estimate fetch, and the Plus-only manual
+    // refresh. They cost the same money, so they share one per-user budget -
+    // a second entry point with its own (or no) limit would be a way around
+    // the first one's.
+    const calls = valueActions.match(/avmBudgetAllows\(/g) ?? [];
+    // One declaration plus one call from each action.
+    expect(calls.length).toBe(3);
+  });
+
+  it("refuses a refresh from a free account server-side", () => {
+    // The button a free account sees is a link to /plus, not a submit, but
+    // the action is callable directly by anything holding a session: the only
+    // path that can bill RentCast a SECOND time for one home checks
+    // membership on the server before it spends anything.
+    const refresh = valueActions.indexOf(
+      "export async function refreshMarketValueAction"
+    );
+    expect(refresh).toBeGreaterThan(-1);
+    const gate = valueActions.indexOf("await hasPlus()", refresh);
+    const lookup = valueActions.indexOf("lookupMarketValue(", refresh);
+    expect(gate).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(lookup);
   });
 });
 

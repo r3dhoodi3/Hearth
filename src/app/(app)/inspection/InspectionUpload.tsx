@@ -9,6 +9,7 @@ import AiNotice from "@/components/AiNotice";
 import Lightbox from "@/components/Lightbox";
 import ProgressBar, { useStagedProgress } from "@/components/ProgressBar";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
+import { FREE_TASTE_PAYWALL, tasteMeterLabel } from "@/lib/freeAiTaste";
 
 type Mode = "photo" | "pdf" | "text";
 
@@ -25,6 +26,33 @@ const INGEST_STAGES = [
 // is the friendly first line so a homeowner isn't left guessing. accept="" is
 // only a hint, so the real check lives in onPickPdf.
 const MAX_PDF_BYTES = 20 * 1024 * 1024; // 20MB
+
+// Only these messages are ever shown from the API's JSON `error` field. The
+// route hand-writes every one of them today, but nothing in the type system
+// stops a future change (or an exception serialized into that field) from
+// putting a stack trace or an internal code in there, and this component would
+// print it to the homeowner verbatim. Anything not on this list falls back to
+// the component's own plain-English copy. Keep in sync with the responses in
+// src/app/api/ingest-inspection/route.ts.
+const ALLOWED_API_ERRORS: RegExp[] = [
+  /^Add a photo or PDF of the report, or paste its text\.$/,
+  /^That's too much to read at once\. Send the PDF on its own, or fewer page photos\.$/,
+  /^Please add at most \d+ pages at a time\.$/,
+  /^One of those images is too large\.$/,
+  /^Those photos add up to too much at once\. Add fewer pages, or use the PDF or paste option\.$/,
+  /^That PDF is too large \(max 20MB\)\. Try the photos or paste option instead\.$/,
+  /^Report text is too long\. Paste the findings and summary sections, or upload the PDF instead\.$/,
+  /^That PDF has too many pages \(max \d+\)\. Please upload just the inspection report's pages\.$/,
+];
+
+// Returns the server's message only when it is one Hearth wrote, otherwise
+// null so the caller uses its own fallback. Exported for
+// InspectionUpload.errors.test.tsx, which covers both branches directly.
+export function knownApiError(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const msg = raw.trim();
+  return ALLOWED_API_ERRORS.some((re) => re.test(msg)) ? msg : null;
+}
 
 type ProposedSystem = {
   system_type: string;
@@ -111,7 +139,18 @@ function pdfToBase64(file: File): Promise<string> {
 // Add an inspection report an owner already has: photos of its pages or
 // pasted text go to Hearth, which proposes systems and issues. Nothing is
 // saved until the owner reviews the checklist and confirms.
-export default function InspectionUpload() {
+//
+// `freeReadsLeft` is the meter: how many of the 1 lifetime free report reads
+// this account has left (src/lib/freeAiTaste.ts). Null for a Plus or trialing
+// member, and null when the counter could not be read, and in both cases no
+// meter and no door is shown. At zero the "Read this report" button becomes
+// the Plus door carrying the SAME sentence /api/ingest-inspection would have
+// sent, so the refusal is never a surprise and never arrives cold.
+export default function InspectionUpload({
+  freeReadsLeft = null,
+}: {
+  freeReadsLeft?: number | null;
+}) {
   const [mode, setMode] = useState<Mode>("photo");
   const [images, setImages] = useState<string[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -130,6 +169,14 @@ export default function InspectionUpload() {
   // (so cancelling doesn't also flash an error message).
   const abortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
+  // The live meter, seeded from the server and spent here as reads succeed, so
+  // the count stays honest without a page refresh. Null means "no meter"
+  // (Plus, or the counter could not be read).
+  const [readsLeft, setReadsLeft] = useState<number | null>(freeReadsLeft);
+  // Set when the server refuses (HTTP 402). Belt and braces behind the meter,
+  // for the tab that was already open when the free read was spent elsewhere.
+  const [locked, setLocked] = useState(false);
+  const doorShowing = locked || readsLeft === 0;
   // A PDF is a bigger read for the model than a few photos, so pace the stage
   // labels a little slower for it.
   const progress = useStagedProgress(INGEST_STAGES, mode === "pdf" ? 32000 : 22000);
@@ -235,12 +282,25 @@ export default function InspectionUpload() {
         return;
       }
 
+      // Out of free reads. No red error line: this is not something the owner
+      // got wrong, so the door below carries the message instead.
+      if (resp.status === 402) {
+        setPhase("idle");
+        setReadsLeft(0);
+        setLocked(true);
+        setError(null);
+        return;
+      }
+
       const data = await resp.json().catch(() => ({}));
       if (data?.result) {
         const found = data.result as IngestResult;
         setResult(found);
         setSystemsChecked(found.systems.map(() => true));
         setIssuesChecked(found.issues.map(() => true));
+        // A real read landed, so the free read is gone. A failed read is
+        // refunded server side, so the meter only moves on a real result.
+        setReadsLeft((n) => (n === null ? null : Math.max(0, n - 1)));
         setPhase("review");
       } else if (data?.reason === "rate_limited") {
         setPhase("idle");
@@ -251,7 +311,7 @@ export default function InspectionUpload() {
       } else {
         setPhase("idle");
         setError(
-          data?.error ||
+          knownApiError(data?.error) ||
             (mode === "pdf"
               ? "We couldn't read that PDF. Try the photo or paste option instead."
               : "Couldn't read that report. Try clearer photos or paste the text instead.")
@@ -619,14 +679,40 @@ export default function InspectionUpload() {
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-      <button
-        type="button"
-        onClick={ingest}
-        disabled={phase === "working"}
-        className="btn-primary w-full"
-      >
-        {phase === "working" ? "Reading the report…" : "Read this report"}
-      </button>
+      {/* THE DOOR, in place of the button once the free read is gone, carrying
+          the same sentence the route sends so the refusal is never cold. */}
+      {doorShowing ? (
+        <div className="space-y-3 rounded-lg border border-bark-100 bg-bark-50 p-4 text-center dark:border-bark-700 dark:bg-bark-700/40">
+          <p className="text-sm text-bark-700 dark:text-stone-300">
+            {FREE_TASTE_PAYWALL.inspection.message}
+          </p>
+          <Link
+            href={FREE_TASTE_PAYWALL.inspection.link}
+            className="btn-primary inline-block"
+          >
+            Get Hearth Plus
+          </Link>
+        </div>
+      ) : (
+        <>
+          {/* THE METER, stated before the tap rather than after the wall.
+              Plus and trialing members get null and see nothing here. */}
+          {readsLeft !== null && readsLeft > 0 && (
+            <p className="text-xs text-stone-500 dark:text-stone-400">
+              {tasteMeterLabel("inspection", readsLeft)}. Plus reads every
+              report you add.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={ingest}
+            disabled={phase === "working"}
+            className="btn-primary w-full"
+          >
+            {phase === "working" ? "Reading the report…" : "Read this report"}
+          </button>
+        </>
+      )}
       {phase === "working" && (
         <>
           <ProgressBar

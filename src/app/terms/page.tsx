@@ -33,7 +33,7 @@ export default function TermsPage() {
         Terms of Service
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-        Last updated July 2026. The plain-English basics, not legalese.
+        Last updated August 28, 2026. The plain-English basics, not legalese.
       </p>
 
       <div className="mt-8 space-y-8 text-stone-700 dark:text-stone-300">
@@ -227,12 +227,31 @@ export default function TermsPage() {
             you&apos;re contractually barred from sharing.
           </p>
           <p className="mt-3 leading-relaxed">
-            We don&apos;t review content before it goes up. We may remove or
-            restrict any content, at any time, if we believe it violates these
-            terms or the law, but we&apos;re not obligated to monitor, and
-            we&apos;re not responsible for content other users post. Content
-            from other users is theirs, not ours, and we don&apos;t endorse
-            it. {/* TODO(legal): attorney review required — confirm this tracks the Section 230 and DMCA safe-harbor posture we intend to rely on. */}
+            No person reads your content before it goes up. Some of it does go
+            through an automatic check first: business names, profile
+            descriptions, review comments, and custom service names are
+            screened for slurs and for off-platform contact details, and a save
+            that trips the check is refused with a reason. Chat messages have
+            slurs and profanity masked before they are stored. Those checks are
+            word and pattern matching, not a human reviewer and not a judgment
+            about whether something is true. We may also remove or restrict any
+            content, at any time, if we believe it violates these terms or the
+            law, but we&apos;re not obligated to monitor, and we&apos;re not
+            responsible for content other users post. Content from other users
+            is theirs, not ours, and we don&apos;t endorse it.{" "}
+            {/* TODO(legal): attorney review required — confirm this tracks the Section 230 and DMCA safe-harbor posture we intend to rely on. */}
+            {/* LAWYER: check that describing the automatic slur/contact screening above does not undercut the "not obligated to monitor" posture or the Section 230 / DMCA safe harbor. */}
+          </p>
+          <p className="mt-3 leading-relaxed">
+            Reviews have one rule on top of that: you can only review a job on
+            your own property that a pro was actually hired for, one review per
+            job, and you can&apos;t review your own company or a company tied
+            to another account of yours. We don&apos;t require the pro to mark
+            the job finished first, because that would let a pro avoid a bad
+            review by never marking anything finished. We don&apos;t pay for
+            reviews, we don&apos;t write them, and we don&apos;t delete a
+            review for being negative.{" "}
+            {/* LAWYER: check this against the FTC Rule on Consumer Reviews and Testimonials (16 CFR 465), in particular the review-suppression and insider-review provisions, and confirm we can say "we don't delete a review for being negative" given the moderation gate above can refuse one at submission time. */}
           </p>
           <p className="mt-3 leading-relaxed">
             If someone brings a claim against Hearth because of something you

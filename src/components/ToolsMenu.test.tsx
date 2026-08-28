@@ -31,6 +31,7 @@ describe("ToolsMenu phone sheet", () => {
     expect(hrefs).toEqual([
       "/emergency",
       "/walkthrough",
+      "/home-details",
       "/documents",
       "/value",
       "/taxes",
@@ -92,5 +93,16 @@ describe("ToolsMenu phone sheet", () => {
 
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(trigger).toHaveFocus();
+  });
+
+  // The trigger sits in the app header next to the address label, so its
+  // padding is deliberately tight. The phone-only min height is what keeps it
+  // at the 44px thumb minimum; jsdom applies no CSS, so the class itself is
+  // the thing to assert. Desktop sizing is untouched (the bump is max-sm:).
+  it("keeps the Tools trigger at 44px on a phone", () => {
+    render(<ToolsMenu hasPlus={false} />);
+    expect(screen.getByRole("button", { name: /tools/i }).className).toContain(
+      "max-sm:min-h-11"
+    );
   });
 });

@@ -423,6 +423,17 @@ export default async function HomeReportPage() {
             {propertyFacts.join(" · ")}
           </p>
         )}
+        {/* Wrong or missing facts get fixed on the dedicated editor, not
+            here - this page is a read-only export. print:hidden because a
+            printed/PDF report shouldn't carry a link to click. */}
+        <p className="mt-1 print:hidden">
+          <Link
+            href="/home-details"
+            className="text-sm text-bark-700 underline decoration-bark-300 underline-offset-2 hover:text-bark-800 dark:text-stone-300 dark:decoration-bark-600 dark:hover:text-stone-100"
+          >
+            Edit details
+          </Link>
+        </p>
       </header>
 
       {/* Systems */}
@@ -566,7 +577,11 @@ export default async function HomeReportPage() {
             checked off - this section never fabricates or infers entries. */}
         {completedTasks.length === 0 ? (
           <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
-            No maintenance recorded yet.
+            No maintenance recorded yet.{" "}
+            <Link href="/dashboard" className="underline underline-offset-2">
+              Log an upkeep task from your dashboard
+            </Link>{" "}
+            to start your record.
           </p>
         ) : (
           <ul className="mb-4 divide-y divide-stone-100 dark:divide-white/10">

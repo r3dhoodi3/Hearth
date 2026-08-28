@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_TYPES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
-import { hasPlus } from "@/lib/subscription";
+import { getPlusTier } from "@/lib/subscription";
 import { countAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { readJsonBounded } from "@/lib/boundedBody";
+import { FREE_TASTE_PAYWALL } from "@/lib/freeAiTaste";
+import {
+  claimFreeTaste,
+  refundFreeTaste,
+  freeTastesLeft,
+} from "@/lib/freeAiTasteServer";
 import { generateJson, hasClaudeKey, isRateLimitError } from "@/lib/claude";
 
 export const runtime = "nodejs";
@@ -87,6 +93,36 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // FREE TASTE CHECK, before the body is read and long before the model is
+  // called: two lifetime AI document reads for a free account, unlimited for
+  // Plus and trialing within the daily ceilings below. This is the advisory
+  // half - cheap to answer, so a homeowner who is out never uploads megabytes
+  // of base64 first - and the authoritative atomic claim happens immediately
+  // before the model call. See src/lib/freeAiTaste.ts for why it is split.
+  //
+  // The refusal carries the same sentence the vault's upload card already
+  // shows next to the button, so nobody ever meets it cold.
+  // One tier read for both questions: which daily ceiling this caller gets
+  // (countAiUsage below) and whether they are on the free taste at all. A
+  // trialing account counts as Plus here - the taste exists to give a free
+  // account a real look at the feature, and a trialer is already looking.
+  const tier = await getPlusTier();
+  const isPlus = tier !== "free";
+  if (!isPlus) {
+    const left = await freeTastesLeft(user.id, isPlus, "document");
+    if (left !== null && left <= 0) {
+      return NextResponse.json(
+        {
+          doc: null,
+          reason: "plus_required",
+          error: FREE_TASTE_PAYWALL.document.message,
+          link: FREE_TASTE_PAYWALL.document.link,
+        },
+        { status: 402 }
+      );
+    }
+  }
+
   if (!hasClaudeKey()) {
     // No key: the vault still works, the owner just fills fields in by hand.
     return NextResponse.json({ doc: null, reason: "no_key" });
@@ -108,14 +144,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Image too large." }, { status: 413 });
   }
 
+  // THE AUTHORITATIVE CLAIM, atomic. Two tabs that both passed the advisory
+  // check above cannot both come away with a taste: claim_free_ai_taste
+  // (migration 0135) does the read and the write in one statement. It is
+  // handed back on every path below that never produces an extraction, so a
+  // blurry photo or a thrown call costs nothing.
+  //
+  // It runs BEFORE countAiUsage on purpose: a refusal here must not have
+  // charged the caller one of their 25 daily tool usages for a request that
+  // never reached the model.
+  const { allowed: tasteAllowed, claimed: tasteClaimed } = await claimFreeTaste(
+    user.id,
+    isPlus,
+    "document"
+  );
+  if (!tasteAllowed) {
+    return NextResponse.json(
+      {
+        doc: null,
+        reason: "plus_required",
+        error: FREE_TASTE_PAYWALL.document.message,
+        link: FREE_TASTE_PAYWALL.document.link,
+      },
+      { status: 402 }
+    );
+  }
+
   // Same per-user daily cap as /api/ask (same ai_usage table and limits), so
   // document extraction can't be a side door around the abuse limits on the
   // paid model. Over the cap degrades like any other model failure.
-  const { overLimit, reason } = await countAiUsage(user.id, await hasPlus());
+  const { overLimit, reason } = await countAiUsage(user.id, tier);
   if (overLimit) {
-    // One mapping for every counter refusal, so a burst window reads as "give
-    // it a minute" instead of "you are out for the day". See
+    // Turned away by a ceiling, with nothing sent to the model: the free read
+    // goes back. One mapping for every counter refusal, so a burst window
+    // reads as "give it a minute" instead of "you are out for the day". See
     // src/lib/aiReason.ts.
+    await refundFreeTaste(user.id, "document", tasteClaimed);
     return NextResponse.json({ doc: null, ...reasonToClientPayload(reason) });
   }
 
@@ -155,6 +219,12 @@ export async function POST(req: NextRequest) {
       label: "extract-document",
     });
     if (!parsed) {
+      // Nothing usable came back, so this was not a read: give the free taste
+      // back, the same promise the quote analyzer makes ("a failed upload
+      // never burns it"). The DAILY usage above deliberately stays spent, as
+      // it always has on this path - the model was called and billed, and it
+      // is what stops an unreadable image being looped for free.
+      await refundFreeTaste(user.id, "document", tasteClaimed);
       return NextResponse.json({ doc: null, reason: "failed" });
     }
     return NextResponse.json({ doc: normalize(parsed) });
@@ -162,7 +232,8 @@ export async function POST(req: NextRequest) {
     // The owner was already charged one of today's usages above; a thrown
     // model call never produced an extraction, so hand it back rather than
     // spending their allowance on a request that failed before it reached
-    // them.
+    // them. Same for the free taste.
+    await refundFreeTaste(user.id, "document", tasteClaimed);
     await refundAiUsage(user.id);
     return NextResponse.json({
       doc: null,

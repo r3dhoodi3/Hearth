@@ -13,6 +13,22 @@ import { ImageResponse } from "next/og";
 const SIZE = 192;
 const MARK = 132; // keep the same ~69% ratio apple-icon.tsx uses (124/180)
 
+// Cache hard. This handler takes no input at all - no params, no query, no
+// cookies, no database - so its bytes are a constant of the deployment and can
+// only change when the artwork above is edited and redeployed. A GET route
+// handler is dynamic by default in Next 15, so without this every install
+// prompt and every Android home-screen refresh re-runs a satori render on the
+// server for a picture that never changes. attachDeviceCookie already skips
+// /icon* and any path with a file extension (src/lib/risk/cookies.ts), so no
+// Set-Cookie rides along to make the CDN refuse to store it.
+//
+//   s-maxage=31536000  the CDN may hold it until the next deploy, which
+//                      invalidates the cache anyway.
+//   max-age=86400      a browser re-checks daily, so a changed icon reaches an
+//                      already-installed app within a day rather than never.
+const ICON_CACHE_CONTROL =
+  "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=86400";
+
 export async function GET() {
   return new ImageResponse(
     (
@@ -46,6 +62,10 @@ export async function GET() {
         </svg>
       </div>
     ),
-    { width: SIZE, height: SIZE }
+    {
+      width: SIZE,
+      height: SIZE,
+      headers: { "Cache-Control": ICON_CACHE_CONTROL },
+    }
   );
 }

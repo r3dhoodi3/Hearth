@@ -138,7 +138,7 @@ function AppNav({
           Tools <span className="text-[10px] text-stone-400">▾</span>
         </span>
       </span>
-      <span className="flex min-w-[56px] flex-1 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-400">
+      <span className="flex min-w-[56px] flex-1 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-500">
         <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7" />
           <path d="M21 21l-4.3-4.3" />
@@ -2213,9 +2213,22 @@ export default function HeroDemoPlayer() {
     setPaused(next ?? false);
   }
 
-  // Clicking the picture toggles pause, like every video player.
-  function handleScreenClick() {
-    if (started && !finished) handleTogglePause();
+  // Clicking the picture toggles pause, like every video player - but only
+  // the device's outer frame (title bar, the padding/room around the phone),
+  // not the simulated screen inside it. The simulated pages are rendered
+  // with the real site's own classes (nav tabs, a search bar, an address
+  // input, a chat "Send" button), so a viewer watching the demo naturally
+  // tries clicking things that look interactive. None of that content is
+  // real, and a click landing on it must not silently pause the whole demo -
+  // that read as broken, not as a play/pause control (found via a click
+  // probe: clicking the fake nav logo or the fake Send chip paused
+  // playback; clicking the surrounding page - header, heading, background -
+  // never did, so this exemption only needs to cover the screen itself).
+  function handleScreenClick(e: { target: EventTarget | null }) {
+    if (!started || finished) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('[data-x="screen"]')) return;
+    handleTogglePause();
   }
 
   // YouTube-style scrubbing: while dragging, only the bar preview moves and
@@ -2514,9 +2527,9 @@ export default function HeroDemoPlayer() {
                   <p className="mt-1 text-sm text-stone-500">
                     Home health score{" "}
                     <span className="align-middle text-2xl font-bold text-green-700" data-x="endScore">71</span>
-                    <span className="align-middle text-sm text-stone-400"> of 100</span>
+                    <span className="align-middle text-sm text-stone-500"> of 100</span>
                   </p>
-                  <p className="text-xs text-stone-400">after one season of upkeep</p>
+                  <p className="text-xs text-stone-500">after one season of upkeep</p>
                   {/* A REAL link: the end card is a conversion surface, not a
                       prop. stopPropagation so the click doesn't toggle pause. */}
                   <Link
@@ -2613,7 +2626,7 @@ export default function HeroDemoPlayer() {
             type="button"
             className={styles.rateBtn}
             onClick={handleCycleRate}
-            aria-label={`Playback speed ${RATES[rateIdx]}x, click to change`}
+            aria-label={`Playback speed ${RATES[rateIdx]}x, change speed`}
           >
             {RATES[rateIdx]}x
           </button>

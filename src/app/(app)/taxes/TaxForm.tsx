@@ -52,9 +52,8 @@ export default function TaxForm({
       {!hasData && (
         <p className="text-sm text-stone-500 dark:text-stone-400">
           Look for a line called &quot;assessed value&quot; or &quot;total
-          assessed value&quot; on your county&apos;s assessment notice or
-          property tax bill, along with the tax year it applies to. Two
-          numbers and you&apos;re done.
+          assessed value&quot; on your tax bill or assessment notice, plus the
+          tax year it applies to. Two numbers and you&apos;re done.
         </p>
       )}
 

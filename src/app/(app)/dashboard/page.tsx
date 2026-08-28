@@ -15,7 +15,6 @@ import {
   openIssueFor,
 } from "@/lib/health";
 import {
-  REMODEL_PROJECTS,
   categoryForSystem,
   labelFor,
   SYSTEM_TYPES,
@@ -44,6 +43,7 @@ import {
 } from "lucide-react";
 import { calculateEquity, headlineHomeValue } from "@/lib/homeValue";
 import HomeValueAutoFetch from "../value/ValueAutoFetch";
+import ProjectChips from "../contractors/ProjectChips";
 import { estimateSeasonalEnergyCost } from "@/lib/energy";
 import type { Issue } from "@/lib/database.types";
 
@@ -57,6 +57,31 @@ function PlusChip({ className = "" }: { className?: string }) {
       Plus
     </span>
   );
+}
+
+// The two one-time free-taste credits (migration 0099), read in one row so the
+// query can ride along in the dashboard's main parallel wave instead of being
+// a third sequential round trip.
+//
+// FAIL OPEN on any read error, including the columns not being live yet: a
+// homeowner must never be told a free credit is used when it never was. No
+// user id (signed out, which the (app) layout already prevents) reads as "no
+// credits", exactly as before.
+async function readFreeCredits(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string | null
+): Promise<{ planUnused: boolean; quoteUnused: boolean }> {
+  if (!userId) return { planUnused: false, quoteUnused: false };
+  const { data, error } = await supabase
+    .from("users")
+    .select("free_plan_used_at, free_quote_used_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) return { planUnused: true, quoteUnused: true };
+  return {
+    planUnused: !!data && data.free_plan_used_at === null,
+    quoteUnused: !!data && data.free_quote_used_at === null,
+  };
 }
 
 export default async function HomePage(
@@ -74,9 +99,15 @@ export default async function HomePage(
   // Score and "This month" stay expanded either way. Normal visits are
   // untouched.
   const isFirstVisit = !!searchParams.welcome;
-  // getActiveProperty and hasPlus don't depend on each other - run them
-  // together instead of stacking two round trips before the redirect check.
-  const [property, plus] = await Promise.all([getActiveProperty(), hasPlus()]);
+  // getActiveProperty, hasPlus and getUser don't depend on each other - run
+  // them together instead of stacking round trips before the redirect check.
+  // getUser is the cached, network-free read, and its id is needed by the
+  // free-credit query that now rides along in the wave below.
+  const [property, plus, user] = await Promise.all([
+    getActiveProperty(),
+    hasPlus(),
+    getUser(),
+  ]);
   if (!property) redirect("/onboarding");
   const supabase = await createClient();
 
@@ -87,6 +118,7 @@ export default async function HomePage(
     { data: pics },
     { data: jobs },
     { data: docs },
+    credits,
   ] = await Promise.all([
     // home_systems: kept as select(*) on purpose. SystemRow's edit form
     // reads filter_size/filter_interval_months (migration 0042 columns that
@@ -137,6 +169,13 @@ export default async function HomePage(
       .eq("property_id", property.id)
       .not("warranty_expires", "is", null)
       .order("warranty_expires", { ascending: true }),
+    // The free-credit read used to be a THIRD sequential wave below (it only
+    // ran for non-Plus homeowners, i.e. most of them), so the dashboard paid
+    // three stacked round trips before it could render. Fired here instead:
+    // same query, same cost when it runs, but off the critical path. Plus
+    // members pay one extra parallel read they then ignore, which is cheaper
+    // than an extra serial hop for everyone else.
+    readFreeCredits(supabase, user?.id ?? null),
   ]);
 
   // Open jobs = postings the owner has put up that no pro has been picked for yet.
@@ -154,32 +193,15 @@ export default async function HomePage(
   // tracked the same way the free quote check is (users.free_plan_used_at,
   // migration 0099). freePlanCredit is true only while that credit is unused,
   // so the CTA can offer the real build once, then revert to the Plus pitch.
-  let freePlanCredit = false;
   // Same idea for the quote analyzer's one free check (users.
   // free_quote_used_at): the tile below advertises a "1 free" chip, and that
   // chip has to disappear once the credit is actually spent or it is an ad for
   // something the user no longer has. Read in the same round trip.
-  let freeQuoteCredit = false;
-  if (!plus) {
-    // The cached, network-free getUser(): the row below is RLS-protected and
-    // pinned to this id, so a live auth-server round trip buys nothing here.
-    const user = await getUser();
-    if (user) {
-      const { data: creditRow, error: creditErr } = await supabase
-        .from("users")
-        .select("free_plan_used_at, free_quote_used_at")
-        .eq("id", user.id)
-        .maybeSingle();
-      // FAIL OPEN if the column isn't live yet (migration 0099 not run): a
-      // homeowner must never be told the free build is used when it never was.
-      freePlanCredit = creditErr
-        ? true
-        : !!creditRow && creditRow.free_plan_used_at === null;
-      freeQuoteCredit = creditErr
-        ? true
-        : !!creditRow && creditRow.free_quote_used_at === null;
-    }
-  }
+  //
+  // Plus members never see either offer, so the read above is simply ignored
+  // for them - same behavior as when this was gated behind `if (!plus)`.
+  const freePlanCredit = !plus && credits.planUnused;
+  const freeQuoteCredit = !plus && credits.quoteUnused;
 
   // Group system photos by system id so each row can show its own thumbnails.
   const photosBySystem = new Map<string, string[]>();
@@ -511,27 +533,10 @@ export default async function HomePage(
       <p className="text-sm text-stone-500 dark:text-stone-400">
         Popular upgrades. Tap one to get matched with a local pro.
       </p>
-      <div className="flex flex-wrap gap-2">
-        {REMODEL_PROJECTS.map((p) => (
-          <Link
-            key={p.label}
-            href={`/contractors?category=${p.category}`}
-            className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
-          >
-            {/* Plain text labels, matching the "Other" chip below. The little
-                pictograms were removed on purpose - no surface renders the
-                REMODEL_PROJECTS icon field any more, it just hasn't been
-                deleted from constants.ts yet. */}
-            {p.label}
-          </Link>
-        ))}
-        <Link
-          href="/contractors?category=other"
-          className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
-        >
-          Other
-        </Link>
-      </div>
+      {/* The chip row itself now lives in contractors/ProjectChips so the
+          phone copy at the top of /contractors renders the exact same list.
+          Same markup as before, just no longer written out twice. */}
+      <ProjectChips />
     </>
   );
 
@@ -616,7 +621,23 @@ export default async function HomePage(
           thing the owner sees. */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className={`card-hero border ${band.tone}`}>
-          <p className="stat-label text-sm">Home Health Score</p>
+          <div className="flex items-center gap-1.5">
+            <p className="stat-label text-sm">Home Health Score</p>
+            {/* One plain sentence for "what does this number mean," separate
+                from the "Why this score?" breakdown below. A first-time
+                visitor sees the score before they see any explanation of it
+                otherwise, so this sits right next to the title. */}
+            <details className="group">
+              <summary className="focus-ring cursor-pointer list-none text-xs font-medium underline opacity-70 [&::-webkit-details-marker]:hidden hover:opacity-100 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">
+                What is this?
+              </summary>
+              <p className="mt-1 max-w-xs text-xs opacity-80">
+                Your home score is a quick read on how your home is doing. It
+                goes up when systems are in good shape and tasks are done,
+                and drops when something needs attention.
+              </p>
+            </details>
+          </div>
           <p className="stat-number mt-1 text-4xl">{score}</p>
           <p className="text-sm">{mostlyEstimated ? "Estimated score" : band.label}</p>
           <details className="group mt-2 text-sm">
@@ -659,9 +680,14 @@ export default async function HomePage(
             )}
           </details>
         </div>
+        {/* Phone: hidden. "Open jobs" is a jobs concept, not a home-state one,
+            and the home page was too long to scroll. The count now lives at the
+            top of /contractors (the "Post" tab, one tap away on the bottom nav),
+            which is also where this card already pointed. Desktop keeps the
+            four-card grid exactly as it was. */}
         <Link
           href={openJobsCount > 0 ? "/contractors#your-jobs" : "/contractors"}
-          className="card-link"
+          className="card-link max-sm:hidden"
         >
           <p className="stat-label text-sm">Open jobs</p>
           {openJobsCount > 0 ? (
@@ -685,7 +711,11 @@ export default async function HomePage(
           propertyId={property.id}
           silent
         />
-        <Link href="/value" className="card-link">
+        {/* Phone: hidden. /value is already a permanent entry in the phone
+            Tools sheet ("Your home" group), so this card is a duplicate there,
+            not the only way in. The AVM fetch above still runs on phone, so the
+            number is warm by the time someone opens /value. Desktop unchanged. */}
+        <Link href="/value" className="card-link max-sm:hidden">
           <p className="stat-label text-sm">Home value</p>
           {homeEstimatedValue != null ? (
             <>
@@ -749,8 +779,8 @@ export default async function HomePage(
             </summary>
             <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
               Estimated from your home&apos;s size, age, and typical energy
-              prices in your state, plus your HVAC system&apos;s age and type
-              when you&apos;ve added one. It&apos;s a ballpark, not a bill.
+              prices in your state, plus your HVAC&apos;s age and type if
+              you&apos;ve added one. It&apos;s a ballpark, not a bill.
             </p>
             <Link
               href="/walkthrough"
@@ -771,24 +801,51 @@ export default async function HomePage(
             <p className="text-xs font-semibold uppercase tracking-wide text-bark-700 dark:text-stone-300">
               Hearth&apos;s briefing
             </p>
-            <ul className="mt-1.5 space-y-1.5">
-              {briefing.map((b, i) => (
-                <li key={i} className="text-sm text-stone-900 dark:text-stone-100">
-                  <span className="text-bark-700 dark:text-stone-300">•</span>{" "}
-                  {b.urgent && (
-                    <span className="chip-danger mr-1 py-0 align-middle">Urgent</span>
-                  )}
-                  {b.text}
-                  {b.href && (
+            {/* Each briefing item with a destination is one full-width row
+                that is entirely tappable, not a bare "→" glyph glued to the
+                end of a wrapped sentence. The row clears 44px, the label
+                ("Find a pro", "Plan it") stays visible, and the chevron is the
+                same real icon every other disclosure on this page uses. Same
+                colors as before at every width - the row just became a row.
+                One anchor per item, no nesting (dashboardShape.test.tsx). */}
+            <ul className="mt-1.5 space-y-1">
+              {briefing.map((b, i) =>
+                b.href ? (
+                  <li key={i}>
                     <Link
                       href={b.href}
-                      className="ml-1 font-medium text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
+                      className="focus-ring -mx-2 flex min-h-11 items-center gap-2 rounded-lg px-2 py-2 text-sm text-stone-900 hover:bg-black/[0.03] active:bg-black/[0.06] dark:text-stone-100 dark:hover:bg-white/[0.05]"
                     >
-                      {b.cta} →
+                      <span className="flex-1">
+                        {b.urgent && (
+                          <span className="chip-danger mr-1 py-0 align-middle">
+                            Urgent
+                          </span>
+                        )}
+                        {b.text}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-0.5 whitespace-nowrap font-medium text-bark-700 dark:text-stone-300">
+                        {b.cta}
+                        <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      </span>
                     </Link>
-                  )}
-                </li>
-              ))}
+                  </li>
+                ) : (
+                  <li
+                    key={i}
+                    className="-mx-2 flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-stone-900 dark:text-stone-100"
+                  >
+                    <span className="flex-1">
+                      {b.urgent && (
+                        <span className="chip-danger mr-1 py-0 align-middle">
+                          Urgent
+                        </span>
+                      )}
+                      {b.text}
+                    </span>
+                  </li>
+                )
+              )}
             </ul>
           </div>
 
@@ -1166,9 +1223,15 @@ export default async function HomePage(
       {/* Project ideas. Always-open plain section on normal visits (not
           collapsible - unchanged from before); collapsed by default right
           after claiming a home so first-visit declutter doesn't dump this
-          below Systems too. */}
+          below Systems too.
+
+          Phone: both render paths are hidden (max-sm:hidden). Twenty-one chips
+          wrap to about seven rows at 390px, which is a big chunk of scroll for
+          a browse-y section at the very bottom of the home page. The same chips
+          now sit at the top of /contractors on phone, right above the Post a
+          job form they prefill. Desktop keeps this block exactly as it was. */}
       {isFirstVisit ? (
-        <details className="group space-y-3">
+        <details className="group space-y-3 max-sm:hidden">
           <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden text-lg font-semibold text-stone-900 dark:text-stone-100">
             <ChevronRight
               className="h-5 w-5 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
@@ -1179,7 +1242,7 @@ export default async function HomePage(
           {projectChips}
         </details>
       ) : (
-        <section className="space-y-3">
+        <section className="space-y-3 max-sm:hidden">
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Thinking about a project?
           </h2>

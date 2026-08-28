@@ -389,11 +389,10 @@ export default async function ForecastPage() {
               Why this matters
             </h2>
             <p className="text-sm text-stone-500 dark:text-stone-400">
-              Big-ticket systems like roofs and HVAC do not fail on a
-              schedule, but they do fail eventually. Setting aside a little
-              every month, instead of scrambling for a loan or a credit card
-              when a system finally gives out, turns a five-figure surprise
-              into a bill you already planned for.
+              Big systems like roofs and HVAC don&apos;t fail on a schedule,
+              but they do fail eventually. Set aside a little every month, and
+              a five-figure surprise becomes a bill you already planned for,
+              instead of a loan or credit card scramble.
             </p>
           </div>
           </>
@@ -450,12 +449,12 @@ export default async function ForecastPage() {
                         <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                           {labelFor(SYSTEM_TYPES, item.system_type)}
                         </p>
-                        <p className="text-xs text-stone-400 dark:text-stone-500">
+                        <p className="text-xs text-stone-500 dark:text-stone-500">
                           Timing and cost with Plus
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 whitespace-nowrap text-right text-sm text-stone-400 dark:text-stone-500">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap text-right text-sm text-stone-500 dark:text-stone-500">
                       <Lock className="h-3.5 w-3.5" aria-hidden="true" />
                       <span className="tabular-nums">{MASKED_AMOUNT}</span>
                     </div>

@@ -197,7 +197,7 @@ export default function ProToolsClient({
       } else if (data?.reason === "rate_limited") {
         setPjError("You've hit today's drafting limit. It resets at midnight.");
       } else if (data?.reason === "no_key") {
-        setPjError("Drafting is temporarily unavailable.");
+        setPjError("Can't draft right now. Try again in a minute.");
       } else {
         setPjError(
           "Couldn't read that document. Try a clearer photo, a PDF, or a different file."
@@ -333,7 +333,7 @@ export default function ProToolsClient({
       } else if (data?.reason === "rate_limited") {
         setError("You've hit today's drafting limit. It resets at midnight.");
       } else if (data?.reason === "no_key") {
-        setError("Drafting is temporarily unavailable.");
+        setError("Can't draft right now. Try again in a minute.");
       } else {
         setError(data?.error || "Couldn't write that draft. Please try again.");
       }

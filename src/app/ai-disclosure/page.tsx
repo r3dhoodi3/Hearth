@@ -43,7 +43,7 @@ export default function AiDisclosurePage() {
         How Hearth Uses AI
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-        Last updated August 26, 2026. Plain English, and specific about what
+        Last updated August 28, 2026. Plain English, and specific about what
         the software actually does.
       </p>
 

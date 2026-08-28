@@ -5,6 +5,7 @@ import Logo from "@/components/Logo";
 import ProNav from "@/components/ProNav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AskHearthDock from "@/components/AskHearthDock";
+import AppGuideMount from "@/components/AppGuideMount";
 import { proGreeting } from "@/lib/proGreeting";
 
 // The dock's opening line comes from src/lib/proGreeting.ts, shared with the
@@ -72,7 +73,7 @@ export default async function ProLayout({
             <form action="/auth/signout" method="post">
               <button
                 type="submit"
-                className="text-sm text-stone-500 underline hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
+                className="text-sm text-stone-500 underline hover:text-stone-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400 dark:hover:text-stone-200"
               >
                 Sign out
               </button>
@@ -112,6 +113,19 @@ export default async function ProLayout({
         <ProAskHearthDock contractorName={contractor.name} />
       </Suspense>
       <NewMessageNotifier role="contractor" />
+      {/* First sign-in only, the pro set of cards. Inside this branch on
+          purpose: the bare no-company shell above is somebody still setting up
+          their business, and a tour of leads and reviews there would be a
+          takeover in the middle of onboarding. Renders null once the account
+          has been through it. See src/lib/appGuide.ts.
+          Behind Suspense like the dock above: its one users-row read is not on
+          the path to anything visible, so it must not hold up the shell. (The
+          homeowner layout needs no boundary - it already awaits
+          getUserProfile() at the top, so the same call there is a
+          request-cache hit.) */}
+      <Suspense fallback={null}>
+        <AppGuideMount side="pro" />
+      </Suspense>
     </div>
   );
 }

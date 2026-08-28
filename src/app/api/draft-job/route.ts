@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { hasPlus } from "@/lib/subscription";
+import { getPlusTier } from "@/lib/subscription";
 import { countAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { readJsonBounded } from "@/lib/boundedBody";
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
   // Same shared per-user daily cap as every other AI-backed route, so drafting
   // descriptions can't be a side door around the abuse limits on the paid
   // model. Counted only once the photo is confirmed to exist and to be theirs.
-  const { overLimit, reason } = await countAiUsage(user.id, await hasPlus());
+  const { overLimit, reason } = await countAiUsage(user.id, await getPlusTier());
   if (overLimit) {
     // One mapping for every counter refusal, so a burst window reads as "give
     // it a minute" instead of "you are out for the day". See

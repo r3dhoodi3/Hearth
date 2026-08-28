@@ -71,9 +71,12 @@ export function homesForSwitcher(
 //   ownership_verified        - self-attested MVP flag, superseded by
 //                               ownership_status and marked dead in
 //                               src/app/onboarding/actions.ts
-//   lot_size_sqft, property_type - written at onboarding, never read off a
-//                               property row (the onboarding form reads them
+//   property_type              - written at onboarding, never read off a
+//                               property row (the onboarding form reads it
 //                               off the parcel lookup, not the DB row)
+// lot_size_sqft used to be in that same "write-only" group, but the
+// home-details editor (src/app/(app)/home-details/page.tsx) now prefills its
+// form from this row, so it has to stay in the select below.
 // ownership_owner_names in particular is an unbounded json blob carried on
 // every home on every app page.
 // Whether this process has already learned that properties.unit (migration
@@ -135,6 +138,7 @@ const PROPERTY_COLUMN_NAMES = [
   "sqft",
   "beds",
   "baths",
+  "lot_size_sqft",
   "purchase_date",
   "ownership_status",
   "ownership_checked_at",

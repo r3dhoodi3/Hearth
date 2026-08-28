@@ -245,7 +245,7 @@ describe("OnboardingForm ownership copy", () => {
   it("promises the county check for a single-family claim", async () => {
     await toReadyStep();
     expect(
-      screen.getByText(/compare the name on your account against the county/i)
+      screen.getByText(/check the name on your account against the county/i)
     ).toBeInTheDocument();
   });
 
@@ -256,7 +256,7 @@ describe("OnboardingForm ownership copy", () => {
     });
 
     expect(
-      screen.queryByText(/compare the name on your account against the county/i)
+      screen.queryByText(/check the name on your account against the county/i)
     ).toBeNull();
     expect(
       screen.getByText(/Public records only go down to the building/i)

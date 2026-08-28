@@ -129,10 +129,10 @@ export default function InsurancePacket({
         Build my requote packet
       </h3>
       <p className="text-sm text-stone-600 dark:text-stone-300">
-        Hearth will put your home&apos;s facts and recent upkeep into one
-        plain-language summary you can hand to insurance agents when you shop
-        for quotes, plus the coverage questions worth asking. Review it and
-        fill in anything only you know, like your current coverage limits.
+        Hearth puts your home&apos;s facts and recent upkeep into one plain
+        summary, ready to hand to insurance agents. It also lists coverage
+        questions worth asking. Review it and add anything only you know, like
+        your current limits.
       </p>
 
       {!packet && (

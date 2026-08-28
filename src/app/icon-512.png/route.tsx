@@ -8,6 +8,12 @@ import { ImageResponse } from "next/og";
 const SIZE = 512;
 const MARK = 352; // keep the same ~69% ratio apple-icon.tsx uses (124/180)
 
+// Same reasoning as src/app/icon-192.png/route.tsx: no input of any kind, so
+// the bytes are a constant of the deployment. Cached at the CDN until the next
+// deploy, re-checked daily by the browser.
+const ICON_CACHE_CONTROL =
+  "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=86400";
+
 export async function GET() {
   return new ImageResponse(
     (
@@ -41,6 +47,10 @@ export async function GET() {
         </svg>
       </div>
     ),
-    { width: SIZE, height: SIZE }
+    {
+      width: SIZE,
+      height: SIZE,
+      headers: { "Cache-Control": ICON_CACHE_CONTROL },
+    }
   );
 }

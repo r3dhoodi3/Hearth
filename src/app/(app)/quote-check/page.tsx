@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getVerifiedUser } from "@/lib/auth";
 import { hasPlus } from "@/lib/subscription";
 import QuoteAnalyzer from "@/components/QuoteAnalyzer";
 
@@ -17,9 +18,10 @@ export default async function QuoteCheckPage() {
   let freeTaste = false;
   if (!plus) {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    // getVerifiedUser(): the same live auth-server check, shared through
+    // React's cache() with the (app) layout's own verification instead of
+    // opening a second round trip for this one row.
+    const user = await getVerifiedUser();
     if (user) {
       const { data: row, error } = await supabase
         .from("users")
@@ -43,11 +45,9 @@ export default async function QuoteCheckPage() {
           Quote analyzer
         </h1>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-          Upload a photo of a contractor&apos;s quote, or paste the text, and
-          Hearth will read every line item, compare the total to typical
-          costs, flag anything that looks padded, vague, or duplicated, and
-          draft a short message you can send back to negotiate. It only takes
-          a minute, and you&apos;ll know where you stand before you sign anything.
+          Upload a photo of a quote, or paste the text. Hearth checks every
+          line, flags anything padded or vague, and drafts a message you can
+          send back. Takes a minute. Know where you stand before you sign.
         </p>
       </header>
 

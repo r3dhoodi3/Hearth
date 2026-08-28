@@ -18,7 +18,12 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to a COMMIT SHA, not the v4 tag. A tag is mutable: whoever can
+      # move actions/checkout's v4 can run their code in this job, and this job
+      # holds contents:write on the repo. The comment says which release the
+      # SHA is, so bumping it stays a one-line, reviewable change (look the next
+      # one up with: gh api repos/actions/checkout/git/ref/tags/vX.Y.Z).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: deploy/free-test
           fetch-depth: 0

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { hasPlus } from "@/lib/subscription";
+import { getPlusTier } from "@/lib/subscription";
 import { countAiUsage, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { getActiveProperty } from "@/lib/property";
@@ -30,7 +30,10 @@ export async function POST() {
   }
 
   // Plus-only, no free taste here: the comparison itself is the free part.
-  const isPlus = await hasPlus();
+  // The tier (not the boolean) so the daily ceiling below can give a trial its
+  // own, smaller budget - see PlusTier in src/lib/subscription.ts.
+  const tier = await getPlusTier();
+  const isPlus = tier !== "free";
   if (!isPlus) {
     return NextResponse.json({ error: "plus_required" }, { status: 403 });
   }
@@ -78,7 +81,7 @@ export async function POST() {
   // the owner-wide spend breaker). A counter that could not be read is a bug,
   // not a limit, and saying "usage limit" for it sends people looking for an
   // upgrade that would not help.
-  const { overLimit, reason } = await countAiUsage(user.id, isPlus);
+  const { overLimit, reason } = await countAiUsage(user.id, tier);
   if (overLimit) {
     // One mapping for every counter refusal, so a burst window reads as "give
     // it a minute" instead of "you are out for the day". See

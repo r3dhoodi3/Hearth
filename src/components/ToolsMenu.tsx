@@ -77,6 +77,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
 
   const homeLinks = [
     { href: "/walkthrough", label: "Walk your home" },
+    { href: "/home-details", label: "Home details" },
     { href: "/documents", label: "Documents" },
     { href: "/value", label: "Home value" },
     { href: "/taxes", label: "Property taxes" },
@@ -106,7 +107,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1.5 text-sm font-medium text-stone-600 hover:bg-bark-50 hover:text-stone-900 max-sm:min-h-10 sm:px-3 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
+        className="flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1.5 text-sm font-medium text-stone-600 hover:bg-bark-50 hover:text-stone-900 max-sm:min-h-11 sm:px-3 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"
       >
         Tools
         <svg

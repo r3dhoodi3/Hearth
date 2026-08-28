@@ -8,6 +8,8 @@ import { isAcceptableCustomCategory } from "@/lib/customCategory";
 import Logo from "@/components/Logo";
 import RequestQuoteForm from "./RequestQuoteForm";
 import BackLink from "./BackLink";
+import ReportSheet from "@/components/ReportSheet";
+import BlockMenu from "@/components/BlockMenu";
 import { requestProAction } from "@/app/(app)/contractors/actions";
 
 // Public, shareable business page for a pro: /p/<contractor_id> or, once
@@ -63,6 +65,10 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 type PublicReview = {
+  // Optional: absent until migration 0138 runs, which adds the review's id to
+  // public_pro_profile's payload. A review with no id gets no Report control
+  // rather than one pointing at nothing.
+  id?: string;
   rating: number;
   comment: string | null;
   created_at: string;
@@ -183,7 +189,17 @@ export async function generateMetadata(
   const title = `${profile.name} on Hearth`;
   const description =
     profile.review_count > 0 && profile.rating != null
-      ? `${profile.name} is rated ${profile.rating} from ${profile.review_count} verified review${profile.review_count === 1 ? "" : "s"} on Hearth. See reviews and services.`
+      // "verified" was doing more work than the rule behind it. What Hearth
+      // actually checks (leave_review, migrations 0017/0082/0132) is that the
+      // reviewer owned the property on a job this pro was hired for, that it
+      // is not the pro's own account, and that it is not a linked second
+      // account. That is real, so the description says it plainly instead of
+      // leaning on a word the FTC's consumer-review rule reads as a claim.
+      // LAWYER: check that "from homeowners who hired them" is a safe way to
+      // describe review eligibility under the FTC Rule on Consumer Reviews
+      // and Testimonials (16 CFR 465), and confirm dropping "verified" here
+      // is the right call rather than defining the term on the page.
+      ? `${profile.name} is rated ${profile.rating} from ${profile.review_count} review${profile.review_count === 1 ? "" : "s"} on Hearth, left by homeowners who hired them. See reviews and services.`
       : `Reviews and services for ${profile.name}, a home service pro on Hearth.`;
   const url = `${SITE_URL}${canonicalPath(profile)}`;
 
@@ -664,9 +680,60 @@ export default async function PublicProPage(
                     {r.comment && (
                       <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{r.comment}</p>
                     )}
+                    {/* Signed-in only: reportContentAction needs an account to
+                        record as the reporter, so offering the control to a
+                        signed-out visitor would be a button that always fails.
+                        They get the /contact link in the row below instead. */}
+                    {user && r.id && (
+                      <div className="mt-1">
+                        <ReportSheet
+                          targetType="review"
+                          targetId={r.id}
+                          label="Report"
+                          openLabel="Report this review"
+                        />
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
+            )}
+          </section>
+
+          {/* Moderation row. Quiet by design and last on the page: it should
+              be findable when somebody needs it and invisible otherwise.
+              Anonymous visitors see only the contact link - blocking needs an
+              account to block FROM, and a Block button that bounced you to
+              /signin would be a worse answer than not showing it. */}
+          {/* Stacked, not a row: both controls expand in place into a panel
+              (a reason picker, a confirm step), and a flex row would have to
+              reflow around whichever one is open. */}
+          <section className="mt-5 space-y-3 border-t border-stone-100 pt-4 dark:border-white/10">
+            {user ? (
+              <>
+                <ReportSheet
+                  targetType="contractor"
+                  targetId={profile.id}
+                  label="Report this business"
+                  openLabel="Report this business"
+                />
+                {/* profile.id is the real contractor UUID even when the URL
+                    used a slug. The action resolves the pro's ACCOUNT from it
+                    server-side; this page never handles their user id. A pro
+                    who lands on their own page gets an honest "You can't block
+                    your own account" from the action. */}
+                <BlockMenu
+                  contractorId={profile.id}
+                  personLabel={profile.name}
+                />
+              </>
+            ) : (
+              <Link
+                href="/contact?topic=abuse"
+                className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+              >
+                Report abuse or a safety concern
+              </Link>
             )}
           </section>
         </div>

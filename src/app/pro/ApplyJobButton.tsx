@@ -147,7 +147,7 @@ export default function ApplyJobButton({
         // (src/lib/aiReason.ts); the fallback covers an older reply.
         setDraftError(data?.error || "Give it a minute and try again.");
       } else if (data?.reason === "no_key") {
-        setDraftError("Drafting is temporarily unavailable.");
+        setDraftError("Can't draft right now. Try again in a minute.");
       } else {
         setDraftError(
           data?.error || "Couldn't draft a message. Try writing your own."

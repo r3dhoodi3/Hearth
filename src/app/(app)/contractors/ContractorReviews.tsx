@@ -3,8 +3,17 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import InlineSpinner from "@/components/InlineSpinner";
+import ReportSheet from "@/components/ReportSheet";
 
-type Review = { rating: number; comment: string | null; created_at: string };
+// id is OPTIONAL on purpose: migration 0138 adds it to contractor_reviews(),
+// and a live database still on 0137 returns rows without one. A row with no
+// id simply gets no Report control rather than one that points at nothing.
+type Review = {
+  id?: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+};
 
 // Expander that lists a contractor's reviews (rating + comment + date), fetched
 // on demand via the contractor_reviews RPC. Lets a homeowner read an applicant's
@@ -85,6 +94,16 @@ export default function ContractorReviews({
               </div>
               {r.comment && (
                 <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">{r.comment}</p>
+              )}
+              {r.id && (
+                <div className="mt-1">
+                  <ReportSheet
+                    targetType="review"
+                    targetId={r.id}
+                    label="Report"
+                    openLabel="Report this review"
+                  />
+                </div>
               )}
             </div>
           ))}

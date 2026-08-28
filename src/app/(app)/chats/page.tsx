@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { extractQuote, formatUSDCents } from "@/lib/quotes";
+import { isUnreadSince } from "@/lib/unread";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import MarkChatsSeen from "@/components/MarkChatsSeen";
@@ -252,16 +253,14 @@ export default async function HomeownerChatsPage(
     .map((l) => ({ id: l.id, name: nameOf(l), amount: quoteByLead.get(l.id)! }))
     .sort((a, b) => a.amount - b.amount);
 
-  // Unread if the latest message is from the contractor and newer than last seen.
+  // Unread if the latest message is from the contractor and newer than last
+  // seen. isUnreadSince compares epoch millis, not raw strings, so a
+  // JS-built seen timestamp and a Postgres-returned created_at can't skew
+  // the result against each other (see src/lib/unread.ts).
   const isUnread = (leadId: string) => {
     const last = lastByLead.get(leadId);
     if (!last || last.sender_role !== "contractor") return false;
-    const seenAt = seen[leadId];
-    // Compare as epoch millis so timestamp formats cannot skew the result.
-    return (
-      !seenAt ||
-      new Date(seenAt).getTime() < new Date(last.created_at).getTime()
-    );
+    return isUnreadSince(seen[leadId], last.created_at);
   };
 
   convos.sort((a, b) => {

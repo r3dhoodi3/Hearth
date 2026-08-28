@@ -27,11 +27,15 @@ export default function PrivacyRightsPanel({
   // Monitored inbox for requests the buttons can't serve. Empty string drops
   // the row rather than rendering a dead mailto.
   contact,
+  // This side's blocked-accounts list (/account/blocks or /pro/blocks).
+  // Optional: omit it and the safety card below is simply not rendered.
+  blocksHref,
 }: {
   securityHref: string;
   profileHref: string;
   profileLabel: string;
   contact: string;
+  blocksHref?: string;
 }) {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -64,7 +68,7 @@ export default function PrivacyRightsPanel({
             </p>
             <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
               Everything we hold for your account, as a PDF you can read or
-              print. Generated fresh when you click.
+              print. Generated fresh each time.
             </p>
             <a
               href="/api/privacy/export?format=json"
@@ -215,11 +219,42 @@ export default function PrivacyRightsPanel({
           ))}
         </div>
         <p className="mt-5 text-sm text-stone-600 dark:text-stone-400">
-          The other party to a job sees what you send them: if you post a job, the
-          pros you talk to see your name, contact details, address, and what you
-          wrote.
+          If you post a job, the pros you talk to see your name, contact
+          details, address, and what you wrote.
         </p>
       </div>
+
+      {/* Safety controls. Not a privacy right under the CPRA, but this is the
+          page people land on when they want to be left alone, and "who can
+          reach me" belongs next to "what is held about me". */}
+      {blocksHref && (
+        <div className="card p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                Blocked accounts
+              </p>
+              <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
+                Someone you block cannot message you, and you will not be shown
+                to each other for new work. You can undo it any time.
+              </p>
+              <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
+                To report content or behaviour instead,{" "}
+                <Link
+                  href="/contact?topic=abuse"
+                  className="underline hover:text-stone-600 dark:hover:text-stone-300"
+                >
+                  tell us what happened
+                </Link>
+                .
+              </p>
+            </div>
+            <Link href={blocksHref} className="btn-secondary whitespace-nowrap">
+              Manage blocks
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Anything the buttons can't do. */}
       {contact && (
@@ -231,9 +266,9 @@ export default function PrivacyRightsPanel({
               </p>
               <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
                 Email us for anything the controls above don&apos;t cover,
-                including requests made on your behalf by someone you authorise.
-                We&apos;ll confirm we got it within 10 business days and answer
-                within 45 days.
+                including a request made on your behalf by someone you&apos;ve
+                authorized. We&apos;ll confirm we got it within 10 business
+                days and answer within 45.
               </p>
             </div>
             <a

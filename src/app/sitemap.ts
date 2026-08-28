@@ -20,6 +20,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// Regenerate at most once an hour, and serve the cached XML in between.
+//
+// This file is read by crawlers, never by a signed-in person: it touches no
+// cookies and no request headers, and its one query runs through the
+// service-role admin client, so every visitor gets byte-identical output.
+// Without this, the admin-client fetch underneath opts the route out of Next's
+// data cache and every crawler hit re-runs the pro query and rebuilds the whole
+// document. An hour is well inside how often a crawler re-reads a sitemap, and
+// a pro who claims a page is picked up on the next regeneration rather than the
+// next request - which is the same day either way, and Google's own recrawl
+// latency dwarfs it.
+export const revalidate = 3600;
+
 // Keep in sync with src/app/guides/page.tsx (GUIDES) - every guide listed
 // there needs an entry here or it's unreachable by crawlers with no
 // sitemap signal.

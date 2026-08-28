@@ -55,6 +55,7 @@ const HOMEOWNER_SHELL_ROUTES = [
   "/emergency",
   "/feedback",
   "/forecast",
+  "/home-details",
   "/home-report",
   "/inspection",
   "/issues",

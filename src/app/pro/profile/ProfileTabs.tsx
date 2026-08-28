@@ -141,7 +141,7 @@ export default function ProfileTabs({
             role="tab"
             aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
-            className={`flex-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-medium transition-colors sm:flex-none sm:px-4 ${
+            className={`flex-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-medium transition-colors max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:justify-center sm:flex-none sm:px-4 ${
               tab === t.key
                 ? "bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-stone-100"
                 : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"

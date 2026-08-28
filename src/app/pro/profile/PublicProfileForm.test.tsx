@@ -99,3 +99,16 @@ describe("PublicProfileForm stays mounted across a save", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("PublicProfileForm phone tap targets", () => {
+  // "Change Cover" is a small pill floating on the cover banner, sized for a
+  // mouse (px-3 py-1.5 lands around 34px). The phone-only bump is what brings
+  // it to the 44px thumb minimum. jsdom applies no CSS, so the class is what
+  // there is to assert; the bump is max-sm:, so desktop is unchanged.
+  it("gives the Change Cover pill a 44px minimum on a phone", () => {
+    render(<PublicProfileForm contractor={CONTRACTOR} />);
+    expect(
+      screen.getByRole("button", { name: /change cover/i }).className
+    ).toContain("max-sm:min-h-11");
+  });
+});

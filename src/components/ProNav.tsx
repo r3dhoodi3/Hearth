@@ -53,12 +53,17 @@ export default function ProNav({
         <div className="flex min-w-0 items-center gap-2">
           <Link
             href="/pro"
-            className="flex items-center gap-2 text-lg font-semibold text-stone-900 dark:text-stone-100"
+            className="flex shrink-0 items-center gap-2 whitespace-nowrap text-lg font-semibold text-stone-900 dark:text-stone-100"
           >
             <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" />
             <span>
               Hearth{" "}
-              <span className="hidden font-normal text-stone-500 sm:inline dark:text-stone-400">
+              {/* Hidden until lg: at 768-900px (md), "Leads / Messages /
+                  Clients / My Business" plus the Business pill already fill
+                  the row, so "for Pros" was getting squeezed by its shrinkable
+                  flex parent and wrapping under "Hearth" (measured two lines,
+                  reading as overlapping letters). Only lg+ has the slack. */}
+              <span className="hidden font-normal text-stone-500 lg:inline dark:text-stone-400">
                 for Pros
               </span>
             </span>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
 import SupportForm from "./SupportForm";
+import ShowAppGuideButton from "@/components/ShowAppGuideButton";
 
 const FAQ: { q: string; a: string; href?: string; hrefLabel?: string }[] = [
   {
@@ -104,6 +105,51 @@ export default async function HelpPage() {
         >
           Report a bug
         </a>
+      </div>
+
+      {/* Safety. Separate from the bug card above on purpose: someone being
+          harassed should not have to work out whether that counts as a bug.
+          Goes to the public /contact form rather than the support form on
+          this page, so the same route works whether or not they are signed in
+          when they come back to it. */}
+      <div className="card">
+        <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
+          Safety
+        </h2>
+        <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
+          You can report a message, a review, or a business from where you see
+          it, and block anyone you do not want to hear from again.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+          <Link
+            href="/contact?topic=abuse"
+            className="text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
+          >
+            Report abuse or a safety concern
+          </Link>
+          <Link
+            href="/account/blocks"
+            className="text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
+          >
+            Blocked accounts
+          </Link>
+        </div>
+      </div>
+
+      {/* The four-card guide from your first sign-in, on demand. Reopens it
+          in place (a window event, no navigation) - see
+          src/components/ShowAppGuideButton.tsx. */}
+      <div className="card">
+        <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
+          New to Hearth?
+        </h2>
+        <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
+          A one-minute look at what Hearth watches, what it asks of you, and
+          how to find a pro.
+        </p>
+        <div className="mt-2">
+          <ShowAppGuideButton />
+        </div>
       </div>
 
       <p className="text-sm text-stone-500 dark:text-stone-400">

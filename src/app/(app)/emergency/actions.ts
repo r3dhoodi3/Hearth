@@ -19,10 +19,15 @@ type PrepMap = Partial<Record<PrepKey, PrepValue>>;
 // themselves must keep working either way.
 export async function savePrepItemAction(formData: FormData) {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  // Thrown messages are written as copy a homeowner could read. Next redacts
+  // server-action errors in production today, but that is framework behaviour,
+  // not a promise, and in dev the raw string does show.
+  if (!property)
+    throw new Error("Couldn't find your home. Try again from the dashboard.");
 
   const key = formData.get("key") as PrepKey;
-  if (!PREP_KEYS.includes(key)) throw new Error("Bad prep key");
+  if (!PREP_KEYS.includes(key))
+    throw new Error("Couldn't save that item. Refresh the page and try again.");
 
   // Cap lengths server-side so an oversized payload can't bloat the row. A
   // note gets trimmed to a sane size; a too-long "URL" is not a URL at all,

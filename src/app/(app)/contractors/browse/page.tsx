@@ -332,7 +332,7 @@ function ProCard({ pro }: { pro: BrowsePro }) {
                   href={pro.yelp_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 sm:hover:border-bark-200 sm:hover:text-bark-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300 dark:hover:text-stone-200"
+                  className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 max-sm:min-h-11 max-sm:px-3 sm:hover:border-bark-200 sm:hover:text-bark-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300 dark:hover:text-stone-200"
                 >
                   Reviews on Yelp
                 </a>
@@ -342,7 +342,7 @@ function ProCard({ pro }: { pro: BrowsePro }) {
                   href={pro.google_reviews_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 sm:hover:border-bark-200 sm:hover:text-bark-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300 dark:hover:text-stone-200"
+                  className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 max-sm:min-h-11 max-sm:px-3 sm:hover:border-bark-200 sm:hover:text-bark-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300 dark:hover:text-stone-200"
                 >
                   Reviews on Google
                 </a>
@@ -388,7 +388,7 @@ function ProCard({ pro }: { pro: BrowsePro }) {
           )}
 
           {memberSince && (
-            <p className="mt-1 text-xs text-stone-400 dark:text-stone-500">
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-500">
               On Hearth since {memberSince}
             </p>
           )}

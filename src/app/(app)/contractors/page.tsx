@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveProperty } from "@/lib/property";
+import { getVerifiedUser } from "@/lib/auth";
 import {
   computeResponseTimeMinutesBatch,
   formatResponseTime,
@@ -24,6 +25,7 @@ import {
 } from "./actions";
 import SubmitButton from "@/components/SubmitButton";
 import CategoryFilter from "./CategoryFilter";
+import ProjectChips from "./ProjectChips";
 import LeadChat from "@/components/LeadChat";
 import PhoneInput from "@/components/PhoneInput";
 import FadingBanner from "@/components/FadingBanner";
@@ -44,6 +46,7 @@ import ReviewButton from "./ReviewButton";
 import ContractorReviews from "./ContractorReviews";
 import HireAgainButton from "./HireAgainButton";
 import ChooseApplicantButton from "./ChooseApplicantButton";
+import { ChevronRight } from "lucide-react";
 import { redactContact } from "@/lib/redact";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 
@@ -76,15 +79,15 @@ export default async function ContractorsPage(
   // Nothing here depends on anything else on the page (property/plus/auth
   // are all independent lookups) - run them together instead of stacking
   // three round trips before any property- or user-scoped query can start.
-  const [property, plus, authResult] = await Promise.all([
+  // getVerifiedUser() wraps the same supabase.auth.getUser() network check in
+  // React's cache(), so this shares the one verification the (app) layout
+  // already paid for instead of opening a second round trip.
+  const [property, plus, user] = await Promise.all([
     getActiveProperty(),
     hasPlus(),
-    supabase.auth.getUser(),
+    getVerifiedUser(),
   ]);
   if (!property) redirect("/onboarding");
-  const {
-    data: { user },
-  } = authResult;
 
   const category = searchParams.category ?? "";
   const issueId = searchParams.issue ?? "";
@@ -177,6 +180,14 @@ export default async function ContractorsPage(
   // unchanged.
   const directRequests = leads.filter((l) => l.direct_to && !l.contractor_id);
   const jobLeads = leads.filter((l) => !(l.direct_to && !l.contractor_id));
+
+  // Same definition the dashboard's "Open jobs" card uses: a posting on this
+  // property that no pro has been picked for yet. `leads` is already scoped to
+  // property.id (getActiveProperty resolves the signed-in owner's property), so
+  // this counts nothing the owner can't already see on this page. Phone only -
+  // the dashboard card is max-sm:hidden now, and this strip is where the count
+  // lives below sm.
+  const openJobsCount = leads.filter((l) => !l.contractor_id).length;
 
   // The target pro of a pending direct request isn't "related" to this
   // homeowner yet (no assigned lead, no application), so the contractors RLS
@@ -344,12 +355,46 @@ export default async function ContractorsPage(
   return (
     <div className="space-y-8">
       <div>
+        {/* Phone only: the dashboard's "Open jobs" card is hidden below sm, so
+            this is where the count lives now. Sits INSIDE this wrapper, not as
+            a sibling of it, on purpose: as a sibling it would take the parent's
+            space-y-8 margin and push the h1 down 32px on desktop, where it is
+            display:none and should cost nothing at all. */}
+        {openJobsCount > 0 && (
+          <Link
+            href="#your-jobs"
+            className="focus-ring mb-4 flex min-h-11 items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2 shadow-sm sm:hidden dark:border-white/10 dark:bg-stone-800"
+          >
+            <span className="text-sm font-medium text-stone-900 dark:text-stone-100">
+              {openJobsCount} open job{openJobsCount === 1 ? "" : "s"}
+            </span>
+            <span className="flex shrink-0 items-center gap-0.5 text-sm font-medium text-bark-700 dark:text-stone-300">
+              View
+              <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+            </span>
+          </Link>
+        )}
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Post a job</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Describe what you need and post it. Local pros apply, then you review
           them and pick the one you want.
         </p>
       </div>
+
+      {/* Phone only: the "Thinking about a project?" chips moved off the home
+          page (too much scrolling) to here, where they are one tap into the
+          form directly below - each chip reloads this page with ?category=x,
+          which prefills "What do you need?". Desktop still has them on the
+          dashboard, so this copy is sm:hidden and shares the same component. */}
+      <section className="space-y-3 sm:hidden">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+          Thinking about a project?
+        </h2>
+        <p className="text-sm text-stone-500 dark:text-stone-400">
+          Popular upgrades. Tap one to fill in the form below.
+        </p>
+        <ProjectChips />
+      </section>
 
       <form
         key={searchParams.posted ?? "new"}

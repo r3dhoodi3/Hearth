@@ -28,7 +28,8 @@ export async function saveDocumentAction(
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property)
+    throw new Error("Couldn't find your home. Try again from the dashboard.");
   const supabase = await createClient();
 
   const fileUrl = s(formData, "file_url");
@@ -110,7 +111,8 @@ export async function saveDocumentAction(
 // reminder so the owner hears about it before coverage lapses.
 export async function applyDocumentToTwinAction(formData: FormData) {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property)
+    throw new Error("Couldn't find your home. Try again from the dashboard.");
   const supabase = await createClient();
 
   const id = s(formData, "id");

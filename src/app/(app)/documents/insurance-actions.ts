@@ -19,7 +19,8 @@ export async function saveInsuranceAction(
   formData: FormData
 ): Promise<{ ok: boolean }> {
   const property = await getActiveProperty();
-  if (!property) throw new Error("No active property");
+  if (!property)
+    throw new Error("Couldn't find your home. Try again from the dashboard.");
 
   const dateRaw = formData.get("insurance_renewal_date");
   const premiumRaw = formData.get("insurance_premium");

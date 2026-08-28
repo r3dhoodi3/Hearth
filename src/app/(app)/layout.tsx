@@ -12,6 +12,7 @@ import Nav from "@/components/Nav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AskHearthDock from "@/components/AskHearthDock";
 import ReviewPrompt from "@/components/ReviewPrompt";
+import AppGuideMount from "@/components/AppGuideMount";
 
 // Shell for all signed-in homeowner screens. The only rule is that a claimed
 // home exists.
@@ -74,6 +75,13 @@ export default async function AppLayout({
       <AskHearthDock greetingUrl="/api/ask-greeting" hideOnPhone />
       <NewMessageNotifier role="homeowner" />
       <ReviewPrompt />
+      {/* First sign-in only: four cards explaining what the app does, now that
+          the phone landing page no longer explains anything. Safe to mount
+          unconditionally here - the redirect above means a claimed home always
+          exists by this point, and the component renders null once the account
+          has been through it (or is on a page it must not cover, like
+          /plus or /emergency). See src/lib/appGuide.ts. */}
+      <AppGuideMount side="homeowner" />
     </div>
   );
 }

@@ -93,11 +93,23 @@ export interface Database {
           // One free maintenance-plan build for non-Plus users (migration
           // 0099), mirroring free_quote_used_at. Null while unused.
           free_plan_used_at: string | null;
+          // Lifetime free AI reads a non-Plus account has spent on the
+          // document vault and the inspection import (migration 0135). Counts,
+          // not timestamps, because the document taste is two reads. Written
+          // only by claim_free_ai_taste / refund_free_ai_taste; see
+          // src/lib/freeAiTaste.ts.
+          free_doc_reads_used: number;
+          free_inspection_reads_used: number;
           // TCPA SMS consent (migration 0073): sms_consent_at only moves
           // forward on a false -> true transition (see
           // src/app/(app)/account/actions.ts saveAccountAction).
           sms_consent: boolean;
           sms_consent_at: string | null;
+          // First-run app guide (migration 0137), one stamp per side: null
+          // until the account has closed that side's guide, which is what
+          // keeps it from reappearing on their other device.
+          guide_seen_at: string | null;
+          pro_guide_seen_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -108,8 +120,12 @@ export interface Database {
           notification_prefs?: { [key: string]: boolean } | null;
           free_quote_used_at?: string | null;
           free_plan_used_at?: string | null;
+          free_doc_reads_used?: number;
+          free_inspection_reads_used?: number;
           sms_consent?: boolean;
           sms_consent_at?: string | null;
+          guide_seen_at?: string | null;
+          pro_guide_seen_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
@@ -782,21 +798,50 @@ export interface Database {
       reports: {
         Row: {
           id: string;
-          lead_id: string;
+          // Nullable since migration 0138: a report about a review or a pro
+          // profile has no chat thread behind it and names target_type/
+          // target_id instead. Chat reports (0009) still fill this in.
+          lead_id: string | null;
           reporter_id: string | null;
           reporter_role: string;
+          reason: string | null;
+          // 'review' | 'contractor', or null on a chat report (0138).
+          target_type: string | null;
+          target_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id?: string | null;
+          reporter_id?: string | null;
+          reporter_role: string;
+          reason?: string | null;
+          target_type?: string | null;
+          target_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reports"]["Insert"]>;
+        Relationships: [];
+      };
+      // Migration 0138. One row per "this account never wants to hear from
+      // that account again". RLS is self-scoped to blocker_user_id =
+      // auth.uid() for select/insert/delete, and there is no update grant.
+      user_blocks: {
+        Row: {
+          id: string;
+          blocker_user_id: string;
+          blocked_user_id: string;
           reason: string | null;
           created_at: string;
         };
         Insert: {
           id?: string;
-          lead_id: string;
-          reporter_id?: string | null;
-          reporter_role: string;
+          blocker_user_id: string;
+          blocked_user_id: string;
           reason?: string | null;
           created_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["reports"]["Insert"]>;
+        Update: Partial<Database["public"]["Tables"]["user_blocks"]["Insert"]>;
         Relationships: [];
       };
       household_members: {
@@ -1277,6 +1322,17 @@ export interface Database {
         Args: { p_user: string; p_delta?: number };
         Returns: number;
       };
+      // Migration 0135. Spend / hand back one lifetime free AI read on the
+      // document vault or the inspection import. Service role only; see
+      // src/lib/freeAiTasteServer.ts.
+      claim_free_ai_taste: {
+        Args: { p_user: string; p_feature: string; p_limit: number };
+        Returns: boolean;
+      };
+      refund_free_ai_taste: {
+        Args: { p_user: string; p_feature: string };
+        Returns: undefined;
+      };
       owns_property: {
         Args: { p_property_id: string };
         Returns: boolean;
@@ -1304,6 +1360,10 @@ export interface Database {
       contractor_reviews: {
         Args: { p_contractor: string };
         Returns: {
+          // Optional in the TYPE, not in the function: migration 0138 adds it,
+          // and a live database still on 0137 returns rows without it. Every
+          // reader treats a missing id as "no Report link for this row".
+          id?: string;
           rating: number;
           comment: string | null;
           created_at: string;

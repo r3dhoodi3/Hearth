@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SYSTEM_TYPES, ISSUE_CATEGORIES, SEVERITIES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
-import { hasPlus } from "@/lib/subscription";
+import { getPlusTier } from "@/lib/subscription";
 import { countAiUsage, addAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { readJsonBounded } from "@/lib/boundedBody";
+import { FREE_TASTE_PAYWALL } from "@/lib/freeAiTaste";
+import {
+  claimFreeTaste,
+  refundFreeTaste,
+  freeTastesLeft,
+} from "@/lib/freeAiTasteServer";
 import { wrapUntrusted } from "@/lib/promptSafe";
 import {
   generateJson,
@@ -152,6 +158,31 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // FREE TASTE CHECK, before a byte of the (up to 26MB) body is read: one
+  // lifetime inspection import for a free account, unlimited for Plus and
+  // trialing within the daily ceilings below. Advisory here so a homeowner who
+  // is out is answered cheaply; the authoritative atomic claim runs right
+  // before the model call. See src/lib/freeAiTaste.ts.
+  //
+  // One tier read answers both questions: which daily ceiling this caller gets
+  // (countAiUsage below), and whether they are on the free taste at all.
+  const tier = await getPlusTier();
+  const isPlus = tier !== "free";
+  if (!isPlus) {
+    const left = await freeTastesLeft(user.id, isPlus, "inspection");
+    if (left !== null && left <= 0) {
+      return NextResponse.json(
+        {
+          result: null,
+          reason: "plus_required",
+          error: FREE_TASTE_PAYWALL.inspection.message,
+          link: FREE_TASTE_PAYWALL.inspection.link,
+        },
+        { status: 402 }
+      );
+    }
+  }
+
   if (!hasClaudeKey()) {
     return NextResponse.json({ result: null, reason: "no_key" });
   }
@@ -245,13 +276,43 @@ export async function POST(req: NextRequest) {
   // the owner-wide spend breaker). A counter that could not be read is a bug,
   // not a limit, and saying "usage limit" for it is simply untrue. One mapping for all four
   // reasons lives in src/lib/aiReason.ts.
-  const { overLimit, reason } = await countAiUsage(user.id, await hasPlus());
+  // THE AUTHORITATIVE CLAIM, atomic, before the model call and before the
+  // fan-out weighting below. Two tabs that both passed the advisory check
+  // above cannot both come away with the one free import: claim_free_ai_taste
+  // (migration 0135) reads and writes in a single statement. Handed back on
+  // every path that never produces findings.
+  //
+  // It runs BEFORE countAiUsage on purpose: a refusal here must not have
+  // charged the caller one of their daily tool usages for a request that never
+  // reached the model.
+  const { allowed: tasteAllowed, claimed: tasteClaimed } = await claimFreeTaste(
+    user.id,
+    isPlus,
+    "inspection"
+  );
+  if (!tasteAllowed) {
+    return NextResponse.json(
+      {
+        result: null,
+        reason: "plus_required",
+        error: FREE_TASTE_PAYWALL.inspection.message,
+        link: FREE_TASTE_PAYWALL.inspection.link,
+      },
+      { status: 402 }
+    );
+  }
+
+  const { overLimit, reason } = await countAiUsage(user.id, tier);
   if (overLimit) {
+    // Turned away by a ceiling with nothing sent to the model: the one free
+    // import goes back.
+    await refundFreeTaste(user.id, "inspection", tasteClaimed);
     return NextResponse.json({
       result: null,
       ...reasonToClientPayload(reason),
     });
   }
+
   // Honest fan-out weighting: countAiUsage already counted 1, so add the rest of
   // the payload's weight (one per extra image, one for a PDF). Text-only or a
   // single image stays at 1. Best-effort; the gating decision is already made.
@@ -310,12 +371,19 @@ export async function POST(req: NextRequest) {
       label: "ingest-inspection",
     });
     if (!parsed) {
+      // Nothing usable came back, so this was not a read: give the one free
+      // import back. The DAILY usage stays spent, as it always has on this
+      // path - the model was called and billed, and that cap is what stops an
+      // unreadable upload being looped for free.
+      await refundFreeTaste(user.id, "inspection", tasteClaimed);
       return NextResponse.json({ result: null, reason: "failed" });
     }
     return NextResponse.json({ result: normalize(parsed) });
   } catch (e) {
     // A thrown model call produced nothing: refund the base unit plus the
-    // fan-out weight charged above for a multi-image or PDF submission.
+    // fan-out weight charged above for a multi-image or PDF submission, and
+    // the free taste along with them.
+    await refundFreeTaste(user.id, "inspection", tasteClaimed);
     for (let i = 0; i < 1 + Math.max(0, extraWeight); i++) await refundAiUsage(user.id);
     return NextResponse.json({
       result: null,

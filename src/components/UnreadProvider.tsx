@@ -64,15 +64,70 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
   useEffect(() => {
     if (!enabled) return;
     let active = true;
+    // Cached across polls in this mount so a dual-role (homeowner + pro)
+    // account isn't re-resolving auth.getUser() on every 2-minute tick.
+    let uid: string | null = null;
+
+    // The lead ids that belong to THIS side of the account. `messages` RLS
+    // (can_access_lead in 0007_messages.sql) lets a dual-role account read
+    // rows on BOTH its home's leads and its business's leads, so querying
+    // "messages" by sender_role alone - with no lead_id scoping - picked up
+    // the user's own OUTGOING business messages (sender_role: "contractor")
+    // as "unread" on their HOMEOWNER nav badge, and vice versa on the pro
+    // side. Those lead ids never get a "seen" cookie entry from the other
+    // side's /chats page, so they counted as unread permanently: a real,
+    // reported fake-notification bug for any account with both sides.
+    async function myLeadIds(): Promise<string[]> {
+      if (role === "homeowner") {
+        // RLS-scoped to household membership (see chats/page.tsx's identical
+        // note), so this is already exactly the user's own-home universe.
+        const { data: props } = await supabase.from("properties").select("id");
+        const propertyIds = (props ?? []).map((p: { id: string }) => p.id);
+        if (!propertyIds.length) return [];
+        const { data: leads } = await supabase
+          .from("contractor_leads")
+          .select("id")
+          .in("property_id", propertyIds);
+        return (leads ?? []).map((l: { id: string }) => l.id);
+      }
+      // contractor: "contractors" RLS also allows reading OTHER contractors'
+      // rows (any contractor related to a lead on a property you own - see
+      // contractor_related_to_me() in 0069_contractors_rls_hardening.sql),
+      // so it must be filtered to this user's own row by user_id explicitly
+      // rather than relied on to self-scope.
+      if (!uid) {
+        const { data } = await supabase.auth.getUser();
+        uid = data.user?.id ?? null;
+      }
+      if (!uid) return [];
+      const { data: mine } = await supabase
+        .from("contractors")
+        .select("id")
+        .eq("user_id", uid)
+        .maybeSingle();
+      if (!mine) return [];
+      const { data: leads } = await supabase
+        .from("contractor_leads")
+        .select("id")
+        .eq("contractor_id", mine.id);
+      return (leads ?? []).map((l: { id: string }) => l.id);
+    }
+
     async function poll() {
       if (typeof document !== "undefined" && document.hidden) return;
       const cookieName = SEEN_COOKIE[role];
+      const leadIds = await myLeadIds();
+      if (!leadIds.length) {
+        if (active) setCount(0);
+        return;
+      }
       // Only the most recent messages, since unread ones are always recent. This
       // keeps the query bounded and from hogging a DB connection.
       const { data } = await supabase
         .from("messages")
         .select("lead_id, sender_role, created_at")
         .eq("sender_role", OTHER[role])
+        .in("lead_id", leadIds)
         .order("created_at", { ascending: false })
         .limit(50);
       // Count one per person (conversation), not one per message. A lead is

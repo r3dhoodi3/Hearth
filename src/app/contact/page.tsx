@@ -16,6 +16,13 @@ import ContactForm from "./ContactForm";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// Short slugs the app's own links use, spelled out for the visitor. Keys are
+// lowercase; anything not listed here is shown back exactly as typed.
+const TOPIC_LABELS: Record<string, string> = {
+  abuse: "Reporting abuse or a safety concern",
+  safety: "Reporting abuse or a safety concern",
+};
+
 export const metadata: Metadata = {
   // The root layout's title template appends "| Hearth"; don't repeat it here.
   title: "Contact us",
@@ -33,11 +40,17 @@ export default async function ContactPage(
   const searchParams = await props.searchParams;
   // Optional context from LegalContact's `topic` prop (e.g. "Arbitration
   // opt-out"), shown back to the visitor so they know what they're writing
-  // about. Capped and never trusted beyond display - it isn't stored.
-  const topic =
+  // about. Capped, and still never trusted beyond display and a one-line
+  // prefix on the stored message.
+  const rawTopic =
     typeof searchParams?.topic === "string"
       ? searchParams.topic.trim().slice(0, 120) || null
       : null;
+  // A few short slugs the app links to rather than spelling out in a URL.
+  // Everything else falls through as the visitor's own words. "abuse" is the
+  // one the safety links across the app use (/contact?topic=abuse), so it has
+  // to read as a sentence here and not as a bare word.
+  const topic = rawTopic ? (TOPIC_LABELS[rawTopic.toLowerCase()] ?? rawTopic) : null;
 
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import GuideCta from "@/components/GuideCta";
 import Logo from "@/components/Logo";
-import { createClient } from "@/lib/supabase/server";
+import SessionCta from "@/components/SessionCta";
+import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 import { ClipboardList, MessageSquare, Wrench, Gift } from "lucide-react";
 
 // Shared shell for the two city landing pages (src/app/fountain-valley,
@@ -20,21 +21,20 @@ import { ClipboardList, MessageSquare, Wrench, Gift } from "lucide-react";
 // Session-aware header/hero CTA: same reasoning as src/app/guides/layout.tsx
 // - a signed-in visitor shouldn't be pitched "get started free" again.
 //
-// THIS IS WHAT KEEPS /huntington-beach AND /fountain-valley DYNAMIC, and the
-// old note here ("these routes are already dynamically rendered anyway, so the
-// auth check adds no new rendering cost") is no longer true. It was true only
-// because the root layout read the flash cookie on every route; that read has
-// moved to the client (src/components/FlashToast.tsx), so the ONLY thing now
-// standing between these two city landing pages and full static generation is
-// the auth.getUser() below, plus the second session read inside <GuideCta />.
+// BOTH CITY PAGES ARE NOW STATIC. This component used to call
+// supabase.auth.getUser() here, and <GuideCta /> below read the session again,
+// which is what kept /fountain-valley and /huntington-beach off static
+// generation. The old note in this spot named the fix - "a small client
+// component that resolves the session in the browser and renders the CTA, used
+// here and in GuideCta" - and that component now exists
+// (src/components/SessionCta.tsx, which GuideCta shares). Both CTAs below are
+// it, nothing in this tree reads cookies() or the session, and the two pages
+// carry `export const revalidate`.
 //
-// Left dynamic on purpose. These are the pages a signed-in homeowner reaches
-// from the footer, and making them static means rendering "Get started free"
-// to someone who already started, then swapping it after hydration. That is a
-// visible regression on a real CTA, traded for one Supabase round trip on two
-// pages. If it is ever worth it, the fix is a small client component that
-// resolves the session in the browser and renders the CTA, used here and in
-// GuideCta - not force-static over the top of a server-side auth read.
+// The trade, stated plainly and argued in SessionCta.tsx: a signed-in visitor
+// sees "Get started free" until hydration swaps it. In exchange these two
+// pages ship from the CDN instead of waking a serverless function and waiting
+// on a Supabase auth round trip before the first byte.
 
 const VALUE = [
   {
@@ -100,18 +100,13 @@ export function buildCityServiceJsonLd(city: string, siteUrl: string, path: stri
   };
 }
 
-export default async function CityLandingPage({
+export default function CityLandingPage({
   city,
   housingParagraph,
 }: {
   city: string;
   housingParagraph: string;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   return (
     <div className="min-h-screen">
       <header className="mx-auto flex max-w-2xl items-center justify-between px-6 pt-6">
@@ -121,21 +116,7 @@ export default async function CityLandingPage({
         >
           <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
         </Link>
-        {user ? (
-          <Link
-            href="/dashboard"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
-          >
-            Open your dashboard
-          </Link>
-        ) : (
-          <Link
-            href="/homeowner-signup"
-            className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300"
-          >
-            Get started free
-          </Link>
-        )}
+        <SessionCta signedOutHref="/homeowner-signup" />
       </header>
 
       <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
@@ -146,21 +127,17 @@ export default async function CityLandingPage({
           <p className="mx-auto mt-4 max-w-xl text-stone-600 dark:text-stone-300">
             {housingParagraph}
           </p>
-          {user ? (
-            <Link
-              href="/dashboard"
-              className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-md"
-            >
-              Open your dashboard
-            </Link>
-          ) : (
-            <Link
-              href="/homeowner-signup"
-              className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-md"
-            >
-              Get started free
-            </Link>
-          )}
+          {/* This is a per-city page, so say out loud that the city is not the
+              whole service area. Hearth serves the entire county, and a reader
+              who landed here from a city search should not conclude the
+              neighboring town is unserved. */}
+          <p className="mx-auto mt-3 max-w-xl text-sm text-stone-500 dark:text-stone-400">
+            Hearth serves {LAUNCH_AREA_LABEL}, California, not just {city}.
+          </p>
+          <SessionCta
+            signedOutHref="/homeowner-signup"
+            className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-md"
+          />
         </div>
 
         <section className="mt-14">

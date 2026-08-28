@@ -1,7 +1,10 @@
-// Moderation gate for the two free-text fields on a contractor row that are
-// rendered verbatim on a PUBLIC page: contractors.name (the business name, on
-// /p/<slug>, the browse cards, every share card, the job board) and
-// contractors.about (the Pro-member blurb on /p/<slug>).
+// Moderation gate for the free-text fields that get rendered verbatim on a
+// PUBLIC page: contractors.name (the business name, on /p/<slug>, the browse
+// cards, every share card, the job board), contractors.about (the Pro-member
+// blurb on /p/<slug>), and reviews.comment (a homeowner's review text, shown
+// on ContractorReviews.tsx, the pro's public page, and the review share
+// card). All three are unreviewed free text with no editor in between the
+// writer and the public page, so all three run through the same gate.
 //
 // Neither had a content check. The custom-service box got one
 // (isAcceptableCustomCategory, src/lib/customCategory.ts) precisely because it
@@ -141,3 +144,6 @@ export const COMPANY_NAME_REJECTED =
 
 export const ABOUT_REJECTED =
   "We couldn't use that about section. Take out any phone number, email address, or language that wouldn't work on a public page.";
+
+export const REVIEW_COMMENT_REJECTED =
+  "Reviews can't include phone numbers, email addresses, or offensive language. Please edit and try again.";

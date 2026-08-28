@@ -1189,19 +1189,19 @@ export default function OnboardingForm({
               <p className="rounded-lg bg-bark-50 p-3 text-xs text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
                 {hasUnit ? (
                   <>
-                    By claiming this home you&apos;re confirming you own or manage
-                    it. Public records only go down to the building for a unit
-                    like yours, so there&apos;s nothing for us to check your name
-                    against and we won&apos;t pretend otherwise. Everything here
-                    works the same either way.
+                    By claiming this home, you&apos;re confirming you own or
+                    manage it. For a unit like yours, public records only go
+                    down to the building, so there&apos;s nothing for us to
+                    check your name against. We won&apos;t pretend otherwise,
+                    everything else works the same.
                   </>
                 ) : (
                   <>
-                    By claiming this home you&apos;re confirming you own or manage
-                    it. We also quietly compare the name on your account against
-                    the county&apos;s public owner-of-record for this address. It
-                    helps pros trust that jobs here are real, and nothing bad
-                    happens if it doesn&apos;t match.
+                    By claiming this home, you&apos;re confirming you own or
+                    manage it. We also check the name on your account against
+                    the county&apos;s public owner record. This helps pros trust
+                    that jobs here are real. Nothing bad happens if it
+                    doesn&apos;t match.
                   </>
                 )}
               </p>

@@ -420,41 +420,211 @@ export async function updateSystemAction(
   return ok();
 }
 
-// Not called from anywhere today (no home-details form wires it up yet), but
-// kept crash-proof to match the rest of this file rather than left throwing.
-export async function updatePropertyAction(formData: FormData) {
+// One int field off the home-details form (year_built, sqft, beds,
+// lot_size_sqft are all `int` in properties, migration 0001 - baths is
+// `numeric(3,1)` and gets its own handling below). Blank means "the owner
+// didn't touch this box" and is left OUT of the return value entirely, so the
+// caller can skip the column rather than writing null over a real fact - see
+// the blank-field comment on updatePropertyAction below for why. A non-blank
+// value that fails the range/finite check is a real typo, not a "clear this"
+// signal, so it comes back as a named error instead of being silently
+// dropped to null.
+function intFieldOrOmit(
+  formData: FormData,
+  key: string,
+  min: number,
+  max: number,
+  label: string,
+  rangeText: string
+): { value?: number; error?: string } {
+  const raw = formData.get(key);
+  if (typeof raw !== "string" || raw.trim() === "") return {};
+  const n = boundedInt(raw, min, max);
+  if (n === null) {
+    return {
+      error: `${label} should be ${rangeText}. Please check it and try again.`,
+    };
+  }
+  return { value: n };
+}
+
+// Called programmatically from HomeDetailsForm so it can show an inline error
+// (a bad year, an impossible date) without losing the owner's other entries,
+// the same way updateSystemAction does above.
+export async function updatePropertyAction(
+  formData: FormData
+): Promise<ActionResult> {
   const property = await getActiveProperty();
   if (!property) {
-    setFlash("Couldn't save home details. Try again.", "error");
-    return;
+    return err("Couldn't find your home. Please refresh and try again.");
   }
   const supabase = await createClient();
 
-  // Same finite-and-in-range treatment the systems above get, with the same
-  // ranges onboarding uses for these columns: a NaN or a wild value would
-  // otherwise be written straight onto the home.
-  const num = (k: string, min: number, max: number) =>
-    boundedNumber(formData.get(k), min, max);
+  // OWNER ONLY, and said out loud rather than discovered.
+  //
+  // getActiveProperty returns a home the caller is an active HOUSEHOLD MEMBER
+  // of as well as one they own ("properties member select", migration 0051),
+  // but the only UPDATE policy on properties is "properties owner update"
+  // (user_id = auth.uid(), migration 0002). Without this check a member's save
+  // ran through their own session client, RLS filtered the row out, PostgREST
+  // returned zero rows and NO error, and the action fell through to "Home
+  // details saved" - the edit silently discarded under a success toast.
+  //
+  // Refusing in words is the honest fix while members are read-only. If
+  // members are ever meant to edit the home's facts, the change is a member
+  // UPDATE policy in SQL, and this guard comes out with it.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return err("Please sign in first.");
+  if (property.user_id !== user.id) {
+    return err("Only the home's owner can change this.");
+  }
 
-  const { error } = await supabase
+  // BLANK-FIELD DECISION: on this form, a blank box means "leave it as it
+  // was," not "clear this fact." Every field here is prefilled from the
+  // current row, so the only way to see a blank box is to have deliberately
+  // deleted a value that was already there - far more likely a stray
+  // backspace (especially on a phone) than an owner asking to forget their
+  // home's square footage. These facts also took real effort to get right
+  // (typed at onboarding, or pulled from the assessor/RentCast lookup), and
+  // several other pages read them (home-report's facts line, the dashboard
+  // and forecast system-age estimates, the value page's purchase-price
+  // trend) - silently nulling one out from an unrelated edit would be a
+  // confusing way to lose real data. This is the opposite choice from
+  // updateSystemAction's install_year/last_serviced fields above, where a
+  // blank genuinely does mean "clear it": those are per-system notes an
+  // owner adds over time, not facts about the home itself. So: each field
+  // below is only added to the update object when the owner actually typed
+  // something in it; a field left blank is simply never mentioned in the
+  // update, and Postgres leaves the stored value untouched.
+  const yearBuilt = intFieldOrOmit(
+    formData,
+    "year_built",
+    1700,
+    2100,
+    "Year built",
+    "a 4-digit year between 1700 and 2100"
+  );
+  if (yearBuilt.error) return err(yearBuilt.error);
+  const sqft = intFieldOrOmit(
+    formData,
+    "sqft",
+    1,
+    1_000_000,
+    "Square feet",
+    "between 1 and 1,000,000"
+  );
+  if (sqft.error) return err(sqft.error);
+  const beds = intFieldOrOmit(
+    formData,
+    "beds",
+    0,
+    100,
+    "Bedrooms",
+    "between 0 and 100"
+  );
+  if (beds.error) return err(beds.error);
+  const lotSize = intFieldOrOmit(
+    formData,
+    "lot_size_sqft",
+    0,
+    100_000_000,
+    "Lot size",
+    "between 0 and 100,000,000 square feet"
+  );
+  if (lotSize.error) return err(lotSize.error);
+
+  // baths is numeric(3,1), so half-baths (2.5) are real values here, unlike
+  // the int fields above - boundedNumber (not boundedInt) keeps the decimal.
+  //
+  // 99.9, NOT 100: numeric(3,1) is three digits with one after the point, so
+  // 99.9 is the largest value the column can hold. 100 passed the old bound
+  // (and so did 99.95, which Postgres rounds up to 100.0), reached the database
+  // as 22003 "numeric field value out of range", and came back as the generic
+  // "Couldn't save your home details just now" on every retry with no hint
+  // which box was wrong - taking every other edit in the same submit down with
+  // it. The ceiling is named in the message so the fix is obvious.
+  const rawBaths = formData.get("baths");
+  let baths: number | undefined;
+  if (typeof rawBaths === "string" && rawBaths.trim() !== "") {
+    const n = boundedNumber(rawBaths, 0, 99.9);
+    if (n === null) {
+      return err(
+        "Bathrooms should be a number between 0 and 99.9. Please check it and try again."
+      );
+    }
+    baths = n;
+  }
+
+  const rawPurchaseDate = formData.get("purchase_date");
+  let purchaseDate: string | undefined;
+  if (typeof rawPurchaseDate === "string" && rawPurchaseDate.trim() !== "") {
+    const d = validPurchaseDate(rawPurchaseDate);
+    if (d === null) {
+      return err(
+        "Purchase date doesn't look right. Please check it and try again."
+      );
+    }
+    purchaseDate = d;
+  }
+
+  // A plain object literal type, not Record<string, ...>: the generated
+  // Supabase Update type rejects any argument with a string index signature
+  // (it can't tell that signature only ever holds real column names), so a
+  // Record here fails tsc even though every key it can hold is a real column.
+  const update: Partial<{
+    year_built: number;
+    sqft: number;
+    beds: number;
+    baths: number;
+    lot_size_sqft: number;
+    purchase_date: string;
+  }> = {};
+  if (yearBuilt.value !== undefined) update.year_built = yearBuilt.value;
+  if (sqft.value !== undefined) update.sqft = sqft.value;
+  if (beds.value !== undefined) update.beds = beds.value;
+  if (baths !== undefined) update.baths = baths;
+  if (lotSize.value !== undefined) update.lot_size_sqft = lotSize.value;
+  if (purchaseDate !== undefined) update.purchase_date = purchaseDate;
+
+  // Every box was left blank, so there is nothing to write. Short-circuit
+  // rather than sending an empty PATCH: it saves a round trip, and it keeps
+  // the zero-row check below meaning one thing only ("the write was filtered
+  // out") instead of two.
+  if (Object.keys(update).length === 0) {
+    setFlash("Home details saved");
+    return ok();
+  }
+
+  // .select("id") is what makes a REFUSED write visible. PostgREST reports an
+  // update that matched no rows as a plain success with an empty result set,
+  // so without asking for the rows back this action cannot tell "saved" from
+  // "RLS filtered it out and nothing happened" - and it used to report the
+  // second as the first. The owner check above should mean this never fires;
+  // it stays because a wrong success on a save is the worst possible answer.
+  const { data: saved, error } = await supabase
     .from("properties")
-    .update({
-      year_built: num("year_built", 1700, 2100),
-      sqft: num("sqft", 1, 1_000_000),
-      beds: num("beds", 0, 100),
-      baths: num("baths", 0, 100),
-      lot_size_sqft: num("lot_size_sqft", 0, 100_000_000),
-      purchase_date: validPurchaseDate(
-        (formData.get("purchase_date") as string) || null
-      ),
-    })
-    .eq("id", property.id);
+    .update(update)
+    .eq("id", property.id)
+    .select("id");
 
   if (error) {
-    setFlash("Couldn't save home details. Try again.", "error");
-    return;
+    console.error("updatePropertyAction: save failed", error);
+    return err("Couldn't save your home details just now. Please try again.");
+  }
+  if (!saved || saved.length === 0) {
+    console.error(
+      "updatePropertyAction: update matched no rows for property",
+      property.id
+    );
+    return err("Couldn't save your home details just now. Please try again.");
   }
   setFlash("Home details saved");
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
+  revalidatePath("/forecast");
+  revalidatePath("/value");
+  revalidatePath("/home-details");
+  return ok();
 }

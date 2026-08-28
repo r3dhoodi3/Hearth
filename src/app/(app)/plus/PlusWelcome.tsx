@@ -163,6 +163,7 @@ export default function PlusWelcome({
             <button
               type="button"
               onClick={() => setStep((s) => s - 1)}
+              aria-label={`Back to step ${step} of ${STEPS.length}`}
               className="btn-secondary flex-1"
             >
               Back
@@ -176,6 +177,7 @@ export default function PlusWelcome({
             <button
               type="button"
               onClick={() => setStep((s) => s + 1)}
+              aria-label={`Next, step ${step + 2} of ${STEPS.length}`}
               className="btn-primary flex-1"
             >
               Next

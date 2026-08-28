@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
+import { APPLE_SIGN_IN_ENABLED } from "@/lib/constants";
 
 // The standard Apple mark, inline so the button never depends on an external
 // asset host (and renders instantly, no network round trip). fill is
@@ -61,12 +62,22 @@ function AppleLogo() {
 // off by default and turns on with NEXT_PUBLIC_APPLE_SIGNIN=1, set in Vercel
 // once the provider is live.
 //
+// Also gated on APPLE_SIGN_IN_ENABLED (src/lib/constants.ts) - a second,
+// independent switch for a product decision rather than a technical one:
+// as of 2026-08-28 the owner wants Apple hidden everywhere so a fresh account
+// can be created and onboarding seen without hitting the button, regardless
+// of whether the Supabase provider itself is configured. Both switches must
+// be on for the button to render; folding the check in here, rather than in
+// each of the three pages that import APPLE_SIGNIN_ENABLED, keeps a single
+// source of truth so the button and its "By continuing with Google or Apple"
+// consent copy never disagree.
+//
 // Exported so the sign-up pages can match their "By continuing with Google or
 // Apple" consent copy to what is actually on screen. The literal
 // process.env.NEXT_PUBLIC_* read is required for Next to inline the value
 // into the client bundle at build time.
 export const APPLE_SIGNIN_ENABLED =
-  process.env.NEXT_PUBLIC_APPLE_SIGNIN === "1";
+  process.env.NEXT_PUBLIC_APPLE_SIGNIN === "1" && APPLE_SIGN_IN_ENABLED;
 
 type AppleSignInButtonProps = {
   // Where /auth/callback should send the browser after the exchange. Same

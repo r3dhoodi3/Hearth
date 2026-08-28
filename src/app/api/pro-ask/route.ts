@@ -12,12 +12,19 @@ import { readJsonBounded } from "@/lib/boundedBody";
 import { TOPIC_GUARD_PRO } from "@/lib/aiGuard";
 import { hasAskableContent, pickImageIndexes } from "@/lib/askRequest";
 import {
-  generateText,
+  streamText,
   hasClaudeKey,
   claudeFailureMessage,
   isRateLimitError,
   type ClaudeMessage,
+  type ClaudeStream,
 } from "@/lib/claude";
+import {
+  NDJSON_HEADERS,
+  encodeDelta,
+  encodeDone,
+  ndjsonBody,
+} from "@/lib/askStream";
 import { wrapUntrusted } from "@/lib/promptSafe";
 import {
   LEAD_TIER_FEES,
@@ -430,18 +437,38 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // NO ANSWER MEANS NO CHARGE, the same rule the homeowner route has always
+  // had and this one was missing entirely: the question is counted before the
+  // call, so a call that threw (a 400 we built wrong, a timeout, a 429 from
+  // Anthropic) has to hand it back rather than quietly spending one out of the
+  // pro's daily allowance for nothing. One helper, because a streamed answer
+  // can now fail in two places: before the stream opens, or part-way through
+  // it, after the headers have already gone out. Returns the line to show.
+  const failedAnswer = async (e: unknown): Promise<string> => {
+    console.error("Ask Hearth for Pros: model call failed:", e);
+    await refundAiUsage(authUser.id);
+    return isRateLimitError(e)
+      ? "Ask Hearth is busy right now. Try again in a minute."
+      : "Sorry, I couldn't generate an answer. Please try again.";
+  };
+
+  let stream: ClaudeStream;
   try {
     // Thinking stays OFF, and it now says so OUT LOUD: claude-sonnet-5 runs
     // adaptive thinking when `thinking` is omitted, so "we never turned it on"
     // was in fact a full reasoning pass on every question, in a chat the pro is
-    // watching a spinner for. `false` disables it explicitly and "low" effort
-    // keeps the answer short, which is what a copilot answer between jobs
-    // wants to be.
+    // waiting on. `false` disables it explicitly and "low" effort keeps the
+    // answer short, which is what a copilot answer between jobs wants to be.
+    //
+    // STREAMED, through the same request builder the non-streaming path uses,
+    // so the prompt, the cache breakpoint, and the cost are unchanged: only
+    // the delivery is. A pro standing in someone's driveway sees the first
+    // words in about a second instead of waiting out the whole answer.
     //
     // The system prompt is byte-stable for the whole conversation (company
     // details, nothing per-request), so it caches and the second and later
     // questions in a session read the prefix back at a tenth of the price.
-    const { text, stopReason } = await generateText({
+    stream = streamText({
       system,
       systemSuffix: systemCompanyDetails,
       messages: turns,
@@ -449,29 +476,63 @@ export async function POST(req: NextRequest) {
       effort: "low",
       maxTokens: 2048,
       timeoutMs: 90_000,
+      // Same disconnect policy as /api/ask: a client that hangs up stops the
+      // model call rather than leaving it to finish on Anthropic's meter, and
+      // nothing is refunded, because the deltas already sent are the answer.
+      signal: req.signal,
       label: "pro-ask",
     });
-
-    // A truncated reply still carries a usable answer, so return it: a partial
-    // answer beats an apology.
-    if (text) return NextResponse.json({ answer: text });
-    return NextResponse.json({
-      answer:
-        claudeFailureMessage(stopReason, text) ??
-        "Sorry, I couldn't generate an answer. Please try again.",
-    });
   } catch (e) {
-    console.error("Ask Hearth for Pros: model call failed:", e);
-    // NO ANSWER MEANS NO CHARGE, the same rule the homeowner route has always
-    // had and this one was missing entirely: the question is counted before
-    // the call, so a call that threw (a 400 we built wrong, a timeout, a 429
-    // from Anthropic) has to hand the question back rather than quietly
-    // spending one out of the pro's daily allowance for nothing.
-    await refundAiUsage(authUser.id);
-    return NextResponse.json({
-      answer: isRateLimitError(e)
-        ? "Ask Hearth is busy right now. Try again in a minute."
-        : "Sorry, I couldn't generate an answer. Please try again.",
-    });
+    // Nothing has gone out yet, so this stays an ordinary JSON reply.
+    return NextResponse.json({ answer: await failedAnswer(e) });
   }
+
+  // From here the answer is a stream of NDJSON lines: see src/lib/askStream.ts
+  // for the format. Every refusal above this point is still a plain JSON body
+  // with its own status code, so the shared chat client only has to branch on
+  // the response content type.
+  return new Response(
+    ndjsonBody(async (emit) => {
+      // Has any of the answer actually reached the client? A disconnect is
+      // only "the deltas already delivered are the answer" if there WERE
+      // deltas. See the catch below.
+      let sentAny = false;
+      try {
+        for await (const delta of stream.textDeltas) {
+          emit(encodeDelta(delta));
+          sentAny = true;
+        }
+        const { text, stopReason } = await stream.final;
+        // A truncated reply still carries a usable answer, so send it: a
+        // partial answer beats an apology. The client takes this `answer` as
+        // authoritative over the deltas it stitched together.
+        emit(
+          encodeDone({
+            answer:
+              text ||
+              claudeFailureMessage(stopReason, text) ||
+              "Sorry, I couldn't generate an answer. Please try again.",
+          })
+        );
+      } catch (e) {
+        // A failure part-way through still ends with a well-formed terminal
+        // line, so the client needs no separate error channel.
+        //
+        // ONLY A REAL MODEL FAILURE, though. A client that hangs up reaches
+        // this branch two ways - emit throwing on a cancelled controller
+        // (ndjsonBody now swallows that) and req.signal aborting the SDK call
+        // (this check) - and neither is worth a refund: the deltas already
+        // delivered are the answer. Nothing to send either, since emit is a
+        // no-op once the consumer is gone.
+        //
+        // Only if something WAS delivered, though (sentAny). A pro whose
+        // client hung up before the first delta received no answer at all, so
+        // their question falls through to failedAnswer and is refunded, same
+        // as any other request that produced nothing.
+        if (req.signal.aborted && sentAny) return;
+        emit(encodeDone({ answer: await failedAnswer(e) }));
+      }
+    }),
+    { headers: NDJSON_HEADERS }
+  );
 }

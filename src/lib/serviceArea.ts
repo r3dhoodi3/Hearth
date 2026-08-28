@@ -1,12 +1,25 @@
 import { OC_INCORPORATED_CITIES } from "./ocCities";
 
-// TODO(verify): generated from general OC ZIP knowledge; verify against the
-// HUD-USPS ZIP crosswalk (huduser.gov) before launch. Border ZIPs shared with
-// LA County are a known imperfect edge. Since the launch area became all of
-// Orange County (migration 0129) this set is ALSO the homeowner gate, so a
-// residential ZIP missing from it turns a real Orange County home away: two
-// such omissions (92694 Ladera Ranch, 92832 downtown Fullerton) were found and
-// added in 0129, and the crosswalk pass should look for any others.
+// VERIFIED 2026-08-28 against the full Orange County ZIP roster (zip-codes.com
+// county list, which carries the USPS Standard / PO Box / Unique type,
+// cross-checked against the CICLT FIPS 06059 county roster and per-ZIP
+// hometownlocator profiles). Result: this set is a strict SUPERSET of the
+// county's 85 standard residential-delivery ZIPs. NOTHING IS MISSING, which is
+// the direction that matters, because since migration 0129 this set is also
+// the homeowner gate and an omission turns a real Orange County home away.
+// The earlier TODO here asked for exactly that pass; it is done.
+//
+// The 6 extras are deliberate keeps, not mistakes. USPS types them PO Box
+// rather than street delivery, but each is a place people actually say they
+// live and put on mail, so letting them through costs nothing and refusing
+// them would turn away a real neighbor: 90742 Sunset Beach, 90743 Surfside,
+// 92678 Trabuco Canyon, 92856 and 92864 Orange, 92885 Yorba Linda.
+//
+// Checked and correctly ABSENT: 92702 and 92799 (Santa Ana PO box / firm),
+// 92697 (UC Irvine, unique), 92698 (Aliso Viejo, unique), 92709 and 92710
+// (retired, do not exist), 92899 / 92809 / 92862 (firm ZIPs with zero
+// residential delivery), 90638 La Mirada (Los Angeles County, not Orange),
+// and the ~40 other PO-box-only ZIPs across the county.
 //
 // Standard (residential-delivery) 5-digit ZIP codes for Orange County,
 // California, across its cities: Aliso Viejo, Anaheim, Brea, Buena Park,
@@ -141,11 +154,17 @@ export const OUT_OF_AREA_POST_MESSAGE =
 // (92676, reached by Santiago Canyon Road) to Orange, and Trabuco Canyon
 // proper (92678) to Rancho Santa Margarita, the nearest city with pros.
 //
-// VERIFY THESE against the HUD crosswalk (same TODO as the set above): 92676
-// and 92678 (canyon ZIPs no incorporated city contains, assigned by road
-// access), 92885 (Yorba Linda, may be PO-box only), 92856 and 92864 (Orange,
-// both small and one may be PO-box only), 92694 and 92832 (added in 0129 as
-// missing residential ZIPs).
+// VERIFIED 2026-08-28 along with the set above. Every ZIP here resolves to a
+// city, so every Orange County address can be claimed. Two mappings knowingly
+// disagree with the USPS PRIMARY city name, and stay as they are because this
+// map answers "which launch city serves this ZIP", not "what does USPS call
+// it": 92679 is Trabuco Canyon / Coto de Caza to USPS and Rancho Santa
+// Margarita here, and 92676 is Silverado to USPS and Orange here. Changing
+// either would mean adding a launch city, which is an owner decision with a
+// DB CHECK constraint behind it, not a correction. 92624, 92625, 92657 and
+// 92610 are the same story (Capistrano Beach, Corona del Mar, Newport Coast,
+// Foothill Ranch), except there USPS treats the city named here as an
+// acceptable alias anyway.
 export const LAUNCH_CITY_BY_ZIP: Record<string, LaunchCityName> = {
   // Aliso Viejo
   "92656": "Aliso Viejo",

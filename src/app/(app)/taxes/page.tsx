@@ -285,15 +285,25 @@ export default async function TaxesPage() {
               What is a property tax appeal?
             </h2>
             <p className="text-sm text-stone-600 dark:text-stone-300">
-              Every county lets homeowners challenge their assessment if they
-              believe it is higher than what the home is really worth. You
-              file a short form or letter with your county assessor (usually
-              free), often with evidence like recent sales of similar homes
-              nearby, and the county reviews it. If they agree, your assessed
-              value comes down and your tax bill comes down with it. Watch
-              the deadline on your notice: most counties give you only a few
-              weeks after assessments go out.
+              You can challenge your assessment if you think it&apos;s too high.
             </p>
+            <ul className="list-disc space-y-1 pl-5 text-sm text-stone-600 dark:text-stone-300">
+              <li>
+                File a short form with your county assessor. It is usually free.
+              </li>
+              <li>
+                Add proof if you have it, like what similar homes nearby sold
+                for.
+              </li>
+              <li>
+                If the county agrees, your assessed value and your tax bill both
+                go down.
+              </li>
+              <li>
+                Check your notice for the deadline. Most counties give you only
+                a few weeks.
+              </li>
+            </ul>
           </div>
 
           {verdict === "high" && (

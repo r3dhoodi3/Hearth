@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
+import SubmitButton from "@/components/SubmitButton";
 import {
   updateClientDetailsAction,
   deleteClientAction,
@@ -167,9 +168,9 @@ export default async function ClientDetailPage(
             />
           </label>
           <div className="sm:col-span-2">
-            <button type="submit" className="btn-primary">
+            <SubmitButton className="btn-primary" pendingLabel="Saving…">
               Save changes
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>
@@ -203,12 +204,14 @@ export default async function ClientDetailPage(
             required
             className="textarea"
           />
-          <button type="submit" className="btn-primary text-sm">
+          <SubmitButton className="btn-primary text-sm" pendingLabel="Adding…">
             Add note
-          </button>
+          </SubmitButton>
         </form>
         {notes.length === 0 ? (
-          <p className="text-sm text-stone-500 dark:text-stone-400">No notes yet.</p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            No notes yet. Add one in the box above.
+          </p>
         ) : (
           <ul className="space-y-2">
             {notes.map((n) => (

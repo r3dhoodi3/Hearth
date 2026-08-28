@@ -68,3 +68,6 @@ yarn-error.log*
 .next-*/
 lh.json
 .build-check.log
+
+.vercel
+.env*

@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { PLUS_ASK_PER_DAY, PLUS_INCLUDED_HOMES } from "@/lib/constants";
+import {
+  PLUS_ASK_PER_DAY,
+  PLUS_INCLUDED_HOMES,
+  TRIAL_ASK_PER_DAY,
+} from "@/lib/constants";
 
 // src/lib/aiUsage.ts imports the service-role Supabase client, which is
 // "server-only" and throws the moment it is imported outside a server
@@ -21,6 +25,22 @@ function constant(source: string, name: string): number {
 describe("the Plus allowances quoted in marketing copy", () => {
   it("quotes the same daily question count the server enforces", () => {
     expect(PLUS_ASK_PER_DAY).toBe(constant(src("./aiUsage.ts"), "ASK_DAILY_PLUS"));
+  });
+
+  it("quotes the same trial question count the server enforces", () => {
+    expect(TRIAL_ASK_PER_DAY).toBe(
+      constant(src("./aiUsage.ts"), "ASK_DAILY_TRIAL")
+    );
+  });
+
+  it("keeps the trial allowance between free and paid", () => {
+    // A trial that matched Plus would hand the whole ceiling to any account
+    // with a spare inbox; one that matched free would demo nothing.
+    const aiUsage = src("./aiUsage.ts");
+    expect(TRIAL_ASK_PER_DAY).toBeGreaterThan(
+      constant(aiUsage, "ASK_DAILY_FREE")
+    );
+    expect(TRIAL_ASK_PER_DAY).toBeLessThan(PLUS_ASK_PER_DAY);
   });
 
   it("quotes the same home count the claim cap enforces", () => {

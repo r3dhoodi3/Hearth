@@ -5,7 +5,7 @@ import {
   getProperties,
   formatAddressLine,
 } from "@/lib/property";
-import { hasPlus } from "@/lib/subscription";
+import { getPlusTier } from "@/lib/subscription";
 import {
   countAskUsage,
   countAiUsageWindow,
@@ -13,6 +13,7 @@ import {
   refundAskUsage,
   ASK_DAILY_FREE,
   ASK_DAILY_PLUS,
+  ASK_DAILY_TRIAL,
 } from "@/lib/aiUsage";
 import { readJsonBounded } from "@/lib/boundedBody";
 import { TOPIC_GUARD_HOMEOWNER, newTurnHasImage } from "@/lib/aiGuard";
@@ -20,13 +21,20 @@ import { hasAskableContent, pickImageIndexes } from "@/lib/askRequest";
 import { wrapUntrusted } from "@/lib/promptSafe";
 import { REPLACEMENT_INFO } from "@/lib/health";
 import {
-  generateText,
+  streamText,
   hasClaudeKey,
   claudeFailureMessage,
   isRateLimitError,
   isEmptyPromptError,
   type ClaudeMessage,
+  type ClaudeStream,
 } from "@/lib/claude";
+import {
+  NDJSON_HEADERS,
+  encodeDelta,
+  encodeDone,
+  ndjsonBody,
+} from "@/lib/askStream";
 
 export const runtime = "nodejs";
 
@@ -158,7 +166,15 @@ export async function POST(req: NextRequest) {
   // Plus decides two things here: photos, and how many questions a day. Read
   // it before any of the expensive work below so a locked or throttled request
   // costs nothing.
-  const isPlus = await hasPlus();
+  //
+  // The TIER, not the boolean, because the two decisions want different
+  // answers for someone on the 3-day trial. Photos are a feature, so a trial
+  // gets them (that is what a trial is for). The daily count is money, and a
+  // trial is free to start and free to start again from a fresh email, so it
+  // gets ASK_DAILY_TRIAL rather than the full paid ceiling. See PlusTier in
+  // src/lib/subscription.ts.
+  const tier = await getPlusTier();
+  const isPlus = tier !== "free";
 
   // PHOTO GATE. Vision calls are the expensive ones, so they are a Plus
   // feature. Only the newest turn counts (the client replays its whole local
@@ -196,13 +212,18 @@ export async function POST(req: NextRequest) {
   // in instead of decrementing tomorrow's (which would leave the question
   // silently spent). See refundAskUsage in src/lib/aiUsage.ts.
   const { overLimit, reason, remaining, dailyLimit, windowStart } =
-    await countAskUsage(authUser.id, isPlus);
-  // Quiet meter for free users only: the client shows it when the number is
-  // small enough to matter. Members are on a ceiling that rarely bites, so a
-  // number would be noise. Null when the counter could not be read - say
-  // nothing rather than guess.
-  const freeRemaining = isPlus ? null : remaining;
-  const freeLimit = isPlus ? null : dailyLimit;
+    await countAskUsage(authUser.id, tier);
+  // Quiet meter for everyone on a countable allowance: free homeowners and
+  // anyone on the trial. A PAID member is on a ceiling that rarely bites, so a
+  // number would be noise, and they still get nothing. A trialer is on 8 a
+  // day, which is small enough to matter and must never arrive as a surprise -
+  // showing them where they stand is the same rule the free tier already
+  // follows. The client renders the meter whenever a limit arrives (see
+  // shouldShowMeter in src/lib/askLimits.ts), so sending these two fields is
+  // the whole change. Null when the counter could not be read - say nothing
+  // rather than guess.
+  const freeRemaining = tier === "paid" ? null : remaining;
+  const freeLimit = tier === "paid" ? null : dailyLimit;
   if (overLimit) {
     // WHOSE limit was it? Only "user_daily" means this person spent their own
     // allowance, and only then does the Plus pitch make sense. A tripped
@@ -221,9 +242,14 @@ export async function POST(req: NextRequest) {
       );
     }
     return NextResponse.json({
-      answer: isPlus
-        ? "You have reached today's Ask Hearth limit. It resets tomorrow."
-        : `You've used your ${ASK_DAILY_FREE} free questions for today. Hearth Plus gives you ${ASK_DAILY_PLUS} a day and photo answers.`,
+      answer:
+        tier === "paid"
+          ? "You have reached today's Ask Hearth limit. It resets tomorrow."
+          : tier === "trialing"
+            ? // Already inside the funnel: state the number and the reset, and
+              // do not pitch them something they are currently on.
+              `That's your ${ASK_DAILY_TRIAL} questions for today on your Plus trial. They reset tomorrow, and a paid plan gives you ${ASK_DAILY_PLUS} a day.`
+            : `You've used your ${ASK_DAILY_FREE} free questions for today. Hearth Plus gives you ${ASK_DAILY_PLUS} a day and photo answers.`,
       // The message names Hearth Plus, so give the reader something to tap
       // instead of a page to go hunt for. The chat bubble renders plain text
       // (see src/components/Markdown.tsx - no link support on purpose), so
@@ -238,6 +264,7 @@ export async function POST(req: NextRequest) {
           }),
       freeRemaining,
       freeLimit,
+      askTier: tier,
     });
   }
 
@@ -387,9 +414,10 @@ export async function POST(req: NextRequest) {
       ? `The homeowner's name is ${firstName}; greet and address them by their first name naturally, without overusing it. `
       : "") +
     "Give a genuinely detailed, useful answer, but break it up so it is easy to skim. Lead with one short sentence that answers the question directly. Then, if there is more to say, add a few short bullets or two to three sentence steps, with a line break between chunks and a small header before a list when it helps, like 'Likely cause:' or 'Next steps:'. Never write a long wall of text. Each chunk should be short enough to read in a few seconds. " +
-    // LENGTH. The reply is generated in one shot with no streaming, so every
-    // extra sentence is extra seconds the homeowner spends looking at a
-    // spinner. This caps the usual answer without capping the useful one:
+    // LENGTH. The reply streams now, so the first words land in about a
+    // second either way, but every extra sentence is still another second
+    // before the answer is finished (and more output tokens to pay for).
+    // This caps the usual answer without capping the useful one:
     // "unless the homeowner asks for detail" keeps the long form available on
     // request.
     "Answer in under 150 words unless the homeowner asks for detail; lead with the answer, then at most 3 short bullets. " +
@@ -475,21 +503,47 @@ export async function POST(req: NextRequest) {
         .filter((t: ClaudeMessage | null): t is ClaudeMessage => t !== null)
     : [{ role: "user", text: question }];
 
+  // NO ANSWER MEANS NO CHARGE, in one place, because there are now two ways
+  // the model call can fail: it throws before the stream opens, or it throws
+  // part-way through one, after headers have already gone out. The question
+  // was counted before the call (the counter is check-and-increment in one
+  // atomic RPC, which is what makes it safe against parallel requests), so a
+  // call that threw - a 400 we built wrong, a timeout, a 429 from Anthropic -
+  // has to hand it back rather than quietly spending one of three. Best
+  // effort: see refundAskUsage. Returns the plain-English line to show, and
+  // the meter that goes with it reflects the refund so it does not tick down
+  // on a turn that never happened.
+  const failedAnswer = async (e: unknown): Promise<string> => {
+    console.error("Ask Hearth: model call failed:", e);
+    await refundAskUsage(authUser.id, windowStart);
+    return isRateLimitError(e)
+      ? "Ask Hearth is busy right now. Try again in a minute."
+      : "Sorry, I couldn't generate an answer. Please try again.";
+  };
+  const refundedRemaining = freeRemaining === null ? null : freeRemaining + 1;
+
+  let stream: ClaudeStream;
   try {
     // Thinking stays OFF here, and it now says so OUT LOUD. This is a chat the
-    // homeowner is watching a spinner for, and the continuity rules that used
-    // to need a small reasoning budget now live in the system prompt above.
+    // homeowner is waiting on, and the continuity rules that used to need a
+    // small reasoning budget now live in the system prompt above.
     // Omitting the option was not enough: claude-sonnet-5 runs adaptive
     // thinking when `thinking` is absent, so every question was quietly paying
     // for a full reasoning pass before a single word came back. `false` sends
     // an explicit disable, and "low" effort keeps the answer short and quick,
     // which is the right trade for home Q&A.
     //
+    // STREAMED, through the same request builder the non-streaming path uses:
+    // the prompt, the cache breakpoint, and the cost are identical, only the
+    // delivery changed. The homeowner used to watch a spinner for the whole
+    // ten seconds it takes to write 150 words; now the first words land in
+    // about one.
+    //
     // The prompt itself is byte-stable for the whole conversation (home
     // details and today's date, nothing per-request), so it caches: the second
     // and later questions in a session read the whole prefix back at a tenth
     // of the price.
-    const { text, stopReason } = await generateText({
+    stream = streamText({
       system,
       systemSuffix: systemHomeDetails,
       messages: turns,
@@ -503,26 +557,20 @@ export async function POST(req: NextRequest) {
       // the headroom is free unless it gets used.
       maxTokens: 4096,
       timeoutMs: 90_000,
+      // Stop paying for an answer nobody is waiting for. When the browser
+      // hangs up, ndjsonBody drops every remaining line (and deliberately does
+      // NOT refund - the deltas already delivered are the answer), so without
+      // this the model call would keep running to completion, billed in full,
+      // with nothing to show for it.
+      signal: req.signal,
       label: "ask",
     });
-
-    // A truncated reply still carries a usable answer, so return it: a partial
-    // answer beats an apology. Only an empty or refused reply falls back to
-    // the plain-English failure line.
-    if (text) {
-      return NextResponse.json({ answer: text, freeRemaining, freeLimit });
-    }
-    return NextResponse.json({
-      answer:
-        claudeFailureMessage(stopReason, text) ??
-        "Sorry, I couldn't generate an answer. Please try again.",
-      freeRemaining,
-      freeLimit,
-    });
   } catch (e) {
-    console.error("Ask Hearth: model call failed:", e);
-    // NOTHING TO SEND IS A BAD REQUEST, not a model failure. generateText
-    // throws EmptyPromptError before it calls the API when every turn came out
+    // Nothing has been sent yet, so these stay ordinary JSON replies with
+    // their old status codes.
+    //
+    // NOTHING TO SEND IS A BAD REQUEST, not a model failure. streamText throws
+    // EmptyPromptError before it opens the request when every turn came out
     // empty (all whitespace text, an image the caps dropped), and that is a
     // malformed request, not "Hearth couldn't answer" - it would be answered
     // the same way forever, so telling the homeowner to try again is bad
@@ -537,20 +585,81 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    // NO ANSWER MEANS NO CHARGE. The question was counted before the call (the
-    // counter is check-and-increment in one atomic RPC, which is what makes it
-    // safe against parallel requests), so a call that threw - a 400 we built
-    // wrong, a timeout, a 429 from Anthropic - has to hand the question back
-    // rather than quietly spending one of three. Best effort: see
-    // refundAskUsage, and the meter the client is handed reflects the refund
-    // so it does not tick down on a turn that never happened.
-    await refundAskUsage(authUser.id, windowStart);
     return NextResponse.json({
-      answer: isRateLimitError(e)
-        ? "Ask Hearth is busy right now. Try again in a minute."
-        : "Sorry, I couldn't generate an answer. Please try again.",
-      freeRemaining: freeRemaining === null ? null : freeRemaining + 1,
+      answer: await failedAnswer(e),
+      freeRemaining: refundedRemaining,
       freeLimit,
+      askTier: tier,
     });
   }
+
+  // From here the answer is a stream of NDJSON lines: see src/lib/askStream.ts
+  // for the format. Every refusal above this point is still a plain JSON body
+  // with its own status code, so the client only has to branch on the response
+  // content type.
+  return new Response(
+    ndjsonBody(async (emit) => {
+      // Has any of the answer actually reached the client? A disconnect is
+      // only "the deltas already delivered are the answer" if there WERE
+      // deltas. See the catch below.
+      let sentAny = false;
+      try {
+        for await (const delta of stream.textDeltas) {
+          emit(encodeDelta(delta));
+          sentAny = true;
+        }
+        const { text, stopReason } = await stream.final;
+        // A truncated reply still carries a usable answer, so send it: a
+        // partial answer beats an apology. Only an empty or refused reply
+        // falls back to the plain-English failure line. The client takes this
+        // `answer` as authoritative over the deltas it stitched together.
+        emit(
+          encodeDone({
+            answer:
+              text ||
+              claudeFailureMessage(stopReason, text) ||
+              "Sorry, I couldn't generate an answer. Please try again.",
+            freeRemaining,
+            freeLimit,
+            askTier: tier,
+          })
+        );
+      } catch (e) {
+        // A failure part-way through still ends with a well-formed terminal
+        // line, so the client needs no separate error channel: it renders this
+        // answer exactly the way it renders a good one, and the refunded meter
+        // arrives with it.
+        //
+        // ONLY A REAL MODEL FAILURE REACHES HERE. A client that hangs up used
+        // to land in this branch (emit threw on a cancelled controller) and
+        // get its question refunded, which made the free ceiling meaningless;
+        // ndjsonBody now swallows a disconnect instead. DECIDED: a disconnect
+        // is NOT refunded. The deltas already delivered are the answer, so the
+        // question is spent, and req.signal above stops the model call so the
+        // spend stops with it.
+        //
+        // That signal is also the SECOND way a disconnect could get in here:
+        // aborting the request makes the SDK throw, and that throw is not a
+        // model failure either. Check it before spending a refund on it. There
+        // is nothing to send in that state anyway - emit is already a no-op.
+        //
+        // ONLY when something was actually delivered, though (sentAny). A
+        // client that hangs up before the first delta got NO answer at all, so
+        // "the deltas already delivered are the answer" is not true of it, and
+        // keeping its question spent charges for nothing. That case falls
+        // through to failedAnswer, which refunds; the emit it then attempts is
+        // a harmless no-op on a controller nobody is reading.
+        if (req.signal.aborted && sentAny) return;
+        emit(
+          encodeDone({
+            answer: await failedAnswer(e),
+            freeRemaining: refundedRemaining,
+            freeLimit,
+            askTier: tier,
+          })
+        );
+      }
+    }),
+    { headers: NDJSON_HEADERS }
+  );
 }

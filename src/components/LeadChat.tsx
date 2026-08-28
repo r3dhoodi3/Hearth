@@ -7,6 +7,7 @@ import { Image as ImageIcon } from "lucide-react";
 import { FilePreviewThumb } from "@/components/FilePreview";
 import Lightbox from "@/components/Lightbox";
 import InlineSpinner from "@/components/InlineSpinner";
+import BlockMenu from "@/components/BlockMenu";
 import { createClient } from "@/lib/supabase/client";
 import { censor } from "@/lib/censor";
 import { extractQuote, formatUSD, dollarsToCents, formatUSDCents } from "@/lib/quotes";
@@ -528,6 +529,20 @@ export default function LeadChat({
           body: finalBody,
         })
         .select();
+      // A block on this thread (migration 0138) is not a delivery failure and
+      // must never land in the retry queue: "Retry" would fail forever and
+      // read as a bug. The database trigger raises a sentence written for a
+      // person, so it is matched here and shown as its own notice instead.
+      // Left on screen rather than auto-cleared like the transient notices:
+      // the condition is permanent until somebody unblocks.
+      if (error && /blocked/i.test(error.message ?? "")) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        setBusy(false);
+        setNotice(
+          "You can no longer message this person. One of you has blocked the other."
+        );
+        return;
+      }
       if (error || !data || data.length === 0) throw new Error("send failed");
       if (slur) {
         await supabase.from("reports").insert({
@@ -1111,6 +1126,7 @@ export default function LeadChat({
           <button
             type="button"
             onClick={() => setOpen(false)}
+            aria-label="Close messages"
             className="text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
           >
             Close
@@ -1152,13 +1168,15 @@ export default function LeadChat({
                   type="button"
                   onClick={confirmClose}
                   disabled={busy}
-                  className="rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  aria-label="Yes, end conversation"
+                  className="max-sm:min-h-11 rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
                 >
                   Yes
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmingClose(false)}
+                  aria-label="No, keep conversation"
                   className="text-xs font-medium text-stone-900 hover:text-stone-600 dark:text-stone-100 dark:hover:text-stone-300"
                 >
                   No
@@ -1169,7 +1187,7 @@ export default function LeadChat({
                 type="button"
                 onClick={() => setConfirmingClose(true)}
                 disabled={busy}
-                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                className="max-sm:min-h-11 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
               >
                 Finish conversation
               </button>
@@ -1707,7 +1725,7 @@ export default function LeadChat({
               }}
               placeholder="Type a message…"
             />
-            <button className="btn-primary" disabled={busy}>
+            <button className="btn-primary max-sm:min-h-11" disabled={busy}>
               {busy && <InlineSpinner />}
               Send
             </button>
@@ -1758,13 +1776,40 @@ export default function LeadChat({
             </div>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => setReporting(true)}
-            className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
-          >
-            Report chat
-          </button>
+          // The moderation row: report (unchanged) plus the overflow menu
+          // that holds Block. Two controls, both quiet, both out of the way
+          // of the conversation itself. Blocking resolves the other party
+          // from this lead server-side - see BlockMenu and
+          // src/app/(app)/account/blocks/actions.ts - so nothing here has to
+          // know, or be trusted with, the other person's account id.
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setReporting(true)}
+              className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+            >
+              Report chat
+            </button>
+            <BlockMenu
+              leadId={leadId}
+              personLabel={
+                role === "homeowner" ? "this pro" : "this homeowner"
+              }
+              manageHref={role === "homeowner" ? "/account/blocks" : "/pro/blocks"}
+              // A block does not end this conversation (0138 guards sending,
+              // not access), so the confirm step says so and offers the
+              // control that does. It is the SAME "End" flow as the
+              // conversation header above, not a second way to close a
+              // thread - it just opens the confirm from here, so nobody has
+              // to go find it. Only where that header is actually on screen
+              // and the thread is still open.
+              onEndConversation={
+                embedded && !closed && !justClosed
+                  ? () => setConfirmingClose(true)
+                  : undefined
+              }
+            />
+          </div>
         )}
       </div>
 
@@ -1898,6 +1943,7 @@ function QuoteCard({
                   type="button"
                   onClick={onWithdraw}
                   disabled={busy}
+                  aria-label="Confirm withdraw quote"
                   className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
                 >
                   Confirm
@@ -2055,6 +2101,7 @@ function InvoiceCard({
                     type="button"
                     onClick={() => onSignInPerson?.()}
                     disabled={busy}
+                    aria-label="Confirm signed in person"
                     className="text-xs font-semibold text-bark-700 hover:text-bark-700 disabled:opacity-50 dark:text-stone-300 dark:hover:text-stone-300"
                   >
                     Confirm
@@ -2118,6 +2165,7 @@ function InvoiceCard({
                   type="button"
                   onClick={onVoid}
                   disabled={busy}
+                  aria-label="Confirm void invoice"
                   className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
                 >
                   Confirm

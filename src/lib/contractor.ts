@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { getUser } from "@/lib/auth";
+import { getUser, getVerifiedUser } from "@/lib/auth";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import type { Contractor } from "@/lib/database.types";
 import type { AuthRoleDecision, Role, Sides } from "@/lib/roleRouting";
@@ -74,12 +74,22 @@ export const getCurrentContractor = cache(
     // cookie. Below we hand that id to the admin client, which bypasses RLS
     // entirely, so a cookie-edited id would let an attacker read any
     // contractor's full row (balance, checkr_*, license_verify_detail, ...).
-    // supabase.auth.getUser() here re-checks the id against Supabase's auth
-    // server, so it's safe to trust before the admin-client query below.
-    const authClient = await createClient();
-    const {
-      data: { user },
-    } = await authClient.auth.getUser();
+    // getVerifiedUser() re-checks the id against Supabase's auth server - the
+    // exact same supabase.auth.getUser() network call this used to make
+    // inline - so it is still safe to trust before the admin-client query
+    // below. NOTHING about the trust boundary changes here: no header, no
+    // cookie claim, no caller-supplied id is believed.
+    //
+    // What DOES change is how many times that call is made. This helper runs
+    // in the layout of every signed-in page on both sides of the app, and
+    // several pages inside those layouts re-verify for their own reasons
+    // (/account/security, /account/household, /contractors, /inspection,
+    // /quote-check, getPasswordStatus). The supabase client has no request
+    // cache, so each inline supabase.auth.getUser() was its own sequential
+    // round trip to Supabase's auth server. getVerifiedUser() is
+    // React-cache()-wrapped, so every one of those call sites now shares ONE
+    // verification per request instead of paying its own.
+    const user = await getVerifiedUser();
     if (!user) return null;
 
     // Admin client, not the user client: 0067 stripped column-level SELECT on

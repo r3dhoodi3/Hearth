@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SubmitButton from "@/components/SubmitButton";
 import { startBackgroundCheckAction } from "../actions";
 import { BACKGROUND_CHECK_MIN_PAID_LEADS } from "@/lib/constants";
 import type { Contractor } from "@/lib/database.types";
@@ -137,14 +138,16 @@ export default function BackgroundCheckCard({
             Your legal name goes to Checkr to run the check. Hearth doesn&apos;t
             store it.
           </p>
-          <button
-            type="submit"
+          {/* SubmitButton, not a bare <button>: this kicks off a real Checkr
+              run, so a fast double tap must not start two of them. */}
+          <SubmitButton
+            pendingLabel="Starting…"
             // Same phone-only bump as the license Verify button next to it
             // (PublicProfileForm.tsx): 44px below sm, untouched from sm up.
-            className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-4 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
+            className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-60 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-4 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
           >
             Start my background check
-          </button>
+          </SubmitButton>
         </form>
       ) : (
         <p className="text-xs text-stone-500 dark:text-stone-400">

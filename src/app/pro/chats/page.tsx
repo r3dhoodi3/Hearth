@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
+import { isUnreadSince } from "@/lib/unread";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import AskHearthRow from "@/components/AskHearthRow";
@@ -91,12 +92,17 @@ export default async function ProChatsPage(props: {
   }
 
   // A conversation is unread if its latest message is from the homeowner and is
-  // newer than the last time we viewed that thread.
+  // newer than the last time we viewed that thread. Compared with
+  // isUnreadSince (epoch millis), not a raw string `<` - this was the one
+  // page still comparing a JS-built seen timestamp ("...Z") against a
+  // Postgres-returned created_at ("...+00:00") as plain strings, unlike the
+  // homeowner chats page and UnreadProvider.tsx, which both already went
+  // through epoch millis for the same format-mismatch reason. See
+  // src/lib/unread.ts.
   const isUnread = (leadId: string) => {
     const last = lastByLead.get(leadId);
     if (!last || last.sender_role !== "homeowner") return false;
-    const seenAt = seen[leadId];
-    return !seenAt || seenAt < last.created_at;
+    return isUnreadSince(seen[leadId], last.created_at);
   };
 
   // Sort: conversations with the most recent message first, then newest leads.

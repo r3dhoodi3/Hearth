@@ -47,6 +47,12 @@ export type CurrentWeather = {
   // this field existed will not carry it; dayLabel falls back to weekday
   // names rather than guessing which row is today.
   today?: string;
+  // The IANA zone Open-Meteo geocoded for this home (its `timezone=auto`
+  // response field), so the strip's clock can show the home's real local
+  // time instead of always assuming the launch area's zone. Null when the
+  // upstream lookup didn't return one; timeZoneForProperty falls back to a
+  // state guess, then the launch area's zone, in that case.
+  timezone: string | null;
   daily: DailyForecast[];
 };
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { hasPlus } from "@/lib/subscription";
+import { getPlusTier } from "@/lib/subscription";
 import { countAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { readJsonBounded } from "@/lib/boundedBody";
@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
   // purpose: it is a non-counting READ of the same window, so it still refuses
   // cheaply once some OTHER tool route has already burst-limited this caller,
   // and it never bumps the counter itself.
-  const { overLimit, reason } = await countAiUsage(user.id, await hasPlus(), {
+  const { overLimit, reason } = await countAiUsage(user.id, await getPlusTier(), {
     burst: false,
   });
   if (overLimit) {

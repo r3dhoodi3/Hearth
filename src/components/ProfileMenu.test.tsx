@@ -93,4 +93,14 @@ describe("ProfileMenu side switch", () => {
     const button = screen.getByRole("button", { name: "Switch to your business" });
     expect(button).not.toBeDisabled();
   });
+
+  // The avatar trigger is padded for a mouse (py-1). The phone-only min
+  // height is what holds it at the 44px thumb minimum; jsdom applies no CSS,
+  // so the class is the thing to assert. max-sm: leaves desktop as it was.
+  it("keeps the account menu trigger at 44px on a phone", () => {
+    render(<ProfileMenu name="Jamie" links={[]} />);
+    expect(screen.getByLabelText("Account menu for Jamie").className).toContain(
+      "max-sm:min-h-11"
+    );
+  });
 });

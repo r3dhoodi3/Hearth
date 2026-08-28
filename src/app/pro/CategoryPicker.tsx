@@ -75,9 +75,13 @@ export default function CategoryPicker({
         );
       })}
 
-      {/* Full-width "Other". Describe a service not listed above. */}
+      {/* Full-width "Other". Describe a service not listed above. Label
+          sits above the input on a phone (max-sm:) rather than sharing its
+          row: at 390px a typed value scrolled past the "Other" chip and
+          rendered as if clipped under it. Desktop keeps the original
+          side-by-side row, unchanged. */}
       <div
-        className={`col-span-2 flex items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${
+        className={`col-span-2 flex flex-col gap-1 rounded-xl border px-3 py-2 transition-colors sm:flex-row sm:items-center sm:gap-3 sm:py-3 ${
           otherActive
             ? "border-bark-500 bg-bark-50 ring-1 ring-bark-500 dark:border-bark-400 dark:bg-bark-900/40 dark:ring-bark-400"
             : "border-stone-200 bg-white dark:border-white/10 dark:bg-stone-800"
@@ -94,10 +98,8 @@ export default function CategoryPicker({
           type="text"
           value={other}
           onChange={(e) => setOther(e.target.value)}
-          // Short on purpose: the longer version was cut off mid-word at
-          // 390px, where this input shares its row with the "Other" label.
           placeholder="Describe your service"
-          className="min-w-0 flex-1 border-0 bg-transparent text-base text-stone-700 placeholder:text-stone-500 focus:outline-none focus:ring-0 sm:text-sm dark:text-stone-200 dark:placeholder:text-stone-500"
+          className="min-w-0 flex-1 border-0 bg-transparent text-base text-stone-700 placeholder:text-stone-500 focus:outline-none focus:ring-0 max-sm:min-h-[44px] sm:text-sm dark:text-stone-200 dark:placeholder:text-stone-500"
         />
       </div>
 

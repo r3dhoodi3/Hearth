@@ -13,12 +13,57 @@ import { AI_GLOBAL_DAILY_LIMIT, AI_GLOBAL_BUCKET } from "@/lib/constants";
 // spendable on document scans, nor drained by them.
 export const DAILY_LIMIT_FREE = 25;
 export const DAILY_LIMIT_PLUS = 250;
+// The 3-day trial's own tool budget. Well past the free 25 (a trialer can scan
+// their whole document drawer and an inspection report on day one and never
+// feel it), well under the paid 250, for the reason spelled out on
+// ASK_DAILY_TRIAL below: a trial costs nothing to start and nothing to start
+// again from a fresh email.
+export const DAILY_LIMIT_TRIAL = 60;
 
 // The homeowner chat's OWN daily bucket. Free is a taste, not a product:
 // three text questions a day, no photos (the vision calls are the expensive
 // ones). Plus gets 15 a day with photos.
 export const ASK_DAILY_FREE = 3;
 export const ASK_DAILY_PLUS = 15;
+// The trial sits between them, with photos allowed. A 3-day trial exists to
+// show what Plus feels like, not to hand the full ceiling to an account that
+// costs nothing to create: 8 is well over double the free allowance and more
+// than anyone asks in an evening, so a real homeowner trying Plus never
+// notices the gap, while a throwaway account cannot farm 15 vision calls a day
+// for three days. MIRRORED by TRIAL_ASK_PER_DAY in src/lib/constants.ts (which
+// the client-side /plus card reads), and src/lib/constants.test.ts fails if the
+// two ever drift.
+export const ASK_DAILY_TRIAL = 8;
+
+// Which allowance a caller gets. Not the same question as hasPlus(): see
+// PlusTier in src/lib/subscription.ts, which is where these strings come from.
+// Declared here rather than imported so this module keeps its short dependency
+// list (subscription.ts pulls in Stripe and the request-scoped Supabase
+// client, neither of which a counter should need).
+export type AiTier = "free" | "trialing" | "paid";
+
+// Callers that already know the tier pass it straight in. The older boolean
+// call sites (every pro-side route, which has its own membership and its own
+// trial) keep their exact meaning: true was always "the Plus ceiling".
+export function toAiTier(plan: AiTier | boolean): AiTier {
+  if (plan === true) return "paid";
+  if (plan === false) return "free";
+  return plan;
+}
+
+// The two ceilings, as pure functions of the tier, so the three-way resolution
+// is testable without a database.
+export function askDailyLimitFor(tier: AiTier): number {
+  if (tier === "paid") return ASK_DAILY_PLUS;
+  if (tier === "trialing") return ASK_DAILY_TRIAL;
+  return ASK_DAILY_FREE;
+}
+
+export function toolDailyLimitFor(tier: AiTier): number {
+  if (tier === "paid") return DAILY_LIMIT_PLUS;
+  if (tier === "trialing") return DAILY_LIMIT_TRIAL;
+  return DAILY_LIMIT_FREE;
+}
 
 // Burst limits, on top of the daily cap. The daily cap alone still lets a
 // script fire its whole allowance in two seconds, and the global bucket below
@@ -76,7 +121,9 @@ export type AiLimitReason =
 // instead of letting the wall arrive with no warning. Nothing gates on it.
 export async function countAiUsage(
   userId: string,
-  isPlus: boolean,
+  // Tier or the older boolean (see toAiTier). A trialing caller gets
+  // DAILY_LIMIT_TRIAL rather than the full paid ceiling.
+  plan: AiTier | boolean,
   // The two chat routes run these same two checks themselves, in their own
   // order and with their own copy, so they opt out here rather than being
   // counted twice. Every other caller gets them for free, which is the point:
@@ -90,7 +137,9 @@ export async function countAiUsage(
   remaining: number | null;
   dailyLimit: number;
 }> {
-  const dailyLimit = isPlus ? DAILY_LIMIT_PLUS : DAILY_LIMIT_FREE;
+  const tier = toAiTier(plan);
+  const isPlus = tier !== "free";
+  const dailyLimit = toolDailyLimitFor(tier);
   const admin = createAdminClient();
   let remaining: number | null = null;
 
@@ -207,7 +256,9 @@ export async function countAiUsage(
 // rather than hand out unmetered access to a paid model.
 export async function countAskUsage(
   userId: string,
-  isPlus: boolean
+  // Tier or the older boolean (see toAiTier). "trialing" gets ASK_DAILY_TRIAL:
+  // photos and a real Plus-sized allowance, but not the paid ceiling.
+  plan: AiTier | boolean
 ): Promise<{
   overLimit: boolean;
   reason: AiLimitReason | null;
@@ -221,7 +272,9 @@ export async function countAskUsage(
   // spent. Captured once, up front, and threaded through.
   windowStart: string;
 }> {
-  const dailyLimit = isPlus ? ASK_DAILY_PLUS : ASK_DAILY_FREE;
+  const tier = toAiTier(plan);
+  const isPlus = tier !== "free";
+  const dailyLimit = askDailyLimitFor(tier);
   const admin = createAdminClient();
   const bucket = askBucket(userId);
   const windowStart = askWindowStart();

@@ -45,7 +45,7 @@ function DisputeLicenseButton() {
       type="submit"
       formAction={licenseDisputeAction}
       disabled={pending}
-      className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
+      className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 max-sm:min-h-11 max-sm:px-4 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
     >
       {pending && <InlineSpinner size={12} />}
       Send dispute
@@ -163,7 +163,7 @@ export default function PublicProfileForm({
       <div className="relative h-32 bg-stone-100 sm:h-40 dark:bg-stone-700">
         <button
           type="button"
-          className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-600 shadow-sm hover:bg-stone-50 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+          className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-600 shadow-sm hover:bg-stone-50 max-sm:min-h-11 max-sm:px-4 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
@@ -420,12 +420,11 @@ export default function PublicProfileForm({
                         </>
                       ) : (
                         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                          Automatic license checks currently cover California
-                          (CSLB) licenses only, so yours stays on file as-is.
-                          State You Serve is already set to California for
-                          you, so if it is a CSLB license, save your changes
-                          and then verify. You can keep applying to jobs
-                          meanwhile.
+                          Automatic license checks only cover California (CSLB)
+                          right now, so yours stays on file as-is. State You
+                          Serve is already set to California, if it&apos;s a
+                          CSLB license, save and then verify. You can keep
+                          applying to jobs while you wait.
                         </p>
                       ))}
                   </>

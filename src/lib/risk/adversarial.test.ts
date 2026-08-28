@@ -696,7 +696,12 @@ describe("the decision table", () => {
   });
 
   it("treats the top band as a logging event", () => {
-    expect(decisionSrc).toContain('console.error(\n        "[risk] high"');
+    // Whitespace-tolerant on purpose. What this pins is that the high band is
+    // logged with console.error, not the indentation of the call - that broke
+    // once already when trialDecision's body was lifted out of a try block
+    // (the render-path decision cache), which dedented these lines by two
+    // columns without changing a thing about what they do.
+    expect(decisionSrc).toMatch(/console\.error\(\s*"\[risk\] high"/);
   });
 
   it("ships in log-only mode by default", () => {

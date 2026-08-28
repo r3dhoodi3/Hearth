@@ -22,6 +22,7 @@ export default async function ProPrivacyRightsPage() {
       profileHref="/pro/profile"
       profileLabel="Edit business profile"
       contact={FOUNDER.email}
+      blocksHref="/pro/blocks"
     />
   );
 }

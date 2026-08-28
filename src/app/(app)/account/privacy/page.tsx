@@ -21,6 +21,7 @@ export default async function PrivacyRightsPage() {
       profileHref="/account"
       profileLabel="Edit profile"
       contact={FOUNDER.email}
+      blocksHref="/account/blocks"
     />
   );
 }

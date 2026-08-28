@@ -32,8 +32,8 @@ export default function ChooseApplicantButton({
   return (
     <div className="flex flex-col items-end gap-2">
       <p className="max-w-[14rem] text-right text-xs text-stone-500 dark:text-stone-400">
-        Choosing {contractorName} is permanent: every other applicant is
-        declined and can&apos;t be picked later.
+        Choosing {contractorName} can&apos;t be undone: every other applicant
+        is declined and can&apos;t be picked later.
       </p>
       <div className="flex gap-2">
         <button

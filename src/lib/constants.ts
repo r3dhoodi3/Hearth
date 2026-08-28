@@ -2,6 +2,14 @@
 
 
 // =============================================================================
+// APPLE SIGN IN: hidden 2026-08-28 at the owner's request so a fresh account
+// can be created and onboarding can be seen without hitting the Apple button.
+// MUST be turned on (set NEXT_PUBLIC_APPLE_SIGN_IN=on in Vercel) before the
+// App Store build because guideline 4.8 requires it alongside Google sign-in.
+// =============================================================================
+export const APPLE_SIGN_IN_ENABLED = process.env.NEXT_PUBLIC_APPLE_SIGN_IN === "on";
+
+// =============================================================================
 // COLD START: launch-phase liquidity levers.
 //
 // While the marketplace is young, both sides of it are opened up to build
@@ -546,6 +554,17 @@ export const PLUS_INCLUDED_HOMES = 5;
 // aiUsage.ts's source and fails if the two ever disagree, so the mirror can
 // never quietly drift.
 export const PLUS_ASK_PER_DAY = 15;
+
+// Ask Hearth questions a day during the 3-day Plus trial, with photos. Mirrors
+// ASK_DAILY_TRIAL in src/lib/aiUsage.ts for exactly the reason above, and
+// src/lib/constants.test.ts fails if the two drift.
+//
+// Deliberately under PLUS_ASK_PER_DAY. A trial is there to show what Plus
+// feels like, not to hand the full ceiling to an account that costs nothing to
+// create and can be created again from a fresh email. Eight is more than
+// double the free allowance and more than anybody asks in one evening, so a
+// homeowner genuinely trying Plus never runs into it.
+export const TRIAL_ASK_PER_DAY = 8;
 
 // Pay-per-extra-home add-on (Plus members only). The ONE place the add-on
 // pricing lives, so the /plus "More homes" UI, the setExtraHomesAction server

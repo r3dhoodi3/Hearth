@@ -644,8 +644,8 @@ export default async function ProBusinessPage() {
             <span className="text-stone-500 dark:text-stone-400">({pendingApps.length})</span>
           </h2>
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            Ghost protection: a fee comes back automatically as wallet credit
-            if the homeowner never responds.
+            Ghost protection: if the homeowner never responds, your fee comes
+            back automatically as wallet credit.
           </p>
         </div>
         {pendingApps.length === 0 ? (

@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
+import { hasAuthCookie } from "@/lib/authCookie";
 import { requestOrigin } from "@/lib/requestOrigin";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
@@ -95,9 +96,7 @@ export async function updateSession(request: NextRequest) {
   const authUnreachable =
     authError != null &&
     (authError.name === "AuthRetryableFetchError" || authError.status === 0);
-  const hasAuthCookies = request.cookies
-    .getAll()
-    .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
+  const hasAuthCookies = hasAuthCookie(request.cookies.getAll());
   if (authUnreachable && hasAuthCookies && isReadMethod(request.method)) {
     return response;
   }
@@ -150,6 +149,7 @@ const GUARDED_SEGMENTS = new Set([
   "emergency",
   "feedback",
   "forecast",
+  "home-details",
   "home-report",
   "inspection",
   "issues",
@@ -298,6 +298,15 @@ export function isPublicPath(path: string): boolean {
     // as successful while nothing executed. The secret check inside each
     // route remains the real gate.
     path.startsWith("/api/cron/") ||
+    // Uptime probe (src/app/api/health): fetched by an external monitor that
+    // has no session and does not follow redirects meaningfully. WITHOUT this
+    // entry the middleware 307s it to /signin, and a monitor that DOES follow
+    // the redirect scores the sign-in page's HTML 200 as "healthy" while the
+    // database is unreachable - the exact outage this endpoint exists to
+    // catch. The route reads one anon-visible row and returns a status
+    // category only; it exposes nothing a logged-out browser cannot already
+    // see.
+    path === "/api/health" ||
     // The embeddable rating widget is fetched by THIRD-PARTY sites (a pro's
     // own website embeds it), so there is never a session on the request. It
     // serves aggregate-only public data by design.

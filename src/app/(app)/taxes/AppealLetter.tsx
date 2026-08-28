@@ -30,9 +30,9 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
         </h2>
         <p className="text-sm text-stone-600 dark:text-stone-300">
           Hearth Plus can draft a respectful appeal letter using your
-          home&apos;s facts, ready for you to review, fill in your parcel
-          number, and file with your county. You stay in control: Hearth
-          never files anything for you.
+          home&apos;s facts. Review it, fill in your parcel number, and file it
+          with your county. You stay in control, Hearth never files anything
+          for you.
         </p>
         <Link href="/plus?reason=tax" className="btn-primary inline-block">
           Unlock with Hearth Plus
@@ -91,11 +91,10 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
         Draft an appeal letter
       </h2>
       <p className="text-sm text-stone-600 dark:text-stone-300">
-        Hearth will draft a respectful, factual letter from your home&apos;s
-        details. Review it, fill in the placeholders like your parcel number,
-        and file it with your county yourself. Every county has its own form,
-        deadline, and process, so check your assessment notice for the exact
-        steps.
+        Hearth drafts a respectful, factual letter using your home&apos;s
+        details. Fill in the placeholders, like your parcel number, and file it
+        with your county. Every county has its own form and deadline, check
+        your assessment notice for the exact steps.
       </p>
 
       {!letter && (

@@ -55,7 +55,12 @@ import { LAUNCH_CITIES, LAUNCH_CITY_GROUPS } from "./launchCities";
 // so a pro who narrowed keeps their narrowing across an unrelated profile
 // save. Anything that isn't a launch city is ignored here, and
 // selectLaunchCities drops it server-side too, so a stale or hand-edited
-// value can never pre-check a city Hearth doesn't serve.
+// value can never pre-check a city Hearth doesn't serve. When "All" starts
+// checked (nothing stored, or every city stored - the onboarding draft
+// re-posts every city while a pro leaves "All" checked, so a resumed draft
+// hits this same path), opening the disclosure starts every box unchecked
+// rather than pre-checking all of them: there is no real narrowing to
+// restore in that case, only a genuine partial pick is.
 export default function LaunchCityCheckboxes({
   defaultCities = [],
   requireOne = true,
@@ -66,10 +71,18 @@ export default function LaunchCityCheckboxes({
   const initial = LAUNCH_CITIES.filter((city) =>
     defaultCities.some((c) => String(c).trim().toLowerCase() === city.toLowerCase())
   );
-  const [all, setAll] = useState(
-    initial.length === 0 || initial.length === LAUNCH_CITIES.length
+  // Nothing stored and everything stored both read as "All", collapsed. In
+  // neither case is `initial` a pro's actual narrowing, so the specific-city
+  // list underneath the disclosure must not seed from it: opening the
+  // disclosure always starts from zero in these two cases, never from every
+  // box pre-checked. Only a genuine partial pick (some but not all cities)
+  // is a narrowing worth restoring when the disclosure opens.
+  const isFullOrEmpty =
+    initial.length === 0 || initial.length === LAUNCH_CITIES.length;
+  const [all, setAll] = useState(isFullOrEmpty);
+  const [checked, setChecked] = useState<readonly string[]>(
+    isFullOrEmpty ? [] : initial
   );
-  const [checked, setChecked] = useState<readonly string[]>(initial);
   const noneChecked = requireOne && !all && checked.length === 0;
 
   const rowClass =
@@ -101,7 +114,7 @@ export default function LaunchCityCheckboxes({
           onClick={() => setAll(false)}
           className="mt-1 inline-flex items-center py-1 text-sm text-bark-700 underline underline-offset-2 hover:text-bark-800 max-sm:min-h-[44px] max-sm:text-base dark:text-stone-300"
         >
-          Choose specific cities instead
+          Pick specific cities instead
         </button>
       ) : (
         <div className="mt-2 space-y-4">

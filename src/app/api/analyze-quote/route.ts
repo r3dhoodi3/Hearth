@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { hasPlus } from "@/lib/subscription";
+import { getPlusTier } from "@/lib/subscription";
 import { countAiUsage, addAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { readJsonBounded } from "@/lib/boundedBody";
+import { QUOTE_TASTE_PAYWALL } from "@/lib/freeAiTaste";
 import { sendNotification } from "@/lib/notify";
 import {
   runTranscribe,
@@ -95,7 +96,11 @@ export async function POST(req: NextRequest) {
   // analyses. Only the one request that wins the claim proceeds; the rest get
   // the same 403 as before. If this request never produces an analysis, the
   // claim is refunded below so a blurry photo still doesn't burn the credit.
-  const isPlus = await hasPlus();
+  // The tier, not the boolean: the free-taste claim below only cares whether
+  // this is a free account, but the daily ceiling further down gives a trial
+  // its own, smaller budget - see PlusTier in src/lib/subscription.ts.
+  const tier = await getPlusTier();
+  const isPlus = tier !== "free";
   let claimedFreeCredit = false;
   if (!isPlus) {
     try {
@@ -114,7 +119,17 @@ export async function POST(req: NextRequest) {
       claimedFreeCredit = false;
     }
     if (!claimedFreeCredit) {
-      return NextResponse.json({ error: "plus_required" }, { status: 403 });
+      // The refusal carries the SAME sentence QuoteAnalyzer renders in place
+      // of the form, so the cold path and the warm path say the same fair
+      // thing. `error: "plus_required"` stays for any older client.
+      return NextResponse.json(
+        {
+          error: "plus_required",
+          message: QUOTE_TASTE_PAYWALL.message,
+          link: QUOTE_TASTE_PAYWALL.link,
+        },
+        { status: 403 }
+      );
     }
   }
 
@@ -192,7 +207,7 @@ export async function POST(req: NextRequest) {
   // below, however many model calls it ends up making.
   const { overLimit, reason: limitReason } = await countAiUsage(
     user.id,
-    isPlus
+    tier
   );
   if (overLimit) {
     await refundFreeCredit();

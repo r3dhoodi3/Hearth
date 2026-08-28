@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getSides } from "@/lib/contractor";
+import { cookies } from "next/headers";
+import { hasAuthCookie } from "@/lib/authCookie";
+import { getVerifiedUser } from "@/lib/auth";
+import { isContractor } from "@/lib/contractor";
 import {
   FOUNDER,
   LEAD_TIER_FEES,
@@ -68,22 +70,50 @@ export const metadata: Metadata = {
 // behavior (lead fee shown up front, aging markdowns, pay-per-apply wallet),
 // so keep copy in sync with /pro and leadPricing.ts if those change.
 //
-// STAYS DYNAMIC, and not because of the root layout (that no longer reads
-// cookies - see src/app/layout.tsx). Three independent per-request reads live
-// in the body below: auth.getUser() plus getSides() to bounce a signed-in
-// contractor straight to /pro, and searchParams.ref to thread a referral code
-// into the signup link. The redirect is the important one: prerendering this
-// page would land contractors on the marketing pitch instead of their leads.
-// No revalidate export here - it would be a no-op against those reads, and
+// STAYS DYNAMIC, and unlike /guides and the two city pages (both of which just
+// moved to static, see src/components/SessionCta.tsx) it cannot be made static
+// without changing what the page DOES. Two independent per-request reads are
+// load-bearing here:
+//
+//   1. the session, to bounce a signed-in contractor straight to /pro. This is
+//      not a label like the guides header was - it is a redirect, and
+//      prerendering it would land contractors on the marketing pitch instead
+//      of their leads (or flash the pitch and then bounce, if the redirect
+//      moved to the client).
+//   2. searchParams.ref, which threads a referral code into the signup link.
+//      Reading searchParams in a page opts the route out of prerendering on
+//      its own, so even removing (1) would leave this route dynamic until the
+//      whole CTA moved into a client component reading useSearchParams.
+//
+// So no revalidate export: it would be a no-op against those reads, and
 // force-static would silently break the redirect rather than fail loudly.
+//
+// WHAT DID GET CHEAPER. For an anonymous visitor - the overwhelming majority
+// here - this now does no auth work whatsoever: the cookie-name check below
+// answers "no session" without building a Supabase client at all. (Even the
+// old path made no network call for them, since GoTrue answers a getUser()
+// with no session cookie locally, but it still constructed a client and drove
+// its initialize/lock machinery for an answer that was already knowable.) For
+// a SIGNED-IN visitor it used to cost two full auth round trips (this page's
+// own auth.getUser(), then a second one inside getCurrentContractor() under
+// getSides()) plus a properties count query. It now costs one:
+//   - getVerifiedUser() is the same live check, React-cache()-wrapped, so
+//     getCurrentContractor() underneath shares this request's single
+//     verification instead of opening its own.
+//   - isContractor() replaces (await getSides()).hasPro. They answer the
+//     identical question off the identical company row (getSides derives
+//     hasPro as `contractor !== null`), but getSides ALSO runs hasHomeSide()'s
+//     `count` over properties, and nothing on this page asks about homes.
 export default async function ProsLanding(props: {
   searchParams?: Promise<{ ref?: string }>;
 }) {
   const searchParams = await props.searchParams;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Cookie names first (hasAuthCookie, src/lib/authCookie.ts): a request with
+  // no Supabase auth cookie has no session to find, so it skips the client and
+  // the auth call entirely. Same short-circuit, same reasoning, as the landing
+  // page - and like there, it can only skip work, never grant anything.
+  const signedInPossible = hasAuthCookie((await cookies()).getAll());
+  const user = signedInPossible ? await getVerifiedUser() : null;
 
   // Pros go straight to their leads. Everyone else, including signed-in
   // homeowners, can read the pitch: bouncing them to the dashboard made this
@@ -91,7 +121,7 @@ export default async function ProsLanding(props: {
   // company row, not the role stamp - someone whose preferred side is
   // contractor but who never finished setup should read the pitch, not be
   // thrown into an empty /pro.
-  if (user && (await getSides()).hasPro) {
+  if (user && (await isContractor())) {
     redirect("/pro");
   }
 
