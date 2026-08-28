@@ -120,6 +120,11 @@ export default function OnboardingForm({
   // aria-activedescendant, so a screen reader announces the option the sighted
   // user sees highlighted.
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  // A suggest request finished and had nothing to offer. Distinct from
+  // `suggestions.length === 0`, which is also true before the first request
+  // and while one is in flight - the hint below must not flash on during
+  // either. Reset to false the moment the box changes again.
+  const [suggestEmpty, setSuggestEmpty] = useState(false);
   // The city and state from a picked suggestion, used only as the fallback
   // default for the optional City/State boxes on the ready step when the
   // records lookup didn't return them. The lookup's own values win whenever
@@ -305,6 +310,9 @@ export default function OnboardingForm({
   // convenience over a free third-party geocoder, and the address has always
   // been typeable by hand.
   useEffect(() => {
+    // Whatever happens below, the previous answer is stale the moment the box
+    // changes: the hint must never outlive the text it was about.
+    setSuggestEmpty(false);
     if (step !== "address") {
       setSuggestions([]);
       setActiveSuggestion(-1);
@@ -342,11 +350,14 @@ export default function OnboardingForm({
           return;
         }
         const body = await res.json();
-        setSuggestions(
-          Array.isArray(body?.suggestions)
-            ? body.suggestions.slice(0, SUGGEST_LIMIT)
-            : []
-        );
+        const next = Array.isArray(body?.suggestions)
+          ? body.suggestions.slice(0, SUGGEST_LIMIT)
+          : [];
+        setSuggestions(next);
+        // A request that came back with nothing. Only this - not a timeout,
+        // not a 500, not an abort - earns the hint below, because only this
+        // means the geocoder actually looked and had no answer.
+        setSuggestEmpty(next.length === 0);
         setActiveSuggestion(-1);
       } catch {
         // Aborted by the next keystroke, or the network failed. Either way
@@ -671,6 +682,33 @@ export default function OnboardingForm({
   // over the locked fields of the ready step.
   const suggestOpen = step === "address" && suggestions.length > 0;
 
+  // Photon needs a house number. Asked for a bare street name it answers with
+  // centerlines and bus stops, every one of which mapPhotonResults drops for
+  // having no number - so a street-name-only query reliably shows an empty
+  // list, and an empty list with no explanation reads as "Hearth doesn't know
+  // my street". Say the one thing that fixes it. Only after a request has
+  // actually come back empty (suggestEmpty), and only while there is no digit
+  // in the box, so it never argues with someone who did type a number.
+  const needsHouseNumber =
+    step === "address" &&
+    suggestEmpty &&
+    !suggestOpen &&
+    street.trim().length >= MIN_SUGGEST_QUERY &&
+    !/\d/.test(street);
+
+  // The other half of the same empty-list moment: a query that DOES have a
+  // house number came back with nothing, meaning Photon just doesn't have
+  // that address on record (see the 2026-08-28 silent-address-swap comment
+  // on matchesQueryHouseNumber in src/lib/addressSuggest.ts - an empty list
+  // is the honest answer, not a bug). Say so, and say it's not a dead end:
+  // the typed line still goes to the county lookup on submit.
+  const noAddressMatch =
+    step === "address" &&
+    suggestEmpty &&
+    !suggestOpen &&
+    street.trim().length >= MIN_SUGGEST_QUERY &&
+    /\d/.test(street);
+
   return (
     <div className="card">
       {step !== "out_of_area" && (
@@ -855,6 +893,16 @@ export default function OnboardingForm({
                     </li>
                   ))}
                 </ul>
+              )}
+              {needsHouseNumber && (
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  Add a house number to see matches.
+                </p>
+              )}
+              {noAddressMatch && (
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  No match for that address. You can type it in and continue.
+                </p>
               )}
             </div>
             {/* Condos and townhomes. Without this the address model had no

@@ -126,7 +126,7 @@ const PRO_SLIDES: Slide[] = [
     title: "Ask Hearth for pros",
     lines: [
       "Your copilot for pricing a job, wording a quote, and deciding which lead is worth your morning.",
-      "It knows your trades, your area, and the jobs sitting in front of you.",
+      "Find it in Messages, pinned at the top, or from your account menu.",
     ],
   },
 ];

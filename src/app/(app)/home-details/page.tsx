@@ -29,6 +29,7 @@ export default async function HomeDetailsPage() {
       </p>
 
       <HomeDetailsForm
+        propertyType={property.property_type}
         yearBuilt={property.year_built}
         sqft={property.sqft}
         beds={property.beds}

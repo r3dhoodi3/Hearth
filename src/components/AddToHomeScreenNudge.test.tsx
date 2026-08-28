@@ -139,7 +139,20 @@ describe("AddToHomeScreenNudge", () => {
   // up mid-answer and covered the input. There is no global "request in
   // flight" signal to gate on instead, so the whole route is excluded on
   // both sides of the app.
-  it.each(["/ask", "/pro/ask", "/chats", "/pro/chats"])(
+  // Every route that mounts AskHearth, not just the two dedicated chat
+  // screens: Learn and Search embed the same chat inline (see
+  // src/app/(app)/learn/page.tsx and src/app/(app)/search/page.tsx), so its
+  // composer sits at the bottom of those pages too. /walkthrough is here for
+  // the same reason - it drives a flow from its own bottom controls.
+  it.each([
+    "/ask",
+    "/pro/ask",
+    "/chats",
+    "/pro/chats",
+    "/learn",
+    "/search",
+    "/walkthrough",
+  ])(
     "never shows on %s or a thread nested under it",
     async (path) => {
       mockPathname = path;

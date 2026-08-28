@@ -61,17 +61,31 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Add a client to the tracker, either typed in fresh or (with lead_id set)
 // from the Track button on a suggested lead.
+//
+// NO REDIRECT ON THIS FORM, on any path, success or failure: it is always
+// submitted from /pro/crm, so a redirect() back to the exact path the form is
+// already on is the same-path App Router footgun documented on the /pro/profile
+// save (../actions.ts, saveCompanyAction) - it can leave the route stuck on its
+// loading.tsx boundary instead of resolving back to the real page, which is
+// exactly what testers saw: "Adding..." stayed on screen and the list and the
+// "Your clients (0)" counter never updated until a manual reload.
+// revalidatePath() alone marks /pro/crm stale, which is what makes the next
+// render (still on this same action response, no navigation needed) pick up
+// the new row, the new counter, and the flash message - see FlashToast's own
+// comment for why a revalidate-only render is exactly what it is listening for.
 export async function addClientAction(formData: FormData) {
   const contractor = await assertContractor();
 
   const name = String(formData.get("client_name") ?? "").trim();
   if (!name) {
     await setFlash("A client name is required.", "error");
-    redirect("/pro/crm");
+    revalidatePath("/pro/crm");
+    return;
   }
   if (name.length > 80) {
     await setFlash("Client name must be 80 characters or fewer.", "error");
-    redirect("/pro/crm");
+    revalidatePath("/pro/crm");
+    return;
   }
 
   const stageRaw = String(formData.get("stage") ?? "lead");
@@ -80,13 +94,15 @@ export async function addClientAction(formData: FormData) {
   const noteRaw = String(formData.get("note") ?? "").trim();
   if (noteRaw.length > 1000) {
     await setFlash("Note must be 1,000 characters or fewer.", "error");
-    redirect("/pro/crm");
+    revalidatePath("/pro/crm");
+    return;
   }
 
   const followUp = parseFollowUp(formData.get("follow_up_on"));
   if (!followUp.ok) {
     await setFlash("That follow up date doesn't look right.", "error");
-    redirect("/pro/crm");
+    revalidatePath("/pro/crm");
+    return;
   }
 
   const supabase = await createClient();
@@ -99,22 +115,29 @@ export async function addClientAction(formData: FormData) {
   });
   if (error) {
     await setFlash("Couldn't add that client. Please try again.", "error");
-    redirect("/pro/crm");
+    revalidatePath("/pro/crm");
+    return;
   }
 
   await setFlash("Client added.");
   revalidatePath("/pro/crm");
-  redirect("/pro/crm");
 }
 
 // One tap from the auto suggestion list: creates a client row prefilled from a
 // lead the pro was already chosen for, so nothing new about the homeowner is
 // exposed here beyond what the pipeline already showed. This only ever copies
 // the visible display name, never homeowner_email or homeowner_phone.
+// Same same-path footgun as addClientAction above, and the same fix: this form
+// is always submitted from /pro/crm too, so every exit is a revalidate, never a
+// redirect back to the page it is already on.
 export async function trackLeadAction(formData: FormData) {
   const contractor = await assertContractor();
   const leadId = String(formData.get("lead_id") ?? "");
-  if (!leadId) redirect("/pro/crm");
+  if (!leadId) {
+    await setFlash("Couldn't track that one.", "error");
+    revalidatePath("/pro/crm");
+    return;
+  }
 
   const name =
     String(formData.get("client_name") ?? "").trim().slice(0, 80) || "Client";
@@ -135,7 +158,8 @@ export async function trackLeadAction(formData: FormData) {
     .maybeSingle();
   if (!ownLead) {
     await setFlash("That job isn't yours to track.", "error");
-    redirect("/pro/crm");
+    revalidatePath("/pro/crm");
+    return;
   }
 
   // A quick double click shouldn't create a second row for the same lead.
@@ -149,7 +173,8 @@ export async function trackLeadAction(formData: FormData) {
     .maybeSingle();
   if (already) {
     await setFlash("Already tracking that one.");
-    redirect("/pro/crm");
+    revalidatePath("/pro/crm");
+    return;
   }
 
   const { error } = await supabase.from("pro_clients").insert({
@@ -160,12 +185,12 @@ export async function trackLeadAction(formData: FormData) {
   });
   if (error) {
     await setFlash("Couldn't track that client. Please try again.", "error");
-    redirect("/pro/crm");
+    revalidatePath("/pro/crm");
+    return;
   }
 
   await setFlash("Client tracked.");
   revalidatePath("/pro/crm");
-  redirect("/pro/crm");
 }
 
 // Full contact and details save from the client detail page: name, phone,
@@ -177,44 +202,58 @@ export async function updateClientDetailsAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) redirect("/pro/crm");
 
-  const back = () => redirect(`/pro/crm/${id}`);
+  // NO REDIRECT ON THIS FORM either, on any exit: it is always submitted
+  // from /pro/crm/[id] (see the addClientAction comment above for the same
+  // App Router footgun on the list page). back() marks that same detail path
+  // stale so the next render - still this action's own response, no
+  // navigation needed - shows the flash and whatever was already typed.
+  // revalidatePath() does not stop execution the way redirect() used to, so
+  // every validation branch below now needs its own explicit `return`.
+  const back = () => revalidatePath(`/pro/crm/${id}`);
 
   const name = String(formData.get("client_name") ?? "").trim();
   if (!name) {
     await setFlash("A client name is required.", "error");
     back();
+    return;
   }
   if (name.length > 80) {
     await setFlash("Client name must be 80 characters or fewer.", "error");
     back();
+    return;
   }
 
   const phone = String(formData.get("phone") ?? "").trim();
   if (phone.length > 30) {
     await setFlash("Phone must be 30 characters or fewer.", "error");
     back();
+    return;
   }
 
   const email = String(formData.get("email") ?? "").trim();
   if (email.length > 120) {
     await setFlash("Email must be 120 characters or fewer.", "error");
     back();
+    return;
   }
   if (email && !EMAIL_PATTERN.test(email)) {
     await setFlash("That email doesn't look right.", "error");
     back();
+    return;
   }
 
   const address = String(formData.get("address") ?? "").trim();
   if (address.length > 200) {
     await setFlash("Address must be 200 characters or fewer.", "error");
     back();
+    return;
   }
 
   const estValue = parseEstValue(formData.get("est_value"));
   if (!estValue.ok) {
     await setFlash(estValue.message ?? "That estimated value doesn't look right.", "error");
     back();
+    return;
   }
 
   const stageRaw = String(formData.get("stage") ?? "lead");
@@ -224,6 +263,7 @@ export async function updateClientDetailsAction(formData: FormData) {
   if (!followUp.ok) {
     await setFlash("That follow up date doesn't look right.", "error");
     back();
+    return;
   }
 
   const supabase = await createClient();
@@ -244,12 +284,12 @@ export async function updateClientDetailsAction(formData: FormData) {
   if (error) {
     await setFlash("Couldn't save your changes. Please try again.", "error");
     back();
+    return;
   }
 
   await setFlash("Client updated.");
   revalidatePath("/pro/crm");
   revalidatePath(`/pro/crm/${id}`);
-  back();
 }
 
 export async function deleteClientAction(formData: FormData) {
@@ -277,6 +317,12 @@ export async function deleteClientAction(formData: FormData) {
 // so its ownership is checked explicitly before the insert rather than
 // trusting the form: RLS backs this too, but a friendly flash beats a raw
 // database error if someone tampers with the id.
+//
+// This form, too, is always submitted from /pro/crm/[id] - so, same as
+// updateClientDetailsAction above, every exit that stays on that page is a
+// revalidate, never a redirect back to the page it's already on. Only the
+// "this client isn't real / isn't yours" branches actually leave the page,
+// because there is nowhere on it left to show.
 export async function addNoteAction(formData: FormData) {
   const contractor = await assertContractor();
   const clientId = String(formData.get("client_id") ?? "");
@@ -285,11 +331,13 @@ export async function addNoteAction(formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   if (!body) {
     await setFlash("A note can't be empty.", "error");
-    redirect(`/pro/crm/${clientId}`);
+    revalidatePath(`/pro/crm/${clientId}`);
+    return;
   }
   if (body.length > 1000) {
     await setFlash("Note must be 1,000 characters or fewer.", "error");
-    redirect(`/pro/crm/${clientId}`);
+    revalidatePath(`/pro/crm/${clientId}`);
+    return;
   }
 
   const supabase = await createClient();
@@ -306,13 +354,13 @@ export async function addNoteAction(formData: FormData) {
     .insert({ client_id: clientId, body });
   if (error) {
     await setFlash("Couldn't add that note. Please try again.", "error");
-    redirect(`/pro/crm/${clientId}`);
+    revalidatePath(`/pro/crm/${clientId}`);
+    return;
   }
 
   await setFlash("Note added.");
   revalidatePath(`/pro/crm/${clientId}`);
   revalidatePath("/pro/crm");
-  redirect(`/pro/crm/${clientId}`);
 }
 
 export async function deleteNoteAction(formData: FormData) {
@@ -337,10 +385,10 @@ export async function deleteNoteAction(formData: FormData) {
     .eq("client_id", clientId);
   if (error) {
     await setFlash("Couldn't remove that note. Please try again.", "error");
-    redirect(`/pro/crm/${clientId}`);
+    revalidatePath(`/pro/crm/${clientId}`);
+    return;
   }
 
   await setFlash("Note removed.");
   revalidatePath(`/pro/crm/${clientId}`);
-  redirect(`/pro/crm/${clientId}`);
 }

@@ -78,6 +78,11 @@ function makeStream() {
   return { push, response };
 }
 
+// The canned opener the chat starts every conversation with; it is part of the
+// saved list, so the order assertions below account for it.
+const GREETING =
+  "Hi, I'm Hearth. If you have any questions about your home, feel free to ask.";
+
 const delta = (text: string) => `${JSON.stringify({ delta: text })}\n`;
 const done = (payload: Record<string, unknown>) =>
   `${JSON.stringify({ done: true, ...payload })}\n`;
@@ -257,6 +262,37 @@ describe("a streamed answer", () => {
     expect(last.partial).toBe(true);
   });
 
+  it("shows a cut-off notice on a partial answer and withholds its actions until asked again", async () => {
+    const stream = makeStream();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.response));
+
+    render(<AskHearth fill />);
+    await ask("Should I call someone?");
+
+    // The OPTIONS block is complete - only the stream itself is cut short.
+    stream.push(
+      delta(
+        'Probably worth a look.\n\n[[OPTIONS]]{"options":["Yes","No"]}[[/OPTIONS]]'
+      )
+    );
+    stream.push("end");
+    await settle();
+
+    expect(screen.getByText(/Probably worth a look\./)).toBeInTheDocument();
+    expect(
+      screen.getByText("This answer was cut off. Ask again for the full one.")
+    ).toBeInTheDocument();
+    // A partial answer's machine-readable block never turns into tappable
+    // actions, even though the JSON itself finished: the reply may still
+    // change once it's asked again in full.
+    expect(
+      screen.queryByRole("button", { name: "Yes" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "No" })
+    ).not.toBeInTheDocument();
+  });
+
   it("says so plainly when the connection drops before a single word, without persisting the apology", async () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
@@ -286,6 +322,236 @@ describe("a streamed answer", () => {
       role: "user",
       content: "Anything there?",
     });
+  });
+});
+
+// THE SECOND QUESTION. One finished answer, then another question in the same
+// conversation. The reported regression: sending Q2 wiped Q1's answer off the
+// transcript and out of localStorage, so a reload came back with two questions,
+// no answers, and a "That took too long" orphan card.
+describe("a second question in the same conversation", () => {
+  it("keeps the first answer on screen and on disk", async () => {
+    const first = makeStream();
+    const second = makeStream();
+    const streams = [first.response, second.response];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => streams.shift() ?? second.response)
+    );
+
+    render(<AskHearth fill />);
+    await ask("Why is my water heater loud?");
+
+    first.push(delta("Sediment in the tank."));
+    first.push(done({ answer: "Sediment in the tank." }));
+    await settle();
+
+    expect(screen.getByText("Sediment in the tank.")).toBeInTheDocument();
+
+    const storedAfterFirst = JSON.parse(
+      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+    );
+    expect(storedAfterFirst.map((m: any) => m.content)).toEqual([
+      GREETING,
+      "Why is my water heater loud?",
+      "Sediment in the tank.",
+    ]);
+
+    // Q2 goes out. Nothing about it touches Q1's answer.
+    await ask("How do I flush it?");
+    await settle();
+
+    // (a) the first answer is still in the transcript while Q2 is thinking
+    expect(screen.getByText("Sediment in the tank.")).toBeInTheDocument();
+    expect(screen.getByText("How do I flush it?")).toBeInTheDocument();
+    // ...and the unanswered-orphan card is NOT shown: this question is in
+    // flight, not abandoned.
+    expect(
+      screen.queryByText("That took too long. Try asking again.")
+    ).not.toBeInTheDocument();
+
+    // (b) localStorage holds Q1 question, Q1 answer, Q2 question
+    const midFlight = JSON.parse(
+      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+    );
+    expect(midFlight.map((m: any) => m.content)).toEqual([
+      GREETING,
+      "Why is my water heater loud?",
+      "Sediment in the tank.",
+      "How do I flush it?",
+    ]);
+
+    second.push(delta("Attach a hose to the drain valve."));
+    second.push(done({ answer: "Attach a hose to the drain valve." }));
+    await settle();
+
+    // (c) both answers, in order, on screen and on disk
+    expect(screen.getByText("Sediment in the tank.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Attach a hose to the drain valve.")
+    ).toBeInTheDocument();
+
+    const stored = JSON.parse(
+      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+    );
+    expect(stored.map((m: any) => [m.role, m.content])).toEqual([
+      ["assistant", GREETING],
+      ["user", "Why is my water heater loud?"],
+      ["assistant", "Sediment in the tank."],
+      ["user", "How do I flush it?"],
+      ["assistant", "Attach a hose to the drain valve."],
+    ]);
+  });
+
+  it("rebuilds from the saved conversation when memory has fallen behind", async () => {
+    // The reported failure, forced: the in-memory conversation loses the
+    // finished answer while the saved one still has it. Whatever leaves the
+    // ref behind (a render that ran with older state, a lost race), the next
+    // question must not be built on the short list.
+    const first = makeStream();
+    const second = makeStream();
+    const streams = [first.response, second.response];
+    const bodies: string[][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: any) => {
+        bodies.push(
+          JSON.parse(init.body).messages.map((m: any) => m.content as string)
+        );
+        return streams.shift() ?? second.response;
+      })
+    );
+
+    render(<AskHearth fill />);
+    await ask("Why is my water heater loud?");
+    first.push(done({ answer: "Sediment in the tank." }));
+    await settle();
+
+    const key = "hearth_ask_chat:user-1";
+    const saved = window.localStorage.getItem(key) ?? "[]";
+    const withoutAnswer = JSON.parse(saved).filter(
+      (m: any) => m.content !== "Sediment in the tank."
+    );
+
+    // Push the chat back to the shorter list (this is what a storage re-sync
+    // does), then quietly restore the full one on disk without telling it.
+    // Memory is now behind disk by exactly one finished answer.
+    await act(async () => {
+      window.localStorage.setItem(key, JSON.stringify(withoutAnswer));
+      window.dispatchEvent(
+        new CustomEvent("hearth:ask-updated", { detail: { key } })
+      );
+    });
+    expect(
+      screen.queryByText("Sediment in the tank.")
+    ).not.toBeInTheDocument();
+    window.localStorage.setItem(key, saved);
+
+    await ask("How do I flush it?");
+    await settle();
+
+    // The answer is back in the transcript, in the request, and on disk.
+    expect(screen.getByText("Sediment in the tank.")).toBeInTheDocument();
+    expect(bodies[1]).toEqual([
+      "Why is my water heater loud?",
+      "Sediment in the tank.",
+      "How do I flush it?",
+    ]);
+    expect(
+      JSON.parse(window.localStorage.getItem(key) ?? "[]").map(
+        (m: any) => m.content
+      )
+    ).toEqual([
+      GREETING,
+      "Why is my water heater loud?",
+      "Sediment in the tank.",
+      "How do I flush it?",
+    ]);
+  });
+});
+
+// The answer is on screen for as long as it takes to write, and it used to be
+// nowhere else until the terminal line landed. Anything that re-read the store
+// inside that window - a reload, another instance of this chat on the page -
+// found the question with nothing under it.
+describe("an answer still being written", () => {
+  it("is saved as it grows, so a reload shows it instead of an orphan card", async () => {
+    const stream = makeStream();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.response));
+
+    const view = render(<AskHearth fill />);
+    await ask("What is that noise?");
+
+    stream.push(delta("It is probably the expansion tank."));
+    await settle();
+
+    // Mid-answer, with no terminal line yet: what is on screen is on disk.
+    const midStream = JSON.parse(
+      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+    );
+    expect(midStream[midStream.length - 1]).toMatchObject({
+      role: "assistant",
+      content: "It is probably the expansion tank.",
+      partial: true,
+    });
+
+    // The page goes away mid-answer and comes back.
+    view.unmount();
+    render(<AskHearth fill />);
+
+    expect(
+      await screen.findByText("It is probably the expansion tank.")
+    ).toBeInTheDocument();
+    // The conversation ends on an answer, so the unanswered-question card has
+    // no business here.
+    expect(
+      screen.queryByText("That took too long. Try asking again.")
+    ).not.toBeInTheDocument();
+  });
+});
+
+// localStorage is a few megabytes and this chat carries base64 photos. A write
+// that overflows it THROWS, and the old code swallowed that whole - so the
+// short questions fitted and were saved while the long answers between them
+// were silently dropped.
+describe("a full localStorage", () => {
+  it("sheds old history rather than losing the answer that just finished", async () => {
+    const realSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string
+    ) {
+      if (value.length > 2000) {
+        const err = new Error("QuotaExceededError");
+        err.name = "QuotaExceededError";
+        throw err;
+      }
+      realSetItem.call(this, key, value);
+    });
+
+    const stream = makeStream();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.response));
+
+    // A long opener stands in for the long history a real chat accumulates:
+    // the whole conversation no longer fits, only its newest turns do.
+    render(<AskHearth fill greeting={"a lot of history. ".repeat(200)} />);
+    await ask("Why is my water heater loud?");
+
+    stream.push(done({ answer: "Sediment in the tank." }));
+    await settle();
+
+    const stored = JSON.parse(
+      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+    );
+    // The oldest messages were shed to make room; the newest turn - the
+    // question AND its answer - is what survives.
+    expect(stored.map((m: any) => [m.role, m.content])).toEqual([
+      ["user", "Why is my water heater loud?"],
+      ["assistant", "Sediment in the tank."],
+    ]);
+
+    vi.restoreAllMocks();
   });
 });
 

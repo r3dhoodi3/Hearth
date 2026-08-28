@@ -13,7 +13,7 @@ import {
   LEAD_TIER_FEES,
   isMajorCategory,
 } from "@/lib/constants";
-import { Check } from "lucide-react";
+import { Check, ChevronRight, Sparkles } from "lucide-react";
 import Link from "next/link";
 import OpenChatButton from "@/components/OpenChatButton";
 import ChatDrawer from "@/components/ChatDrawer";
@@ -483,6 +483,34 @@ export default async function ProDashboard(
           nothing. */}
       <ClearOnboardingDraft userId={contractor.user_id ?? ""} />
 
+      {/* PHONE ONLY. The floating copilot dock is desktop-only
+          (ProAskHearthDock's hideOnPhone in pro/layout.tsx), so on a phone
+          the copilot otherwise lives only as a pinned row inside Messages -
+          a tester never found it there. Mirrors the homeowner dashboard's own
+          ask-hearth-card (src/app/(app)/dashboard/page.tsx), one compact row
+          above every number on this page. Desktop is untouched. */}
+      <Link
+        href="/pro/ask"
+        data-testid="ask-hearth-card"
+        className="card-link flex min-h-11 items-center gap-3 p-4 sm:hidden"
+      >
+        <span className="icon-chip">
+          <Sparkles className="h-5 w-5 text-hearth-700 dark:text-stone-300" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-stone-900 dark:text-stone-100">
+            Ask Hearth about pricing, quotes, or a lead
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-stone-500 dark:text-stone-400">
+            Your business copilot
+          </span>
+        </span>
+        <ChevronRight
+          className="h-5 w-5 shrink-0 text-stone-400 dark:text-stone-500"
+          aria-hidden="true"
+        />
+      </Link>
+
       <SetupChecklist items={setupItems} />
 
       {lowBalance && (
@@ -797,7 +825,7 @@ export default async function ProDashboard(
               homeowner picks someone else.{" "}
               <Link
                 href="/pro/billing"
-                className="underline hover:text-stone-600 dark:hover:text-stone-300"
+                className="underline hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:hover:text-stone-300"
               >
                 Details on Billing
               </Link>
@@ -842,7 +870,7 @@ export default async function ProDashboard(
                   Make your page worth picking:{" "}
                   <Link
                     href="/pro/profile"
-                    className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                    className="font-medium text-hearth-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
                   >
                     complete your public page
                   </Link>{" "}
@@ -859,7 +887,7 @@ export default async function ProDashboard(
                     expires after 60 days.{" "}
                     <Link
                       href="/pro/billing"
-                      className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                      className="font-medium text-hearth-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
                     >
                       Fund your wallet
                     </Link>{" "}

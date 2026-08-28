@@ -487,3 +487,193 @@ describe("OnboardingForm not-found address", () => {
     ).toBeNull();
   });
 });
+
+// The 2026-08-28 tester report, reproduced field for field.
+//
+// They typed "9042 Warner". The autocomplete offered ONE suggestion, "17091
+// Twain Lane" - an unrelated street, which is what Photon does when it cannot
+// place a house number - and they picked it. The county lookup then answered
+// with "3831 Warner Ave", a third address again. What they saw next was
+// "County record: 3831 Warner Ave" as a passive label, no "Keep mine / Use the
+// county record" panel at all, and by the time they reached the claim button
+// the street box itself read 3831 Warner Ave. Nobody ever asked them.
+//
+// That is the exact silent-overwrite this form was rebuilt to make impossible,
+// so it gets a test with those three real strings in it.
+describe("OnboardingForm county record disagrees with the picked address", () => {
+  const PICKED = "17091 Twain Lane";
+  const COUNTY = "3831 Warner Ave";
+
+  const COUNTY_FACTS = {
+    ...FACTS,
+    address_line1: COUNTY,
+    city: "Huntington Beach",
+    zip: "92649",
+  };
+
+  async function pickThenLookUp() {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        suggestions: [
+          {
+            line1: PICKED,
+            city: "Huntington Beach",
+            state: "CA" as const,
+            zip: "92649",
+          },
+        ],
+      }),
+    });
+    lookupParcelAction.mockResolvedValue({ ok: true, facts: COUNTY_FACTS });
+
+    render(<OnboardingForm />);
+    const street = screen.getByLabelText("Street address") as HTMLInputElement;
+    fireEvent.change(street, { target: { value: "9042 Warner" } });
+    // Exactly what a person does: tap the one row the list offers.
+    fireEvent.click(await screen.findByText(PICKED));
+    expect(street.value).toBe(PICKED);
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Your full name")).toBeInTheDocument()
+    );
+    return street;
+  }
+
+  it("asks which address they mean instead of swapping one in", async () => {
+    await pickThenLookUp();
+
+    // The panel, by its two buttons - the thing the tester never saw.
+    expect(
+      screen.getByRole("button", { name: "Keep mine" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Use the county record" })
+    ).toBeInTheDocument();
+    // And it names both addresses, so the choice is readable. (COUNTY also
+    // appears in the advisory "County record:" box above, which is why this
+    // matches the panel's own sentence rather than the address alone.)
+    expect(
+      screen.getByText(/isn't the address you picked/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(PICKED))).toBeInTheDocument();
+  });
+
+  it("leaves the picked line in the street box until they choose", async () => {
+    const street = await pickThenLookUp();
+    expect(street.value).toBe(PICKED);
+  });
+
+  it("swaps in the county line only when they ask for it", async () => {
+    const street = await pickThenLookUp();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use the county record" }));
+    expect(street.value).toBe(COUNTY);
+
+    // The panel goes once it has been answered: the street box IS the answer,
+    // so the two now agree and there is nothing left to ask. The box stays
+    // editable, which is the way back.
+    expect(screen.queryByRole("button", { name: "Keep mine" })).toBeNull();
+    expect(street.readOnly).toBe(false);
+  });
+
+  it("keeps their own line when they say so, and keeps asking", async () => {
+    const street = await pickThenLookUp();
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep mine" }));
+    expect(street.value).toBe(PICKED);
+    // Still standing, because keeping their own line does not make the two
+    // addresses agree - and claimPropertyAction runs the same comparison
+    // server-side, so the claim lands with none of that record's facts on it.
+    expect(
+      screen.getByRole("button", { name: "Use the county record" })
+    ).toBeInTheDocument();
+  });
+});
+
+// Photon needs a house number: asked for a bare street name it answers with
+// centerlines and bus stops, all of which mapPhotonResults drops for having no
+// number. So a street-name-only query reliably comes back empty, and an empty
+// list with nothing under it reads as "Hearth has never heard of my street".
+describe("OnboardingForm empty suggestion list", () => {
+  const HINT = "Add a house number to see matches.";
+
+  async function typeAndSettle(value: string) {
+    render(<OnboardingForm />);
+    const street = screen.getByLabelText("Street address") as HTMLInputElement;
+    fireEvent.change(street, { target: { value } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    return street;
+  }
+
+  it("says what to add when a street name alone finds nothing", async () => {
+    // fetchMock defaults to { suggestions: [] } (see the top of this file).
+    await typeAndSettle("Warner Avenue");
+    expect(await screen.findByText(HINT)).toBeInTheDocument();
+  });
+
+  it("stays quiet once a house number is in the box", async () => {
+    await typeAndSettle("9042 Warner");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it("stays quiet while there are suggestions to show", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        suggestions: [
+          {
+            line1: "9042 Warner Avenue",
+            city: "Huntington Beach",
+            state: "CA" as const,
+            zip: "92649",
+          },
+        ],
+      }),
+    });
+    await typeAndSettle("Warner Avenue");
+    await screen.findByRole("listbox");
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it("clears the moment the box changes again", async () => {
+    const street = await typeAndSettle("Warner Avenue");
+    await screen.findByText(HINT);
+    fireEvent.change(street, { target: { value: "Warner Avenu" } });
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  // The other half of the same empty-list moment: a query that already has a
+  // house number came back with nothing, which means Photon just doesn't
+  // have that address on record - not that the person did something wrong.
+  const NO_MATCH_HINT = "No match for that address. You can type it in and continue.";
+
+  it("says no match when a full address finds nothing", async () => {
+    // fetchMock defaults to { suggestions: [] } (see the top of this file).
+    await typeAndSettle("9042 Warner");
+    expect(await screen.findByText(NO_MATCH_HINT)).toBeInTheDocument();
+    // The two hints are mutually exclusive - this one has a house number.
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it("stays quiet on the no-match hint while there are suggestions to show", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        suggestions: [
+          {
+            line1: "9042 Warner Avenue",
+            city: "Huntington Beach",
+            state: "CA" as const,
+            zip: "92649",
+          },
+        ],
+      }),
+    });
+    await typeAndSettle("9042 Warner");
+    await screen.findByRole("listbox");
+    expect(screen.queryByText(NO_MATCH_HINT)).toBeNull();
+  });
+});

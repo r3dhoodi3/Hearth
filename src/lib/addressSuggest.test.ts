@@ -346,3 +346,110 @@ describe("photonStreetNames", () => {
     ).toEqual([]);
   });
 });
+
+// The 2026-08-28 silent address swap, with the real strings from the live
+// probe that found it.
+//
+// GET /api/address-suggest?q=9042%20Warner&zip=92649 answered with exactly one
+// suggestion - "3831 Warner Avenue" - because Photon does not say "no such
+// house number", it returns the nearest number it has on that street. The form
+// showed that single row, the tester tapped it, and the street box quietly
+// became 3831. Worse, the county record for 3831 Warner Ave then AGREED with
+// the picked line, so the "Keep mine / Use the county record" panel had
+// nothing to disagree about and never appeared. Nothing on any screen said the
+// house number had changed.
+describe("mapPhotonResults house-number substitution", () => {
+  const WARNER_3831 = feature({
+    housenumber: "3831",
+    street: "Warner Avenue",
+    city: "Huntington Beach",
+    postcode: "92649",
+  });
+  const WARNER_9042 = feature({
+    housenumber: "9042",
+    street: "Warner Avenue",
+    city: "Huntington Beach",
+    postcode: "92649",
+  });
+
+  it("does not offer a different house on the street they typed", () => {
+    expect(mapPhotonResults(body(WARNER_3831), SUGGEST_LIMIT, "9042 Warner")).toEqual(
+      []
+    );
+  });
+
+  it("offers the house they typed when the geocoder has it", () => {
+    expect(
+      mapPhotonResults(
+        body(WARNER_3831, WARNER_9042),
+        SUGGEST_LIMIT,
+        "9042 Warner"
+      )
+    ).toEqual([
+      {
+        line1: "9042 Warner Avenue",
+        city: "Huntington Beach",
+        state: "CA",
+        zip: "92649",
+      },
+    ]);
+  });
+
+  it("offers every number on the street while they are still typing the name", () => {
+    // No house number in the query yet, so there is nothing to contradict and
+    // every real address on that street is a useful offer.
+    expect(
+      mapPhotonResults(body(WARNER_3831, WARNER_9042), SUGGEST_LIMIT, "Warner Ave")
+    ).toHaveLength(2);
+  });
+
+  it("filters nothing when no query is passed", () => {
+    // The parameter is optional; a caller without the query in hand keeps the
+    // behavior it had before this filter existed.
+    expect(mapPhotonResults(body(WARNER_3831))).toHaveLength(1);
+  });
+
+  it("ignores case and spacing around the typed number", () => {
+    expect(
+      mapPhotonResults(body(WARNER_9042), SUGGEST_LIMIT, "  9042   warner ave ")
+    ).toHaveLength(1);
+  });
+
+  it("keeps a letter-suffixed unit whose digits match the query", () => {
+    // "9042A Warner Avenue" is a real unit at 9042, not a different house -
+    // exact string equality against the query rejected it for having a
+    // trailing letter.
+    const suffixed = feature({
+      housenumber: "9042A",
+      street: "Warner Avenue",
+      city: "Huntington Beach",
+      postcode: "92649",
+    });
+    expect(
+      mapPhotonResults(body(suffixed), SUGGEST_LIMIT, "9042 Warner")
+    ).toHaveLength(1);
+  });
+
+  it("keeps an OSM range value that starts at the queried number", () => {
+    // OSM sometimes carries a housenumber as a range ("9042-9044") rather
+    // than a single value. Exact string equality against "9042" rejected it.
+    const ranged = feature({
+      housenumber: "9042-9044",
+      street: "Warner Avenue",
+      city: "Huntington Beach",
+      postcode: "92649",
+    });
+    expect(
+      mapPhotonResults(body(ranged), SUGGEST_LIMIT, "9042 Warner")
+    ).toHaveLength(1);
+  });
+
+  it("keeps a full number while the query is still a leading prefix of it", () => {
+    // Mid-typing: the person has typed "904" so far, on the way to "9042".
+    // The full number on record is not a contradiction, it is where they're
+    // headed.
+    expect(
+      mapPhotonResults(body(WARNER_9042), SUGGEST_LIMIT, "904 Warner")
+    ).toHaveLength(1);
+  });
+});

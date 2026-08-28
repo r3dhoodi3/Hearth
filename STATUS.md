@@ -1,65 +1,56 @@
-# Hearth status (2026-08-27)
+# Hearth status (2026-08-28 morning, written by Claude overnight)
 
-Quick-read handoff so the chat can be cleared. Full blow-by-blow detail is in `HANDOFF.md`.
-Live site: https://gethearth.vercel.app (old link https://hearth-seven-pink.vercel.app still works).
-Code: all on `main`, pushed through commit `30048de`.
+Quick-read handoff. The blow-by-blow is in `HANDOFF.md` (older) and the session notes below.
+Live site: https://gethearth.vercel.app. Code: all on `main`, pushed through the commits listed under "Pushed".
 
-## What I want to do (goals)
+## Goals (unchanged)
 
-- Ship Hearth mainly as an iPhone App Store app. The phone experience is what matters; desktop just has to not break.
-- Make it feel like a simple home app anyone can use (Angi-style: few buttons, little scrolling, not "a whole assignment"), while keeping every standout feature: Ask Hearth, home health score, systems inventory, cost forecast, weather alerts, job posting with pro applicants, the pro leads board, CRM, wallet.
-- Serve all of Orange County (done), with honest pricing and a clean subscription page.
-- Keep it safe: never trust IDs from the browser, verify ownership on every request, block trial farming, moderate public text.
+- Ship Hearth mainly as an iPhone App Store app; desktop must not break.
+- Simple app feel (Angi-style), keep every standout feature.
+- All of Orange County, honest pricing, clean subscription page.
+- Safe: ownership on every request, no trial farming, moderated public text.
 
-## Current status
+## Pushed overnight 2026-08-28 (both verified: tsc 0, full vitest green, eslint 0, isolated build 0, red team + checker)
 
-- All of Orange County is live (36 cities, address suggestions gated to OC).
-- Weekly / Monthly / Annual / Free Plus plans live. Monthly $4.99 (preselected), Weekly $1.99 with the only 3-day trial, Annual best value. One checkout button, plan cards select with the outline following, consent text next to the button.
-- Dashboard decluttered: one number per card, tasks behind one tap, weather has an F/C toggle, no "RentCast" wording in the UI.
-- Review prompt ("Enjoying Hearth?" -> Love it = rate step, Not really = private /feedback form), Add-to-Home-Screen nudge, Tools bottom sheet, denser pro leads cards.
-- Security waves done: IDOR fixes (app + DB), trial-abuse risk score (log-only for now), red-team hardening x2 (open redirect closed, webhook fail-closed, moderation folding, rate limits, AI refunds).
-- Every push was verified: tsc clean, ~1149 tests, eslint 0 errors, isolated production build exit 0, plus a checker agent.
+1. `d2b30a2` Streaming Ask Hearth, paywall metering (2 doc reads, 1 inspection, trial 8 asks/day, home value refresh Plus-only), block/report for UGC, speed wave (one auth call per request, 15 public pages static, dashboard 2 query waves, indexes), accessibility and readability pass, phone Plus picker (no Free card, 3 in a row), home details editor, weather clock, header wrap fix, real fix for fake Messages badges, landing demo pause fix, Apple sign-in hidden behind a flag, copy freshness (all of OC, legal dates), health route, Stripe dunning notices, support digest cron, users column lock (0139), 0135 SECURITY INVOKER.
+2. `29f5231` Round 2 from the 10-persona run: job post confirmation banner + visible failures, minimal phone landing (1 tap to signup), county-records fix (RentCast 404 = miss, retry, honest manual entry), condo data sanity (no building-level $34M figures), address mismatch choice, pro wizard fixes (empty city start, Other field, draft key per account, chips survive restore, error keeps the form), routing for pro accounts without a company + escape hatch, ghost-protection copy, CSLB digits-only, menu z-order, tap targets, many copy fixes.
+3. (pending at time of writing) Round 3: Ask Hearth transcript fix (second question no longer drops the first answer; answers saved while streaming), pro Ask Hearth entry points, property type on Home details, job-post confirmation for first-time posters, address-mismatch panel fix.
 
-## Next steps (mine, in order)
+## YOUR morning list (in order; nothing below works until 1 and 2 are done)
 
-1. Vercel: set `STRIPE_SECRET_KEY` to the real value from `.env.local` (currently a placeholder, so checkout fails), then Redeploy. This unblocks all payments.
-2. Supabase SQL editor, in order: `supabase/PRECHECK-2026-08-26.sql` (all queries must return nothing), then `supabase/COMBINED-2026-08-26-migrations-0129-0132.sql`, then `supabase/PASTE-ME-live-2026-08-27-app-feedback.sql`. This creates the risk + feedback tables and should also speed up signed-in pages.
-3. Decide trial-farming controls for the weekly plan (see Notes): set `RISK_ENFORCE=true` in Vercel after a week of log-only data, and cap trialing accounts at free-tier AI limits.
-4. Delete the test accounts when done: `delete from auth.users where email like 'hearth-test-%@example.com';` (everything they made is titled "TEST (ignore)").
-5. Supabase Auth > URL Configuration: set Site URL to https://gethearth.vercel.app and add https://gethearth.vercel.app/** to Redirect URLs (so email and Google/Apple sign-in point at the new name).
+1. Supabase SQL editor, in this order, each file has verify queries at the bottom:
+   `supabase/PRECHECK-2026-08-26.sql` (all queries must return 0 rows) ->
+   `supabase/COMBINED-2026-08-26-migrations-0129-0132.sql` ->
+   `supabase/PASTE-ME-live-2026-08-27-app-feedback.sql` (0133) ->
+   `supabase/PASTE-ME-live-2026-08-28-free-ai-tastes.sql` (0135) ->
+   `supabase/PASTE-ME-live-2026-08-28-perf-indexes.sql` (0136) ->
+   `supabase/PASTE-ME-live-2026-08-28-app-guide.sql` (0137) ->
+   `supabase/PASTE-ME-live-2026-08-28-user-blocks.sql` (0138) ->
+   `supabase/PASTE-ME-live-2026-08-28-users-column-lock.sql` (0139, must be last).
+   Until 0129 is applied, NO new contractor can finish onboarding on live except with Huntington Beach and/or Fountain Valley (the old constraint). Every pro tester hit this.
+2. Vercel > hearth > Settings > Environment Variables (Production + Preview), values from `C:\Users\lande\hearth\.env.local`: `STRIPE_SECRET_KEY` (edit), `ANTHROPIC_API_KEY` (add; it is NOT set on Vercel at all, which is why Ask Hearth is down on live), `RISK_HASH_SALT` (add; last line of .env.local, never rotate). Then Redeploy.
+3. Supabase > Authentication > Sign In / Providers > Email: turn "Confirm email" back ON (I asked you to turn it off for the testers).
+4. Stripe dashboard: set the public business name to "Hearth" (checkout showed "Landen Chu"); enable the webhook events `invoice.payment_failed` and `customer.subscription.trial_will_end` on the endpoint.
+5. Delete the test accounts when done (SQL, service role):
+   `delete from auth.users where email like 'hearth-persona-%' or email like 'hearth-test-%@example.com' or email like 'hearth-redteam-%';`
+   (cascades homes, companies "TEST ... (ignore)", CRM clients, TEST (ignore) jobs.) NOTE: the contractor "2e3thyj" is YOUR OWN pro account, do not delete it.
+6. Later, before the App Store build: set `NEXT_PUBLIC_APPLE_SIGN_IN=on` (Apple requires it next to Google); read `scratchpad appstore-checklist` summary in the session notes: Plus must be sold through StoreKit/IAP inside the iOS app, block/report now exist, DMCA placeholders and `TODO(legal)` still block submission.
 
-## Next steps (product, when I want them)
+## Decisions I made for you (say if you disagree)
 
-- Onboarding slides for first login, one version for homeowners and one for contractors (after account creation, not on the landing page).
-- Keep pushing the "simple app, not a website" feel: header shows title + avatar only, sheet-style detail pages, a real App Store app via a Capacitor wrapper (needed for push notifications, haptics, and a native review prompt).
-- A home-details editor (year built / sqft / beds / baths have no post-onboarding form yet).
-- Ask Hearth streaming (answers still take ~10s).
+- A RentCast miss (no county record) no longer refuses the home; it proceeds to manual entry with honest copy. Refusing would have blocked real homeowners (4 real OC addresses had no record in one night). Fake addresses are caught by the street-name match against the geocoder.
+- Free tier: 2 document AI reads and 1 inspection import per account, then Plus. Trialing accounts get 8 asks/day (paid 15). Home value refresh/trend is Plus; the first estimate stays free.
+- Light theme stays the default with a manual toggle (4 testers wanted system dark mode; your earlier decision stands).
+- The dashboard "Home value" and "Open jobs" cards are hidden on phones (value lives in Tools, jobs on the Pros tab).
+- Block does not cancel an existing job; the confirm copy says so and offers End conversation.
 
-## What worked
+## What the testers liked (3+ sessions each)
 
-- Probing the live site directly caught real config problems a code review could not (the wrong service-role key, the placeholder Stripe key, missing migrations).
-- Green-before-push discipline: tsc + full tests + eslint + an isolated build + a checker agent before every commit.
-- Worker-agent then checker-agent then Fable review caught real bugs each round (the sign-in "too many homes" wall, the Post-job tap being swallowed, an open redirect, moderation bypasses).
-- Address claiming, Ask Hearth, all-of-OC suggestions, the plan picker, moderation (accepts real surnames, rejects slurs and phone numbers), and the Post-job-while-typing fix all verified working on the live site.
+Honest Plus page and Stripe terms, 2 to 4 taps to an account, address autocomplete, Ask Hearth answers grounded in the home, the first-login guide, Emergency page, dark mode, plain copy everywhere, loading states.
 
-## What did not work / went wrong
+## Still open (not done tonight)
 
-- Checkout still fails on live because the Vercel `STRIPE_SECRET_KEY` is a placeholder (`yoursk_t...`). Not a code bug; env config. Fix in Next step 1.
-- The risk and feedback tables do not exist on live yet (migrations 0130-0133 not applied), so those queries error on every signed-in page load and log noise. Fix in Next step 2.
-- Signed-in pages are slow on cold start (dashboard ~67s cold, warming to ~13s, other pages ~6-7s). Pages return 200, no crashes. Caused by hobby-tier serverless cold starts plus heavy sequential DB queries, several hitting the missing tables. Applying the migrations should help; if still slow, parallelize the dashboard queries and consider Vercel Pro.
-- One push (`963593b`) briefly went out with a single red test because a piped `grep` hid the test runner's exit code; fixed two minutes later in `30048de`. Lesson recorded: always capture the real exit code before pushing.
-
-## RISK_ENFORCE and trial AI caps (trial-farming control)
-
-This is the one guard that stops people abusing the free trial on the new $1.99 weekly plan. Read before turning the weekly plan loose.
-
-- The problem: a trialing account currently gets the full Plus AI ceiling (15 asks/day, up to 250 model calls/day) for free. Weekly is the cheapest way in, so a farmer could burn ~750 Anthropic calls per throwaway account, and ~20 accounts empty the whole daily AI budget for every real user.
-- `RISK_ENFORCE` is a Vercel env var, currently UNSET (= off). The abuse score already runs and logs on every checkout, but with it off it never actually blocks anyone.
-- Set `RISK_ENFORCE=true` to switch that score from log-only to real enforcement: medium score = no free trial (billed day one), high = no trial + an alert to me. It never refuses a sale.
-- Second, separate lever: cap trialing accounts at the free-tier AI limits until their first paid invoice.
-- Recommended order: (1) apply the DB migrations so the risk tables exist, (2) watch the score log for about a week, (3) then set `RISK_ENFORCE=true` in Vercel AND cap trialing AI. Do both, not one.
-
-## Notes
-- Optional Vercel env still unset: `STRIPE_PRICE_PLUS_WEEKLY` (weekly works via an inline price without it), `NEXT_PUBLIC_APP_STORE_URL` (hides the "Rate on the App Store" button until there is an app), `TWILIO_*` (SMS stays off), `CRON_SECRET` and `RESEND_*` (scheduled jobs and email off).
-- Working agreements: no em dashes anywhere; commit and push only on an in-the-moment go-ahead (an overnight exception was granted 2026-08-26 and has ended); live DB changes ship as PASTE-ME files; mobile-first, verify at 390px, desktop must not break.
-- Still open, not yet built: review comment text is not moderated; `open_jobs_for_me` has no LIMIT (a scale concern); the DMCA agent and a real business address are placeholders in the legal docs.
+- Capacitor/iOS wrapper, push, IAP entitlement merge, privacy manifest (App Store checklist in session notes).
+- Sentry / uptime monitor (owner accounts needed), Vercel Pro + region match with Supabase.
+- 46 `TODO(legal)` placeholders (DMCA agent, business address, pro-terms numbers) for the lawyer.
+- Review comments moderation is done; `open_jobs_for_me` already had a LIMIT (old STATUS item was stale).

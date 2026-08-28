@@ -169,6 +169,31 @@ describe("updatePropertyAction", () => {
     expect(result.ok).toBe(true);
     expect(lastUpdate).toEqual({ baths: 99.9 });
   });
+
+  it("accepts a property type from the allow-list", async () => {
+    const result = await updatePropertyAction(fd({ property_type: "condo" }));
+    expect(result.ok).toBe(true);
+    expect(lastUpdate).toEqual({ property_type: "condo" });
+  });
+
+  it("leaves the property type untouched when a forged value is posted", async () => {
+    // The <select> only ever renders PROPERTY_TYPES, so this can only happen
+    // via a forged request. Unlike the other fields, a bad property_type is
+    // treated the same as blank rather than returned as a named error.
+    const result = await updatePropertyAction(
+      fd({ property_type: "mansion" })
+    );
+    expect(result.ok).toBe(true);
+    expect(lastUpdate).toBeNull();
+  });
+
+  it("leaves the property type untouched when the box is left blank", async () => {
+    const result = await updatePropertyAction(
+      fd({ property_type: "", year_built: "1998" })
+    );
+    expect(result.ok).toBe(true);
+    expect(lastUpdate).toEqual({ year_built: 1998 });
+  });
 });
 
 describe("only the home's owner can save", () => {

@@ -16,6 +16,7 @@ import {
   COLD_START_FREE_POSTING,
 } from "@/lib/constants";
 import { hasPlus } from "@/lib/subscription";
+import { leadContractorEmbed } from "@/lib/leadJoin";
 import {
   postJobAction,
   chooseApplicantAction,
@@ -126,8 +127,15 @@ export default async function ContractorsPage(
   // owner_closed_at (migration 0092) isn't in the generated types yet either,
   // so the client itself is cast to any for this call, same pattern as the
   // lead_applications reads below.
-  const LEADS_CONTRACTOR_JOIN =
-    "contractors(name, rating, review_count, service_area, license_number, contact_phone, contact_email)";
+  // leadContractorEmbed, not a bare "contractors(...)": migration 0105 added a
+  // SECOND foreign key from contractor_leads to contractors (direct_to), which
+  // made the plain embed ambiguous. PostgREST answers an ambiguous embed with
+  // HTTP 300 / PGRST201 and no rows, supabase-js hands that back as `error`,
+  // and this page then rendered an empty Your jobs list for every homeowner
+  // who had jobs. See src/lib/leadJoin.ts.
+  const LEADS_CONTRACTOR_JOIN = leadContractorEmbed(
+    "name, rating, review_count, service_area, license_number, contact_phone, contact_email"
+  );
   const LEADS_BASE = `id, category, issue_description, issue_id, contractor_id, status, timing, created_at, ${LEADS_CONTRACTOR_JOIN}`;
   const LEADS_SELECT_WITH_CLOSE = `id, category, issue_description, issue_id, contractor_id, status, timing, created_at, owner_closed_at, ${LEADS_CONTRACTOR_JOIN}`;
   // Direct-request columns (migration 0104) on top of owner_closed_at (0092).
@@ -186,6 +194,18 @@ export default async function ContractorsPage(
               .order("created_at", { ascending: false });
           }
           leadsData = close.data;
+          leadsError = close.error;
+        }
+        // Anything the cascade could not fix leaves leadsData null, which this
+        // page renders as "you have no jobs" - indistinguishable, to the
+        // homeowner, from their post having vanished. It stayed silent for the
+        // whole life of the PGRST201 ambiguous-embed bug (see leadJoin.ts).
+        // Say so in the server log so the next one is found in minutes.
+        if (leadsError && !leadsData) {
+          console.error(
+            "ContractorsPage: contractor_leads read failed, Your jobs will render empty:",
+            leadsError.message ?? leadsError
+          );
         }
         return leadsData;
       })(),
@@ -675,8 +695,18 @@ export default async function ContractorsPage(
           jobLeads.length > 0 (the two are a full, disjoint partition of
           `leads`), so this wrapper renders in every case openJobsCount > 0
           can occur, plus the (harmless) case of jobs that are all
-          closed/chosen. */}
-      {(directRequests.length > 0 || jobLeads.length > 0) && (
+          closed/chosen.
+
+          searchParams.posted is in the condition for one reason: the success
+          banner above links to #your-jobs by name. A banner pointing at an
+          anchor that is not in the document is worse than no banner - the
+          homeowner taps "Your jobs", nothing moves, and they conclude the post
+          did not land. So whenever the banner is on screen, this wrapper is
+          too, and the section below says something even if the list came back
+          empty. */}
+      {(directRequests.length > 0 ||
+        jobLeads.length > 0 ||
+        Boolean(searchParams.posted)) && (
         <div id="your-jobs" className="scroll-mt-4 space-y-8">
       {/* Pending direct requests (migration 0104): a request aimed at one
           specific pro that they haven't accepted yet. Kept out of "Your jobs"
@@ -1127,6 +1157,31 @@ export default async function ContractorsPage(
               );
             })}
           </ul>
+        </section>
+      )}
+
+      {/* The just-posted job did not come back in the read above. That is a
+          server-side fault (see the console.error on the leads query), not
+          anything the homeowner did, and the one thing they must not be told
+          is nothing: the banner has just sent them here by name. Say what is
+          true - the job is saved, this list could not be loaded - and give
+          them the one action that fixes it. */}
+      {jobLeads.length === 0 && searchParams.posted && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Your jobs
+          </h2>
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            Your job is saved and pros can see it. We couldn&apos;t load your
+            job list just now.{" "}
+            <Link
+              href="/contractors"
+              className="focus-ring font-medium underline underline-offset-2"
+            >
+              Reload this page
+            </Link>{" "}
+            to see it.
+          </p>
         </section>
       )}
         </div>

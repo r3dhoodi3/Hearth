@@ -104,6 +104,13 @@ export default function LaunchCityCheckboxes({
           checked={all}
           onChange={(e) => setAll(e.target.checked)}
           className={boxClass}
+          // Not a form field (nothing about "All" itself is posted; see the
+          // hidden per-city inputs above), so this is the one hook a caller
+          // has to read this box's state straight off the DOM. OnboardingCompanyForm's
+          // draft-restore guard reads it to tell an untouched picker (still
+          // "All", collapsed) from one the pro already tapped (unchecked, or a
+          // city underneath it checked) - see the comment on restoredRef there.
+          data-launch-city-all
         />
         <span>All of Orange County</span>
       </label>

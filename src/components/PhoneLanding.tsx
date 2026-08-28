@@ -67,21 +67,24 @@ export default function PhoneLanding() {
         </Link>
       </div>
 
-      {/* Quiet row: the three doors that are not "sign up as a homeowner".
+      {/* Quiet row: the two doors that are not "sign up as a homeowner".
           Small text, no buttons - they should not compete with the two
-          above. */}
+          above. Each link still clears a 44px tap target even though the
+          row reads small. Privacy lives in the phone footer only now
+          (src/app/page.tsx); it used to repeat here too, a few hundred
+          pixels above its own footer. */}
       <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-stone-500 dark:text-stone-400">
-        <Link href="/pros" className="py-1 hover:text-bark-700 dark:hover:text-stone-300">
+        <Link
+          href="/pros"
+          className="inline-flex min-h-11 items-center py-1 hover:text-bark-700 dark:hover:text-stone-300"
+        >
           I&apos;m a contractor
         </Link>
         <Link
           href="/emergency-help"
-          className="py-1 hover:text-bark-700 dark:hover:text-stone-300"
+          className="inline-flex min-h-11 items-center py-1 hover:text-bark-700 dark:hover:text-stone-300"
         >
           Emergency help
-        </Link>
-        <Link href="/privacy" className="py-1 hover:text-bark-700 dark:hover:text-stone-300">
-          Privacy
         </Link>
       </div>
     </div>

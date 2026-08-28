@@ -128,4 +128,4 @@ export function plausibleHomeFigure(
 // why, and what the homeowner can do about it, without naming a provider or
 // blaming the county.
 export const BUILDING_RECORD_NOTICE =
-  "County records for this address cover the whole building, not your unit, so we can't show a purchase price or assessed value. You can add your own under Home details.";
+  "County records for this address cover the whole building, not your unit, so we can't show a purchase price or assessed value. You can add your own purchase price under Home value.";

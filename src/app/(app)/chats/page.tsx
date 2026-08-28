@@ -7,6 +7,7 @@ import { getActiveProperty } from "@/lib/property";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { extractQuote, formatUSDCents } from "@/lib/quotes";
 import { isUnreadSince } from "@/lib/unread";
+import { leadContractorEmbed } from "@/lib/leadJoin";
 import { plainPreview } from "@/lib/previewText";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
@@ -96,12 +97,21 @@ export default async function HomeownerChatsPage(
   // contractor_id/created_at plus the joined contractor name - everything
   // else (status, payout_amount, homeowner_*, issue_*, timing, paid, paid_at,
   // budget_range, property_id, ...) is unused here.
-  const { data: leads } = await supabase
+  //
+  // leadContractorEmbed, not a bare "contractors(name)": contractor_leads has
+  // two FKs into contractors since migration 0105 (contractor_id, direct_to),
+  // and an ambiguous embed makes PostgREST answer 300/PGRST201 with no rows -
+  // which this page would have rendered as "no conversations". See
+  // src/lib/leadJoin.ts.
+  const { data: leads, error: leadsError } = await supabase
     .from("contractor_leads")
-    .select("id, category, contractor_id, created_at, contractors(name)")
+    .select(`id, category, contractor_id, created_at, ${leadContractorEmbed("name")}`)
     .eq("property_id", property.id)
     .not("contractor_id", "is", null)
     .order("created_at", { ascending: false });
+  if (leadsError) {
+    console.error("ChatsPage: contractor_leads read failed:", leadsError.message);
+  }
 
   const convos = leads ?? [];
   const seen = await readSeenMap();
@@ -186,7 +196,8 @@ export default async function HomeownerChatsPage(
     needsCrossHomeLookup
       ? supabase
           .from("contractor_leads")
-          .select("id, category, contractor_id, created_at, contractors(name)")
+          // Same FK hint as the main leads read above (src/lib/leadJoin.ts).
+          .select(`id, category, contractor_id, created_at, ${leadContractorEmbed("name")}`)
           // needsCrossHomeLookup already guarantees searchParams.lead is
           // truthy (Boolean(searchParams.lead) is part of that condition).
           .eq("id", searchParams.lead as string)

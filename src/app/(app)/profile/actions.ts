@@ -6,7 +6,7 @@ import { getActiveProperty } from "@/lib/property";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { setFlash } from "@/lib/flash";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
-import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
+import { labelFor, PROPERTY_TYPES, SYSTEM_TYPES } from "@/lib/constants";
 import {
   boundedNumber,
   boundedInt,
@@ -569,11 +569,28 @@ export async function updatePropertyAction(
     purchaseDate = d;
   }
 
+  // property_type is a <select> that renders exactly PROPERTY_TYPES (the same
+  // allow-list onboarding uses), with a blank "Leave as is" option for when
+  // the owner doesn't want to touch it. Same blank-means-unchanged rule as
+  // every other field on this form: only a recognized value gets written. A
+  // forged value would pick a fee tier and a set of building-record rules
+  // (isBuildingLevelHome, src/lib/parcelSanity.ts) the rest of the app has no
+  // entry for, so - unlike the other fields - a value that fails the check is
+  // treated the same as blank rather than returned as a named error; the
+  // <select> itself can never produce anything but a listed value or blank.
+  const rawPropertyType = formData.get("property_type");
+  const propertyType =
+    typeof rawPropertyType === "string" &&
+    isAllowedValue(PROPERTY_TYPES, rawPropertyType)
+      ? rawPropertyType
+      : undefined;
+
   // A plain object literal type, not Record<string, ...>: the generated
   // Supabase Update type rejects any argument with a string index signature
   // (it can't tell that signature only ever holds real column names), so a
   // Record here fails tsc even though every key it can hold is a real column.
   const update: Partial<{
+    property_type: string;
     year_built: number;
     sqft: number;
     beds: number;
@@ -581,6 +598,7 @@ export async function updatePropertyAction(
     lot_size_sqft: number;
     purchase_date: string;
   }> = {};
+  if (propertyType !== undefined) update.property_type = propertyType;
   if (yearBuilt.value !== undefined) update.year_built = yearBuilt.value;
   if (sqft.value !== undefined) update.sqft = sqft.value;
   if (beds.value !== undefined) update.beds = beds.value;

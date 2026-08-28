@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { plainPreview } from "@/lib/previewText";
+import { leadContractorEmbed } from "@/lib/leadJoin";
 
 type Toast = { id: string; name: string; body: string; href: string };
 
@@ -54,7 +55,11 @@ export default function NewMessageNotifier({
         const leadIds = Array.from(new Set(fresh.map((m: any) => m.lead_id)));
         const { data: leads } = await supabase
           .from("contractor_leads")
-          .select("id, contractors(name)")
+          // FK hint, not a bare "contractors(name)": contractor_leads has two
+          // FKs into contractors since migration 0105, and the ambiguous embed
+          // returns 300/PGRST201 with no rows (src/lib/leadJoin.ts) - which
+          // showed here as every toast naming an empty pro.
+          .select(`id, ${leadContractorEmbed("name")}`)
           .in("id", leadIds);
         for (const l of leads ?? []) {
           nameByLead[(l as any).id] = (l as any).contractors?.name ?? "";

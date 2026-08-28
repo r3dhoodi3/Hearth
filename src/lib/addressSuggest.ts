@@ -16,6 +16,7 @@ import {
   launchCityForZip,
   type LaunchCityName,
 } from "@/lib/serviceArea";
+import { houseNumberOf } from "@/lib/addressMatch";
 
 // The Orange County box, minLon,minLat,maxLon,maxLat - the order Photon's
 // `bbox` parameter takes. Roughly the county's extent: Seal Beach in the
@@ -115,9 +116,47 @@ function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+// Does this Photon result stand for the house number the person typed?
+//
+// THIS IS THE 2026-08-28 SILENT-ADDRESS-SWAP BUG. Photon does not answer "I
+// don't have that house number" - asked for "9042 Warner, Huntington Beach,
+// California" it returns the nearest address it DOES have on Warner, which in
+// a live probe was a single result: "3831 Warner Avenue". The form offered
+// that one row, a tester who had typed 9042 tapped it, and the street box
+// became 3831. The county record for 3831 Warner Ave then agreed with the
+// picked line, so the "Keep mine / Use the county record" panel correctly did
+// not fire, and NOTHING on any screen ever said the house number had changed.
+// They reached the claim button looking at an address they never typed.
+//
+// So a suggestion whose house number contradicts a house number already in
+// the query is not a suggestion, it is a substitution, and it is dropped.
+// Typing "9042 Warner" now offers nothing at all - which is the honest answer
+// ("we don't know that address") and leaves the typed line untouched, so the
+// county lookup runs on 9042 and the mismatch panel does its job.
+//
+// Only applies when the query HAS a house number. A street-name-only query
+// ("Bolsa Ave") is a person still typing, and every numbered result on that
+// street is a useful offer.
+function matchesQueryHouseNumber(
+  housenumber: string,
+  queryNumber: string | null
+): boolean {
+  if (!queryNumber) return true;
+  // Compare leading digit runs, not the whole token: exact string equality
+  // rejected a letter-suffixed number Photon returns for a unit ("9042A" for
+  // a query of "9042"), an OSM range value ("9042-9044" for a query of
+  // "9042"), and a mid-typing prefix ("904" for a full "9042"). Falling back
+  // to a match (true) when either side has no leading digits keeps this a
+  // pure narrowing filter, never a new way to drop a result.
+  const q = queryNumber.match(/^\d+/)?.[0];
+  const h = housenumber.trim().match(/^\d+/)?.[0];
+  if (!q || !h) return true;
+  return h === q || h.startsWith(q);
+}
+
 // Maps a Photon FeatureCollection to the suggestions the form can use.
 //
-// Three filters, in order of how much they throw away:
+// Four filters, in order of how much they throw away:
 //   1. No house number or no street name - a street centerline, a city, a bus
 //      stop. None of those is a home, and filling the box with one would send
 //      an unclaimable line into the parcel lookup.
@@ -126,21 +165,32 @@ function str(v: unknown): string {
 //      filter, the DB's launch_city_for_zip), so a suggestion whose ZIP would
 //      be rejected on the very next screen has no business being offered, no
 //      matter what city name OSM attached to it.
-//   3. Duplicates - OSM routinely holds several nodes for one address (the
+//   3. A house number that contradicts the one in the query - see
+//      matchesQueryHouseNumber above, which is the whole reason `query` is a
+//      parameter here.
+//   4. Duplicates - OSM routinely holds several nodes for one address (the
 //      building, the entrance, a shop inside it).
 //
 // Takes `unknown` rather than a typed body because this is a third-party
 // response: it is parsed defensively and a shape surprise yields an empty
 // list, never a throw.
+//
+// `query` is the text the person actually typed. Optional, and omitting it
+// keeps the pre-2026-08-28 behavior, so a caller with no query in hand loses
+// nothing but the substitution filter.
 export function mapPhotonResults(
   body: unknown,
-  limit: number = SUGGEST_LIMIT
+  limit: number = SUGGEST_LIMIT,
+  query?: string
 ): AddressSuggestion[] {
   const features = (body as { features?: unknown } | null)?.features;
   if (!Array.isArray(features)) return [];
 
   const out: AddressSuggestion[] = [];
   const seen = new Set<string>();
+  // houseNumberOf reads the leading numeric token and lowercases, which is the
+  // same normalization the county-record comparison uses (src/lib/addressMatch.ts).
+  const queryNumber = query ? houseNumberOf(query) : null;
 
   for (const feature of features) {
     if (out.length >= limit) break;
@@ -151,6 +201,7 @@ export function mapPhotonResults(
     const housenumber = str(props.housenumber);
     const street = str(props.street);
     if (!housenumber || !street) continue;
+    if (!matchesQueryHouseNumber(housenumber, queryNumber)) continue;
 
     // First five digits only, same normalization launchCityForZip and
     // isOrangeCountyZip use, so a ZIP+4 resolves the way it does everywhere

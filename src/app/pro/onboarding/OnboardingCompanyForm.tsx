@@ -351,8 +351,16 @@ function OnboardingCompanyFormInner({
   // remount, StrictMode's double invoke. The live-values check makes it
   // harmless even when it does run late: if the form already holds an answer,
   // the pro is ahead of the draft and the draft has nothing to give them.
-  // Cities are deliberately not consulted - LaunchCityCheckboxes starts on
-  // "All of Orange County", so every untouched form already posts all 36.
+  // Cities can't be read the same way name/phone/categories are - every
+  // untouched picker already posts all 36 hidden `service_cities` inputs for
+  // "All of Orange County", so live.cities.length is never a useful signal -
+  // but LaunchCityCheckboxes marks that one control with
+  // data-launch-city-all (see its own comment), and unchecked is exactly
+  // "the pro already tapped something here": either they unchecked it
+  // directly, or checking a city underneath it did. That is the "a first tap
+  // on ... a city checkbox is silently swallowed" report: the same race as
+  // the trade chips below, just on the field the live-values check used to
+  // skip.
   const restoredRef = useRef(false);
   useEffect(() => {
     // Restore in an effect rather than in the initial state, so the
@@ -364,10 +372,15 @@ function OnboardingCompanyFormInner({
     const form = formRef.current;
     if (form) {
       const live = readValues(form);
+      const allCitiesBox = form.querySelector<HTMLInputElement>(
+        "[data-launch-city-all]"
+      );
+      const citiesTouched = allCitiesBox ? !allCitiesBox.checked : false;
       if (
         live.name.trim() ||
         live.phone.trim() ||
-        live.categories.some((c) => c.trim())
+        live.categories.some((c) => c.trim()) ||
+        citiesTouched
       ) {
         // Already being filled in by hand. Leave it alone, and never come
         // back: the draft keeps saving underneath, so nothing is lost.
@@ -733,8 +746,9 @@ function OnboardingCompanyFormInner({
             />
           </div>
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            Optional. Your CSLB license number, digits only. We check it
-            against the CSLB for a verified badge.
+            Optional. Your CSLB (California&apos;s contractor license board)
+            license number, digits only. We check it against the CSLB for a
+            verified badge.
           </p>
         </div>
 

@@ -57,6 +57,13 @@ const EXCLUDED_PATH_PREFIXES = [
   "/pro/ask",
   "/chats",
   "/pro/chats",
+  // Every other route that mounts AskHearth. Its composer is pinned to the
+  // bottom of the pane on all of them, which is where this card lands: Learn
+  // and Search embed the chat inline, and the walkthrough is a step-by-step
+  // flow with its own bottom controls to get through.
+  "/learn",
+  "/search",
+  "/walkthrough",
 ];
 
 function isExcludedPath(pathname: string | null): boolean {

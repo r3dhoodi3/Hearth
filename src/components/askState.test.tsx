@@ -2,14 +2,15 @@
 import { describe, expect, it } from "vitest";
 import {
   alreadyAsked,
+  freshest,
   isUnanswered,
   lastUserMessage,
   type Msg,
 } from "./AskHearth";
 
-// The three pure state reads Ask Hearth makes about a conversation. Each one
-// exists because of a specific way the chat used to misbehave, so the cases
-// below are those bugs, not coverage for its own sake.
+// The pure state reads Ask Hearth makes about a conversation. Each one exists
+// because of a specific way the chat used to misbehave, so the cases below are
+// those bugs, not coverage for its own sake.
 
 const greeting: Msg = { role: "assistant", content: "Hi, I'm Hearth." };
 const ask = (content: string): Msg => ({ role: "user", content, ts: 1 });
@@ -85,5 +86,45 @@ describe("isUnanswered", () => {
   it("is true for an orphan question sitting behind an answered one", () => {
     const msgs = [greeting, ask("First"), reply("Answer"), ask("Second")];
     expect(isUnanswered(msgs)).toBe(true);
+  });
+});
+
+describe("freshest", () => {
+  // The guard on which list the next question is appended to. It exists for
+  // one reported failure: a finished answer disappeared from the transcript
+  // the moment the next question was sent, because the in-memory conversation
+  // had fallen behind the saved one and the new turn was built on the shorter
+  // list.
+  it("takes the saved list when it has everything in memory and more", () => {
+    const memory = [greeting, ask("Q1")];
+    const saved = [greeting, ask("Q1"), reply("A1")];
+    expect(freshest(memory, saved)).toBe(saved);
+  });
+
+  it("keeps memory when the two agree", () => {
+    const memory = [greeting, ask("Q1"), reply("A1")];
+    const saved = [greeting, ask("Q1"), reply("A1")];
+    expect(freshest(memory, saved)).toBe(memory);
+  });
+
+  it("keeps memory when the saved list is shorter", () => {
+    // Another instance on the page deleted an orphan question or cleared the
+    // chat. Memory already followed that; do not put it back.
+    const memory = [greeting, ask("Q1"), reply("A1")];
+    expect(freshest(memory, [greeting])).toBe(memory);
+    expect(freshest(memory, [])).toBe(memory);
+  });
+
+  it("keeps memory when the saved list disagrees about a message it has", () => {
+    // Not "memory fell behind" - the two conversations have diverged, and the
+    // longer one is not automatically the right one.
+    const memory = [greeting, ask("Q1")];
+    const saved = [greeting, ask("Something else"), reply("A")];
+    expect(freshest(memory, saved)).toBe(memory);
+  });
+
+  it("takes the saved list for a memory that lost everything", () => {
+    const saved = [greeting, ask("Q1"), reply("A1")];
+    expect(freshest([], saved)).toBe(saved);
   });
 });

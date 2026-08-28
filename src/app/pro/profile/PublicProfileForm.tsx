@@ -353,7 +353,8 @@ export default function PublicProfileForm({
                     </div>
                     {!hasLicense && (
                       <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                        Your CSLB license number, digits only.
+                        Your CSLB (California&apos;s contractor license board)
+                        license number, digits only.
                       </p>
                     )}
                     {hasLicense && (

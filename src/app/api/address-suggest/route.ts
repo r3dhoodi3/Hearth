@@ -5,6 +5,7 @@ import {
   mapPhotonResults,
   normalizeSuggestQuery,
   photonSuggestUrl,
+  SUGGEST_LIMIT,
   type AddressSuggestion,
 } from "@/lib/addressSuggest";
 
@@ -199,7 +200,12 @@ export async function GET(req: NextRequest) {
       cache: "no-store",
     });
     if (!res.ok) return NextResponse.json(EMPTY);
-    const suggestions = mapPhotonResults(await res.json());
+    // `q` is passed so a result whose house number contradicts the typed one
+    // is dropped rather than offered as a substitution - see
+    // matchesQueryHouseNumber in src/lib/addressSuggest.ts. The cache key
+    // already includes the query, so a filtered list is never served to a
+    // different query.
+    const suggestions = mapPhotonResults(await res.json(), SUGGEST_LIMIT, q);
     // An empty result is cached too. A misspelling gets retyped and re-sent,
     // and a miss costs the same outbound request a hit does.
     cacheSet(cacheKey, suggestions);

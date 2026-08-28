@@ -18,7 +18,8 @@
 // ?waitlisted= from.
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { act } from "react";
+import { act, type ReactElement } from "react";
+import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../actions", () => ({ saveCompanyAction: vi.fn() }));
@@ -261,5 +262,108 @@ describe("pro onboarding wizard: the draft", () => {
     fireEvent.click(screen.getByLabelText("All of Orange County"));
     await settle();
     expect(storedDraft("user-1").cities).toEqual([...LAUNCH_CITIES]);
+  });
+});
+
+describe("pro onboarding wizard: the city checkboxes", () => {
+  it("never lets a late draft restore clear a city the pro already picked", async () => {
+    // Same race as the trade chips above, on the field the restore guard used
+    // to skip: LaunchCityCheckboxes always posts all 36 cities while
+    // untouched, so live.cities.length was never a usable "already answered"
+    // signal, and the guard fell back to name/phone/categories only. Reported
+    // as "a first tap on ... a city checkbox is silently swallowed."
+    window.localStorage.setItem(
+      proOnboardingDraftKey("user-1") as string,
+      JSON.stringify({
+        savedAt: Date.now(),
+        v: 2,
+        step: 1,
+        name: "Stale Draft Co",
+        phone: "",
+        license: "",
+        referral: "",
+        cities: ["Anaheim"],
+        categories: [],
+      })
+    );
+
+    const { rerender, form } = renderWizard("");
+    fillStepOne();
+    next();
+    pickSpecificCities();
+    fireEvent.click(screen.getByLabelText("Irvine"));
+
+    rerender(
+      <OnboardingCompanyForm userId="user-1" defaultEmail="pro@example.com" />
+    );
+    await settle();
+
+    expect(screen.getByLabelText("All of Orange County")).not.toBeChecked();
+    expect(screen.getByLabelText("Irvine")).toBeChecked();
+    expect(screen.getByLabelText("Anaheim")).not.toBeChecked();
+    expect(new FormData(form).getAll("service_cities")).toEqual(["Irvine"]);
+    // And the company name the pro already typed survives too - the whole
+    // form is left alone once anything on it has been touched.
+    expect(screen.getByLabelText(/Company name/)).toHaveValue("Acme Plumbing");
+  });
+});
+
+describe("pro onboarding wizard: hydration safety", () => {
+  // Renders straight through react-dom/client rather than Testing Library's
+  // render(), and reads the DOM in the same synchronous tick `root.render()`
+  // returns in - before React gets a chance to flush any passive effect,
+  // draft restore included. That is exactly what a browser's first paint
+  // during hydration sees: the server's markup, then whatever the client's
+  // FIRST render produces, before any effect has run. If reading the draft
+  // (or anything else) ever moved out of an effect and into render, this
+  // would start failing the moment a draft existed.
+  function firstPaintHTML(node: ReactElement): string {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const originalError = console.error;
+    // root.render() outside act() logs React's "not wrapped in act(...)"
+    // warning on purpose - the whole point is to inspect the DOM before any
+    // effect-driven update, which act() would otherwise flush away first.
+    console.error = () => {};
+    try {
+      root.render(node);
+    } finally {
+      console.error = originalError;
+    }
+    const html = container.innerHTML;
+    console.error = () => {};
+    try {
+      root.unmount();
+    } finally {
+      console.error = originalError;
+    }
+    return html;
+  }
+
+  it("renders identical first-paint markup with and without a draft waiting in localStorage", () => {
+    const noDraftHtml = firstPaintHTML(
+      <OnboardingCompanyForm userId="user-1" defaultEmail="pro@example.com" />
+    );
+
+    window.localStorage.setItem(
+      proOnboardingDraftKey("user-1") as string,
+      JSON.stringify({
+        savedAt: Date.now(),
+        v: 2,
+        step: 1,
+        name: "Acme Plumbing",
+        phone: "7145551234",
+        license: "1029384",
+        referral: "REF123",
+        cities: ["Irvine", "Tustin"],
+        categories: ["plumbing"],
+      })
+    );
+
+    const withDraftHtml = firstPaintHTML(
+      <OnboardingCompanyForm userId="user-1" defaultEmail="pro@example.com" />
+    );
+
+    expect(withDraftHtml).toBe(noDraftHtml);
   });
 });

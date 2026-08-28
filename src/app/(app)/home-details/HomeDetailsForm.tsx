@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { updatePropertyAction } from "../profile/actions";
 import SubmitButton from "@/components/SubmitButton";
+import { PROPERTY_TYPES } from "@/lib/constants";
 
 export default function HomeDetailsForm({
+  propertyType,
   yearBuilt,
   sqft,
   beds,
@@ -12,6 +14,7 @@ export default function HomeDetailsForm({
   lotSizeSqft,
   purchaseDate,
 }: {
+  propertyType: string | null;
   yearBuilt: number | null;
   sqft: number | null;
   beds: number | null;
@@ -42,6 +45,24 @@ export default function HomeDetailsForm({
       className="card space-y-4"
     >
       <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="property_type">
+            Property type
+          </label>
+          <select
+            id="property_type"
+            name="property_type"
+            className="select"
+            defaultValue={propertyType ?? ""}
+          >
+            <option value="">Leave as is</option>
+            {PROPERTY_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="label" htmlFor="year_built">
             Year built

@@ -87,6 +87,12 @@ export default function ProNav({
             name={company}
             themeToggle
             links={[
+              // First entry, mirroring the homeowner ToolsMenu's askLink: the
+              // copilot otherwise lives only as a pinned row inside Messages
+              // (AskHearthRow, /pro/chats), which a tester never found. This
+              // is the second door, reachable from every page in the pro
+              // shell, not just the inbox.
+              { href: "/pro/ask", label: "Ask Hearth" },
               // Company profile is the pro's storefront: top-level. "Edit
               // business" says what you DO here.
               { href: "/pro/profile", label: "Edit business profile" },

@@ -111,6 +111,13 @@ export default async function ProCrmPage(
   const clients = clientRows ?? [];
   const leads = leadRows ?? [];
 
+  // How many clients came from the "Add a client" form itself (lead_id null)
+  // rather than from tapping Track on a suggested job (lead_id set). Used
+  // below to reset that form's fields on a successful add, without also
+  // resetting it - and blanking whatever the pro was mid-typing - every time
+  // a Track tap changes the client count too.
+  const addedClientCount = clients.filter((c) => !c.lead_id).length;
+
   // The search box narrows the grouped list below; the stage tiles, the
   // follow up digest, and the job suggestions all stay based on every client
   // so the pipeline overview never shifts just because someone is searching.
@@ -225,7 +232,21 @@ export default async function ProCrmPage(
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           Add a client
         </h2>
-        <form action={addClientAction} className="grid gap-3 sm:grid-cols-2">
+        {/* Keyed on addedClientCount, not clients.length: a successful add
+            changes that number, so React remounts the form with blank
+            uncontrolled inputs instead of leaving the just-submitted name and
+            note sitting in the fields. A validation error (see ./actions.ts's
+            addClientAction) leaves the count untouched, so the key stays put
+            and whatever the pro typed is still there to fix and resubmit.
+            Keying on the plain client count instead used to also remount (and
+            blank) this form when a Track tap on a suggested job below added a
+            client of its own - a half-typed name here would vanish on a tap
+            that had nothing to do with this form. */}
+        <form
+          key={addedClientCount}
+          action={addClientAction}
+          className="grid gap-3 sm:grid-cols-2"
+        >
           <label className="block sm:col-span-2">
             <span className="label">Client name</span>
             <input

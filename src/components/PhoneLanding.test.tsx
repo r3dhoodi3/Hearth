@@ -43,18 +43,23 @@ describe("PhoneLanding", () => {
     expect(signIn).toHaveClass("btn-secondary", "min-h-12", "w-full");
   });
 
-  it("keeps the three quiet doors as small text links, not buttons", () => {
+  it("keeps the two quiet doors as small text links, not buttons, each clearing 44px", () => {
     render(<PhoneLanding />);
     const quiet = [
       ["I'm a contractor", "/pros"],
       ["Emergency help", "/emergency-help"],
-      ["Privacy", "/privacy"],
     ] as const;
     for (const [name, href] of quiet) {
       const link = screen.getByRole("link", { name });
       expect(link).toHaveAttribute("href", href);
       expect(link.className).not.toMatch(/btn/);
+      expect(link).toHaveClass("min-h-11");
     }
+  });
+
+  it("does not repeat Privacy here (it lives in the phone footer only)", () => {
+    render(<PhoneLanding />);
+    expect(screen.queryByRole("link", { name: "Privacy" })).toBeNull();
   });
 
   it("keeps the theme switch reachable, since the page header is hidden on phone", () => {

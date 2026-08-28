@@ -43,8 +43,8 @@ export type Msg = {
   // ended (a network drop, a server recompile, an idle timeout) before the
   // terminal line arrived, and this is whatever text had already come in.
   // Persisted so a reload shows the partial answer instead of treating the
-  // question as unanswered; a later UI could use this to say the answer was
-  // cut short.
+  // question as unanswered. The bubble says so under the text, and its
+  // OPTIONS/POSTJOB actions wait for a full, non-partial reply.
   partial?: boolean;
 };
 type Job = { category: string; timing: string; summary: string };
@@ -417,6 +417,11 @@ const STREAM_IDLE_TIMEOUT_MS = 30_000;
 // that fast. At 60ms the text still appears to flow and the work drops by
 // more than an order of magnitude.
 const STREAM_PAINT_MS = 60;
+// How often a still-growing answer is written to localStorage. Repainting is
+// cheap enough to do every 60ms; a synchronous JSON.stringify plus a store
+// write of the whole conversation is not, so saving runs on its own, much
+// slower clock. See the `save` helper in consumeStream for why it saves at all.
+const STREAM_SAVE_MS = 1000;
 // How close to the bottom of the chat counts as "following along". Inside
 // this, a streamed answer keeps scrolling into view; outside it, the reader
 // has deliberately scrolled up and is left alone.
@@ -465,6 +470,59 @@ function prune(msgs: Msg[], retention: Retention): Msg[] {
       : msgs.filter((m) => !m.ts || m.ts >= cutoff);
   return kept.slice(-MAX_MESSAGES);
 }
+
+/**
+ * Write the conversation to localStorage, shedding history rather than losing
+ * the newest turns.
+ *
+ * The store is a few megabytes per origin and this conversation carries base64
+ * photos, so a long chat can fill it. setItem then THROWS, and swallowing that
+ * (which is all this used to do) drops the write whole - which shows up as the
+ * worst possible shape: the short user turns fit and get saved, the long
+ * answer between them does not, and a reload comes back to a column of
+ * questions with no answers and a "That took too long" card under the last
+ * one. So try the whole list, then the same list without its photos, then
+ * progressively less history, and keep the newest turns on disk.
+ *
+ * Returns whether anything was written.
+ */
+function writeChat(key: string, msgs: Msg[]): boolean {
+  // Photos are by far the biggest thing in here; the text of the same turn is
+  // worth far more than the attachment on a reload.
+  const stripped: Msg[] = msgs.map((m) => {
+    if (!m.image) return m;
+    const copy: Msg = { role: m.role, content: m.content };
+    if (m.ts) copy.ts = m.ts;
+    if (m.link) copy.link = m.link;
+    if (m.partial) copy.partial = true;
+    return copy;
+  });
+  const attempts: Msg[][] = [msgs, stripped];
+  // Strictly descending and deduplicated: the raw list isn't guaranteed
+  // either (msgs.length - 1 and Math.ceil(msgs.length / 2) can land in any
+  // order, or land on the same number, depending on msgs.length), and an
+  // out-of-order or repeated size here just means retrying an attempt no
+  // smaller than the last, which never gets this loop any closer to a write
+  // that fits.
+  const keeps = [
+    ...new Set(
+      [msgs.length - 1, Math.ceil(msgs.length / 2), 8, 4, 2, 1].filter(
+        (n) => n >= 1 && n < msgs.length
+      )
+    ),
+  ].sort((a, b) => b - a);
+  for (const n of keeps) attempts.push(stripped.slice(-n));
+
+  for (const attempt of attempts) {
+    try {
+      localStorage.setItem(key, JSON.stringify(attempt));
+      return true;
+    } catch {
+      // Over quota (or storage is switched off entirely) - try a smaller list.
+    }
+  }
+  return false;
+}
 // ---------------------------------------------------------------------------
 // Pure conversation helpers. Exported for their unit test
 // (src/components/askState.test.tsx); the component is their only real caller.
@@ -504,6 +562,38 @@ export function alreadyAsked(msgs: Msg[], question: string): boolean {
 export function isUnanswered(msgs: Msg[]): boolean {
   const last = msgs[msgs.length - 1];
   return !!last && last.role === "user";
+}
+
+/**
+ * Which conversation the next question should be appended to: the one held in
+ * memory, or the one on disk.
+ *
+ * Normally they are the same list and memory wins, because memory is the only
+ * one that is up to date the instant something changes. But memory lives in a
+ * ref, and a ref is the one piece of state React cannot re-derive: anything
+ * that leaves it behind - a render that ran with older state, a stale closure,
+ * a storage read that lost a race - takes turns off the front of the next
+ * request, and the reader watches a finished answer vanish from the transcript
+ * the moment they ask their next question.
+ *
+ * So: when the saved conversation contains everything memory has AND MORE, the
+ * saved one wins. That shape has exactly one cause - memory fell behind - and
+ * it is the shape the reported bug leaves. A saved list that is shorter, or
+ * that disagrees about a message memory already has, is left alone: that is
+ * another instance of this chat clearing or deleting, which memory is right to
+ * have followed.
+ */
+export function freshest(inMemory: Msg[], stored: Msg[]): Msg[] {
+  if (stored.length <= inMemory.length) return inMemory;
+  for (let i = 0; i < inMemory.length; i++) {
+    if (
+      stored[i].role !== inMemory[i].role ||
+      stored[i].content !== inMemory[i].content
+    ) {
+      return inMemory;
+    }
+  }
+  return stored;
 }
 
 const DEFAULT_GREETING =
@@ -622,8 +712,20 @@ export default function AskHearth({
   // than off the `messages` closure it was created with: a storage re-read can
   // land between the render that created the handler and the tap that runs it,
   // and appending to a stale list either loses the turn or repeats one.
+  //
+  // NOTHING WRITES THIS DURING RENDER. It used to carry a bare
+  // `messagesRef.current = messages` in the render body, which looks like a
+  // free way to keep the two in step and is the one way this ref can move
+  // BACKWARDS: a render body runs with the state for that render, and React is
+  // free to render (and even commit) a pass that does not include an update
+  // already queued - a lower-priority pass, a pass restarted after an
+  // interruption, a discarded one. Whatever `applyMessages` had just written
+  // was then overwritten with the older list, and the next send built its
+  // append off that: a finished answer disappeared from the transcript the
+  // moment the following question went out, and never reached localStorage.
+  // Every writer of `messages` (applyMessages, and the storage read below)
+  // sets this ref itself, so the assignment was redundant as well as unsafe.
   const messagesRef = useRef(messages);
-  messagesRef.current = messages;
 
   // Which account's chat this is. Until the id loads (or if it can't), fall
   // back to the legacy shared keys so nothing breaks.
@@ -696,7 +798,7 @@ export default function AskHearth({
         const parsed = raw ? JSON.parse(raw) : null;
         const pruned = Array.isArray(parsed) ? prune(parsed, r) : [];
         if (Array.isArray(parsed) && pruned.length !== parsed.length) {
-          localStorage.setItem(storageKey, JSON.stringify(pruned));
+          writeChat(storageKey, pruned);
         }
         const next = pruned.length ? pruned : [GREETING];
         // Keep the ref in step immediately: submit() reads it, and a tap can
@@ -758,11 +860,7 @@ export default function AskHearth({
   // Save the conversation and notify other open instances on this page. Only on
   // real user turns, so loading a saved chat can't overwrite it.
   function persist(msgs: Msg[]) {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(prune(msgs, retention)));
-    } catch {
-      /* ignore */
-    }
+    writeChat(storageKey, prune(msgs, retention));
     window.dispatchEvent(
       new CustomEvent(SYNC_EVENT, { detail: { key: storageKey } })
     );
@@ -788,7 +886,7 @@ export default function AskHearth({
       localStorage.setItem(retentionKey, r);
       const pruned = prune(messages, r);
       applyMessages(pruned.length ? pruned : [GREETING]);
-      localStorage.setItem(storageKey, JSON.stringify(pruned));
+      writeChat(storageKey, pruned);
     } catch {
       /* ignore */
     }
@@ -910,15 +1008,38 @@ export default function AskHearth({
     // signal that the answer has started.
     applyMessages(withContent(""));
 
+    // Save the growing answer, marked partial, on the slow clock above.
+    //
+    // The whole of an answer used to be memory-only until the terminal line
+    // landed, which meant that for as long as a reply took to write, what was
+    // on screen and what was on disk disagreed by an entire assistant turn.
+    // Anything that re-read the store inside that window - a reload, another
+    // instance of this chat on the page saving its own turn - came back to the
+    // question with nothing under it, and the answer the reader was already
+    // reading was gone for good. `partial` is the same flag the
+    // dropped-connection path below already writes, so a reload inside the
+    // window shows the text that had arrived rather than an orphaned question
+    // and a "That took too long" card.
+    let lastSave = 0;
+    const save = () => {
+      if (!streamed.trim()) return; // nothing worth saving yet
+      lastSave = Date.now();
+      persist(withContent(streamed, null, true));
+    };
+
     // Repaint at most every STREAM_PAINT_MS. Trailing edge, so the last delta
     // before a pause still lands even if nothing follows it for a while.
     let paintTimer: ReturnType<typeof setTimeout> | null = null;
-    const paint = () => {
+    const cancelPaint = () => {
       if (paintTimer) {
         clearTimeout(paintTimer);
         paintTimer = null;
       }
+    };
+    const paint = () => {
+      cancelPaint();
       applyMessages(withContent(streamed));
+      if (Date.now() - lastSave >= STREAM_SAVE_MS) save();
     };
     const schedulePaint = () => {
       if (paintTimer) return;
@@ -962,7 +1083,11 @@ export default function AskHearth({
               typeof data.answer === "string" && data.answer
                 ? data.answer
                 : streamed;
-            paint(); // cancels any pending repaint before the final write
+            // Drop any pending repaint; the two writes below are the final
+            // word on this reply and both run right now, so `messagesRef` and
+            // localStorage are in step with the transcript before this
+            // function returns and the next question can be sent.
+            cancelPaint();
             const updated = withContent(answer, link);
             applyMessages(updated);
             persist(updated);
@@ -1033,7 +1158,10 @@ export default function AskHearth({
     // on this page saving) landing between render and tap. Appending to the
     // stale copy replays turns that are already in the conversation, which is
     // how one question ends up on screen as two identical bubbles.
-    const before = messagesRef.current;
+    const before = freshest(
+      messagesRef.current,
+      readStoredMessages(storageKey, retention)
+    );
     const userMsg: Msg = {
       role: "user",
       content: text || (sentImage ? "Here's a photo - what is this?" : ""),
@@ -1355,6 +1483,16 @@ export default function AskHearth({
             )}
           </span>
         )}
+        {/* The connection dropped before the terminal line arrived, and this
+            is whatever text had already come in (see `partial` on Msg above).
+            Said plainly rather than silently, so a reload doesn't read as the
+            whole answer. No button: asking again is just typing the next
+            question, same as any other follow-up. */}
+        {m.role === "assistant" && m.partial && (
+          <span className="text-xs text-stone-500 dark:text-stone-400">
+            This answer was cut off. Ask again for the full one.
+          </span>
+        )}
         {/* A question whose answer never arrived (the page was reloaded or
             closed mid-request). Say so plainly and give them the two things
             they'd want: ask it again, or get rid of it. */}
@@ -1395,8 +1533,11 @@ export default function AskHearth({
             JSON has closed but whose reply has not would pop a "Get 3 free
             quotes" card up mid-sentence, on an answer that may still change.
             On the last message during a load there is nothing to show anyway
-            (a user turn has no actions), so this costs nothing elsewhere. */}
-        {!(isLast && loading) && (
+            (a user turn has no actions), so this costs nothing elsewhere.
+            Same reasoning for `partial`: a cut-off answer is not the final
+            one either, whether or not it's still the last message on
+            screen, so its actions wait for a full reply too. */}
+        {!(isLast && loading) && !m.partial && (
           <MessageActions
             job={parsed.job}
             issue={parsed.issue}
@@ -1405,7 +1546,7 @@ export default function AskHearth({
         )}
         {/* Tappable quick-reply options, shown on the latest reply so the
             homeowner can drill down without typing. */}
-        {parsed.options && isLast && !loading && (
+        {parsed.options && isLast && !loading && !m.partial && (
           <div className="mt-2 flex flex-wrap gap-2">
             {parsed.options
               // Drop any "Other" the model added; we always add our own below.

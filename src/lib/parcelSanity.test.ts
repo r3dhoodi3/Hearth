@@ -145,7 +145,7 @@ describe("absent and malformed figures", () => {
 describe("the notice", () => {
   it("says what happened and what the owner can do", () => {
     expect(BUILDING_RECORD_NOTICE).toContain("whole building");
-    expect(BUILDING_RECORD_NOTICE).toContain("Home details");
+    expect(BUILDING_RECORD_NOTICE).toContain("Home value");
     // House style: no em dashes or en dashes anywhere in user-facing copy.
     // Checked by codepoint so this file does not itself contain the
     // characters it bans.

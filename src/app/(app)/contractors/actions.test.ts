@@ -47,6 +47,13 @@ const LAUNCH_PROPERTY = {
 let activeProperty: Record<string, unknown> | null = LAUNCH_PROPERTY;
 let rateLimitAnswers: (boolean | null)[] = [];
 
+// Table handlers for the SUCCESS path. Null (the default) keeps the strict
+// behavior every failure test relies on: touching a table throws, which is how
+// "nothing was inserted" is proved rather than asserted. The one test that
+// posts a job for real installs handlers here and takes them down after.
+let dbTables: ((table: string) => unknown) | null = null;
+let adminTables: ((table: string) => unknown) | null = null;
+
 vi.mock("@/lib/property", () => ({
   getActiveProperty: vi.fn(async () => activeProperty),
   formatAddressLine: vi.fn(
@@ -62,6 +69,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: async () => ({ data: { user: sessionUser } }) },
     from: (table: string) => {
+      if (dbTables) return dbTables(table);
       throw new Error(`postJobAction must not touch "${table}" on this path`);
     },
     storage: {
@@ -80,6 +88,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       error: null,
     })),
     from: (table: string) => {
+      if (adminTables) return adminTables(table);
       throw new Error(`postJobAction must not write "${table}" on this path`);
     },
   })),
@@ -115,6 +124,7 @@ import { postJobAction } from "./actions";
 import { POST_JOB_ERRORS } from "./postJobErrors";
 import { setFlash } from "@/lib/flash";
 import { redirect } from "next/navigation";
+import { alertProsForNewLead } from "@/lib/proAlerts";
 
 function fd(fields: Record<string, string>): FormData {
   const f = new FormData();
@@ -148,6 +158,13 @@ async function runAndCatchRedirect(form: FormData): Promise<string> {
 beforeEach(() => {
   activeProperty = { ...LAUNCH_PROPERTY };
   rateLimitAnswers = [];
+  dbTables = null;
+  adminTables = null;
+  // Back to the strict default: on every REJECTED post, alerting pros is a
+  // test failure. The success tests below opt out of this for their own run.
+  vi.mocked(alertProsForNewLead).mockImplementation((() => {
+    throw new Error("pros must not be alerted about a job that was rejected");
+  }) as unknown as typeof alertProsForNewLead);
   vi.mocked(setFlash).mockClear();
   vi.mocked(redirect).mockClear();
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -314,5 +331,163 @@ describe("postJobAction failure paths", () => {
     for (const message of Object.values(POST_JOB_ERRORS)) {
       expect(message.length).toBeGreaterThan(10);
     }
+  });
+});
+
+// The success path, driven with the EXACT FormData the real form produces.
+//
+// Every test above proves a rejection. None of them proved the ordinary case,
+// which is how the 2026-08-28 report ("Posting..., then a reset form, no
+// banner, and no Your jobs anywhere") stayed ambiguous for so long: the action
+// was in fact inserting the row and redirecting to ?posted=, and the missing
+// half was on the page. So this pins the contract the page depends on - a good
+// post ends at /contractors?posted=<something that changes>, never at a bare
+// /contractors and never at an ?error= URL.
+//
+// The field names below are copied from the rendered form, not invented:
+// issue_id (hidden), category (CategoryFilter's hidden input, the plain
+// category - never the project-option key), timing, homeowner_name /
+// homeowner_email / homeowner_phone, message (DescriptionField's textarea),
+// budget_range (BudgetField, "" for "Prefer not to say"). photo_urls and the
+// 0114 scope fields are absent from a plain no-photo, non-major post, exactly
+// as they are absent from the real submit.
+const REAL_SUBMIT = {
+  issue_id: "",
+  category: "plumbing",
+  timing: "few_weeks",
+  homeowner_name: "Jane Doe",
+  homeowner_email: "jane@example.com",
+  homeowner_phone: "(714) 555-0134",
+  message:
+    "The kitchen sink drain under the cabinet has been leaking steadily for three days and the cabinet floor is soaked.",
+  budget_range: "",
+};
+
+// A PostgREST-shaped stub: filters and modifiers chain, and awaiting anywhere
+// in the chain (directly, or via single/maybeSingle) resolves to whatever this
+// table is set up to answer with. Reads answer off a queue so one table can
+// give a different answer per call, which contractor_leads needs: the
+// duplicate-post probe, then the insert, then the post-insert twin check.
+function tableStub(
+  reads: unknown[],
+  // Where the rows handed to .insert() are collected, and what the insert's
+  // own .select(...).single() answers with (the DB gives back id/created_at,
+  // which the action needs for the post-insert twin check).
+  sink?: { rows: Record<string, unknown>[]; returning: unknown }
+) {
+  const queue = [...reads];
+  let inserted = false;
+  const chain: Record<string, unknown> = {};
+  for (const m of [
+    "select",
+    "eq",
+    "neq",
+    "is",
+    "not",
+    "in",
+    "gte",
+    "lte",
+    "order",
+    "limit",
+    "contains",
+    "update",
+    "delete",
+  ]) {
+    chain[m] = () => chain;
+  }
+  chain.insert = (row: unknown) => {
+    inserted = true;
+    sink?.rows.push(row as Record<string, unknown>);
+    return chain;
+  };
+  const answer = () => {
+    if (inserted) {
+      inserted = false;
+      return { data: sink ? sink.returning : null, error: null, count: null };
+    }
+    return {
+      data: queue.length ? queue.shift() : null,
+      error: null,
+      count: 0,
+    };
+  };
+  chain.single = () => Promise.resolve(answer());
+  chain.maybeSingle = () => Promise.resolve(answer());
+  chain.then = (
+    resolve: (v: unknown) => unknown,
+    reject: (e: unknown) => unknown
+  ) => Promise.resolve(answer()).then(resolve, reject);
+  return chain;
+}
+
+describe("postJobAction success path", () => {
+  it("inserts the job and redirects to ?posted= for a real form submit", async () => {
+    const sink = {
+      rows: [] as Record<string, unknown>[],
+      // What the insert's own .select("id, created_at").single() answers with,
+      // which the action needs for the post-insert duplicate check.
+      returning: { id: "lead-1", created_at: "2026-08-28T12:00:00.000Z" },
+    };
+    // Reads, in order: the pre-insert duplicate probe (nothing recent), then
+    // the twin check, which must name THIS row as the keeper so the action
+    // does not turn round and delete what it just wrote.
+    const leads = tableStub([null, [{ id: "lead-1" }]], sink);
+    dbTables = (table: string) => {
+      if (table === "contractor_leads") return leads;
+      throw new Error(`unexpected table read on the success path: ${table}`);
+    };
+    // app_events (the post_job analytics write) and contractors (the matched-pro
+    // nudge) are the only admin tables a good post touches.
+    adminTables = () => tableStub([[]]);
+    vi.mocked(alertProsForNewLead).mockImplementation(
+      async () => new Set<string>()
+    );
+
+    const path = await runAndCatchRedirect(fd(REAL_SUBMIT));
+    const url = new URL(path, "https://example.test");
+
+    expect(url.pathname).toBe("/contractors");
+    // The banner is gated on ?posted, and the form's React key is that same
+    // value, so it has to be present AND change from post to post.
+    expect(url.searchParams.get("posted")).toBeTruthy();
+    expect(url.searchParams.get("posted")).not.toBe("");
+    // A success must never carry a failure code, and a failure must never
+    // arrive without one - the two halves of the contract the page reads.
+    expect(url.searchParams.get("error")).toBeNull();
+
+    expect(sink.rows).toHaveLength(1);
+    const row = sink.rows[0];
+    expect(row.property_id).toBe("property-1");
+    expect(row.category).toBe("plumbing");
+    expect(row.timing).toBe("few_weeks");
+    expect(row.contractor_id).toBeNull();
+    expect(row.status).toBe("new");
+    expect(row.issue_description).toBe(REAL_SUBMIT.message);
+    expect(row.homeowner_name).toBe("Jane Doe");
+  });
+
+  it("stamps ?posted with a fresh timestamp, not a fixed value", async () => {
+    // The form's React key is ?posted, so a constant would leave the previous
+    // post's text sitting in the textarea after the next one. Every success
+    // path in the action - this one and both duplicate-submit shortcuts -
+    // stamps a real clock value.
+    const before = Date.now();
+    const sink = {
+      rows: [] as Record<string, unknown>[],
+      returning: { id: "lead-1", created_at: "2026-08-28T12:00:00.000Z" },
+    };
+    dbTables = () => tableStub([null, [{ id: "lead-1" }]], sink);
+    adminTables = () => tableStub([[]]);
+    vi.mocked(alertProsForNewLead).mockImplementation(
+      async () => new Set<string>()
+    );
+
+    const url = new URL(
+      await runAndCatchRedirect(fd(REAL_SUBMIT)),
+      "https://example.test"
+    );
+    const posted = Number(url.searchParams.get("posted"));
+    expect(Number.isFinite(posted)).toBe(true);
+    expect(posted).toBeGreaterThanOrEqual(before);
   });
 });

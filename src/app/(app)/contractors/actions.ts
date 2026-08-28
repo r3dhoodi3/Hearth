@@ -546,7 +546,11 @@ export async function postJobAction(formData: FormData) {
     .limit(1)
     .maybeSingle();
   if (recent && Date.now() - new Date(recent.created_at).getTime() < 15000) {
-    redirect("/contractors?posted=1");
+    // Date.now(), not a literal "1", for the same reason the happy path uses
+    // it at the bottom of this action: ?posted is the post form's React key,
+    // so a constant leaves the previous submit's text sitting in the textarea
+    // instead of resetting it.
+    redirect(`/contractors?posted=${Date.now()}`);
   }
 
   // Free vs Plus open-job limits: a free homeowner may have 3 open jobs at a
@@ -708,7 +712,9 @@ export async function postJobAction(formData: FormData) {
       if (photoIssueId && photoIssueId !== issueId) {
         await supabase.from("issues").delete().eq("id", photoIssueId);
       }
-      redirect("/contractors?posted=1");
+      // Same as the pre-insert dedup above: a fresh token, so the form the
+      // owner lands on is actually reset.
+      redirect(`/contractors?posted=${Date.now()}`);
     }
   }
 

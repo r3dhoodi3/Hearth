@@ -240,3 +240,22 @@ STILL YOURS: STRIPE_SECRET_KEY placeholder in Vercel; live DB missing 0130-0133 
 ## Live post-deploy smoke (2026-08-27 ~09:55) + latency finding
 Public pages all 200 (/, /pricing, /privacy, /ai-disclosure, /signin, both signups, /pros, /fountain-valley); no em dashes. Password sign-in works (Supabase returns the token, cookies set: hearth_did httpOnly, hearth_fp, sb-...-auth-token).
 FINDING (not a push blocker, investigate): signed-in server pages are slow on cold start. Dashboard measured 67s cold -> 34s -> 13s warming, /value ~6s, /forecast ~7s. All return 200, no 5xx, no fatal logs. Cause is hobby-tier serverless cold starts PLUS heavy sequential Supabase queries per page, several of which hit the not-yet-created risk/feedback tables (account_signals, account_risk, risk_overrides, linked_accounts, app_feedback all 404 and log an error each). Running the DB pastes removes those errored round trips and should cut dashboard latency. If it is still slow after the migrations: parallelize the dashboard's Supabase queries (they look sequential), cache trialDecision, and consider the Vercel Pro plan for warm functions. Do NOT chase this before the migrations are applied; it is confounded by them.
+
+## Overnight 2026-08-28/29 (Claude, with Landen's one-night push permission)
+
+Read STATUS.md first (morning list). Pushes: d2b30a2 (wave 1), 29f5231 (round 2), plus a round-3 push (see git log). Each push: tsc 0, full vitest green, eslint 0, isolated build 0, red team (2 agents) + checker, Fable review.
+
+Process: research agents (paywall x3, speed, App Store, operations, a11y/copy, mobile home) -> Fable plan -> 30+ sonnet/opus workers -> 2 red teams -> checker -> push -> 10 persona testers (dev server by accident: a leftover `next dev` was on :3100; findings still valid, perf/dev-indicator items discarded) -> bias checker -> fix waves -> push -> 5 testers on a real `next start` build -> fixes -> push -> 10 checker agents.
+
+Root causes worth remembering:
+- Leads list empty everywhere since 0105 added `direct_to` (second FK to contractors): PostgREST PGRST201 ambiguous embed, error swallowed; fixed with `contractors!contractor_leads_contractor_id_fkey` via src/lib/leadJoin.ts. This is why "posted job vanished" showed up in 3 tester reports.
+- RentCast answers a miss with HTTP 404; the code treated every non-ok as "unavailable" (never cached, re-billed, fake-address gate unreachable). Now 404 = miss, retry on connect failure, body read bounded; a miss proceeds to manual entry (product call).
+- Photon substitutes the nearest house number; now filtered when the query has a number.
+- Ask Hearth transcript: `messagesRef.current = messages` in the render body could roll the list backwards; removed; answers saved while streaming; storage quota handled.
+- Dual-role unread badge counted the account's own outgoing business messages (RLS lets either party read the lead).
+- Live DB constraint `contractors_launch_cities_subset` still pre-0129 (HB + FV only) until Landen pastes 0129-0132; every pro tester hit it.
+- Aborting a stream refunded the question (unlimited free tier); `public.users` had no column lock (counters resettable via PostgREST); both fixed (askStream `gone` flag, 0139 trigger).
+
+Scratchpad (session 99a39419): paywall-inventory/benchmarks/ux.md, speed-plan.md, appstore-checklist.md, operating-plan.md, a11y-copy-audit.md, mobile-home-plan.md, redteam-A/B.md, persona-run/round1-findings.md + round1-bias-check.md, README-round2.md, shots/.
+
+Owner items are in STATUS.md. Test accounts to delete: hearth-persona-* (round 1: h1-h4, c1-c4, d1, d2, d2b; round 2: r2h1, r2c2; plus hearth-persona-0), hearth-test-1..5@example.com, hearth-redteam-*.
