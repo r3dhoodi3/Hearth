@@ -266,8 +266,13 @@ export async function updateClientDetailsAction(formData: FormData) {
     return;
   }
 
+  // .select("id") is what turns the contractor_id filter into a real answer.
+  // Without it a write that matched NOTHING - a tampered id, or someone
+  // else's client - returns no error, and the pro would be told "Client
+  // updated." about a row that was never touched. An empty array is the
+  // "not yours" signal.
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("pro_clients")
     .update({
       client_name: name,
@@ -280,9 +285,15 @@ export async function updateClientDetailsAction(formData: FormData) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("contractor_id", contractor.id);
+    .eq("contractor_id", contractor.id)
+    .select("id");
   if (error) {
     await setFlash("Couldn't save your changes. Please try again.", "error");
+    back();
+    return;
+  }
+  if (!updated || updated.length === 0) {
+    await setFlash("That client isn't yours.", "error");
     back();
     return;
   }
@@ -297,15 +308,28 @@ export async function deleteClientAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) redirect("/pro/crm");
 
+  // Same reason as updateClientDetailsAction: .select("id") is the only way
+  // to tell "deleted your row" from "matched nothing", so a tampered id gets
+  // an honest refusal instead of "Client removed."
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: removed, error } = await supabase
     .from("pro_clients")
     .delete()
     .eq("id", id)
-    .eq("contractor_id", contractor.id);
+    .eq("contractor_id", contractor.id)
+    .select("id");
+  // The failure exits stay on /pro/crm/[id], the page this form is always
+  // submitted from, so they revalidate instead of redirecting: a same-path
+  // App Router redirect leaves the route stuck on its loading boundary.
   if (error) {
     await setFlash("Couldn't remove that client. Please try again.", "error");
-    redirect(`/pro/crm/${id}`);
+    revalidatePath(`/pro/crm/${id}`);
+    return;
+  }
+  if (!removed || removed.length === 0) {
+    await setFlash("That client isn't yours.", "error");
+    revalidatePath(`/pro/crm/${id}`);
+    return;
   }
 
   await setFlash("Client removed.");

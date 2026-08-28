@@ -8,6 +8,7 @@ import {
   PLUS_PLAN,
   PLUS_ASK_PER_DAY,
   PLUS_INCLUDED_HOMES,
+  TRIAL_ASK_PER_DAY,
   formatUsd,
   yearlySavings,
   yearlyAsMonthly,
@@ -45,12 +46,21 @@ const YEARLY_AS_MONTHLY = formatUsd(yearlyAsMonthly(PLUS_PLAN)); // $3.33
 // stating them: a hand-typed "5 homes" or "15 asks a day" is a promise that
 // goes stale the first time a limit moves, and nobody re-reads a bullet list
 // when they change a cap.
-const PLUS_BULLETS = [
-  "Plan and forecast, in full",
-  "Quote analyzer, home report",
-  "Every alert, every channel",
-  `${PLUS_INCLUDED_HOMES} homes, ${PLUS_ASK_PER_DAY} asks a day`,
-];
+//
+// A function, not a constant, because ONE of those numbers is not the same on
+// every card. The free days ride on the weekly plan, and the trial enforces
+// TRIAL_ASK_PER_DAY, not PLUS_ASK_PER_DAY (see src/lib/aiUsage.ts): the weekly
+// card and the phone panel were promising 15 asks a day to a buyer whose first
+// three days give 8. Quoting the smaller number on the card that carries the
+// trial is the version the product actually keeps on day one.
+function plusBullets(asksPerDay: number): string[] {
+  return [
+    "Plan and forecast, in full",
+    "Quote analyzer, home report",
+    "Every alert, every channel",
+    `${PLUS_INCLUDED_HOMES} homes, ${asksPerDay} asks a day`,
+  ];
+}
 
 // What the free tier actually includes, so the third card reads as a plan
 // somebody runs on rather than as a wall of dashes.
@@ -104,6 +114,17 @@ export default function PlanToggle({
   const plan: Plan = choice === "free" ? "monthly" : choice;
   const weeklyTrial = trialEligible;
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  // Two bullet lists, differing in one number: the weekly card starts on the
+  // trial's smaller Ask ceiling when the trial is on offer, monthly and annual
+  // bill on day one and get the full one. See plusBullets above.
+  const WEEKLY_BULLETS = plusBullets(
+    weeklyTrial ? TRIAL_ASK_PER_DAY : PLUS_ASK_PER_DAY
+  );
+  const PAID_BULLETS = plusBullets(PLUS_ASK_PER_DAY);
+  // The phone panel shows the bullets for whichever card is selected, so it
+  // follows the same split rather than always quoting the paid ceiling.
+  const panelBullets = plan === "weekly" ? WEEKLY_BULLETS : PAID_BULLETS;
 
   // Roving tabindex: one stop for the whole group, arrows move the selection
   // the way a native radio group does. Space and Enter are already handled by
@@ -290,7 +311,7 @@ export default function PlanToggle({
               </span>
             </span>
             {bulletList(
-              PLUS_BULLETS,
+              WEEKLY_BULLETS,
               "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
             )}
           </button>
@@ -320,7 +341,7 @@ export default function PlanToggle({
               </span>
             </span>
             {bulletList(
-              PLUS_BULLETS,
+              PAID_BULLETS,
               "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
             )}
           </button>
@@ -357,7 +378,7 @@ export default function PlanToggle({
               </span>
             </span>
             {bulletList(
-              PLUS_BULLETS,
+              PAID_BULLETS,
               "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
             )}
           </button>
@@ -413,7 +434,7 @@ export default function PlanToggle({
           <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">
             {panelBilling[plan]}
           </p>
-          {bulletList(PLUS_BULLETS, "mt-2 block space-y-1")}
+          {bulletList(panelBullets, "mt-2 block space-y-1")}
         </div>
 
         {/* The recurring terms sit INSIDE the checkout form, immediately ABOVE

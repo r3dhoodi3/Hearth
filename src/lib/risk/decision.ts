@@ -124,11 +124,33 @@ export function __clearTrialDecisionCache(): void {
 //   allowCheckout false    only a human-written 'manual' abuse flag reaches
 //                          here. If an operator clears that flag, the next read
 //                          must see it cleared, not a ten-minute-old refusal.
+//   allowTrial true        the ONLY decision this cache is allowed to hold is a
+//                          "charged today" one. A granted trial is the answer
+//                          that can go stale in the direction that matters: the
+//                          /plus page prints "3 days free" off this decision,
+//                          and startPlusCheckoutAction recomputes it fresh
+//                          before charging a card. Between those two moments a
+//                          card fingerprint, a device, or a manual flag can
+//                          land, and a ten-minute-old grant would leave the
+//                          buyer consenting to trial terms while the action
+//                          bills them today - the exact mismatch ROSCA and
+//                          California's Automatic Renewal Law care about. A
+//                          removed trial cannot go stale the same way: it is
+//                          the conservative answer, and the checkout re-runs it
+//                          anyway.
 //
 // The fail-open answer from the catch below is not stored either: a transient
 // outage must not pin an optimistic verdict in place for ten minutes.
+//
+// NOTE ON REACH: while RISK_ENFORCE is off (the default, see above) every
+// decision grants the trial, so nothing is cached and each /plus render
+// recomputes. That is the intended trade - correctness of the disclosure over a
+// latency shave on one upsell page - and the cache starts earning its keep the
+// moment enforcement is switched on.
 function cacheable(decision: TrialDecision): boolean {
-  return decision.level !== "high" && decision.allowCheckout;
+  return (
+    decision.level !== "high" && decision.allowCheckout && !decision.allowTrial
+  );
 }
 
 function remember(userId: string, decision: TrialDecision): void {

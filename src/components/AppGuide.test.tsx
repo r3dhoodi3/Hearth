@@ -42,6 +42,7 @@ beforeEach(() => {
   mockPathname = "/dashboard";
   markGuideSeenAction.mockClear();
   window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -147,6 +148,58 @@ describe("AppGuide - homeowner", () => {
     mockPathname = "/plus";
     render(<AppGuide side="homeowner" startOpen />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  // The guide used to re-open, full screen, on EVERY route change until Skip
+  // was found: it covered the post-a-job form and the walkthrough for anybody
+  // who tried to use the app instead of reading it. Navigating past it is a
+  // "not now" - closed for this tab, and deliberately NOT stamped as seen.
+  it("snoozes for the session when they navigate past it, without stamping it seen", () => {
+    const { rerender } = render(<AppGuide side="homeowner" startOpen />);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // They ignore the sheet and tap into the app.
+    mockPathname = "/contractors";
+    rerender(<AppGuide side="homeowner" startOpen />);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(markGuideSeenAction).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("hearth_app_guide_seen")).toBeNull();
+    expect(window.sessionStorage.getItem("hearth_app_guide_snoozed")).toBe("1");
+
+    // And it does not come back on the next page either.
+    mockPathname = "/walkthrough";
+    rerender(<AppGuide side="homeowner" startOpen />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("stays shut for the rest of a session that already snoozed it", () => {
+    window.sessionStorage.setItem("hearth_app_guide_snoozed", "1");
+    render(<AppGuide side="homeowner" startOpen />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("still replays from the help page after a snooze", () => {
+    // The snooze is not "seen": the help link is exactly how somebody who
+    // waved it away gets it back.
+    window.sessionStorage.setItem("hearth_app_guide_snoozed", "1");
+    render(<AppGuide side="homeowner" startOpen />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent(window, new CustomEvent(APP_GUIDE_EVENT));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("keeps the snooze on the side it happened on", () => {
+    const { rerender } = render(<AppGuide side="homeowner" startOpen />);
+    mockPathname = "/contractors";
+    rerender(<AppGuide side="homeowner" startOpen />);
+    expect(window.sessionStorage.getItem("hearth_app_guide_snoozed")).toBe("1");
+    // One account can hold both sides; waving away the homeowner guide must
+    // not eat the pro one.
+    expect(
+      window.sessionStorage.getItem("hearth_pro_guide_snoozed")
+    ).toBeNull();
   });
 
   it("reopens on demand from the help page, even after it was seen", () => {

@@ -285,6 +285,10 @@ export default function OnboardingForm({
               ...current,
               city: textField(data.get("city"), 120) || null,
               state: textField(data.get("state"), 60) || null,
+              // The locked ZIP box at the top of the form, which is now the
+              // only named "zip" in it (see that input's comment). It cannot
+              // change while the ready step is open, so this simply keeps the
+              // saved facts agreeing with the address the draft already holds.
               zip: textField(data.get("zip"), 10) || null,
               year_built: numberField(data.get("year_built")),
               sqft: numberField(data.get("sqft")),
@@ -939,9 +943,20 @@ export default function OnboardingForm({
                   matches your name against - belongs to a different address.
                   So it takes the honest route through "Edit ZIP", which
                   re-runs the lookup rather than quietly leaving stale facts
-                  attached to a new ZIP. */}
+                  attached to a new ZIP.
+
+                  name="zip" matters more than it looks: this box had no name
+                  until 2026-08-28, so the ONLY zip in the claim POST came from
+                  a second, freely editable ZIP box inside "Know more details?"
+                  below. Anyone who cleared that box - it is optional, and it
+                  sits under a disclosure most people never open - had their
+                  claim refused as out of area and was filed on the waitlist for
+                  their own home. That second box is gone; this is the one and
+                  only `zip` the form posts, and readOnly fields submit
+                  normally. */}
               <input
                 id="zip"
+                name="zip"
                 className={`input ${step === "ready" ? readOnlyField : ""}`}
                 placeholder="92646"
                 inputMode="numeric"
@@ -1188,63 +1203,26 @@ export default function OnboardingForm({
                 name="looked_up_address"
                 value={facts.address_line1}
               />
-              <input type="hidden" name="parcel_id" value={facts.parcel_id ?? ""} />
               <input type="hidden" name="next" value={next ?? ""} />
               <input type="hidden" name="ref" value={referralCode ?? ""} />
 
-              {/* RentCast enrichment (src/lib/parcel.ts) the owner can't edit and
-                  isn't shown on this screen: carried through as hidden fields so
-                  claimPropertyAction can persist them alongside the visible
-                  facts above. */}
-              <input type="hidden" name="latitude" value={facts.latitude ?? ""} />
-              <input type="hidden" name="longitude" value={facts.longitude ?? ""} />
-              <input type="hidden" name="hoa_fee" value={facts.hoa_fee ?? ""} />
-              <input type="hidden" name="county" value={facts.county ?? ""} />
-              <input
-                type="hidden"
-                name="assessed_value"
-                value={facts.assessed_value ?? ""}
-              />
-              <input
-                type="hidden"
-                name="assessed_year"
-                value={facts.assessed_year ?? ""}
-              />
-              <input
-                type="hidden"
-                name="purchase_date"
-                value={facts.purchase_date ?? ""}
-              />
-              <input
-                type="hidden"
-                name="purchase_price"
-                value={facts.purchase_price ?? ""}
-              />
-              <input
-                type="hidden"
-                name="market_value"
-                value={facts.market_value ?? ""}
-              />
-              <input
-                type="hidden"
-                name="market_value_low"
-                value={facts.market_value_low ?? ""}
-              />
-              <input
-                type="hidden"
-                name="market_value_high"
-                value={facts.market_value_high ?? ""}
-              />
-              <input
-                type="hidden"
-                name="property_tax_history"
-                value={JSON.stringify(facts.property_tax_history ?? null)}
-              />
-              <input
-                type="hidden"
-                name="system_facts"
-                value={JSON.stringify(facts.system_facts ?? null)}
-              />
+              {/* NO PARCEL FACTS ARE POSTED FROM HERE ANY MORE.
+                  Until 2026-08-28 this block carried thirteen more hidden
+                  fields - parcel_id, latitude, longitude, hoa_fee, county, the
+                  assessed value and year, the last sale, the AVM and its range,
+                  the tax history and the system facts - and claimPropertyAction
+                  read every one of them straight off the POST whenever the
+                  street had not been edited. A hidden input is not a server
+                  value: it is whatever the request says it is, so those fields
+                  let a hand-made claim choose its own coordinates (which /value,
+                  the weather alerts and pro matching all key off) and its own
+                  county assessment. The claim now re-reads all of them from its
+                  own lookup on both branches, so posting them would be pure
+                  decoration.
+
+                  What still posts is what the homeowner actually gave us: the
+                  street, the unit, the ZIP, the name, the property type, and
+                  the optional details they can see and edit below. */}
 
               {/* Full name lives here, not on the sign-up form: this is the first
                   point it's actually used - claimPropertyAction (./actions.ts)
@@ -1295,7 +1273,14 @@ export default function OnboardingForm({
                 </summary>
 
                 <div className="mt-3 space-y-4">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {/* State and City only. There WAS a third ZIP box here, and
+                      it was the only field in the whole form actually named
+                      "zip" - so the claim read this optional, hidden-behind-a-
+                      disclosure input instead of the locked one at the top of
+                      the page, and an empty one refused the claim as out of
+                      area. The ZIP the homeowner looked up is the ZIP that
+                      gets claimed; there is no second place to say otherwise. */}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <label className="label">State</label>
                       {/* pickedState is the fallback for a records lookup
@@ -1319,15 +1304,6 @@ export default function OnboardingForm({
                         name="city"
                         className="input"
                         defaultValue={facts.city ?? pickedCity ?? ""}
-                      />
-                    </div>
-                    <div>
-                      <label className="label">ZIP</label>
-                      <input
-                        name="zip"
-                        className="input"
-                        defaultValue={facts.zip ?? ""}
-                        placeholder="Auto-filled from city"
                       />
                     </div>
                   </div>

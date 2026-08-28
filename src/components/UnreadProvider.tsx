@@ -51,9 +51,8 @@ export type UnreadRole = "homeowner" | "contractor";
 
 // The poll + realtime-subscription mechanics for the unread badge, shared by
 // UnreadProvider (the single instance mounted per shell, see below) and
-// LiveUnreadBadge's own fallback path for shells that render it with no
-// provider above them (e.g. ProNav, which still mounts the badge twice - see
-// LiveUnreadBadge.tsx). `enabled` lets a caller that isn't using this
+// LiveUnreadBadge's own fallback path for any site that renders it with no
+// provider above it (see LiveUnreadBadge.tsx). `enabled` lets a caller that isn't using this
 // instance's result skip the poll/subscription entirely, so the hook can
 // always be called (satisfying the rules of hooks) without ever doing
 // duplicate work when a provider is already supplying the count.

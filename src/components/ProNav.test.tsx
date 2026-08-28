@@ -8,6 +8,9 @@ import "@testing-library/jest-dom/vitest";
 vi.mock("@/components/NavLinks", () => ({ default: () => <div /> }));
 vi.mock("@/components/ProfileMenu", () => ({ default: () => <div /> }));
 vi.mock("@/components/NotificationBell", () => ({ default: () => <div /> }));
+vi.mock("@/components/UnreadProvider", () => ({
+  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 // ProNav imports this for the profile menu's switch-side action, which
 // chains into the service-role admin client (`import "server-only"`) -
 // unresolvable in a jsdom test and irrelevant to the pill this test covers.

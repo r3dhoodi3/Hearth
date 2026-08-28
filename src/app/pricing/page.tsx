@@ -3,6 +3,10 @@ import type { Metadata } from "next";
 import {
   PLUS_PLAN,
   COLD_START_FREE_POSTING,
+  FREE_ASK_PER_DAY,
+  PLUS_ASK_PER_DAY,
+  PLUS_INCLUDED_HOMES,
+  TRIAL_ASK_PER_DAY,
   formatUsd,
   yearlyAsMonthly,
   yearlyPerDay,
@@ -86,7 +90,7 @@ const PLUS_FEATURES = [
   "Unlimited AI document reads and inspection report imports",
   "A shareable home report for resale and insurance",
   "A monthly refresh of your home value, with the year-by-year trend",
-  "Track up to 5 homes in one place",
+  `Track up to ${PLUS_INCLUDED_HOMES} homes in one place`,
   "Every proactive alert, on every channel",
 ];
 
@@ -148,7 +152,8 @@ export default function PricingPage() {
               "free" is a plan rather than a teaser. */}
           <p className="mt-auto pt-4 text-sm text-stone-500 dark:text-stone-400">
             Caps: one home, one plan build, one quote check, one home value
-            estimate, 3 Ask Hearth questions a day (text only).
+            estimate, {FREE_ASK_PER_DAY} Ask Hearth questions a day (text
+            only).
           </p>
         </div>
 
@@ -241,14 +246,19 @@ export default function PricingPage() {
       </div>
 
       {/* Plain disclosure of Ask Hearth's daily cap, so the AI features above
-          never read as unlimited. Numbers match ASK_DAILY_FREE /
-          ASK_DAILY_PLUS in src/lib/aiUsage.ts, the chat's own daily bucket and
-          the source of truth /api/ask actually enforces (the tool routes run
-          on a separate, larger budget); keep this in sync if those change. */}
+          never read as unlimited. The numbers are READ from src/lib/constants.ts
+          rather than typed: those constants mirror ASK_DAILY_FREE /
+          ASK_DAILY_PLUS / ASK_DAILY_TRIAL in src/lib/aiUsage.ts, which is what
+          /api/ask actually enforces (the tool routes run on a separate, larger
+          budget), and src/lib/constants.test.ts fails the build if the mirror
+          ever drifts. The trial's smaller ceiling is stated here too, since the
+          weekly plan's free days are sold two paragraphs down. */}
       <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-        Ask Hearth, the AI assistant, is capped at 3 text questions a day on
-        Free and 15 a day on Plus, with photo answers on Plus only, so it stays
-        fast and available for everyone.
+        Ask Hearth, the AI assistant, is capped at {FREE_ASK_PER_DAY} text
+        questions a day on Free and {PLUS_ASK_PER_DAY} a day on Plus, with photo
+        answers on Plus only, so it stays fast and available for everyone.
+        During the {TRIAL_DAYS}-day trial it is {TRIAL_ASK_PER_DAY} a day, with
+        photos.
       </p>
 
       {/* The honest auto-renew disclosure, stated plainly. Same facts the

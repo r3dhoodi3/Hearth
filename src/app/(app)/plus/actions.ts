@@ -164,11 +164,36 @@ export async function startPlusCheckoutAction(formData: FormData) {
         status: "all",
         limit: 10,
       });
-      alreadySubscribed = stripeSubs.data.some(
-        (s) =>
-          (s.status === "active" || s.status === "trialing") &&
-          s.id !== proSub?.stripe_subscription_id
-      );
+      // WHICH LIVE SUBSCRIPTION COUNTS AS "already has Plus".
+      //
+      // This used to be "any live subscription on the customer whose id is not
+      // the pro row's stripe_subscription_id", and that identity exclusion has
+      // a hole: a Pro-side row can exist with a NULL stripe_subscription_id (an
+      // older row, a manual fix, a webhook that landed the row before the
+      // subscription id). `s.id !== null` is true of everything, so the pro's
+      // own live membership was read as a live Plus one and a contractor who is
+      // also a homeowner was told they already had Plus and could never buy it.
+      //
+      // So match on the PLUS prices when we know them: a Pro subscription is on
+      // Pro's prices and can never be mistaken for one of these, whether or not
+      // its id is on file. When no Plus price is configured (the inline
+      // price_data fallback path, where there is nothing to match on), this
+      // falls back to the old behaviour, with the pro subscription excluded by
+      // id whenever the id is actually known.
+      const plusPriceIds = [
+        process.env.STRIPE_PRICE_PLUS_WEEKLY,
+        process.env.STRIPE_PRICE_PLUS_MONTHLY,
+        process.env.STRIPE_PRICE_PLUS_YEARLY,
+      ].filter((id): id is string => Boolean(id));
+      const proSubId = proSub?.stripe_subscription_id ?? null;
+      alreadySubscribed = stripeSubs.data.some((s) => {
+        if (s.status !== "active" && s.status !== "trialing") return false;
+        if (proSubId && s.id === proSubId) return false;
+        if (!plusPriceIds.length) return true;
+        return s.items.data.some(
+          (i) => i.price?.id && plusPriceIds.includes(i.price.id)
+        );
+      });
     } catch {
       // If Stripe is unreachable, fall through to checkout as before.
     }
@@ -232,7 +257,70 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // they consent to say exactly that - billingTerms() takes the "charged today"
   // branch, so nothing on screen or in the record promises free days that are
   // not coming. /plus's own copy is gated on the same decision (page.tsx).
-  const freeTrial = trialApplies(plan, (await isPlusTrialEligible()) && risk.allowTrial);
+  const wantsTrial = trialApplies(plan, (await isPlusTrialEligible()) && risk.allowTrial);
+
+  // ONE TRIAL PER ACCOUNT, ENFORCED SYNCHRONOUSLY, HERE.
+  //
+  // Every guard above this line reads state the Stripe WEBHOOK writes after a
+  // checkout completes: isPlusTrialEligible() is "no homeowner subscriptions
+  // row", and the two double-checkout guards read the same row or Stripe's own
+  // subscription list. None of them can see a checkout that is still in
+  // flight. So a first-ever buyer could open /plus in two tabs and tap Start
+  // free days in both: both read "no row yet", both got trial_period_days, and
+  // one account minted two free trials (the second surviving as an orphan
+  // subscription with no row and therefore no in-app cancel button pointing at
+  // it, which then bills at trial end).
+  //
+  // The fix is the one the Pro side already uses for its intro price:
+  // atomically claim a promo_claims row before the Stripe session is created.
+  // promo_claims' primary key is (user_id, promo_key) (migration 0073), so
+  // claim_promo()'s "on conflict do nothing ... return found" lets exactly ONE
+  // of N racing requests win; every other one falls straight through to a
+  // charged-today checkout, with the disclosure and the consent record built
+  // from the same `freeTrial` value, so nothing on screen promises free days
+  // that are not coming. claim_promo is service_role-only, hence the admin
+  // client.
+  //
+  // It doubles as a lifecycle-independent ledger: the row is never pruned by a
+  // cancellation, so a churned member whose subscriptions row is ever deleted
+  // still cannot farm a second trial.
+  //
+  // A reservation that is never spent - the buyer closes the Stripe tab, the
+  // card is declined, Stripe fails to create the session at all - is released
+  // again: by the webhook on checkout.session.expired and on a subscription
+  // that lands canceled/incomplete_expired without ever going live, and inline
+  // in the catch below for a session that was never created. `trial_reserved`
+  // in the session metadata is how the webhook recognizes which attempt holds
+  // it.
+  //
+  // A FAILED RPC MEANS NO TRIAL. Unlike the Pro intro (which fails through to
+  // full price for the same reason), free days are the thing being farmed here,
+  // and "the counter was unreadable" must never be a way to get a second one.
+  let freeTrial = false;
+  let claimedTrial = false;
+  if (wantsTrial) {
+    const admin = createAdminClient();
+    try {
+      const { data, error } = await admin.rpc("claim_promo", {
+        p_user: user.id,
+        p_key: "plus_trial",
+        p_ref: "plus_checkout_reservation",
+      });
+      if (error) {
+        console.error(
+          "claim_promo(plus_trial) reservation failed - no free days:",
+          error.message ?? error
+        );
+      } else if (data === true) {
+        claimedTrial = true;
+        freeTrial = true;
+      }
+      // data === false: another tab (or an earlier, spent trial) already holds
+      // this account's one reservation. Charge today instead.
+    } catch (err) {
+      console.error("claim_promo(plus_trial) reservation threw:", err);
+    }
+  }
 
   // Consent record. California's Automatic Renewal Law requires keeping proof
   // of what the subscriber agreed to (Bus. & Prof. Code 17602(b)(2): at least
@@ -284,13 +372,39 @@ export async function startPlusCheckoutAction(formData: FormData) {
           plan,
           consent_terms: consentTerms,
           consent_at: consentAt,
+          // Which attempt holds the one-trial reservation above, for the
+          // webhook's rollback on checkout.session.expired. An abandoned
+          // checkout never produces a subscription, so the session's own
+          // metadata is all the webhook has to go on.
+          trial_reserved: claimedTrial ? "true" : "false",
         },
         success_url: `${siteUrl()}/plus?welcome=1`,
         cancel_url: `${siteUrl()}/plus`,
       },
       { idempotencyKey }
     );
-  } catch {
+  } catch (err) {
+    // The reservation above already wrote to promo_claims, and Stripe never
+    // created a session, so no checkout.session.expired will ever fire for it
+    // and the webhook's rollback cannot reach this case. Release it inline, so
+    // a Stripe hiccup does not cost the buyer their one free trial. Mirrors
+    // startProCheckoutAction's identical catch.
+    if (claimedTrial) {
+      const admin = createAdminClient();
+      const { error } = await admin
+        .from("promo_claims")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("promo_key", "plus_trial");
+      if (error) {
+        console.error(
+          "promo_claims(plus_trial) release after failed session create failed:",
+          error.message ?? error
+        );
+      }
+    }
+    // Logged, never shown: a Stripe error string is not copy for a buyer.
+    console.error("Plus checkout session create failed:", err);
     await setFlash("We couldn't start checkout. Please try again.", "error");
     redirect("/plus");
   }

@@ -42,14 +42,6 @@ import {
   FIELD_MAX,
 } from "@/lib/formFields";
 
-// Ceiling on the two raw JSON blobs the confirm step carries in as hidden
-// fields. They are client input like everything else here, so the string is
-// bounded BEFORE JSON.parse rather than after: parsing a multi-megabyte blob
-// to then throw it away still costs the parse. Generous enough for a real
-// RentCast payload (a handful of tax years, a dozen system facts) and small
-// enough that a crafted post can't turn a claim into a memory spike.
-const MAX_ENRICHMENT_JSON_CHARS = 20000;
-
 // Systems virtually every home has, auto-added so the owner doesn't start from
 // a blank inventory. Install years are ESTIMATED from the build year; real
 // install/repair/remodel dates come from permit data once that API is wired.
@@ -105,10 +97,10 @@ const MAX_COUNTY = 120;
 // designator is "4B", "Apt 12", "Ste 300" - twenty characters is already
 // generous, and the field is shown as a narrow box for the same reason.
 const MAX_UNIT = 20;
-// The county assessor's parcel number, carried in as a hidden field from the
-// lookup. A real APN is a short punctuated string ("934-231-14"); 64 is
-// already several times any format in use, and without a ceiling this is an
-// unbounded client-supplied string landing straight on the row.
+// The county assessor's parcel number, as returned by the records source. A
+// real APN is a short punctuated string ("934-231-14"); 64 is already several
+// times any format in use, and without a ceiling a provider field lands on the
+// row (and into the risk-signal hash) at whatever length it likes.
 const MAX_PARCEL_ID = 64;
 
 // The purchase date arrives from the form as a plain string. Only store a real
@@ -437,32 +429,41 @@ export async function claimPropertyAction(
   //
   // The confirm step's street box is a real, editable input (OnboardingForm.tsx)
   // - a homeowner who can see the county has their street wrong is meant to fix
-  // it there. But every parcel-derived fact on that screen rides along in HIDDEN
-  // fields captured from the ORIGINAL lookup: the APN, the coordinates, the
-  // county, the assessed value and year, the last sale, the tax history, the
-  // AVM. Correcting the street and pressing claim therefore wrote a home whose
-  // address says one property and whose parcel facts describe another - and the
-  // coordinates in particular are what /value, the weather alerts, and the pro
-  // matching all key off, so this is not a cosmetic mismatch.
+  // it there. Correcting it means the record the Continue step found is about a
+  // different property than the one being claimed, and the coordinates in
+  // particular are what /value, the weather alerts, and the pro matching all
+  // key off, so this is not a cosmetic mismatch.
   //
   // So the claim compares the submitted street against the line the lookup
   // actually returned (`looked_up_address`, a hidden field). Same normalization
   // parcelCacheKey uses, so a whitespace or casing difference is not an edit.
-  // When they differ, every frozen fact is re-derived from a fresh lookup of
-  // the address being claimed and the posted hidden fields are ignored outright
-  // - they describe a property this claim is no longer about.
+  // When they differ, the facts are re-derived from a fresh lookup of the
+  // address actually being claimed rather than reusing the cached record for
+  // the old line.
   //
-  // A missing looked_up_address counts as edited. A browser always sends it
-  // whenever those hidden fields exist, so its absence means a hand-made post,
-  // and re-deriving is the safe reading of one.
+  // A missing looked_up_address counts as edited. A browser always sends it,
+  // so its absence means a hand-made post, and re-deriving is the safe reading
+  // of one.
+  //
+  // What this flag no longer decides is WHERE the parcel facts come from: as of
+  // 2026-08-28 they come from the server's own lookup on both branches (see
+  // parcelNum below), never from a hidden field, so an unedited claim is no
+  // longer trusted to echo its own numbers back.
   //
   // Only the FROZEN facts are re-derived. The fields the confirm step puts on
   // screen - city, state, year built, size, beds, baths, lot size, property
   // type - keep whatever was submitted either way, because the person who
   // lives there is the authority on those and overwriting their typing with a
-  // records value is the bug this whole screen exists to avoid. The ZIP is
-  // locked on the ready step, so the re-lookup runs against the same ZIP the
-  // original one did.
+  // records value is the bug this whole screen exists to avoid.
+  //
+  // The ZIP is read-only on the ready step AND is the only `zip` the form
+  // posts, so the re-lookup runs against the same ZIP the original one did.
+  // Both halves of that sentence had to be made true on 2026-08-28: the
+  // locked, visible ZIP box carried no `name` at all, so the only `zip` in the
+  // POST came from a second, freely editable box inside the optional-details
+  // disclosure - clearing that box refused the homeowner's own claim with
+  // "Hearth isn't in your area yet" and filed them on the out-of-area
+  // waitlist. See OnboardingForm.tsx.
   // =========================================================================
   const normalizeStreet = (s: string) =>
     s.trim().replace(/\s+/g, " ").toLowerCase();
@@ -475,6 +476,47 @@ export async function claimPropertyAction(
     !lookedUpAddress ||
     normalizeStreet(lookedUpAddress) !== normalizeStreet(addressLine1);
 
+  // =========================================================================
+  // METER BEFORE ANY OUTBOUND CALL, ON BOTH BRANCHES.
+  //
+  // Everything below this point can reach a third party: lookupParcel makes a
+  // billed RentCast call for any street nothing has fetched yet, and
+  // verifyAddressExists asks Photon whenever there is no county record.
+  //
+  // Both used to be metered only on the EDITED branch, on the reasoning that
+  // an unedited claim re-reads the parcel_cache row the Continue step just
+  // wrote and therefore spends nothing. That reasoning holds for the form, and
+  // only for the form. address_line1, zip and looked_up_address all arrive as
+  // FormData, so a hand-made POST that sets looked_up_address equal to a fresh
+  // street on every request takes the "unedited" branch every time, spends a
+  // billed RentCast lookup and an uncached Photon call every time, and never
+  // consumes a home row to do it - the claim is free to fail afterwards for
+  // any reason at all.
+  //
+  // So the same two per-user buckets lookupParcelAction spends (migration
+  // 0068) are spent here first, whichever branch runs. A real signup pays one
+  // extra token per claim against a 10/hour, 25/day budget, which no
+  // household comes near.
+  //
+  // FAIL-OPEN on a limiter hiccup, same as every other rate_limit_hit call in
+  // this file: only an explicit `allowed === false` blocks.
+  // =========================================================================
+  const limiter = createAdminClient();
+  const { data: allowedHour } = await limiter.rpc("rate_limit_hit", {
+    p_bucket: `parcel:${user.id}`,
+    p_limit: 10,
+    p_window_seconds: 3600,
+  });
+  const { data: allowedDay } = await limiter.rpc("rate_limit_hit", {
+    p_bucket: `parcel-day:${user.id}`,
+    p_limit: 25,
+    p_window_seconds: 86400,
+  });
+  // Distinguished from "the lookup ran and failed": a limiter refusal means
+  // nothing has EVER looked at this street, and the gate below turns that into
+  // a refusal rather than storing an unchecked address.
+  const lookupBlocked = allowedHour === false || allowedDay === false;
+
   // The fresh facts for an edited address. Null means "no facts to use": either
   // the re-lookup was refused by the rate limiter or it failed outright, in
   // which case every frozen field below lands as null. That is the deliberate
@@ -482,38 +524,13 @@ export async function claimPropertyAction(
   // Home Profile, while a claim carrying another address's assessed value is
   // wrong data that nothing downstream can tell apart from real data.
   let relookupFacts: ParcelFacts | null = null;
-  // Distinguished from "the lookup ran and failed": a limiter refusal means
-  // nothing has EVER looked at this street, and the gate below turns that into
-  // a refusal rather than storing an unchecked address.
-  let relookupBlocked = false;
-  if (addressEdited) {
-    // The same per-user buckets lookupParcelAction spends (migration 0068),
-    // because this is the same thing: a lookup of an address nothing has
-    // fetched yet, which costs a billed RentCast call. An unedited claim keeps
-    // hitting the cache row the lookup just wrote and still spends nothing, so
-    // only the edited path is metered. Fail-open on a limiter hiccup, same as
-    // every other rate_limit_hit call in this file.
-    const limiter = createAdminClient();
-    const { data: allowedHour } = await limiter.rpc("rate_limit_hit", {
-      p_bucket: `parcel:${user.id}`,
-      p_limit: 10,
-      p_window_seconds: 3600,
-    });
-    const { data: allowedDay } = await limiter.rpc("rate_limit_hit", {
-      p_bucket: `parcel-day:${user.id}`,
-      p_limit: 25,
-      p_window_seconds: 86400,
-    });
-    if (allowedHour !== false && allowedDay !== false) {
-      try {
-        relookupFacts = await lookupParcel(addressLine1, claimZip);
-      } catch (err) {
-        // Never fatal. The home is still theirs to claim; it just arrives
-        // without the county's numbers on it.
-        console.error("Corrected-address parcel lookup failed:", err);
-      }
-    } else {
-      relookupBlocked = true;
+  if (addressEdited && !lookupBlocked) {
+    try {
+      relookupFacts = await lookupParcel(addressLine1, claimZip);
+    } catch (lookupError) {
+      // Never fatal. The home is still theirs to claim; it just arrives
+      // without the county's numbers on it.
+      console.error("Corrected-address parcel lookup failed:", lookupError);
     }
   }
 
@@ -528,10 +545,12 @@ export async function claimPropertyAction(
   // and skip the lookup step entirely. Without this, "123 Fake St" still
   // creates a real home row.
   //
-  // The lookup itself is nearly free either way: an edited address already
-  // paid for relookupFacts above, and an unedited one hits the parcel_cache
-  // row (migration 0069) the Continue step just wrote - the same cached read
-  // the ownership check further down already makes.
+  // The lookup itself is usually free: an edited address already paid for
+  // relookupFacts above, and an unedited one hits the parcel_cache row
+  // (migration 0069) the Continue step just wrote - the same cached read the
+  // ownership check further down already makes. "Usually" is why it is metered
+  // anyway a few lines up: a POST that never went through the Continue step
+  // has no cache row waiting for it.
   //
   // The decision itself is claimAddressGate (src/lib/parcelGate.ts), which is
   // where its reasoning and its tests live. In short: the GEOCODER decides
@@ -542,9 +561,9 @@ export async function claimPropertyAction(
   // Neither does a records outage, or a geocoder outage, or a lookup that
   // threw: "we couldn't check" is not "this address does not exist", and that
   // conflation is what refused every real address for a day on 2026-08-24. The
-  // one other intolerant case is an EDITED street whose re-lookup the rate
-  // limiter refused: no records call has ever been spent on that string, so
-  // there are no facts to attach to it.
+  // one other intolerant case is a street the rate limiter would not let us
+  // look up at all: no records call has ever been spent on it, so there are no
+  // facts to attach and nothing to decide on.
   //
   // claimFacts is also what the ownership check at the end of this action
   // uses, instead of a third lookupParcel with identical arguments. Each call
@@ -552,7 +571,7 @@ export async function claimPropertyAction(
   // the better part of a minute on the claim button.
   // =========================================================================
   let claimFacts: ParcelFacts | null = relookupFacts;
-  if (hasRecordsSource() && !addressEdited) {
+  if (hasRecordsSource() && !addressEdited && !lookupBlocked) {
     try {
       claimFacts = await lookupParcel(addressLine1, claimZip);
     } catch (error) {
@@ -564,16 +583,31 @@ export async function claimPropertyAction(
   // address is real, so the geocoder is only asked when there is no record.
   // Both calls hit the same 10-minute verdict cache (src/lib/addressVerify.ts),
   // so a normal signup asks Photon once, not twice.
-  const addressVerdict =
-    claimFacts?.source === "rentcast"
+  //
+  // A limiter refusal skips the geocoder outright: Photon is the OTHER
+  // outbound call the hoisted budget above exists to protect, so spending one
+  // on a claim that is about to be refused anyway would defeat the meter.
+  const addressVerdict = lookupBlocked
+    ? ("unavailable" as const)
+    : claimFacts?.source === "rentcast"
       ? ("match" as const)
       : await verifyAddressExists(addressLine1, claimZip);
-  const gate = claimAddressGate({
-    hasRecordsSource: hasRecordsSource(),
-    addressEdited,
-    relookupBlocked,
-    addressVerdict,
-  });
+  // claimAddressGate's own lookup_blocked rule is written for the edited
+  // branch, which was the only branch that could be blocked when the limiter
+  // lived inside it. Now that the budget is spent before both lookups, an
+  // unedited claim can be blocked too, and it is the same situation with the
+  // same answer: nothing was looked up, so there is nothing to decide on and
+  // no facts to attach.
+  const gate = lookupBlocked
+    ? ({ action: "refuse", reason: "lookup_blocked" } as const)
+    : claimAddressGate({
+        hasRecordsSource: hasRecordsSource(),
+        addressEdited,
+        // Always false on this branch: a blocked lookup was answered above,
+        // so anything reaching claimAddressGate got the lookup it needed.
+        relookupBlocked: false,
+        addressVerdict,
+      });
   if (gate.action === "refuse") {
     return err(
       gate.reason === "lookup_blocked"
@@ -582,9 +616,6 @@ export async function claimPropertyAction(
     );
   }
 
-  // A parcel-derived field: from the fresh lookup when the address was edited,
-  // from the posted hidden field when it was not. Three shapes, because the
-  // columns are numeric, integer and text respectively.
   const factString = (v: number | string | null | undefined): string | null =>
     v === null || v === undefined ? null : String(v);
   // =========================================================================
@@ -610,14 +641,13 @@ export async function claimPropertyAction(
   // over the county's amounts to - is checked.
   //
   // THERE ALSO HAS TO BE A RECORD. The `source === "rentcast"` half applies to
-  // both branches as of 2026-08-28, and it is load-bearing now in a way it was
-  // not before: a records miss used to be refused outright a few lines up, so
-  // no claim could reach here without a real record behind it. Misses walk on
-  // now, and every parcel-derived value on an unedited claim is read back out
-  // of a HIDDEN FORM FIELD - which a hand-made POST fills in with whatever it
-  // likes. Without this, "123 Fake St" could arrive carrying an assessor's
-  // parcel number, a sale price and an assessed value that no source ever
-  // returned. If nothing was found, nothing is written.
+  // both branches as of 2026-08-28: a records miss used to be refused outright
+  // a few lines up, so no claim could reach here without a real record behind
+  // it, and misses walk on now. If nothing was found, nothing is written.
+  //
+  // Note what this check does NOT prove, which is why every parcel value below
+  // is read from claimFacts rather than from the post: it says a record exists
+  // for this street, not that any particular number came from that record.
   //
   // When it does not match, every parcel-derived field below lands as null.
   // The home is still theirs to claim; it just arrives with none of another
@@ -630,38 +660,38 @@ export async function claimPropertyAction(
     (!addressEdited ||
       sameStreetAddress(addressLine1, claimFacts.address_line1));
 
+  // A parcel-derived field, read from the SERVER's own lookup (claimFacts) on
+  // BOTH branches. Never from the post.
+  //
+  // Until 2026-08-28 an unedited claim read every one of these back out of a
+  // hidden form field, on the reasoning that the hidden fields were the
+  // lookup's own answer echoed back. They are not. A server action takes
+  // whatever FormData it is handed, so a hand-made POST could set parcel_id,
+  // latitude, longitude, county, the assessed value and year, the last sale,
+  // the tax history and the system facts to anything at all - and
+  // parcelFactsMatchClaim above only proved that SOME record exists for the
+  // street, never that the posted numbers came out of it. The coordinates were
+  // the worst of it: /value, the weather alerts and the pro matching all key
+  // off latitude/longitude, so a forged pair quietly points the whole product
+  // at a house of the poster's choosing.
+  //
+  // claimFacts is already fetched on both branches (the corrected-address
+  // lookup, or the unedited re-check the gate above made), so reading from it
+  // costs nothing extra. Three shapes, because the columns are numeric,
+  // integer and text respectively.
   const parcelNum = (
-    key: string,
     value: number | null | undefined,
     min: number,
     max: number
   ) =>
-    !parcelFactsMatchClaim
-      ? null
-      : boundedNumber(
-          addressEdited ? factString(value) : formData.get(key),
-          min,
-          max
-        );
+    !parcelFactsMatchClaim ? null : boundedNumber(factString(value), min, max);
   const parcelInt = (
-    key: string,
     value: number | null | undefined,
     min: number,
     max: number
-  ) =>
-    !parcelFactsMatchClaim
-      ? null
-      : boundedInt(addressEdited ? factString(value) : formData.get(key), min, max);
-  const parcelText = (
-    key: string,
-    value: string | null | undefined,
-    max: number
-  ) =>
-    !parcelFactsMatchClaim
-      ? null
-      : addressEdited
-        ? (value ?? "").trim().slice(0, max) || null
-        : cappedFieldOrNull(formData, key, max);
+  ) => (!parcelFactsMatchClaim ? null : boundedInt(factString(value), min, max));
+  const parcelText = (value: string | null | undefined, max: number) =>
+    !parcelFactsMatchClaim ? null : (value ?? "").trim().slice(0, max) || null;
 
   // Every number on the claim is client input (the confirm step posts the
   // RentCast figures as hidden fields, and the owner can edit the visible
@@ -681,50 +711,22 @@ export async function claimPropertyAction(
   const int = (key: string, min: number, max: number) =>
     boundedInt(formData.get(key), min, max);
 
-  // The RentCast enrichment carried in as hidden JSON fields (see
-  // OnboardingForm.tsx's confirm step): parsed defensively since it's still
-  // client-controlled form input, not a trusted server value. A parse
-  // failure degrades to "nothing extra to store" rather than failing the
-  // whole claim.
-  // Bounded before the parse (see MAX_ENRICHMENT_JSON_CHARS): an oversized
-  // blob is dropped whole rather than truncated, because half a JSON string
-  // only throws inside the try below anyway.
-  const enrichmentJson = (key: string): string | null => {
-    const raw = formData.get(key);
-    if (typeof raw !== "string" || !raw) return null;
-    return raw.length > MAX_ENRICHMENT_JSON_CHARS ? null : raw;
-  };
-  // Both blobs are parcel-derived, so an edited address takes them from the
-  // fresh lookup and never parses the posted copy at all.
-  let propertyTaxHistory: { year: number; amount: number }[] | null = null;
-  if (!parcelFactsMatchClaim) {
-    // Another property's tax history, same as every other parcel fact here.
-    propertyTaxHistory = null;
-  } else if (addressEdited) {
-    propertyTaxHistory = relookupFacts?.property_tax_history ?? null;
-  } else {
-    try {
-      const raw = enrichmentJson("property_tax_history");
-      propertyTaxHistory = raw ? JSON.parse(raw) : null;
-    } catch {
-      propertyTaxHistory = null;
-    }
-  }
-  let systemFacts: Record<string, string> | null = null;
-  if (!parcelFactsMatchClaim) {
-    // The other building's roof and foundation. The starter systems seed
-    // blank instead, which is what they did before RentCast was wired up.
-    systemFacts = {};
-  } else if (addressEdited) {
-    systemFacts = relookupFacts?.system_facts ?? {};
-  } else {
-    try {
-      const raw = enrichmentJson("system_facts");
-      systemFacts = raw ? JSON.parse(raw) : {};
-    } catch {
-      systemFacts = {};
-    }
-  }
+  // The two RentCast enrichment blobs, from the same server-side facts as
+  // every other parcel value above. They used to ride in as hidden JSON
+  // fields and be JSON.parse'd back out of the post on an unedited claim,
+  // which was the same forgery hole as the scalars - with a longer reach, as
+  // system_facts lands in home_systems.material_or_model on all seven starter
+  // rows. Nothing is parsed from the client any more, so there is no blob-size
+  // ceiling to enforce and no parse to fail.
+  const propertyTaxHistory: { year: number; amount: number }[] | null =
+    parcelFactsMatchClaim ? (claimFacts?.property_tax_history ?? null) : null;
+  // An empty map rather than null when the record does not describe this
+  // claim: the other building's roof and foundation are not this home's, and
+  // the starter systems seed blank instead - which is what they did before
+  // RentCast was wired up.
+  const systemFacts: Record<string, string> = parcelFactsMatchClaim
+    ? (claimFacts?.system_facts ?? {})
+    : {};
 
   // baseRow: the columns this insert has always written, guaranteed to exist
   // on every deployed DB regardless of whether migration 0066 has run yet.
@@ -751,27 +753,34 @@ export async function claimPropertyAction(
   // wrong numbers on the row for every future reader (the digest cron, the
   // appeal letter, an export), so they are refused here as well.
   //
-  // The AVM is what the gate measures against, never the purchase price, so a
-  // bad price can't raise its own ceiling. Read once, and reused by
-  // extendedRow below.
-  const claimMarketValue = parcelNum(
-    "market_value",
-    relookupFacts?.market_value,
-    0,
-    1_000_000_000
-  );
+  // NOTHING THE POST CAN SET REACHES THE GATE'S OWN YARDSTICK.
+  //
+  // The gate measures a figure against the home's estimate and its size, and
+  // both of those used to come from the claim itself: `estimate` was the
+  // posted market_value hidden field, and `sqft` was the visible size box. So
+  // a forged post could hand itself a $500,000,000 estimate (raising the
+  // building-level ceiling to $5,000,000,000) or a 900,000 sqft size (which
+  // switches the absolute-ceiling rule off entirely, since it only fires under
+  // SMALL_HOME_SQFT) and walk a $34,000,000 building price straight onto the
+  // row - which is the exact number this gate exists to refuse.
+  //
+  // So the estimate is null and the size is the server's own. A null estimate
+  // is not a loss: onboarding never had a real one to measure against anyway
+  // (see market_value on extendedRow below), so this only drops the
+  // building-level test to its IMPLAUSIBLE_FLOOR, which is where it already
+  // sat in practice.
   const sanityContext = {
     unit,
     propertyType,
-    sqft: int("sqft", 1, 1_000_000),
-    estimate: claimMarketValue,
+    sqft: parcelInt(claimFacts?.sqft, 1, 1_000_000),
+    estimate: null,
   };
   const claimPurchasePrice = plausibleHomeFigure(
-    parcelNum("purchase_price", relookupFacts?.purchase_price, 0, 1_000_000_000),
+    parcelNum(claimFacts?.purchase_price, 0, 1_000_000_000),
     sanityContext
   );
   const claimAssessedValue = plausibleHomeFigure(
-    parcelNum("assessed_value", relookupFacts?.assessed_value, 0, 1_000_000_000),
+    parcelNum(claimFacts?.assessed_value, 0, 1_000_000_000),
     sanityContext
   );
 
@@ -780,7 +789,7 @@ export async function claimPropertyAction(
     // Frozen fact: the assessor's parcel number belongs to whichever address
     // the lookup actually resolved, so it is re-derived when the street was
     // corrected rather than carried over from the old one.
-    parcel_id: parcelText("parcel_id", relookupFacts?.parcel_id, MAX_PARCEL_ID),
+    parcel_id: parcelText(claimFacts?.parcel_id, MAX_PARCEL_ID),
     address_line1: addressLine1,
     city: cappedFieldOrNull(formData, "city", MAX_CITY),
     state: cappedFieldOrNull(formData, "state", MAX_STATE),
@@ -811,11 +820,7 @@ export async function claimPropertyAction(
     purchase_date:
       claimPurchasePrice == null
         ? null
-        : validPurchaseDate(
-            addressEdited
-              ? (relookupFacts?.purchase_date ?? null)
-              : (formData.get("purchase_date") as string) || null
-          ),
+        : validPurchaseDate(claimFacts?.purchase_date ?? null),
     purchase_price: claimPurchasePrice,
     assessed_value: claimAssessedValue,
     // Same rule for the assessment year: it labels a figure that is not being
@@ -823,7 +828,7 @@ export async function claimPropertyAction(
     assessed_year:
       claimAssessedValue == null
         ? null
-        : parcelInt("assessed_year", relookupFacts?.assessed_year, 1700, 2100),
+        : parcelInt(claimFacts?.assessed_year, 1700, 2100),
   };
   // Written as a spread-in delta, not a field on the row, so a single-family
   // claim (by far the common case) posts exactly the same shape it always has
@@ -841,25 +846,25 @@ export async function claimPropertyAction(
   // would quietly point the whole product at the wrong house.
   const extendedRow = {
     ...baseRow,
-    latitude: parcelNum("latitude", relookupFacts?.latitude, -90, 90),
-    longitude: parcelNum("longitude", relookupFacts?.longitude, -180, 180),
-    hoa_fee: parcelNum("hoa_fee", relookupFacts?.hoa_fee, 0, 100_000),
-    county: parcelText("county", relookupFacts?.county, MAX_COUNTY),
+    latitude: parcelNum(claimFacts?.latitude, -90, 90),
+    longitude: parcelNum(claimFacts?.longitude, -180, 180),
+    hoa_fee: parcelNum(claimFacts?.hoa_fee, 0, 100_000),
+    county: parcelText(claimFacts?.county, MAX_COUNTY),
     property_tax_history: propertyTaxHistory,
-    // Already read above, where the sanity gate needed it as its yardstick.
-    market_value: claimMarketValue,
-    market_value_low: parcelNum(
-      "market_value_low",
-      relookupFacts?.market_value_low,
-      0,
-      1_000_000_000
-    ),
-    market_value_high: parcelNum(
-      "market_value_high",
-      relookupFacts?.market_value_high,
-      0,
-      1_000_000_000
-    ),
+    // THE AVM IS NOT WRITTEN AT CLAIM TIME AT ALL.
+    //
+    // lookupParcel makes one call, for the property record, and never asks for
+    // an estimate - so market_value/_low/_high on ParcelFacts are null on
+    // every path through onboarding (blankFacts and the record mapper in
+    // src/lib/parcel.ts both hard-code them null). The only values that ever
+    // filled these three columns here came out of hidden form fields, which
+    // means they came from the poster, and they did double duty as the sanity
+    // gate's own yardstick above. /value fetches the real AVM lazily
+    // (lookupMarketValue) and stores it then, which is the only place an
+    // estimate is ever known.
+    market_value: null,
+    market_value_low: null,
+    market_value_high: null,
   };
 
   // extendedRow's enrichment fields (everything migration 0066 adds) aren't
@@ -951,12 +956,12 @@ export async function claimPropertyAction(
   // Ownership verification (migration 0093): match the county assessor's
   // owner-of-record for this address against the account holder's own name
   // (src/lib/ownershipMatch.ts). A claim that carries a unit skips the match
-  // entirely and records an honest "unverified" instead - see below. This is the ONLY place
-  // owner data is read - the client-submitted parcel JSON above never
-  // carried it (OnboardingForm.tsx only forwards a fixed, named set of
-  // hidden fields, none of them owner_names/owner_type), so there is
-  // nothing here for a modified client to forge. Best-effort: any failure
-  // just leaves the property unverified, never blocks onboarding.
+  // entirely and records an honest "unverified" instead - see below. The owner
+  // of record is read from claimFacts, the server's own lookup, and there is
+  // no client-supplied parcel data left anywhere in this action for a modified
+  // client to forge (lookupParcelAction strips owner_names/owner_type/
+  // owner_occupied before the browser ever sees them). Best-effort: any
+  // failure just leaves the property unverified, never blocks onboarding.
   try {
     // The name is collected on the confirm step now (OnboardingForm.tsx's
     // full_name field), not at sign-up. Prefer that submitted value; fall back
@@ -1135,6 +1140,17 @@ export async function claimPropertyAction(
         install_year = CURRENT_YEAR - yearsIntoCycle;
       }
     }
+    // Real material read off the RentCast property record when available
+    // (roof/foundation/hvac - see deriveSystemFacts in src/lib/parcel.ts),
+    // otherwise left null same as before.
+    //
+    // Coerced rather than trusted even now that the map comes from the server:
+    // system_facts is TYPED Record<string, string>, but its values are built
+    // out of a third-party JSON body, and a type annotation is not a runtime
+    // check - a number, an object, or a page-long string would land on the
+    // column exactly as it arrived. Same coercion parseFacts uses in
+    // ./draft.ts, with the tighter 120-char cap this column wants.
+    const material = systemFacts[system_type];
     return {
       property_id: created.id,
       system_type,
@@ -1144,10 +1160,8 @@ export async function claimPropertyAction(
       // estimate, and the "auto-estimated" notice lives at the top of the
       // Home Profile page instead.
       notes: null as string | null,
-      // Real material read off the RentCast property record when available
-      // (roof/foundation/hvac - see deriveSystemFacts in src/lib/parcel.ts),
-      // otherwise left null same as before.
-      material_or_model: systemFacts?.[system_type] ?? null,
+      material_or_model:
+        typeof material === "string" ? material.slice(0, 120) : null,
     };
   });
   // A silent failure here is the difference between a dashboard that shows

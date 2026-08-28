@@ -8,10 +8,14 @@ import {
   FOUNDER,
   LEAD_TIER_FEES,
   MAJOR_INTRO_FEE,
-  GHOST_PROTECTION_DAYS,
   COLD_START_FREE_ALERTS,
   PRO_PLAN,
 } from "@/lib/constants";
+import {
+  GHOST_PROTECTION_GUARANTEE,
+  FIRST_APPLICATION_GUARANTEE,
+  CREDIT_NOT_CASH_LINE,
+} from "@/lib/guaranteeCopy";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
 import Link from "next/link";
@@ -49,17 +53,6 @@ function Check({ className = "h-4 w-4" }: { className?: string }) {
     </svg>
   );
 }
-
-// Two DIFFERENT credits, kept as two separate canonical sentences so they can
-// never blur into one guarantee. Ghost protection is unlimited and repeats
-// every time; the first-application guarantee is a one-time credit. Used
-// verbatim everywhere either is described on this page so the terms can
-// never drift.
-const GHOST_PROTECTION_GUARANTEE = `If the homeowner never responds within ${GHOST_PROTECTION_DAYS} days, you always get the fee back as credit, every time, no limit.`;
-const FIRST_APPLICATION_GUARANTEE =
-  "If they do respond but pick someone else, you get that one back as credit too, but only on your very first paid application. After that, a lost bid is a lost fee.";
-const CREDIT_NOT_CASH_LINE =
-  "Either way it is Hearth credit in your wallet, not money back to your card.";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -296,7 +289,7 @@ export default async function ProsLanding(props: {
             Your very first application is protected too.
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
-            {FIRST_APPLICATION_GUARANTEE} Licensed pros get this once.
+            {FIRST_APPLICATION_GUARANTEE}
           </p>
         </section>
       </div>
@@ -482,7 +475,7 @@ export default async function ProsLanding(props: {
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
               <span>
-                {FIRST_APPLICATION_GUARANTEE} Licensed pros get this once.
+                {FIRST_APPLICATION_GUARANTEE}
               </span>
             </li>
             <li className="flex items-start gap-2">

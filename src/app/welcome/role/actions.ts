@@ -50,13 +50,16 @@ export async function chooseRoleAction(formData: FormData) {
   // re-stamp someone who does own a side, which is exactly what the guard
   // exists to prevent.
   //
-  // Only refused when a role stamp already exists. An account with no stamp
-  // and no rows has demonstrably built nothing on either side, so there is
-  // nothing a stale read could be hiding and no reason to block the brand-new
-  // OAuth user this page is mostly for on a transient DB hiccup. With a stamp
-  // on file there IS something that might exist behind the failed read, so
-  // say so plainly and let them retry.
-  if (sides.checked === false && sides.preferred) {
+  // Refused on ANY failed check, stamp or no stamp. The old version only
+  // refused when a role stamp was already on file, on the theory that a
+  // stampless account has built nothing worth protecting - but "no stamp" is
+  // read off user metadata, not off the rows that failed to load, so it says
+  // nothing about whether a contractors row or a property exists. An OAuth
+  // account can hold either without ever having been stamped (the callback
+  // backfills the stamp separately), and letting a failed read through would
+  // hand that account a role it has to fight its way back out of. Making a
+  // brand-new user retry after a transient DB hiccup is the cheaper mistake.
+  if (sides.checked === false) {
     await setFlash(
       "We couldn't check your account just now. Try again in a minute.",
       "error"

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import {
+  FREE_ASK_PER_DAY,
   PLUS_ASK_PER_DAY,
   PLUS_INCLUDED_HOMES,
   TRIAL_ASK_PER_DAY,
@@ -25,6 +26,12 @@ function constant(source: string, name: string): number {
 describe("the Plus allowances quoted in marketing copy", () => {
   it("quotes the same daily question count the server enforces", () => {
     expect(PLUS_ASK_PER_DAY).toBe(constant(src("./aiUsage.ts"), "ASK_DAILY_PLUS"));
+  });
+
+  it("quotes the same free question count the server enforces", () => {
+    // The number in every "Free" column on /plus and /pricing. A drift here is
+    // a promise the free tier does not keep, in the direction people notice.
+    expect(FREE_ASK_PER_DAY).toBe(constant(src("./aiUsage.ts"), "ASK_DAILY_FREE"));
   });
 
   it("quotes the same trial question count the server enforces", () => {

@@ -93,6 +93,15 @@ const GLANCE_ROWS: {
     leaves:
       "Visible to the pro on the other side of that thread. Not sent to any AI provider or advertiser.",
   },
+  // LAWYER: check - this row describes the blocking and reporting data we
+  // now keep; the wording has not been through counsel.
+  {
+    data: "Blocks and reports",
+    why: "Who you blocked or reported, and the reason or note you wrote, so we can stop contact and review what was flagged",
+    linked: "Yes",
+    leaves:
+      "Never sent to an AI provider or any third party. The person you blocked or reported is not told what you wrote.",
+  },
   {
     data: "Payments",
     why: "Hearth Plus, pro lead fees, deposits and invoices",

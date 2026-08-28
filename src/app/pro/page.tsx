@@ -25,6 +25,12 @@ import JobPhotoStrip from "./JobPhotoStrip";
 import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist";
 import ClearOnboardingDraft from "./ClearOnboardingDraft";
 import { agingLeadFee } from "@/lib/leadPricing";
+import {
+  GHOST_PROTECTION_GUARANTEE,
+  FIRST_APPLICATION_GUARANTEE,
+  CREDIT_NOT_CASH_LINE,
+  FIRST_APPLICATION_NEEDS_LICENSE,
+} from "@/lib/guaranteeCopy";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
@@ -539,11 +545,13 @@ export default async function ProDashboard(
             </p>
             {apps.length === 0 && (
               // The canonical guarantee sentence: the 60 days mirrors the
-              // bonus-grant expiry in migration 0041.
+              // bonus-grant expiry in migration 0044.
               <p className="text-xs text-stone-500 dark:text-stone-400">
                 {contractor.license_number
-                  ? "Not chosen on your first application? The fee comes back on its own as wallet credit, spendable on any lead, and it expires after 60 days. It's credit toward future leads, not cash back to your card."
-                  : "Adding your license unlocks the first-application guarantee. Not chosen on your first application? The fee comes back on its own as wallet credit, spendable on any lead, and it expires after 60 days. It's credit toward future leads, not cash back to your card."}
+                  ? null
+                  : `${FIRST_APPLICATION_NEEDS_LICENSE} `}
+                {FIRST_APPLICATION_GUARANTEE} {CREDIT_NOT_CASH_LINE} The credit
+                is spendable on any lead and expires after 60 days.
               </p>
             )}
           </>
@@ -821,8 +829,8 @@ export default async function ProDashboard(
                 per-card fee shown below. */}
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               Applying costs ${LEAD_TIER_FEES.light} to ${LEAD_TIER_FEES.major}{" "}
-              per lead depending on the trade, returned as wallet credit if the
-              homeowner picks someone else.{" "}
+              per lead depending on the trade. {GHOST_PROTECTION_GUARANTEE}{" "}
+              {FIRST_APPLICATION_GUARANTEE} {CREDIT_NOT_CASH_LINE}{" "}
               <Link
                 href="/pro/billing"
                 className="underline hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:hover:text-stone-300"
@@ -1269,11 +1277,13 @@ export default async function ProDashboard(
             Not selected{" "}
             <span className="text-stone-500 dark:text-stone-400">({declinedApps.length})</span>
           </h2>
-          {/* The 0106 credit-back promise, stated where the loss lands. */}
+          {/* The 0044 credit-back promise, stated where the loss lands. It is
+              the narrow one-time guarantee, not a blanket "not chosen" refund,
+              so it is rendered from the canonical sentence. */}
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            When a homeowner picks someone else, your apply fee comes back as
-            wallet credit, good for 60 days. Check your billing page for the
-            credit.
+            {FIRST_APPLICATION_GUARANTEE} {CREDIT_NOT_CASH_LINE} The credit
+            lands on its own and is good for 60 days. Check your billing page
+            for it.
           </p>
           <ul className="space-y-2">
             {declinedApps.map((a) => (

@@ -117,7 +117,7 @@ export default function BlockMenu({
             <button
               type="button"
               onClick={onEndConversation}
-              className="underline text-stone-600 hover:text-stone-900 dark:text-stone-300 dark:hover:text-stone-100"
+              className="underline text-stone-600 hover:text-stone-900 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300 dark:hover:text-stone-100"
             >
               {endLabel}
             </button>
@@ -133,7 +133,7 @@ export default function BlockMenu({
             type="button"
             onClick={confirmBlock}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1 font-medium text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1 font-medium text-white max-sm:min-h-11 max-sm:px-4 disabled:opacity-50"
           >
             {busy && <InlineSpinner size={12} />}
             Block
@@ -145,7 +145,7 @@ export default function BlockMenu({
               setError(null);
             }}
             disabled={busy}
-            className="text-stone-500 hover:text-stone-600 disabled:opacity-50 dark:text-stone-400 dark:hover:text-stone-300"
+            className="text-stone-500 hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center disabled:opacity-50 dark:text-stone-400 dark:hover:text-stone-300"
           >
             Cancel
           </button>
@@ -160,20 +160,20 @@ export default function BlockMenu({
         <button
           type="button"
           onClick={() => setConfirming(true)}
-          className="text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+          className="text-stone-500 hover:text-red-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400 dark:hover:text-red-400"
         >
           Block {personLabel}
         </button>
         <Link
           href={manageHref}
-          className="text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
+          className="text-stone-500 hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400 dark:hover:text-stone-300"
         >
           Blocked accounts
         </Link>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
+          className="text-stone-500 hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400 dark:hover:text-stone-300"
         >
           Close
         </button>
@@ -186,10 +186,11 @@ export default function BlockMenu({
       type="button"
       onClick={() => setOpen(true)}
       aria-label="More options"
-      // 24px tall with the padding, which is inside the 44px row these sit in
-      // on a phone. Kept as a text control, not an icon button, so it reads
-      // the same next to the "Report chat" link it sits beside.
-      className="px-1 text-xs text-stone-500 hover:text-stone-600 dark:text-stone-400 dark:hover:text-stone-300"
+      // A full 44px tap target on a phone, which is exactly the height of the
+      // row these sit in, so nothing grows; desktop keeps the compact 24px
+      // control. Kept as a text control, not an icon button, so it reads the
+      // same next to the "Report chat" link it sits beside.
+      className="px-1 text-xs text-stone-500 hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400 dark:hover:text-stone-300"
     >
       More
     </button>

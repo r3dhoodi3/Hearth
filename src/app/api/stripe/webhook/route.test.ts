@@ -93,6 +93,13 @@ function fakeAdmin() {
           updateFilters.push({ column, values });
           return api;
         },
+        // Recorded the same way `in` is, so a test can assert which statuses a
+        // write was scoped away from. The subscription.updated branch uses this
+        // to refuse to walk a canceled row back to active.
+        neq: (column: string, value: unknown) => {
+          updateFilters.push({ column, values: ["!=", value] });
+          return api;
+        },
         maybeSingle: () => {
           if (table === "subscriptions") {
             return Promise.resolve({ data: subscriptionRow, error: null });

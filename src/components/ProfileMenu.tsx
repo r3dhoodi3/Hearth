@@ -94,6 +94,7 @@ export default function ProfileMenu({
   linksLabel,
   hasPlus,
   themeToggle,
+  nameMaxWidthClass = "max-w-[12rem]",
 }: {
   name: string | null;
   links: MenuLink[];
@@ -106,6 +107,12 @@ export default function ProfileMenu({
   // When true, a "Dark mode" row (with a visible on/off switch) renders above
   // Log out so signed-in users can always change theme from either nav.
   themeToggle?: boolean;
+  // How wide the name beside the avatar is allowed to get. The default is what
+  // both navs used to hardcode; the homeowner Nav passes a smaller one because
+  // its header row (brand + home address + four nav links + Tools + search +
+  // bell + this) is capped at max-w-5xl and a long name was eating the room
+  // the home address needs. ProNav has fewer controls and keeps the default.
+  nameMaxWidthClass?: string;
 }) {
   const [open, setOpen] = useState(false);
   // Plays the exit animation instead of an instant unmount: on the open ->
@@ -200,7 +207,9 @@ export default function ProfileMenu({
           </span>
         )}
         {name && (
-          <span className="hidden max-w-[12rem] truncate sm:inline">{name}</span>
+          <span className={`hidden truncate sm:inline ${nameMaxWidthClass}`}>
+            {name}
+          </span>
         )}
         {/* Dropdown indicator. Hidden below sm: on a phone the avatar alone
             already reads as the account button, and the 24px this costs is

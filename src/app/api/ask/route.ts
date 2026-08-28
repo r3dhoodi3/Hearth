@@ -7,6 +7,7 @@ import {
 } from "@/lib/property";
 import { getPlusTier } from "@/lib/subscription";
 import {
+  allowAbortRefund,
   countAskUsage,
   countAiUsageWindow,
   overAiGlobalHourlyLimit,
@@ -513,9 +514,22 @@ export async function POST(req: NextRequest) {
   // effort: see refundAskUsage. Returns the plain-English line to show, and
   // the meter that goes with it reflects the refund so it does not tick down
   // on a turn that never happened.
+  //
+  // ONCE, though. There are now three ways to reach a refund after the stream
+  // has been opened (a thrown call, an empty reply, an abort before the first
+  // delta), and each of them returns immediately - but a second failure on the
+  // way out (an emit that throws for a reason other than a disconnect) would
+  // otherwise land in the catch and hand back a SECOND question for one
+  // charge, which is the same bug as charging twice, pointed the other way.
+  let refunded = false;
+  const refundOnce = async (): Promise<void> => {
+    if (refunded) return;
+    refunded = true;
+    await refundAskUsage(authUser.id, windowStart);
+  };
   const failedAnswer = async (e: unknown): Promise<string> => {
     console.error("Ask Hearth: model call failed:", e);
-    await refundAskUsage(authUser.id, windowStart);
+    await refundOnce();
     return isRateLimitError(e)
       ? "Ask Hearth is busy right now. Try again in a minute."
       : "Sorry, I couldn't generate an answer. Please try again.";
@@ -609,16 +623,36 @@ export async function POST(req: NextRequest) {
           sentAny = true;
         }
         const { text, stopReason } = await stream.final;
+        // AN EMPTY REPLY IS NOT AN ANSWER, and it must be refunded like any
+        // other failure. The call did not throw, so nothing above catches it:
+        // the stream simply ended with no text (a refusal, a stop before the
+        // first token, a model hiccup). The homeowner read "Sorry, I couldn't
+        // generate an answer" and watched one of three daily questions
+        // disappear into it, which is the same "no answer means no charge" rule
+        // the catch below has always enforced - this path was just never wired
+        // to it. The meter goes back with the reply, so the count on screen
+        // agrees with the counter in the database instead of ticking down on a
+        // turn that never happened.
+        if (!text) {
+          await refundOnce();
+          emit(
+            encodeDone({
+              answer:
+                claudeFailureMessage(stopReason, text) ||
+                "Sorry, I couldn't generate an answer. Please try again.",
+              freeRemaining: refundedRemaining,
+              freeLimit,
+              askTier: tier,
+            })
+          );
+          return;
+        }
         // A truncated reply still carries a usable answer, so send it: a
-        // partial answer beats an apology. Only an empty or refused reply
-        // falls back to the plain-English failure line. The client takes this
-        // `answer` as authoritative over the deltas it stitched together.
+        // partial answer beats an apology. The client takes this `answer` as
+        // authoritative over the deltas it stitched together.
         emit(
           encodeDone({
-            answer:
-              text ||
-              claudeFailureMessage(stopReason, text) ||
-              "Sorry, I couldn't generate an answer. Please try again.",
+            answer: text,
             freeRemaining,
             freeLimit,
             askTier: tier,
@@ -646,10 +680,22 @@ export async function POST(req: NextRequest) {
         // ONLY when something was actually delivered, though (sentAny). A
         // client that hangs up before the first delta got NO answer at all, so
         // "the deltas already delivered are the answer" is not true of it, and
-        // keeping its question spent charges for nothing. That case falls
-        // through to failedAnswer, which refunds; the emit it then attempts is
-        // a harmless no-op on a controller nobody is reading.
-        if (req.signal.aborted && sentAny) return;
+        // keeping its question spent charges for nothing.
+        //
+        // THAT REFUND IS ALSO THE ONE FARMABLE THING ON THIS ROUTE, which is
+        // why it is metered rather than automatic: a script that fires a
+        // question and aborts the moment the headers land gets its question
+        // back every single time, so three a day becomes unlimited while every
+        // one of those requests still opens a paid model call. allowAbortRefund
+        // hands back the first few an hour (a real dropped connection) and
+        // stops after that. Either way this returns silently: there is nobody
+        // on the other end of the socket to tell.
+        if (req.signal.aborted) {
+          if (!sentAny && (await allowAbortRefund(authUser.id))) {
+            await refundOnce();
+          }
+          return;
+        }
         emit(
           encodeDone({
             answer: await failedAnswer(e),

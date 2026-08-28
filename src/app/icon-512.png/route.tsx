@@ -14,6 +14,13 @@ const MARK = 352; // keep the same ~69% ratio apple-icon.tsx uses (124/180)
 const ICON_CACHE_CONTROL =
   "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=86400";
 
+// Rendered once at build time instead of per request. The handler reads no
+// params, no query, no cookies and no database, so there is nothing for a
+// request to vary on - force-static is the honest declaration of that, and it
+// keeps a cold serverless invocation out of the install path entirely. The
+// Cache-Control above still governs how long the CDN and the browser hold it.
+export const dynamic = "force-static";
+
 export async function GET() {
   return new ImageResponse(
     (

@@ -3,13 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import {
+  allowAbortRefund,
   countAiUsage,
   countAiUsageWindow,
   overAiGlobalHourlyLimit,
   refundAiUsage,
 } from "@/lib/aiUsage";
 import { readJsonBounded } from "@/lib/boundedBody";
-import { TOPIC_GUARD_PRO } from "@/lib/aiGuard";
+import { TOPIC_GUARD_PRO, newTurnHasImage } from "@/lib/aiGuard";
 import { hasAskableContent, pickImageIndexes } from "@/lib/askRequest";
 import {
   streamText,
@@ -170,6 +171,80 @@ export async function POST(req: NextRequest) {
       { status: 403 }
     );
   }
+
+  // MEMBERSHIP FIRST, because the two decisions right below it both need the
+  // answer: photos are a Pro feature, and Pro raises the daily ceiling. It is a
+  // request-cached read of the same subscriptions row getProSubscription uses
+  // further down, so asking for it here costs nothing extra.
+  isProMember = await hasProPlan();
+
+  // PHOTO GATE, mirroring the homeowner route's (see /api/ask): vision calls
+  // are the expensive ones, so they are the paid tier's feature on this side
+  // too. Only the NEWEST turn counts, because the client replays its whole
+  // local history on every request and an old photo keeps arriving; the payload
+  // builder below separately refuses to forward ANY image from a non-member, so
+  // a photo already sitting in the history can never be answered later on the
+  // sly. No model call and nothing counted for a locked request.
+  if (!isProMember && newTurnHasImage(history)) {
+    return NextResponse.json({
+      answer: "Photo answers are part of Hearth Pro.",
+      // Same shape the homeowner lock uses, so the shared chat component shows
+      // the lock and hands the photo back instead of eating it.
+      locked: true,
+      link: { href: "/pro/plus", label: "See Hearth Pro" },
+    });
+  }
+
+  // Per-user daily cap so a single account can't run up the paid model bill.
+  // A paying Pro member gets the higher ceiling. Counted in the shared ai_usage
+  // table (fails closed, resets at midnight); see src/lib/aiUsage.ts.
+  // burst/hourly off: this route runs the chat's own tighter burst limit at
+  // the top and its own hourly check below, in that deliberate order. Letting
+  // countAiUsage run them again would double-count both.
+  //
+  // COUNTED HERE, in front of the context build below, not after it. Every
+  // wallet, open-lead and application query underneath used to run before
+  // anything asked whether this pro had allowance left, so a pro who spent
+  // their day's questions hours ago - or a script hammering a capped account -
+  // still cost a fistful of database round trips per refused request. Nothing
+  // between the gate above and here touches the database except the membership
+  // read this needs anyway.
+  const { overLimit, reason } = await countAiUsage(authUser.id, isProMember, {
+    burst: false,
+    hourly: false,
+  });
+  if (overLimit) {
+    // Only "user_daily" is this pro's own allowance. A tripped owner-wide
+    // breaker or an unreadable counter is Hearth's problem, and telling a pro
+    // who has barely used the copilot that they are out for the day (and
+    // pitching Hearth Pro at them) would be plainly false.
+    if (reason !== "user_daily") {
+      return NextResponse.json(
+        { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
+        { status: 503 }
+      );
+    }
+    return NextResponse.json({
+      answer: isProMember
+        ? "You have reached today's Ask Hearth limit. It resets tomorrow."
+        : "You have reached today's Ask Hearth limit. It resets tomorrow. Hearth Pro raises your daily limit if you want more room.",
+    });
+  }
+
+  // GLOBAL CEILING across every user, checked last of the three so a request
+  // that was going to be refused anyway never bumps it. Fails CLOSED.
+  //
+  // The daily counter above already charged this pro, so hand it back: they
+  // are being turned away by OUR ceiling, not theirs, and charging for that is
+  // the bug. Best effort, exactly like the homeowner route's refundAskUsage.
+  if (await overAiGlobalHourlyLimit()) {
+    await refundAiUsage(authUser.id);
+    return NextResponse.json(
+      { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
+      { status: 503 }
+    );
+  }
+
   try {
     if (contractor) {
       companyName = contractor.name ?? null;
@@ -213,8 +288,8 @@ export async function POST(req: NextRequest) {
               ? "Their background check is in progress."
               : `No background check yet. It is optional, and Hearth pays for it once they have ${BACKGROUND_CHECK_MIN_PAID_LEADS} paid lead applications (a refunded application does not count) - a clear result adds a trust signal on their profile. Never tell them it is available right now unless that earn-in is met.`;
 
-      // Pro membership status (perks only, never gates lead access).
-      isProMember = await hasProPlan();
+      // Pro membership status (perks only, never gates lead access) is
+      // resolved above, before the counters, and only read here.
 
       // Trialing is called out separately below because two perks with money
       // attached (the monthly lead credit and the deposit match) do not start
@@ -339,7 +414,7 @@ export async function POST(req: NextRequest) {
     `Today's date is ${today}. ` +
     "You help this contractor grow their business, and ONLY with pro topics. Those are:\n" +
     "Winning work: read a posted lead and draft a persuasive, specific apply message; draft or sharpen a quote or estimate with sensible line items priced to compete locally across Orange County, California, where Hearth operates; and give speed-to-lead and follow-up advice, since replying fast wins jobs.\n" +
-    `The marketplace money model: the per-lead fee to apply is tiered by job value, light work is $${LEAD_TIER_FEES.light}, skilled trades are $${LEAD_TIER_FEES.skilled}, and big-ticket work is $${LEAD_TIER_FEES.major} per lead. The $${MAJOR_INTRO_FEE} intro price applies ONLY to a pro's FIRST big-ticket lead ever; every big-ticket lead after that is the normal $${LEAD_TIER_FEES.major}. You cannot see whether this pro has already used that intro, so never promise them the $${MAJOR_INTRO_FEE} price: if they are unsure whether they have used it, tell them to check their billing page for a past big-ticket charge. The wallet holds cash plus bonus credit, and larger deposits earn a deposit bonus. These are two SEPARATE credits, never blend them into one rule: ghost protection automatically returns a lead fee to the pro's wallet as credit after ${GHOST_PROTECTION_DAYS} days of homeowner silence, every time, with no limit. The first-application guarantee is different and much narrower: if the homeowner responds but picks someone else, the fee comes back as credit too, but ONLY on that pro's very first paid application ever; after that, losing a bid is a lost fee with no credit back. Every fee-back rule pays wallet credit toward future leads, never cash and never a card refund, so never tell a pro they get money back. A posted job fills at ${MAX_APPLICANTS_PER_JOB} applicants, so applying early matters. Do the simple ROI math when it helps, framed around THEIR own trade and a realistic job value for it: a lead fee is usually a small fraction of the job it can win. Never illustrate with a trade that is not one of theirs.\n` +
+    `The marketplace money model: the per-lead fee to apply is tiered by job value, light work is $${LEAD_TIER_FEES.light}, skilled trades are $${LEAD_TIER_FEES.skilled}, and big-ticket work is $${LEAD_TIER_FEES.major} per lead. The $${MAJOR_INTRO_FEE} intro price applies ONLY to a pro's FIRST big-ticket lead ever; every big-ticket lead after that is the normal $${LEAD_TIER_FEES.major}. You cannot see whether this pro has already used that intro, so never promise them the $${MAJOR_INTRO_FEE} price: if they are unsure whether they have used it, tell them to check their billing page for a past big-ticket charge. The wallet holds cash plus bonus credit, and larger deposits earn a deposit bonus. These are two SEPARATE credits, never blend them into one rule: ghost protection automatically returns a lead fee to the pro's wallet as credit after ${GHOST_PROTECTION_DAYS} days of homeowner silence, every time, with no limit. The first-application guarantee is different and much narrower: if the homeowner responds but picks someone else, the fee comes back as credit too, but ONLY on that pro's very first paid application ever; after that, losing a bid is a lost fee with no credit back. It also requires a license number on file whose CSLB check has not failed; the company details below state this pro's license state, and if they have no license on file, never promise them this credit; tell them adding a license unlocks it. Every fee-back rule pays wallet credit toward future leads, never cash and never a card refund, so never tell a pro they get money back. A posted job fills at ${MAX_APPLICANTS_PER_JOB} applicants, so applying early matters. Do the simple ROI math when it helps, framed around THEIR own trade and a realistic job value for it: a lead fee is usually a small fraction of the job it can win. Never illustrate with a trade that is not one of theirs.\n` +
     `Pro membership: Hearth Pro is $${PRO_PLAN.monthly} per month or $${PRO_PLAN.yearly} per year, and its main perk is an extra ${PRO_DEPOSIT_BOOST_PTS} percentage points of deposit bonus on every wallet deposit. New members start with a ${PRO_PLAN.trialDays}-day free trial: the card is entered at signup, nothing is charged for the first ${PRO_PLAN.trialDays} days, it then renews automatically at the price above until cancelled, and cancelling before the trial ends means no charge. Only brand-new members get the trial. The company details below state this pro's free trial eligibility explicitly: if they are NOT eligible, never offer or promise them a trial, and talk about Hearth Pro at its regular price instead. Two perks wait for the first payment: the deposit boost and the monthly $10 lead credit both start when the trial converts, NOT while it runs. So if the details below say this pro is on their free trial, never tell them their next deposit will be matched or that credit is coming this week: deposits during the trial earn only the normal tier bonus, and the match starts the day the trial converts. Membership is perks only, it never changes which leads they can see or apply to. Weigh it against their volume: if they deposit and apply often, the deposit boost can pay for itself.\n` +
     "Trust and compliance: how to earn the CSLB verified badge and what each license status means (verified, failed, pending, or unverified); background checks through Checkr and what homeowners see; and insurance and bonding basics as general guidance, not legal advice. Also how to improve their public profile at /p/<their id> with photos, reviews, and a complete listing to win more homeowners.\n" +
     "Growing locally: gathering reviews, seasonal demand, and using the app well, setting their categories and service area, managing notifications and applications, and marking jobs won.\n\n" +
@@ -372,12 +447,17 @@ export async function POST(req: NextRequest) {
   // their question was actually about. It also refuses to re-send a photo from
   // further back than the last few turns, so an old picture stops riding along
   // at full vision price on every later text question.
-  const keepImages = history
-    ? pickImageIndexes(history, {
-        maxImages: MAX_IMAGES_PER_REQUEST,
-        maxChars: MAX_IMAGE_B64_CHARS,
-      })
-    : new Set<number>();
+  //
+  // MEMBERS ONLY, exactly as the homeowner route restricts this to Plus: a
+  // non-member's images are never forwarded, so an old photo replayed in the
+  // history cannot sneak past the photo gate above on a later text question.
+  const keepImages =
+    isProMember && history
+      ? pickImageIndexes(history, {
+          maxImages: MAX_IMAGES_PER_REQUEST,
+          maxChars: MAX_IMAGE_B64_CHARS,
+        })
+      : new Set<number>();
   const turns: ClaudeMessage[] = history
     ? history
         .map((m: any, i: number): ClaudeMessage | null => {
@@ -395,48 +475,6 @@ export async function POST(req: NextRequest) {
         .filter((t: ClaudeMessage | null): t is ClaudeMessage => t !== null)
     : [{ role: "user", text: question }];
 
-  // Per-user daily cap so a single account can't run up the paid model bill.
-  // A paying Pro member gets the higher ceiling. Counted in the shared ai_usage
-  // table (fails closed, resets at midnight); see src/lib/aiUsage.ts.
-  // burst/hourly off: this route runs the chat's own tighter burst limit at
-  // the top and its own hourly check below, in that deliberate order. Letting
-  // countAiUsage run them again would double-count both.
-  const { overLimit, reason } = await countAiUsage(authUser.id, isProMember, {
-    burst: false,
-    hourly: false,
-  });
-  if (overLimit) {
-    // Only "user_daily" is this pro's own allowance. A tripped owner-wide
-    // breaker or an unreadable counter is Hearth's problem, and telling a pro
-    // who has barely used the copilot that they are out for the day (and
-    // pitching Hearth Pro at them) would be plainly false.
-    if (reason !== "user_daily") {
-      return NextResponse.json(
-        { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
-        { status: 503 }
-      );
-    }
-    return NextResponse.json({
-      answer: isProMember
-        ? "You have reached today's Ask Hearth limit. It resets tomorrow."
-        : "You have reached today's Ask Hearth limit. It resets tomorrow. Hearth Pro raises your daily limit if you want more room.",
-    });
-  }
-
-  // GLOBAL CEILING across every user, checked last of the three so a request
-  // that was going to be refused anyway never bumps it. Fails CLOSED.
-  //
-  // The daily counter above already charged this pro, so hand it back: they
-  // are being turned away by OUR ceiling, not theirs, and charging for that is
-  // the bug. Best effort, exactly like the homeowner route's refundAskUsage.
-  if (await overAiGlobalHourlyLimit()) {
-    await refundAiUsage(authUser.id);
-    return NextResponse.json(
-      { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
-      { status: 503 }
-    );
-  }
-
   // NO ANSWER MEANS NO CHARGE, the same rule the homeowner route has always
   // had and this one was missing entirely: the question is counted before the
   // call, so a call that threw (a 400 we built wrong, a timeout, a 429 from
@@ -444,9 +482,20 @@ export async function POST(req: NextRequest) {
   // pro's daily allowance for nothing. One helper, because a streamed answer
   // can now fail in two places: before the stream opens, or part-way through
   // it, after the headers have already gone out. Returns the line to show.
+  //
+  // ONCE, though, exactly as the homeowner route does it: three paths can
+  // reach a refund after the stream is open (a thrown call, an empty reply, an
+  // abort before the first delta), and handing back two questions for one
+  // charge is the same bug as charging twice, pointed the other way.
+  let refunded = false;
+  const refundOnce = async (): Promise<void> => {
+    if (refunded) return;
+    refunded = true;
+    await refundAiUsage(authUser.id);
+  };
   const failedAnswer = async (e: unknown): Promise<string> => {
     console.error("Ask Hearth for Pros: model call failed:", e);
-    await refundAiUsage(authUser.id);
+    await refundOnce();
     return isRateLimitError(e)
       ? "Ask Hearth is busy right now. Try again in a minute."
       : "Sorry, I couldn't generate an answer. Please try again.";
@@ -503,17 +552,27 @@ export async function POST(req: NextRequest) {
           sentAny = true;
         }
         const { text, stopReason } = await stream.final;
+        // AN EMPTY REPLY IS NOT AN ANSWER, so it is refunded like any other
+        // failure. The call did not throw, so nothing above catches it: the
+        // stream just ended with no text (a refusal, a stop before the first
+        // token, a model hiccup). The pro read "Sorry, I couldn't generate an
+        // answer" and still spent one of their daily allowance on it. Same rule
+        // and same fix as /api/ask.
+        if (!text) {
+          await refundOnce();
+          emit(
+            encodeDone({
+              answer:
+                claudeFailureMessage(stopReason, text) ||
+                "Sorry, I couldn't generate an answer. Please try again.",
+            })
+          );
+          return;
+        }
         // A truncated reply still carries a usable answer, so send it: a
         // partial answer beats an apology. The client takes this `answer` as
         // authoritative over the deltas it stitched together.
-        emit(
-          encodeDone({
-            answer:
-              text ||
-              claudeFailureMessage(stopReason, text) ||
-              "Sorry, I couldn't generate an answer. Please try again.",
-          })
-        );
+        emit(encodeDone({ answer: text }));
       } catch (e) {
         // A failure part-way through still ends with a well-formed terminal
         // line, so the client needs no separate error channel.
@@ -527,9 +586,21 @@ export async function POST(req: NextRequest) {
         //
         // Only if something WAS delivered, though (sentAny). A pro whose
         // client hung up before the first delta received no answer at all, so
-        // their question falls through to failedAnswer and is refunded, same
-        // as any other request that produced nothing.
-        if (req.signal.aborted && sentAny) return;
+        // their question is refunded, same as any other request that produced
+        // nothing.
+        //
+        // METERED, though, for the reason spelled out on allowAbortRefund: an
+        // automatic refund on every early abort is a script's way to make the
+        // daily allowance unlimited while still opening a paid model call each
+        // time. The first few an hour (a genuinely dropped connection) are
+        // handed back and the rest stay spent. Silent either way - there is
+        // nobody on the other end to tell.
+        if (req.signal.aborted) {
+          if (!sentAny && (await allowAbortRefund(authUser.id))) {
+            await refundOnce();
+          }
+          return;
+        }
         emit(encodeDone({ answer: await failedAnswer(e) }));
       }
     }),

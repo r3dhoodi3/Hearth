@@ -446,7 +446,14 @@ export async function saveCompanyAction(formData: FormData) {
   const fields = {
     name: cappedField(formData, "name", 200),
     license_number: cappedFieldOrNull(formData, "license_number", 50),
-    service_area: cappedFieldOrNull(formData, "service_area", 300),
+    // MODERATION: never read this one from the form. service_area is rendered
+    // verbatim on the public /p/<id> page, the browse cards and the share
+    // cards, and a free-text box there was unreviewed text going straight to
+    // homeowners. The launch-city checkboxes below are now the ONLY writer:
+    // this null is just the create-path default, and on an update the key is
+    // stripped when the form did not ask the city question (see updateFields)
+    // so a lean post can never blank a stored area.
+    service_area: null as string | null,
     contact_phone: cappedFieldOrNull(formData, "contact_phone", 40),
     contact_email:
       cappedFieldOrNull(formData, "contact_email", 254) || user.email || null,
@@ -499,6 +506,14 @@ export async function saveCompanyAction(formData: FormData) {
     fields.service_area = citySelection.serviceArea;
   }
 
+  // What the UPDATE paths below actually write. A form that did not ask the
+  // city question has nothing to say about service_area, and spreading the
+  // null default from `fields` would silently blank a stored value, so the
+  // key is removed rather than written. The INSERT path keeps `fields` as-is:
+  // on a brand-new row null is the correct starting value.
+  const updateFields: Record<string, unknown> = { ...fields };
+  if (!hasCityWrite) delete updateFields.service_area;
+
   // Orange County launch gate (0074). Derived from the cities above when the
   // form asked for them; the older `serves_orange_county` yes/no radio is
   // still honored as a fallback so any form still posting it keeps working.
@@ -527,27 +542,25 @@ export async function saveCompanyAction(formData: FormData) {
   const existing = await getCurrentContractor();
 
   // Where a validation refusal below goes: back to the form the pro actually
-  // submitted from, with the reason in a flash. The two halves are NOT
-  // symmetrical, and that asymmetry is the whole point:
+  // submitted from, with the reason in a flash.
   //
-  //   - an existing pro edits from /pro/profile, so a redirect there is a
-  //     real navigation away from wherever they were.
-  //   - onboarding submits from /pro/onboarding, so redirect("/pro/onboarding")
-  //     is a SAME-PATH App Router redirect - the footgun that leaves the route
-  //     stuck on its loading.tsx boundary instead of resolving back to the real
-  //     page. That is what a tester saw as the wizard disappearing behind the
-  //     error banner (no form, no Back button) until a manual reload.
-  //     setFlash() then revalidatePath() on that same path keeps the wizard
-  //     mounted with whatever the pro already typed - exactly what the failed-
-  //     insert branch at the bottom of this action does.
+  // Neither half redirects. Both forms post to themselves - onboarding from
+  // /pro/onboarding, an existing pro from /pro/profile - so a redirect to
+  // either path is a SAME-PATH App Router redirect, the footgun that leaves
+  // the route stuck on its loading.tsx boundary instead of resolving back to
+  // the real page. That is what a tester saw as the wizard disappearing
+  // behind the error banner (no form, no Back button) until a manual reload;
+  // the profile editor had the identical bug, just less visibly.
+  // setFlash() then revalidatePath() on the submitting path keeps the form
+  // mounted with whatever the pro already typed - exactly what the failed-
+  // insert branch at the bottom of this action does.
   //
-  // Every call site must `return` after awaiting this: on the /pro/profile
-  // half redirect() throws and the return is unreachable, but on the
-  // onboarding half there is nothing to throw and the action has to stop.
+  // Every call site must `return` after awaiting this: nothing throws here,
+  // so the action has to stop on its own.
   const backToForm = async (message: string) => {
     await setFlash(message, "error");
-    if (existing) redirect("/pro/profile");
-    revalidatePath("/pro/onboarding");
+    revalidatePath(existing ? "/pro/profile" : "/pro/onboarding");
+    return;
   };
 
   // Server-side floor under the browser's `required`: a post that asked the
@@ -679,7 +692,7 @@ export async function saveCompanyAction(formData: FormData) {
       : {};
     let { error } = await supabase
       .from("contractors")
-      .update({ ...fields, ...stateWrite, ...ocWrite, ...cityWrite, ...reviewLinkWrite } as any)
+      .update({ ...updateFields, ...stateWrite, ...ocWrite, ...cityWrite, ...reviewLinkWrite } as any)
       .eq("id", existing.id);
 
     // The review links need the same thing launch_cities does: 0085 revoked the
@@ -704,7 +717,7 @@ export async function saveCompanyAction(formData: FormData) {
       reviewLinksDropped = true;
       ({ error } = await supabase
         .from("contractors")
-        .update({ ...fields, ...stateWrite, ...ocWrite, ...cityWrite } as any)
+        .update({ ...updateFields, ...stateWrite, ...ocWrite, ...cityWrite } as any)
         .eq("id", existing.id));
     }
     // launch_cities needs both the column (0124) and its own column-level
@@ -735,7 +748,7 @@ export async function saveCompanyAction(formData: FormData) {
       ({ error } = await supabase
         .from("contractors")
         .update({
-          ...fields,
+          ...updateFields,
           ...stateWrite,
           ...(columnMissing ? ocWrite : {}),
           ...effectiveReviewLinkWrite,
@@ -754,7 +767,7 @@ export async function saveCompanyAction(formData: FormData) {
       if (hasReviewLinkWrite) reviewLinksDropped = true;
       ({ error } = await supabase
         .from("contractors")
-        .update(fields)
+        .update(updateFields as any)
         .eq("id", existing.id));
     }
     if (error) {

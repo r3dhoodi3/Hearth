@@ -336,6 +336,23 @@ export default async function ContractorsPage(
     }
   }
 
+  // Which job card gets the full "Your job is live..." explainer, and which
+  // ones get one compact line instead.
+  //
+  // That explainer is a ~200px dashed box, and it used to render inside EVERY
+  // awaiting job card. Four open jobs made this page about 3900px tall on a
+  // phone, repeating the same paragraph and the same photo tip four times. It
+  // is a first-post explanation, not a per-job status, so it renders once, on
+  // the newest awaiting job - jobLeads comes back created_at descending, so
+  // that is the one just posted, the only reader who needs it. Every other
+  // awaiting job says "Live. No applications yet." on one line.
+  const explainerLeadId = jobLeads.find(
+    (l: any) =>
+      !l.contractor_id &&
+      !l.owner_closed_at &&
+      (appsByLead.get(l.id) ?? []).length === 0
+  )?.id as string | undefined;
+
   // Reply-speed line on each applicant card: one batched computation for
   // every applying pro across every job on this page (never one query per
   // pro, never one query per job). Needs the admin client - a pro's reply
@@ -469,16 +486,26 @@ export default async function ContractorsPage(
         //   whose count comes from the leads query above and so includes the
         //   job that was just posted (postJobAction revalidates /contractors
         //   before it redirects).
-        <ScrollIntoViewOnMount>
-          <div className="scroll-mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 shadow-sm dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
+        // scroll-mt goes on the ScrollIntoViewOnMount wrapper, not on the box
+        // inside it: the wrapper is the element scrollIntoView is called on, so
+        // scroll-margin anywhere else is inert. It was on the inner div, which
+        // is why the page landed at scrollY ~361 with "Your job is live" tucked
+        // up under the sticky header. 5rem clears that header at every width
+        // (py-2.5 + a 44px row on a phone, py-3 above sm).
+        <ScrollIntoViewOnMount className="scroll-mt-20">
+          <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 shadow-sm dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
             <p className="font-medium">
               Your job is live. Pros can see it now.
             </p>
             <p className="mt-1">
               Find it under{" "}
+              {/* The one thing to tap in this banner, and it measured 63x17.
+                  max-sm gives it a 44px-tall box while keeping it inline in
+                  the sentence (align-middle so it does not shove the line);
+                  desktop keeps the plain inline link. */}
               <Link
                 href="#your-jobs"
-                className="focus-ring font-medium underline underline-offset-2"
+                className="focus-ring font-medium underline underline-offset-2 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:align-middle"
               >
                 Your jobs
               </Link>{" "}
@@ -934,6 +961,17 @@ export default async function ContractorsPage(
                     </div>
                   ) : apps.length === 0 ? (
                     <div className="space-y-2">
+                      {/* Only the newest awaiting job carries the explainer
+                          (see explainerLeadId above for why). The others say
+                          the same status in one line, which is all a second
+                          or third open job actually needs. */}
+                      {l.id !== explainerLeadId ? (
+                        <p className="text-sm text-stone-500 dark:text-stone-400">
+                          {l.timing === "asap"
+                            ? "Live and marked urgent. No applications yet."
+                            : "Live. No applications yet."}
+                        </p>
+                      ) : (
                       <div className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
                         {/* An asap job shouldn't be told "a day or two": point
                             a real emergency at faster help instead. */}
@@ -967,6 +1005,7 @@ export default async function ContractorsPage(
                           </p>
                         )}
                       </div>
+                      )}
                       <CloseJobButton leadId={l.id} />
                     </div>
                   ) : (

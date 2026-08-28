@@ -194,6 +194,16 @@ export default function TermsPage() {
             (including running up Ask Hearth usage beyond normal, personal
             use of your own home).
           </p>
+          {/* LAWYER: check */}
+          <p className="mt-3 leading-relaxed">
+            You can block another account, and you can report one. Blocking
+            stops new messages and new job matches between the two accounts;
+            it does not cancel a job either of you has already agreed to, and
+            it does not refund anything. Reports come to Hearth for review, so
+            they are not anonymous to us and they are not a message to the
+            other person. Using reports to harass someone, or filing ones you
+            know are false, can get your own account restricted.
+          </p>
         </section>
 
         {/* TODO(legal): attorney review required — user-generated content, license grant, and indemnity. */}

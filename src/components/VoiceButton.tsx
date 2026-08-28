@@ -214,7 +214,10 @@ export default function VoiceButton({
         aria-label={listening ? "Listening. Tap to stop." : "Speak your question"}
         aria-pressed={listening}
         title={listening ? "Listening. Tap to stop." : "Speak your question"}
-        className={`flex items-center rounded-lg border px-2 text-lg disabled:opacity-50 ${
+        // max-sm minimums: the icon alone left this under 44px on a phone,
+        // next to a send button that already clears it. Desktop keeps the
+        // compact composer button it has today.
+        className={`flex items-center justify-center rounded-lg border px-2 text-lg disabled:opacity-50 max-sm:min-h-11 max-sm:min-w-11 ${
           listening
             ? "animate-pulse border-red-300 bg-red-50 text-red-600 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
             : "border-stone-200 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"

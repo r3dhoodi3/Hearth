@@ -259,3 +259,18 @@ Root causes worth remembering:
 Scratchpad (session 99a39419): paywall-inventory/benchmarks/ux.md, speed-plan.md, appstore-checklist.md, operating-plan.md, a11y-copy-audit.md, mobile-home-plan.md, redteam-A/B.md, persona-run/round1-findings.md + round1-bias-check.md, README-round2.md, shots/.
 
 Owner items are in STATUS.md. Test accounts to delete: hearth-persona-* (round 1: h1-h4, c1-c4, d1, d2, d2b; round 2: r2h1, r2c2; plus hearth-persona-0), hearth-test-1..5@example.com, hearth-redteam-*.
+
+### Round 4 (final 10-checker pass, 2026-08-28 early morning)
+
+Ten checker agents read the whole overnight diff after round 3. Their findings went to five workers, then the same gate (tsc 0, full vitest 0, eslint 0, isolated build 0). Commit: see STATUS.md item 4.
+
+What they caught and what changed:
+- Claim path trusted hidden parcel fields from the form; server now re-derives them.
+- Ask Hearth: clearing a chat while an answer streamed let the answer come back (generation counter now stales it); a clear in one tab did not clear the other (storage listener); an empty model reply spent a question without a refund (refund + idempotent refundOnce); abort refunds capped at 5/hour per user; pro Ask photo answers are Pro-only; trial accounts see "your 8 questions for today" instead of a Plus upsell.
+- Payments: the trial is reserved (claim_promo "plus_trial") before the Stripe session is created and released if checkout expires, so two tabs cannot start two trials; customer.subscription.updated can no longer resurrect a canceled row; free/Plus/trial numbers come from constants (drift test); dunning notice ids fall back when invoice.id is missing; the /plus decision cache only holds "charged today" decisions (a cached "3 days free" could go stale against a checkout that bills today).
+- Desktop header: HomeSwitcher could not shrink (sm:min-w-[auto]) so the address collided with Home / Browse Pros at every width. Now truncates; probe clean at 1024 to 1920. 640-1023 still collides (pre-existing, structural, see STATUS.md).
+- Phone: job-card Edit/Close are 44px, the posted banner scrolls clear of the header (scroll-mt was on the wrong element), the tip box shows once, app guide snoozes for the tab after a route change instead of re-opening.
+- 0140: unlock_direct_request checks user_blocks, reason length cap, named unique index.
+
+Probe scripts: scratchpad/hdr/probe.js (header pair intersections per width), budget.js.
+Not done: 640-1023 header shell decision; RISK_ENFORCE is still off (log-only), so the decision cache does nothing until it is turned on.

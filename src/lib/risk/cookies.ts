@@ -54,6 +54,41 @@ function looksLikeFile(path: string): boolean {
   return /\.[a-z0-9]{1,8}$/i.test(last);
 }
 
+// The ONLY paths that get a device cookie: the signup, onboarding and payment
+// funnel. Everything the score ever asks is "were several accounts created or
+// paid for from this browser", and both of those happen here - so a cookie
+// planted anywhere else can never be read for anything, it just costs the CDN
+// a cacheable response.
+//
+// This used to be an exclusion list (skip /api, skip files, skip metadata) and
+// therefore an allow-by-default: every marketing page, every /p/<pro> profile,
+// every guide sent a 400-day Set-Cookie to first-time readers who had not
+// asked for an account. An allowlist is the honest shape - the funnel is short
+// and known, and a visitor who never enters it never gets a cookie at all.
+//
+// A visitor who reads the marketing site first and signs up later still gets
+// their cookie: it is planted on the first funnel page they load, which is
+// before any account or payment exists to link.
+const DEVICE_COOKIE_PATHS = [
+  "/signin",
+  "/get-started",
+  "/homeowner-signup",
+  "/contractor-signup",
+  "/welcome",
+  "/onboarding",
+  "/pro/onboarding",
+  "/plus",
+  "/pro/plus",
+];
+
+// Exact match or a real child segment. Not startsWith on its own: that would
+// make "/plush-rugs" a funnel page.
+function isFunnelPath(path: string): boolean {
+  return DEVICE_COOKIE_PATHS.some(
+    (p) => path === p || path.startsWith(`${p}/`)
+  );
+}
+
 // Plant the device cookie on the response if the request did not carry one.
 //
 // Called from src/middleware.ts AFTER updateSession has produced its response,
@@ -61,13 +96,11 @@ function looksLikeFile(path: string): boolean {
 // session-refreshed response, or a redirect to /signin. It never reads or
 // changes the auth decision.
 //
-// Skipped for anything a person is not looking at: /api and /_next, any path
-// with a file extension, and the well-known metadata routes above. Two reasons,
-// both of which cost nothing to respect: a Stripe or Twilio webhook has no
-// browser to keep a cookie in, and a Set-Cookie header on an otherwise
-// cacheable response tells the CDN not to cache it. Every path a person
-// actually loads in a browser is an extensionless page path, so the signal
-// loses nothing by skipping the rest.
+// Planted ONLY on the funnel paths above. The exclusions kept below (/api,
+// /_next, file extensions, the metadata routes) are now redundant with the
+// allowlist, but they stay as a cheap, obvious first gate: if the allowlist
+// ever grows a broad entry, a Stripe webhook and a cached /robots.txt still
+// never see a Set-Cookie.
 //
 // The whole body is wrapped in try/catch. This runs in the middleware, on every
 // route in the matcher, so a throw here is not a lost signal - it is the entire
@@ -85,6 +118,7 @@ export function attachDeviceCookie(
     if (METADATA_PREFIXES.some((prefix) => path.startsWith(prefix))) {
       return response;
     }
+    if (!isFunnelPath(path)) return response;
     if (request.cookies.get(DEVICE_COOKIE)?.value) return response;
 
     response.cookies.set(DEVICE_COOKIE, crypto.randomUUID(), {

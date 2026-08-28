@@ -84,7 +84,20 @@ describe("both checkout actions consult trialDecision before creating a session"
     expect(source).toContain("risk.allowTrial");
     // The gate has to feed the SAME `freeTrial` the Stripe call, the consent
     // record and the acknowledgment all read, not a parallel variable.
-    expect(source).toMatch(/const freeTrial =[^\n]*risk\.allowTrial/);
+    //
+    // Two accepted shapes. The Pro side computes freeTrial directly from the
+    // decision. The homeowner side puts the decision into `wantsTrial` and then
+    // derives freeTrial from it, because it also has to win a one-per-account
+    // promo_claims reservation before the free days are real (see
+    // startPlusCheckoutAction) - the risk decision is still the gate, it just
+    // is not the last word. The second assertion is what stops that from
+    // becoming a parallel variable nobody reads: freeTrial has to be derived
+    // from the gated one.
+    expect(source).toMatch(/const (freeTrial|wantsTrial) =[^\n]*risk\.allowTrial/);
+    if (/const wantsTrial =/.test(source)) {
+      expect(source).toMatch(/if \(wantsTrial\)/);
+      expect(source).toMatch(/freeTrial = true/);
+    }
   });
 
   it.each(cases)("%s records a signal at checkout time", (_label, source) => {

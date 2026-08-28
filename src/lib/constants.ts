@@ -555,6 +555,13 @@ export const PLUS_INCLUDED_HOMES = 5;
 // never quietly drift.
 export const PLUS_ASK_PER_DAY = 15;
 
+// Ask Hearth questions a day on the FREE tier. Mirrors ASK_DAILY_FREE in
+// src/lib/aiUsage.ts for exactly the reason above, and src/lib/constants.test.ts
+// fails if the two drift. This is the number every comparison table and pricing
+// page quotes in its "Free" column, all of which used to type the digit by hand
+// in four separate places.
+export const FREE_ASK_PER_DAY = 3;
+
 // Ask Hearth questions a day during the 3-day Plus trial, with photos. Mirrors
 // ASK_DAILY_TRIAL in src/lib/aiUsage.ts for exactly the reason above, and
 // src/lib/constants.test.ts fails if the two drift.

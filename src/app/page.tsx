@@ -793,10 +793,19 @@ export default async function Home(props: {
           as a mistake rather than a footer. Terms has no other phone door,
           so it gets one. */}
       <footer className="mt-16 flex items-center justify-center gap-5 text-sm text-stone-500 sm:hidden dark:text-stone-400">
-        <Link href="/privacy" className="py-1 hover:text-bark-700 dark:hover:text-stone-300">
+        {/* min-h-11 with the text left small: py-1 alone gave these a 24px
+            target. This whole footer is sm:hidden, so nothing here reaches
+            desktop. */}
+        <Link
+          href="/privacy"
+          className="inline-flex min-h-11 items-center py-1 hover:text-bark-700 dark:hover:text-stone-300"
+        >
           Privacy
         </Link>
-        <Link href="/terms" className="py-1 hover:text-bark-700 dark:hover:text-stone-300">
+        <Link
+          href="/terms"
+          className="inline-flex min-h-11 items-center py-1 hover:text-bark-700 dark:hover:text-stone-300"
+        >
           Terms
         </Link>
       </footer>

@@ -721,6 +721,47 @@ export async function overAiGlobalHourlyLimit(): Promise<boolean> {
   }
 }
 
+// HOW MANY EARLY ABORTS AN HOUR STILL EARN A REFUND.
+//
+// Both chat routes hand a question back when the client hangs up before the
+// first delta arrives: nothing was delivered, so charging for it would be
+// charging for nothing. That is right for a phone that lost signal, and it is
+// also a free-questions machine: fire a request, abort it the instant the
+// headers land, and the daily counter goes up and straight back down again,
+// forever, while every one of those requests still opened a paid model call.
+//
+// Five an hour is far more than a real connection drops and far too few to farm
+// with. Past that the refund quietly stops: the request still ends silently
+// (there is nobody on the other end to tell), the question just stays spent.
+export const ASK_ABORT_REFUND_LIMIT = 5;
+export const ASK_ABORT_REFUND_WINDOW_SECONDS = 3600;
+
+// Counts one early abort for this user and reports whether it still earns a
+// refund. Same fixed-window rate_limit_hit RPC as every other bucket here, on
+// its own "ask-abort:<user>" key so it can never interact with the burst or
+// daily counters.
+//
+// FAILS OPEN, unlike the gates above, and deliberately: this decides whether to
+// give something BACK, not whether to let something through. A counter blip must
+// cost an honest homeowner nothing, and the worst case of failing open is that
+// an abuser gets refunds during a database outage - during which their questions
+// are not being counted either.
+export async function allowAbortRefund(userId: string): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const { data: allowed, error } = await admin.rpc("rate_limit_hit", {
+      p_bucket: `ask-abort:${userId}`,
+      p_limit: ASK_ABORT_REFUND_LIMIT,
+      p_window_seconds: ASK_ABORT_REFUND_WINDOW_SECONDS,
+    });
+    if (error) throw error;
+    return allowed !== false;
+  } catch (err) {
+    console.error("allowAbortRefund failed - refunding anyway:", err);
+    return true;
+  }
+}
+
 // Add N extra usages for this user today (e.g. a route that fans out to the
 // model more than once per request). Best-effort: it never throws and never
 // blocks the caller, since the gating decision is already made by

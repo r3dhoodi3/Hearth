@@ -15,6 +15,7 @@ import {
 import {
   APP_GUIDE_EVENT,
   appGuideSeenKey,
+  appGuideSnoozeKey,
   isEligibleForAppGuide,
   type GuideSide,
 } from "@/lib/appGuide";
@@ -154,6 +155,23 @@ function writeSeen(side: GuideSide): void {
   }
 }
 
+function readSnoozed(side: GuideSide): boolean {
+  try {
+    return window.sessionStorage.getItem(appGuideSnoozeKey(side)) === "1";
+  } catch {
+    // Storage disabled: fall back to the old behavior (offer it again).
+    return false;
+  }
+}
+
+function writeSnoozed(side: GuideSide): void {
+  try {
+    window.sessionStorage.setItem(appGuideSnoozeKey(side), "1");
+  } catch {
+    // Worst case it re-opens on the next route change, as it used to.
+  }
+}
+
 export default function AppGuide({
   side,
   // Decided on the server by AppGuideMount: false once the users-table stamp
@@ -172,6 +190,10 @@ export default function AppGuide({
   // "Show the app guide again" link on the help pages, usually).
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  // The route the sheet was opened on, or null when it is closed. A pathname
+  // that no longer matches this while the sheet is up means they navigated
+  // past the guide rather than dismissing it - see the auto-open effect.
+  const openedAtRef = useRef<string | null>(null);
 
   const slides = side === "pro" ? PRO_SLIDES : HOMEOWNER_SLIDES;
   const last = slides.length - 1;
@@ -179,8 +201,24 @@ export default function AppGuide({
   // Auto-open, once. Re-runs on navigation so somebody who lands on an
   // excluded page first (a payment screen, the emergency page) still gets the
   // guide on the next ordinary page instead of losing it entirely.
+  //
+  // The same re-run is why the snooze below exists: without it, somebody who
+  // ignored the guide and tapped into the app got it thrown back full-screen
+  // over every page they navigated to - the post-a-job form, the walkthrough -
+  // until they found Skip. Navigating away with it up is a "not now": it
+  // closes and stays closed for this tab, WITHOUT stamping "seen" (only Skip
+  // and Got it do that, in close() below), so a later visit still offers it
+  // and the help pages' "Show the app guide again" brings it back now.
   useEffect(() => {
-    if (open) return;
+    if (open) {
+      // Route changed while the sheet was up: they navigated past it.
+      if (openedAtRef.current !== null && openedAtRef.current !== pathname) {
+        openedAtRef.current = null;
+        writeSnoozed(side);
+        setOpen(false);
+      }
+      return;
+    }
     const eligible = isEligibleForAppGuide({
       pathname,
       // The mount point is the onboarding gate: this component is only
@@ -189,26 +227,36 @@ export default function AppGuide({
       onboardingComplete: true,
       seenOnServer: !startOpen,
       seenInThisBrowser: readSeen(side),
+      snoozedInThisSession: readSnoozed(side),
     });
-    if (eligible) setOpen(true);
-    // `open` is deliberately absent: this must not re-fire the moment the
-    // sheet opens, only on a route change or a new mount.
+    if (eligible) {
+      openedAtRef.current = pathname;
+      setOpen(true);
+    }
+    // `open` is deliberately absent from the deps: this must not re-fire the
+    // moment the sheet opens, only on a route change or a new mount. It is
+    // still READ above, to tell "the route changed under an open sheet" from
+    // "we are deciding whether to open one".
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, side, startOpen]);
 
   // Replay from the help pages ("Show the app guide again"). Always available,
-  // seen or not, on any page.
+  // seen or snoozed or not, on any page. pathname is in the deps so the
+  // replayed sheet records where it opened and the navigate-away snooze above
+  // applies to it too.
   useEffect(() => {
     function onShow() {
       setIndex(0);
+      openedAtRef.current = pathname;
       setOpen(true);
     }
     window.addEventListener(APP_GUIDE_EVENT, onShow);
     return () => window.removeEventListener(APP_GUIDE_EVENT, onShow);
-  }, []);
+  }, [pathname]);
 
   const close = useCallback(() => {
     setOpen(false);
+    openedAtRef.current = null;
     // Both halves of "seen": the browser mirror is synchronous so nothing in
     // this session can show it again even if the round trip below is slow or
     // never lands, and the server stamp is what covers the next device.

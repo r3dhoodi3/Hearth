@@ -98,7 +98,10 @@ export default function ThemeToggle({
         onClick={toggle}
         role="switch"
         aria-checked={dark}
-        className="mx-1 flex w-[calc(100%-0.5rem)] items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-stone-700 active:opacity-70 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600"
+        // max-sm:min-h-11: py-2 on a 14px line put this row at 36px, the one
+        // short target in the account menu on a phone. Desktop keeps the
+        // tighter row it shares with the links above it.
+        className="mx-1 flex w-[calc(100%-0.5rem)] items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-stone-700 active:opacity-70 hover:bg-bark-50 max-sm:min-h-11 dark:text-stone-300 dark:hover:bg-stone-600"
       >
         <span className="flex items-center gap-2">
           <span className="text-stone-500 dark:text-stone-400">

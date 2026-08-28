@@ -5,7 +5,12 @@ import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
 import { applyToJobAction } from "./actions";
-import { GHOST_PROTECTION_DAYS, LEAD_TIER_FEES } from "@/lib/constants";
+import { LEAD_TIER_FEES } from "@/lib/constants";
+import {
+  GHOST_PROTECTION_GUARANTEE,
+  FIRST_APPLICATION_GUARANTEE,
+  CREDIT_NOT_CASH_LINE,
+} from "@/lib/guaranteeCopy";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
 // Submit button for the "Confirm and pay" form below. Needs its own
@@ -246,13 +251,9 @@ export default function ApplyJobButton({
         </div>
       )}
       <p className="text-xs text-stone-500 dark:text-stone-400">
-        Applying charges the {fee} lead fee from your wallet. If the homeowner
-        never responds, ghost protection puts it back in your wallet as
-        credit after {GHOST_PROTECTION_DAYS} days, every time, no limit. If
-        they respond but pick someone else, you get that fee back as credit
-        too, but only on your very first paid application; after that, a lost
-        bid is a lost fee. Returns are always credit toward future leads,
-        never cash back to your card.
+        Applying charges the {fee} lead fee from your wallet.{" "}
+        {GHOST_PROTECTION_GUARANTEE} {FIRST_APPLICATION_GUARANTEE}{" "}
+        {CREDIT_NOT_CASH_LINE}
       </p>
       {/* Said at the moment of the charge, not after it: the price on this
           card is a one-time thing, and a pro deciding whether to spend it

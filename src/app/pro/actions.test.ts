@@ -306,7 +306,7 @@ describe("saveCompanyAction: validation floors", () => {
     expect(lastInsert).toBeNull();
   });
 
-  it("profile save keeps its redirect: /pro/profile is a real navigation", async () => {
+  it("profile save flashes in place too: /pro/profile posts to itself", async () => {
     existingContractor = {
       id: "contractor-1",
       name: "Acme Plumbing",
@@ -317,9 +317,11 @@ describe("saveCompanyAction: validation floors", () => {
 
     await expect(
       saveCompanyAction(fd({ name: "   ", contact_phone: "7145550100" }))
-    ).rejects.toThrow("REDIRECT:/pro/profile");
+    ).resolves.toBeUndefined();
 
     expect(setFlash).toHaveBeenCalledWith("Enter your company name.", "error");
+    expect(redirect).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith("/pro/profile");
     expect(lastUpdate).toBeNull();
   });
 });

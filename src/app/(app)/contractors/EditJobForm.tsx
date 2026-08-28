@@ -21,10 +21,15 @@ export default function EditJobForm({ job }: { job: any }) {
   if (!editing) {
     return (
       <div className="flex justify-end">
+        {/* Phone only: the bare text link measured 43x16, well under the 44px
+            thumb minimum. max-sm turns it into a real target without touching
+            the desktop rendering, where it stays a plain inline text link.
+            -mr-3 cancels the added horizontal padding so the label still
+            lines up with the card's right edge. */}
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
+          className="text-xs font-medium text-bark-700 hover:underline max-sm:-mr-3 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-3 dark:text-stone-300"
         >
           Edit job
         </button>

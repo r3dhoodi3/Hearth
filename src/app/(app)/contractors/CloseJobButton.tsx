@@ -35,10 +35,15 @@ export default function CloseJobButton({
   if (!confirming) {
     return (
       <div className="flex justify-end">
+        {/* Phone only: the bare text link measured 53x16, under the 44px thumb
+            minimum. Same treatment as EditJobForm's "Edit job" beside it -
+            max-sm makes it a real target, desktop keeps the plain text link,
+            and -mr-3 cancels the padding so it still lines up with the card
+            edge. */}
         <button
           type="button"
           onClick={() => setConfirming(true)}
-          className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+          className="text-xs text-stone-500 hover:text-red-600 max-sm:-mr-3 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-3 dark:text-stone-400 dark:hover:text-red-400"
         >
           Close job
         </button>

@@ -8,9 +8,13 @@ import {
   PRO_DEPOSIT_BOOST_PTS,
   LEAD_TIER_FEES,
   MAJOR_INTRO_FEE,
-  GHOST_PROTECTION_DAYS,
   isMajorCategory,
 } from "@/lib/constants";
+import {
+  GHOST_PROTECTION_GUARANTEE,
+  FIRST_APPLICATION_GUARANTEE,
+  CREDIT_NOT_CASH_LINE,
+} from "@/lib/guaranteeCopy";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 import DepositForm from "./DepositForm";
 import FadingBanner from "@/components/FadingBanner";
@@ -377,15 +381,10 @@ export default async function ProBillingPage(props: {
         )}
         {txns.length > 0 && (
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            Ghost protection: if the homeowner never responds within{" "}
-            {GHOST_PROTECTION_DAYS} days, you always get the fee back as
-            credit, every time, no limit. If they come back and choose you
-            after that, the same fee is re-charged. Separately, the
-            first-application guarantee: if they do respond but pick someone
-            else, you get that one back as credit too, but only on your very
-            first paid application. After that, a lost bid is a lost fee.
-            Either way it is Hearth credit in your wallet, not money back to
-            your card.
+            Ghost protection: {GHOST_PROTECTION_GUARANTEE} If they come back
+            and choose you after that, the same fee is re-charged. Separately,
+            the first-application guarantee: {FIRST_APPLICATION_GUARANTEE}{" "}
+            {CREDIT_NOT_CASH_LINE}
           </p>
         )}
       </section>

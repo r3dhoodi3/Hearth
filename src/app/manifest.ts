@@ -8,6 +8,10 @@ import type { MetadataRoute } from "next";
 // product, and the dashboard already bounces a signed-out visitor to /signin.
 // The ?source=pwa on it is just an attribution marker (nothing reads it yet)
 // so installed-app traffic can eventually be told apart from a browser tab.
+// Built once at deploy time, not per request: nothing below reads a param, a
+// cookie or the database, so the bytes are a constant of the deployment.
+export const dynamic = "force-static";
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",

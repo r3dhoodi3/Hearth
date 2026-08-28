@@ -32,11 +32,13 @@ import { useSignedIn } from "@/components/SessionCta";
 // today; the /guides pages and the city pages all rely on the hook.
 //
 // signedInHref/signedInLabel let a page point a signed-in reader at the
-// in-app screen that answers the same question for their own home; callers
-// that don't pass them get a sensible dashboard default.
+// in-app screen that answers the same question for their own home. Callers
+// that don't pass them get "/", which routes by side - a contractor reading a
+// guide lands on their own shell instead of a homeowner dashboard they do not
+// have.
 export default function GuideCta({
   signedIn,
-  signedInHref = "/dashboard",
+  signedInHref = "/",
   signedInLabel = "See this for your home",
 }: {
   signedIn?: boolean;

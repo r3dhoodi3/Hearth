@@ -25,7 +25,11 @@ import SubmitButton from "@/components/SubmitButton";
 import {
   COLD_START_FREE_POSTING,
   COLD_START_FREE_ALERTS,
+  FREE_ASK_PER_DAY,
+  PLUS_ASK_PER_DAY,
+  PLUS_INCLUDED_HOMES,
   PLUS_PLAN,
+  TRIAL_ASK_PER_DAY,
   formatUsd,
   yearlySavings,
 } from "@/lib/constants";
@@ -37,8 +41,17 @@ const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
   { label: "Quote analyzer", free: "-", plus: "Included" },
   { label: "Home report for resale & insurance", free: "-", plus: "Included" },
   // Photo diagnosis is the Plus-only half of Ask Hearth; the question count is
-  // the other half. Both numbers must match what src/lib/aiUsage.ts enforces.
-  { label: "Ask Hearth", free: "3 a day, text only", plus: "15 a day, with photos" },
+  // the other half. Every number is read from src/lib/constants.ts, which
+  // src/lib/constants.test.ts pins to what src/lib/aiUsage.ts actually
+  // enforces, so this row cannot quote an allowance the server does not give.
+  // The trial is called out in the Plus column because the 3 free days run on
+  // their own, smaller ceiling and a buyer arriving from the weekly card would
+  // otherwise read 15 and get 8 on day one.
+  {
+    label: "Ask Hearth",
+    free: `${FREE_ASK_PER_DAY} a day, text only`,
+    plus: `${PLUS_ASK_PER_DAY} a day, with photos (${TRIAL_ASK_PER_DAY} during the trial)`,
+  },
   // The first estimate for a home is free and stays free (see the note at the
   // top of src/app/(app)/value/actions.ts). "Refresh monthly" is the honest
   // word for what Plus buys: the lookup behind it is cached 30 days, so a
@@ -71,7 +84,13 @@ const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
     ? []
     : [{ label: "Matching to pros", free: "Standard", plus: "Priority" }]),
   { label: "Home tracking & document vault", free: "Included", plus: "Included" },
-  { label: "Homes you can track", free: "1 home", plus: "Up to 5 homes" },
+  // Same rule as the Ask row: the number comes from the constant the claim cap
+  // in claimPropertyAction actually enforces, never a typed digit.
+  {
+    label: "Homes you can track",
+    free: "1 home",
+    plus: `Up to ${PLUS_INCLUDED_HOMES} homes`,
+  },
   { label: "Proactive alerts", free: "In-app", plus: "All alerts, every channel" },
   // COLD START: while COLD_START_FREE_POSTING is on, posting is uncapped for
   // everyone, so the row says so honestly and sits last, since it isn't a

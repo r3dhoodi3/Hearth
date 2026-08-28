@@ -228,8 +228,9 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
               // and interactive for its 120ms fade-out (shouldRender), and at
               // z-50 it would otherwise still catch a tap meant for something
               // opening right after it, e.g. the account menu's Household row
-              // - the tap would land on this sheet's own Ask Hearth tile
-              // instead, since that's the first tile in it.
+              // - the tap would land on this sheet's own Emergency tile
+              // instead, since that's the first tile in it (Ask Hearth leads
+              // the "Your home" group below it, not the sheet).
               className={`fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-menu outline-none dark:border-white/10 dark:bg-stone-800 ${
                 open ? "motion-safe:animate-fade-slide-up" : "pointer-events-none motion-safe:animate-fade-slide-down"
               }`}

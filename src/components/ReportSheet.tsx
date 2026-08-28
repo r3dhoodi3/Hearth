@@ -86,7 +86,7 @@ export default function ReportSheet({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400 ${className}`}
+        className={`text-xs text-stone-500 hover:text-red-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400 dark:hover:text-red-400 ${className}`}
       >
         {label}
       </button>
@@ -140,7 +140,7 @@ export default function ReportSheet({
           type="button"
           onClick={submit}
           disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white max-sm:min-h-11 max-sm:px-4 disabled:opacity-50"
         >
           {busy && <InlineSpinner size={12} />}
           Send report
@@ -149,7 +149,7 @@ export default function ReportSheet({
           type="button"
           onClick={() => setOpen(false)}
           disabled={busy}
-          className="text-xs text-stone-500 hover:text-stone-600 disabled:opacity-50 dark:text-stone-400 dark:hover:text-stone-300"
+          className="text-xs text-stone-500 hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center disabled:opacity-50 dark:text-stone-400 dark:hover:text-stone-300"
         >
           Cancel
         </button>

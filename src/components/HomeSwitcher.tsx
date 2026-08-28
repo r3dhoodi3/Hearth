@@ -36,14 +36,17 @@ export default function HomeSwitcher({
     };
   }, [open]);
 
-  // min-w-0 on the root: it sits in the header's shrinkable left group, and
-  // without it the automatic minimum size of this box is its content width,
-  // so on a narrow phone it refused to shrink and the address ran straight
-  // under the Tools button beside it ("8892 ConstitutiTools"). Restored to
-  // min-width:auto from sm up, where the header has room for the whole
-  // address and shrinking it would be a pointless truncation.
+  // min-w-0 at EVERY width, not just below sm: this box sits in the header's
+  // shrinkable left group, and without it the automatic minimum size of the
+  // box is its content width, so the whole left group refuses to shrink and
+  // the address runs straight under whatever is beside it. On a phone that
+  // was the Tools button ("8892 ConstitutiTools"); on a 1024-1680px desktop
+  // it was the nav strip, which is shrink-0, so a long address rendered as
+  // "Hearth · 3831 [Home]ve[Browse Pros]". The address yields (truncated,
+  // with the full one in the aria-label and in the open menu) and the nav
+  // links keep their room at every width.
   return (
-    <div ref={ref} className="relative min-w-0 sm:min-w-[auto]">
+    <div ref={ref} className="relative min-w-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -54,12 +57,15 @@ export default function HomeSwitcher({
             ? `Switch home, current: ${active.address_line1}`
             : "Switch home"
         }
-        className="-my-2.5 flex min-w-0 max-w-full items-center gap-1 py-2.5 text-sm font-medium text-stone-600 active:opacity-70 hover:text-stone-800 sm:min-w-[auto] sm:max-w-none dark:text-stone-400 dark:hover:text-stone-200"
+        className="-my-2.5 flex min-w-0 max-w-full items-center gap-1 py-2.5 text-sm font-medium text-stone-600 active:opacity-70 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
       >
         {/* min-w-0 as well as truncate: a <button> is laid out with a
             min-content size equal to its max-content size, so the explicit
-            min-width:0 above is what actually lets this label give way. */}
-        <span className="min-w-0 max-w-[8.5rem] truncate sm:max-w-[12rem]">
+            min-width:0 above is what actually lets this label give way. The
+            max-w ladder is a ceiling, not a floor - it stops a long address
+            eating the header on a wide screen, while the min-w-0 above lets
+            it go narrower still when the nav needs the space. */}
+        <span className="min-w-0 max-w-[8.5rem] truncate sm:max-w-[10rem] lg:max-w-[14rem]">
           {active?.address_line1}
         </span>
         <span

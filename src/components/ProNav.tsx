@@ -3,6 +3,7 @@ import Logo from "@/components/Logo";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
 import NotificationBell from "@/components/NotificationBell";
+import UnreadProvider from "@/components/UnreadProvider";
 import SidePill from "@/components/SidePill";
 import { setPreferredSideAction } from "@/lib/sideActions";
 
@@ -46,6 +47,12 @@ export default function ProNav({
 
   return (
     <>
+    {/* Single provider for both NavLinks renderings below (desktop top strip
+        + phone bottom bar), mirroring Nav.tsx: one poll and one realtime
+        subscription for the unread-messages badge instead of each rendering
+        running its own. Without it the pro shell paid for two of each on
+        every page. */}
+    <UnreadProvider role="contractor">
     <header className="sticky top-0 z-30 border-b border-stone-200 bg-hearth-50 dark:border-white/10 dark:bg-stone-900">
       {/* One row at every width, mirroring the homeowner Nav: brand left,
           bell + profile pinned top-right, nothing stacks on a phone. */}
@@ -141,6 +148,7 @@ export default function ProNav({
     >
       <NavLinks links={BOTTOM_LINKS} variant="bottom" accent="hearth" />
     </nav>
+    </UnreadProvider>
     </>
   );
 }

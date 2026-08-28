@@ -511,15 +511,103 @@ describe("refundAiUsage", () => {
 });
 
 describe("the pro chat refunds what it never answered", () => {
-  it("hands the question back on both paths that take one without answering", () => {
+  it("hands the question back on every path that takes one without answering", () => {
     // /api/ask has always done this; /api/pro-ask had no refund path at all,
     // so a pro shed by the hourly ceiling, or a model call that threw, quietly
     // spent one of their daily allowance for nothing.
+    //
     expect(aiUsage).toContain("export async function refundAiUsage");
-    expect(proAskRoute.match(/refundAiUsage\(/g)?.length).toBe(2);
     const shed = proAskRoute.indexOf("overAiGlobalHourlyLimit()");
     const refundAfterShed = proAskRoute.indexOf("refundAiUsage(", shed);
     expect(refundAfterShed).toBeGreaterThan(shed);
+    // Everything after the stream opens refunds through one idempotent helper,
+    // so two failures on the way out cannot hand back two questions for one
+    // charge - the mirror image of charging twice.
+    expect(proAskRoute).toContain("const refundOnce = async ()");
+    expect(proAskRoute).toContain("if (refunded) return;");
+  });
+});
+
+// A reply that arrives with NO TEXT is the shape the checker hit in the local
+// production build: the model call did not throw, so nothing above catches it,
+// the stream just ended empty. The homeowner read "Sorry, I couldn't generate
+// an answer" and still watched one of three daily questions disappear into it.
+// Both chat routes now refund that, and the homeowner one sends the refunded
+// meter back with the reply so the count on screen matches the counter in the
+// database.
+describe("an empty reply is refunded like any other failure", () => {
+  it("refunds on the empty-text branch in both chat routes", () => {
+    for (const route of [askRoute, proAskRoute]) {
+      // The empty branch exists, and refunds before it emits anything.
+      expect(route).toContain("if (!text) {");
+      const emptyAt = route.indexOf("if (!text) {");
+      const refundAt = route.indexOf("await refundOnce();", emptyAt);
+      const emitAt = route.indexOf("emit(", emptyAt);
+      expect(refundAt).toBeGreaterThan(emptyAt);
+      expect(refundAt).toBeLessThan(emitAt);
+    }
+  });
+
+  it("sends the REFUNDED meter with that reply, not the spent one", () => {
+    // refundedRemaining is freeRemaining + 1: the meter has to agree with the
+    // counter, or the chat shows a question spent that was just handed back.
+    expect(askRoute).toContain(
+      "const refundedRemaining = freeRemaining === null ? null : freeRemaining + 1;"
+    );
+    const emptyAt = askRoute.indexOf("if (!text) {");
+    const doneAt = askRoute.indexOf("encodeDone({", emptyAt);
+    const meterAt = askRoute.indexOf("freeRemaining: refundedRemaining", doneAt);
+    expect(meterAt).toBeGreaterThan(doneAt);
+    // ...and it is close by: the same encodeDone call, not one further down.
+    expect(meterAt - doneAt).toBeLessThan(300);
+  });
+
+  it("also sends the refunded meter on a pre-stream throw", () => {
+    // streamText throwing before the request opens (a bad payload, a 429 from
+    // Anthropic) is an ordinary JSON reply, and it has always refunded through
+    // failedAnswer. This pins the meter that rides with it.
+    const preStream = askRoute.indexOf("answer: await failedAnswer(e),");
+    expect(preStream).toBeGreaterThan(-1);
+    expect(askRoute.slice(preStream, preStream + 200)).toContain(
+      "freeRemaining: refundedRemaining"
+    );
+  });
+
+  it("refunds at most once per request", () => {
+    // Three paths can reach a refund after the stream opens (a thrown call, an
+    // empty reply, an abort before the first delta). Two of them firing for one
+    // charge would hand back two questions.
+    expect(askRoute).toContain("const refundOnce = async ()");
+    expect(askRoute).toContain("if (refunded) return;");
+    // failedAnswer goes through it too, rather than calling the refund direct.
+    const failedAt = askRoute.indexOf("const failedAnswer = async (");
+    expect(askRoute.slice(failedAt, failedAt + 300)).toContain(
+      "await refundOnce();"
+    );
+  });
+});
+
+// An abort before the first delta gets its question back, because nothing was
+// delivered. That is also the one farmable thing on either chat route: fire a
+// question, hang up the instant the headers land, and the daily counter goes
+// up and straight back down again while a paid model call was still opened.
+describe("the early-abort refund is metered", () => {
+  it("counts early aborts in their own bucket, capped per hour", () => {
+    expect(aiUsage).toContain("export async function allowAbortRefund");
+    // Its OWN bucket: never the burst or daily counters, which would let an
+    // abort spend or shed something it has no business touching.
+    expect(aiUsage).toContain("`ask-abort:${userId}`");
+    expect(aiUsage).toContain("export const ASK_ABORT_REFUND_LIMIT");
+    expect(aiUsage).toContain("export const ASK_ABORT_REFUND_WINDOW_SECONDS");
+  });
+
+  it("gates BOTH chat routes' abort refunds on it", () => {
+    for (const route of [askRoute, proAskRoute]) {
+      expect(route).toContain("allowAbortRefund(authUser.id)");
+      // The refund is inside the `!sentAny` branch: once deltas have gone out,
+      // the answer was delivered and the question stays spent, metered or not.
+      expect(route).toMatch(/if \(!sentAny && \(await allowAbortRefund\(/);
+    }
   });
 });
 

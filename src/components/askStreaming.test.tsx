@@ -587,3 +587,131 @@ describe("a non-streamed reply still works", () => {
     );
   });
 });
+
+// A CLEARED CONVERSATION MUST STAY CLEARED, even with an answer in flight.
+//
+// consumeStream captures the transcript as it stood when the question was sent
+// and rewrites the reply bubble onto that snapshot every 60ms until the
+// terminal line lands. Anything that throws the conversation away in that
+// window used to be undone by the next repaint: the cleared turns came back on
+// screen AND were written to localStorage again. The chat's own Clear button
+// is now locked while an answer streams, so the way in is a SECOND TAB, which
+// reaches this tab as a storage event and nothing else.
+describe("clearing while an answer is streaming", () => {
+  const CHAT_KEY = "hearth_ask_chat:user-1";
+
+  // What another tab's clear looks like from here: removeItem fires a storage
+  // event with a null newValue. jsdom does not dispatch these on its own.
+  function otherTabCleared(key = CHAT_KEY) {
+    window.localStorage.removeItem(key);
+    window.dispatchEvent(
+      new StorageEvent("storage", { key, oldValue: "[]", newValue: null })
+    );
+  }
+
+  it("drops an in-flight answer instead of writing the cleared chat back", async () => {
+    const stream = makeStream();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.response));
+
+    render(<AskHearth fill />);
+    await ask("Why is my water heater loud?");
+
+    stream.push(delta("Sediment in the tank. "));
+    await settle();
+    expect(screen.getByText(/Sediment in the tank\./)).toBeInTheDocument();
+
+    // Another tab clears the conversation mid-answer.
+    await act(async () => {
+      otherTabCleared();
+    });
+    await settle();
+    expect(
+      screen.queryByText("Why is my water heater loud?")
+    ).not.toBeInTheDocument();
+
+    // The rest of the answer arrives, including its terminal line. None of it
+    // may reach the screen or the store.
+    stream.push(delta("Flushing it usually fixes the noise."));
+    stream.push(
+      done({
+        answer: "Sediment in the tank. Flushing it usually fixes the noise.",
+        freeRemaining: 2,
+        freeLimit: 3,
+      })
+    );
+    await settle();
+
+    expect(
+      screen.queryByText("Why is my water heater loud?")
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Sediment in the tank/)).not.toBeInTheDocument();
+    // The greeting is what a cleared conversation shows, and nothing was
+    // persisted on top of the removal.
+    expect(screen.getByText(GREETING)).toBeInTheDocument();
+    const stored = window.localStorage.getItem(CHAT_KEY);
+    expect(stored === null || stored === JSON.stringify([])).toBe(true);
+  });
+
+  it("ignores a storage event for another account's key", async () => {
+    const stream = makeStream();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.response));
+
+    render(<AskHearth fill />);
+    await ask("Why is my water heater loud?");
+
+    stream.push(delta("Sediment in the tank. "));
+    await settle();
+
+    // A different user's chat on the same device (or the pro copilot's key):
+    // nothing about this conversation changed.
+    await act(async () => {
+      otherTabCleared("hearth_ask_chat:user-2");
+    });
+    stream.push(
+      done({
+        answer: "Sediment in the tank. Flushing it usually fixes the noise.",
+        freeRemaining: 2,
+        freeLimit: 3,
+      })
+    );
+    await settle();
+
+    expect(
+      screen.getByText("Sediment in the tank. Flushing it usually fixes the noise.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Why is my water heater loud?")
+    ).toHaveLength(1);
+  });
+
+  it("locks Clear and the retention control while the answer is coming", async () => {
+    const stream = makeStream();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.response));
+
+    render(<AskHearth fill />);
+    const clear = screen.getByRole("button", { name: "Clear" });
+    const retention = screen.getByLabelText("How long chats are kept");
+    expect(clear).not.toBeDisabled();
+    expect(retention).not.toBeDisabled();
+
+    await ask("Why is my water heater loud?");
+    stream.push(delta("Sediment in the tank. "));
+    await settle();
+
+    // One gesture away from wiping a conversation an answer is being written
+    // into, so both stand down until it lands.
+    expect(clear).toBeDisabled();
+    expect(retention).toBeDisabled();
+
+    stream.push(
+      done({
+        answer: "Sediment in the tank. Flushing it usually fixes the noise.",
+        freeRemaining: 2,
+        freeLimit: 3,
+      })
+    );
+    await settle();
+    expect(clear).not.toBeDisabled();
+    expect(retention).not.toBeDisabled();
+  });
+});

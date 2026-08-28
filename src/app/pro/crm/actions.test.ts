@@ -35,6 +35,7 @@ import {
   addClientAction,
   trackLeadAction,
   updateClientDetailsAction,
+  deleteClientAction,
   addNoteAction,
   deleteNoteAction,
 } from "./actions";
@@ -53,6 +54,13 @@ let ownLeadRow: { id: string } | null = { id: "lead-1" };
 let alreadyTrackedRow: { id: string } | null = null;
 let updatedValues: Record<string, unknown> | null = null;
 let updateError: { message: string } | null = null;
+// What the `.select("id")` on the ownership-scoped update/delete returns. An
+// empty array is the "no row matched contractor_id" case: a tampered client
+// id, or someone else's client. Postgrest reports that with no error at all,
+// which is exactly why these writes have to read back what they touched.
+let updatedRows: { id: string }[] = [{ id: "client-1" }];
+let deletedRows: { id: string }[] = [{ id: "client-1" }];
+let deleteError: { message: string } | null = null;
 let insertedNotes: Record<string, unknown>[] = [];
 let noteInsertError: { message: string } | null = null;
 let noteDeleteError: { message: string } | null = null;
@@ -70,10 +78,25 @@ function supabaseStub() {
             if (!updateError) updatedValues = values;
             return {
               eq: () => ({
-                eq: async () => ({ error: updateError }),
+                eq: () => ({
+                  select: async () => ({
+                    data: updateError ? null : updatedRows,
+                    error: updateError,
+                  }),
+                }),
               }),
             };
           },
+          delete: () => ({
+            eq: () => ({
+              eq: () => ({
+                select: async () => ({
+                  data: deleteError ? null : deletedRows,
+                  error: deleteError,
+                }),
+              }),
+            }),
+          }),
           select: () => ({
             eq: () => ({
               eq: () => ({
@@ -126,6 +149,9 @@ beforeEach(() => {
   alreadyTrackedRow = null;
   updatedValues = null;
   updateError = null;
+  updatedRows = [{ id: "client-1" }];
+  deletedRows = [{ id: "client-1" }];
+  deleteError = null;
   insertedNotes = [];
   noteInsertError = null;
   noteDeleteError = null;
@@ -314,6 +340,43 @@ describe("updateClientDetailsAction", () => {
 
     expect(setFlash).toHaveBeenCalledWith(
       "Couldn't save your changes. Please try again.",
+      "error"
+    );
+    expect(revalidatePath).toHaveBeenCalledWith(`/pro/crm/${CLIENT_ID}`);
+  });
+
+  it("refuses a client that isn't this pro's, even though the write reported no error", async () => {
+    updatedRows = [];
+
+    await updateClientDetailsAction(
+      formData({ id: "someone-elses-client", client_name: "Acme Plumbing" })
+    );
+
+    expect(setFlash).toHaveBeenCalledWith("That client isn't yours.", "error");
+    expect(setFlash).not.toHaveBeenCalledWith("Client updated.");
+    expect(revalidatePath).not.toHaveBeenCalledWith("/pro/crm");
+  });
+});
+
+describe("deleteClientAction", () => {
+  const CLIENT_ID = "client-1";
+
+  it("refuses a client that isn't this pro's instead of claiming it was removed", async () => {
+    deletedRows = [];
+
+    await deleteClientAction(formData({ id: "someone-elses-client" }));
+
+    expect(setFlash).toHaveBeenCalledWith("That client isn't yours.", "error");
+    expect(setFlash).not.toHaveBeenCalledWith("Client removed.");
+  });
+
+  it("revalidates the detail page instead of redirecting to it when the delete fails", async () => {
+    deleteError = { message: "constraint violation" };
+
+    await deleteClientAction(formData({ id: CLIENT_ID }));
+
+    expect(setFlash).toHaveBeenCalledWith(
+      "Couldn't remove that client. Please try again.",
       "error"
     );
     expect(revalidatePath).toHaveBeenCalledWith(`/pro/crm/${CLIENT_ID}`);

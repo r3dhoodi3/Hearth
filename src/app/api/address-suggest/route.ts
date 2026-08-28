@@ -123,7 +123,13 @@ export async function GET(req: NextRequest) {
   if (!q) return NextResponse.json(EMPTY);
 
   const zip = (req.nextUrl.searchParams.get("zip") ?? "").trim().slice(0, 10);
-  const cacheKey = `${zip}|${q.toLowerCase()}`;
+  // JSON, not `${zip}|${query}`. Both halves are free text off the query
+  // string, so a query containing "|" could build the same key as a different
+  // (zip, query) pair - "92646|main" with no ZIP reads the cached answer for
+  // "main" in 92646, which is a wrong suggestion list served to a real person.
+  // JSON.stringify escapes the separator into the value instead of letting the
+  // two run together.
+  const cacheKey = JSON.stringify([zip, q.toLowerCase()]);
 
   // A cache hit costs nothing outbound, so it does not spend the limiter
   // either: the budget below exists to protect Photon, not to meter reads of

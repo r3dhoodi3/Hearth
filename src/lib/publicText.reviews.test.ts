@@ -54,8 +54,12 @@ describe("saveReviewAction wires the comment through the same gate", () => {
   );
 
   it("imports the gate and the rejection message", () => {
-    expect(src).toContain(
-      'import {\n  isAcceptablePublicText,\n  REVIEW_COMMENT_REJECTED,\n} from "@/lib/publicText";'
+    // Whitespace-tolerant on purpose: this asserts that both names are
+    // imported from @/lib/publicText, not that Prettier chose to break the
+    // import across four lines. The exact-string version broke on a reformat
+    // that changed nothing about the behavior under test.
+    expect(src).toMatch(
+      /import\s*\{[^}]*\bisAcceptablePublicText\b[^}]*\bREVIEW_COMMENT_REJECTED\b[^}]*\}\s*from\s*"@\/lib\/publicText";/
     );
   });
 

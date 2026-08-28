@@ -334,7 +334,11 @@ export default function SystemRow({
             e.stopPropagation();
             setEditing(true);
           }}
-          className="mt-0.5 inline-flex min-h-11 items-center text-xs font-medium text-bark-700 hover:underline sm:inline-block sm:min-h-0"
+          // min-w-11 as well as min-h-11: the label is four characters, so the
+          // target measured 22x44 - tall enough and half as wide as it needs
+          // to be. Widening it costs the row no height. Both minimums are
+          // dropped from sm up, where this is a plain inline text link.
+          className="mt-0.5 inline-flex min-h-11 min-w-11 items-center justify-center text-xs font-medium text-bark-700 hover:underline sm:inline-block sm:min-h-0 sm:min-w-0"
         >
           Edit
         </button>

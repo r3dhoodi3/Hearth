@@ -105,6 +105,7 @@ export default function HouseholdQrCode({ propertyId }: { propertyId: string }) 
       </p>
 
       {qrDataUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- a client-generated data: URI, so there is no URL for next/image to optimize
         <img
           src={qrDataUrl}
           alt="QR code to join this home's household"

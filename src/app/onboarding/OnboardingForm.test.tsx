@@ -153,10 +153,10 @@ describe("OnboardingForm ready step", () => {
     );
   });
 
-  // The street box is editable, but every parcel fact next to it is a hidden
-  // copy of the ORIGINAL lookup. claimPropertyAction can only tell the two
-  // apart if the form says what the lookup actually returned, so this field is
-  // what makes the correction path safe.
+  // The street box is editable, so claimPropertyAction has to be able to tell
+  // "this is the line we looked up" from "this is a line the homeowner
+  // corrected" - the two need different lookups. This field is what says which
+  // it is.
   it("posts the looked-up line alongside the editable one", async () => {
     const { container } = await toReadyStep();
 
@@ -172,6 +172,84 @@ describe("OnboardingForm ready step", () => {
       target: { value: "9871 Kings Canyon Drive" },
     });
     expect(hidden.value).toBe("9871 Kings Canyon Dr");
+  });
+});
+
+// WHAT THE CLAIM POST ACTUALLY CONTAINS.
+//
+// These read the real FormData the browser would send, which is the only
+// honest way to check a form: a field can be present, correct and visible and
+// still not be in the post, and that is exactly the bug the ZIP had.
+describe("the claim post", () => {
+  function claimData(container: HTMLElement): FormData {
+    return new FormData(container.querySelector("form")!);
+  }
+
+  // The locked, visible ZIP box had NO `name` at all, so the only field in the
+  // form actually named "zip" was an optional box tucked inside "Know more
+  // details?" - a disclosure most people never open. Leaving it blank (or
+  // clearing it) posted an empty ZIP, which claimPropertyAction reads as out of
+  // area: the homeowner was refused with "Hearth isn't in your area yet" and
+  // filed on the waitlist for the ZIP they had just successfully looked up.
+  it("posts the ZIP from the locked field, and only that one", async () => {
+    const { container } = await toReadyStep();
+
+    const zipBox = screen.getByLabelText("ZIP code") as HTMLInputElement;
+    expect(zipBox.name).toBe("zip");
+    expect(zipBox.readOnly).toBe(true);
+    // readOnly still submits - it is `disabled` that would drop the field.
+    expect(zipBox.disabled).toBe(false);
+
+    // Exactly one, so there is no second box to disagree with it.
+    expect(container.querySelectorAll('[name="zip"]')).toHaveLength(1);
+    expect(claimData(container).getAll("zip")).toEqual(["92646"]);
+  });
+
+  // Every one of these used to ride along as a hidden input, and
+  // claimPropertyAction read them straight off the POST whenever the street had
+  // not been edited. A hidden field is not a server value: it is whatever the
+  // request says it is. The claim re-reads all of them from its own lookup now,
+  // so the form has no business carrying them - and with them gone, a forged
+  // parcel_id or latitude has nowhere in the shipped form to hide.
+  it.each([
+    "parcel_id",
+    "latitude",
+    "longitude",
+    "hoa_fee",
+    "county",
+    "assessed_value",
+    "assessed_year",
+    "purchase_date",
+    "purchase_price",
+    "market_value",
+    "market_value_low",
+    "market_value_high",
+    "property_tax_history",
+    "system_facts",
+  ])("carries no %s field for the claim to trust", async (field) => {
+    const { container } = await toReadyStep();
+    expect(container.querySelector(`[name="${field}"]`)).toBeNull();
+    expect(claimData(container).get(field)).toBeNull();
+  });
+
+  // What SHOULD still post: the things the person actually told us, either by
+  // typing them or by leaving the looked-up value in a box they can see.
+  it("still posts what the homeowner typed", async () => {
+    const { container } = await toReadyStep();
+    fireEvent.change(screen.getByLabelText("Your full name"), {
+      target: { value: "Alex Rivera" },
+    });
+    fireEvent.change(screen.getByLabelText(/Unit or apt/), {
+      target: { value: "4B" },
+    });
+
+    const data = claimData(container);
+    expect(data.get("address_line1")).toBe("9871 Kings Canyon Dr");
+    expect(data.get("unit")).toBe("4B");
+    expect(data.get("full_name")).toBe("Alex Rivera");
+    expect(data.get("looked_up_address")).toBe("9871 Kings Canyon Dr");
+    expect(data.get("year_built")).toBe("1968");
+    expect(data.get("property_type")).toBe("single_family");
   });
 });
 

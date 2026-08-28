@@ -145,13 +145,29 @@ describe("a disconnect before the first delta is refunded", () => {
       const text = routeSrc(rel);
       expect(text).toContain("let sentAny = false;");
       expect(text).toContain("sentAny = true;");
-      expect(text).toContain("if (req.signal.aborted && sentAny) return;");
-      // The unqualified form charged for an answer nobody ever received.
+      // The abort branch returns without an answer either way, and sentAny
+      // decides whether the question is handed back inside it. The unqualified
+      // "abort means keep the charge" form is what charged for an answer
+      // nobody ever received, so the refund must be gated on !sentAny.
+      expect(text).toContain("if (req.signal.aborted) {");
+      expect(text).toMatch(/if \(!sentAny && \(await allowAbortRefund\(/);
       expect(text).not.toContain("if (req.signal.aborted) return;");
-      // sentAny has to be set inside the delta loop, before the terminal line.
+      // sentAny has to be set inside the delta loop, before that branch.
       expect(text.indexOf("sentAny = true;")).toBeLessThan(
-        text.indexOf("if (req.signal.aborted && sentAny) return;")
+        text.indexOf("if (req.signal.aborted) {")
       );
+    });
+
+    // ...and the refund is METERED, or it is a free-questions machine: fire a
+    // question, abort the instant the headers land, get it back, repeat. The
+    // bucket hands back the first few an hour (a genuinely dropped connection)
+    // and lets the rest stay spent. See allowAbortRefund in src/lib/aiUsage.ts.
+    it(`${rel} meters that refund so it cannot be farmed`, () => {
+      const text = routeSrc(rel);
+      expect(text).toContain("allowAbortRefund(authUser.id)");
+      const abortAt = text.indexOf("if (req.signal.aborted) {");
+      const meterAt = text.indexOf("allowAbortRefund(authUser.id)");
+      expect(meterAt).toBeGreaterThan(abortAt);
     });
   }
 });

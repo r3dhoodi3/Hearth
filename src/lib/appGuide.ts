@@ -55,6 +55,24 @@ export function appGuideSeenKey(side: GuideSide): string {
   return side === "pro" ? "hearth_pro_guide_seen" : "hearth_app_guide_seen";
 }
 
+// A sessionStorage flag, deliberately NOT the "seen" stamp above.
+//
+// The guide re-opens on every route change until it is dismissed, so somebody
+// who ignores it and taps into the app instead gets it thrown back over the
+// page they were trying to use - over the post-a-job form, over the
+// walkthrough - on every single navigation. Navigating away is a "not now",
+// not a "I read it": it snoozes the guide for this tab and nothing more. The
+// account is still un-stamped, so a later visit offers it again, and the
+// "Show the app guide again" link on either help page brings it straight back
+// (that replay ignores this flag and the seen stamp both).
+//
+// sessionStorage, not localStorage: a snooze should not outlive the tab.
+export function appGuideSnoozeKey(side: GuideSide): string {
+  return side === "pro"
+    ? "hearth_pro_guide_snoozed"
+    : "hearth_app_guide_snoozed";
+}
+
 // The window event the "Show the app guide again" links dispatch (help pages,
 // both sides). The component is always mounted and simply renders null when
 // closed, so replaying it costs no extra fetch and no navigation.
@@ -75,9 +93,14 @@ export function isEligibleForAppGuide(opts: {
   seenOnServer: boolean;
   // This browser's localStorage mirror said the same.
   seenInThisBrowser: boolean;
+  // They already had the guide up in this tab and navigated away from it
+  // without dismissing it (see appGuideSnoozeKey). Optional so a caller that
+  // does not track it fails toward showing, which is the old behavior.
+  snoozedInThisSession?: boolean;
 }): boolean {
   if (!opts.onboardingComplete) return false;
   if (opts.seenOnServer || opts.seenInThisBrowser) return false;
+  if (opts.snoozedInThisSession) return false;
   if (isAppGuideExcludedPath(opts.pathname)) return false;
   return true;
 }

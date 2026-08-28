@@ -40,17 +40,28 @@ vi.mock("@/lib/risk/facts", () => ({
 const { trialDecision, TRIAL_DECISION_TTL_MS, __clearTrialDecisionCache } =
   await import("./decision");
 
+const ORIGINAL_ENFORCE = process.env.RISK_ENFORCE;
+
 beforeEach(() => {
   __clearTrialDecisionCache();
   enforcementCalls = 0;
   computeCalls = 0;
   enforcement = { overrideAllowTrial: null, manualBlock: false };
-  risk = { score: 0, level: "low", reasons: [] };
+  // ENFORCING, and MEDIUM, because that is the only shape this cache is
+  // allowed to hold: a decision that has already removed the free trial (see
+  // cacheable in decision.ts - a granted trial must be recomputed every time,
+  // or the page promises free days the checkout will not honour). In log-only
+  // mode every decision grants the trial and nothing caches at all, which the
+  // last test in this file asserts directly.
+  process.env.RISK_ENFORCE = "true";
+  risk = { score: 40, level: "medium", reasons: [] };
   computeThrows = false;
   vi.useRealTimers();
 });
 
 afterEach(() => {
+  if (ORIGINAL_ENFORCE === undefined) delete process.env.RISK_ENFORCE;
+  else process.env.RISK_ENFORCE = ORIGINAL_ENFORCE;
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -108,12 +119,13 @@ describe("trialDecision render-path cache", () => {
     expect(computeCalls).toBe(2);
   });
 
-  it("a verdict that turns high evicts the low answer it replaces", async () => {
+  it("a verdict that turns high evicts the cached answer it replaces", async () => {
     await trialDecision("user-1", RENDER);
     expect(computeCalls).toBe(1);
 
     // Same user, now scoring high. The next read must not be served the stale
-    // low answer, and the one after it must not be served the high one either.
+    // medium answer, and the one after it must not be served the high one
+    // either.
     risk = { score: 90, level: "high", reasons: [] };
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.useFakeTimers();
@@ -151,6 +163,32 @@ describe("trialDecision render-path cache", () => {
     // Once the outage is over the real answer must be computed again, not
     // served from a ten-minute-old optimistic default.
     computeThrows = false;
+    await trialDecision("user-1", RENDER);
+    expect(computeCalls).toBe(2);
+  });
+
+  it("never caches a decision that still grants the free trial", async () => {
+    // Only a "charged today" answer is safe to hold. A grant has to be
+    // recomputed on every render, because the signal that would have removed it
+    // (a card fingerprint, a device, a manual flag) can land between the page
+    // the buyer reads and the checkout that charges them.
+    risk = { score: 0, level: "low", reasons: [] };
+
+    const first = await trialDecision("user-1", RENDER);
+    expect(first.allowTrial).toBe(true);
+
+    const second = await trialDecision("user-1", RENDER);
+    expect(second.allowTrial).toBe(true);
+    expect(computeCalls).toBe(2);
+  });
+
+  it("caches nothing at all in log-only mode, where every verdict grants the trial", async () => {
+    delete process.env.RISK_ENFORCE;
+    risk = { score: 90, level: "medium", reasons: [] };
+
+    const decision = await trialDecision("user-1", RENDER);
+    expect(decision.allowTrial).toBe(true);
+
     await trialDecision("user-1", RENDER);
     expect(computeCalls).toBe(2);
   });

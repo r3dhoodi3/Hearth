@@ -119,7 +119,10 @@ describe("chooseRoleAction: the row guard cannot fail open", () => {
     expect(updateCalls).toBe(0);
   });
 
-  it("still lets a brand-new account through: no stamp means nothing a failed read could be hiding", async () => {
+  it("refuses a failed read even with no role stamp: the stamp says nothing about the rows", async () => {
+    // "No stamp" is read off user metadata, not off the rows that failed to
+    // load - an OAuth account can own a contractors row or a property without
+    // ever having been stamped. So a failed check is refused either way.
     sides = {
       hasPro: false,
       hasHome: false,
@@ -128,9 +131,14 @@ describe("chooseRoleAction: the row guard cannot fail open", () => {
     };
 
     await expect(chooseRoleAction(fd({ role: "contractor" }))).rejects.toThrow(
-      "REDIRECT:/pro/onboarding"
+      "REDIRECT:/welcome/role"
     );
-    expect(updateCalls).toBe(1);
+
+    expect(setFlash).toHaveBeenCalledWith(
+      "We couldn't check your account just now. Try again in a minute.",
+      "error"
+    );
+    expect(updateCalls).toBe(0);
   });
 
   it("a clean 'no rows' answer is still a real answer, and the choice is made", async () => {

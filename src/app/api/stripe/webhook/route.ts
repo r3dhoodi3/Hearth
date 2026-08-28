@@ -835,6 +835,67 @@ async function releaseIntroReservationIfUnused(
   }
 }
 
+// The homeowner twin of the function above: release a reserved-but-never-spent
+// Plus free-trial claim (the promo_claims row for 'plus_trial').
+//
+// startPlusCheckoutAction claims that row synchronously, before the Stripe
+// session exists, so two tabs cannot each mint a free trial for one account
+// (see the long note there). A buyer who then closes the Stripe tab, or whose
+// card is declined, must not lose their one trial to a checkout they never
+// completed - so the same two events that roll back the Pro intro roll this
+// back too: an expired checkout session, and a subscription landing on
+// canceled/incomplete_expired without ever having gone live.
+//
+// Guarded the same way at both ends. The callers only invoke this when the
+// specific thing they are looking at (trial_reserved on the session,
+// intro_step_up on the subscription) shows THIS attempt is the one holding the
+// reservation, and this function re-confirms there is no LIVE homeowner-side
+// subscription before deleting anything, so a trial that is genuinely running
+// is never clawed back. Best effort throughout: a failure here means the buyer
+// has to ask support for their trial back, never a blocked checkout.
+async function releasePlusTrialReservationIfUnused(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string
+): Promise<void> {
+  try {
+    const { data: rows } = await (admin as any)
+      .from("subscriptions")
+      .select("plan, status, current_period_end")
+      .eq("user_id", userId);
+    // The homeowner side is every row whose plan is NOT a pro_ one, matching
+    // how getSubscription splits the two sides.
+    const stillLive = ((rows as any[]) ?? []).some((row) => {
+      if (typeof row?.plan === "string" && row.plan.startsWith("pro_")) {
+        return false;
+      }
+      if (row?.status !== "active" && row?.status !== "trialing") return false;
+      if (
+        row?.current_period_end &&
+        new Date(row.current_period_end) <= new Date()
+      ) {
+        return false;
+      }
+      return true;
+    });
+    if (stillLive) return;
+
+    const { error } = await admin
+      .from("promo_claims")
+      .delete()
+      .eq("user_id", userId)
+      .eq("promo_key", "plus_trial");
+    if (error) {
+      console.error(
+        "promo_claims(plus_trial) rollback failed for",
+        userId,
+        error.message ?? error
+      );
+    }
+  } catch (err) {
+    console.error("promo_claims(plus_trial) rollback threw for", userId, err);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Trial-abuse signals (src/lib/risk, migration 0130)
 // ---------------------------------------------------------------------------
@@ -1346,6 +1407,20 @@ export async function POST(req: NextRequest) {
       const admin = createAdminClient();
       await releaseIntroReservationIfUnused(admin, meta.user_id);
     }
+
+    // The homeowner half of the same story: an abandoned Plus checkout whose
+    // session won the one-trial reservation (see startPlusCheckoutAction).
+    // Release it so the buyer still has their free days to spend on a real
+    // attempt later. A session that lost the race carries trial_reserved
+    // "false" and this is a no-op for it.
+    if (
+      meta.type === "plus_subscription" &&
+      meta.user_id &&
+      meta.trial_reserved === "true"
+    ) {
+      const admin = createAdminClient();
+      await releasePlusTrialReservationIfUnused(admin, meta.user_id);
+    }
   }
 
   // Delayed-notification payment methods (e.g. ACH debit): the checkout
@@ -1540,6 +1615,23 @@ export async function POST(req: NextRequest) {
         await releaseIntroReservationIfUnused(admin, existing.user_id);
       }
 
+      // Same rollback on the HOMEOWNER side, for the Plus free-trial
+      // reservation (see releasePlusTrialReservationIfUnused). A Plus checkout
+      // that reserved the trial and then never went live - declined card,
+      // abandoned 3-D Secure - must give the free days back. Recognized by the
+      // same intro_step_up flag, which subscriptionCheckoutData stamps on the
+      // subscription whenever the trial was granted, on a row that is NOT a
+      // pro_ one.
+      if (
+        existingPlan &&
+        !existingPlan.startsWith("pro_") &&
+        existing?.user_id &&
+        neverWentLive &&
+        subscription.metadata?.intro_step_up === "true"
+      ) {
+        await releasePlusTrialReservationIfUnused(admin, existing.user_id);
+      }
+
       // Cancelled while still inside the free trial. This is the shape of trial
       // farming: three days of perks, cancel on day two, nothing ever paid. It
       // is ALSO the shape of an honest "I tried it and it is not for me", which
@@ -1613,19 +1705,43 @@ export async function POST(req: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
-    const { error: updateError } = await (admin as any)
-      .from("subscriptions")
-      .update({ ...baseUpdate, extra_home_slots: extraSlots })
-      .eq("stripe_subscription_id", subscription.id);
+    // CANCELED IS TERMINAL, and Stripe does not guarantee event ordering.
+    // customer.subscription.deleted and a customer.subscription.updated for the
+    // same subscription are frequently in flight together (a cancel emits
+    // both), and the updated one can be delivered second - carrying the status
+    // Stripe had a moment BEFORE the deletion. That write walked a canceled row
+    // back to "active" or "trialing", which restored a membership nobody was
+    // paying for and, on a trial, handed the perks back with no subscription
+    // behind them. Nothing then heals it: there are no further events.
+    //
+    // So an `updated` may write anything EXCEPT over a row already canceled.
+    // The `deleted` branch is deliberately not scoped: it is the authority on
+    // that state, and it is what has to be able to write it (and to force
+    // extra_home_slots to 0) in the first place. A Stripe subscription is never
+    // reactivated after cancellation - a new membership is a new subscription
+    // with a new id - so this can never block a legitimate revival.
+    const scopeToLive = <T extends { neq: (c: string, v: string) => T }>(q: T): T =>
+      event.type === "customer.subscription.updated"
+        ? q.neq("status", "canceled")
+        : q;
+
+    const { error: updateError } = await scopeToLive(
+      (admin as any)
+        .from("subscriptions")
+        .update({ ...baseUpdate, extra_home_slots: extraSlots })
+        .eq("stripe_subscription_id", subscription.id)
+    );
     // Graceful degradation: if the live DB hasn't run migration 0108 yet, the
     // extra_home_slots column doesn't exist. Retry without it so status/plan
     // sync - the part that actually keeps a membership live - never breaks over
     // the add-on column, same convention as upsertSubscriptionRow above.
     if (updateError && isMissingSchemaError(updateError)) {
-      const { error: fallbackError } = await (admin as any)
-        .from("subscriptions")
-        .update(baseUpdate)
-        .eq("stripe_subscription_id", subscription.id);
+      const { error: fallbackError } = await scopeToLive(
+        (admin as any)
+          .from("subscriptions")
+          .update(baseUpdate)
+          .eq("stripe_subscription_id", subscription.id)
+      );
       if (fallbackError) {
         // Same reasoning as the checkout upsert branches above: without this
         // write the row drifts from Stripe and nothing else heals it until
@@ -1829,7 +1945,22 @@ export async function POST(req: NextRequest) {
             // this event repeatedly for ONE failed invoice, and the member
             // should hear about it once. A genuinely new failed cycle carries
             // a new invoice id and re-arms the notice.
-            const url = `${terms.cancelPath}?billing=past_due&invoice=${invoice.id}`;
+            //
+            // GUARDED, because an invoice id is not guaranteed to be there: a
+            // draft or preview invoice can arrive without one, and
+            // `invoice=undefined` in the url is a string that is identical for
+            // every failure - so notifyOnce would find its own earlier row and
+            // withhold the notice for a genuinely new failed cycle, forever.
+            // The fallback keys on the subscription plus the cycle it failed
+            // in, which is the same "one notice per failed cycle" the invoice
+            // id gives, from fields the payload always carries.
+            const dedupeKey =
+              typeof invoice.id === "string" && invoice.id
+                ? invoice.id
+                : `${subscriptionId}:${
+                    invoice.period_start ?? invoice.created ?? "unknown"
+                  }`;
+            const url = `${terms.cancelPath}?billing=past_due&invoice=${encodeURIComponent(dedupeKey)}`;
             await notifyOnce(admin, {
               userId: subRow.user_id,
               kind: DUNNING_KIND,

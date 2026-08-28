@@ -587,11 +587,43 @@ describe("FIXED: the device cookie only lands on pages people read", () => {
     }
   });
 
-  it("still plants it on a real page, which is the whole point", () => {
-    for (const path of ["/plus", "/signin", "/pro/plus", "/"]) {
+  it("still plants it on a funnel page, which is the whole point", () => {
+    for (const path of [
+      "/plus",
+      "/signin",
+      "/pro/plus",
+      "/get-started",
+      "/homeowner-signup",
+      "/contractor-signup",
+      "/welcome",
+      "/welcome/role",
+      "/onboarding",
+      "/pro/onboarding",
+    ]) {
       const res = fakeResponse();
       attachDeviceCookie(fakeRequest(path), res);
       expect(res.set.map((c: { name: string }) => c.name)).toEqual([DEVICE_COOKIE]);
+    }
+  });
+
+  it("leaves the marketing site alone: only the signup and payment funnel is cookied", () => {
+    // The score only ever asks whether several accounts were created or paid
+    // for from one browser. A reader who never enters the funnel has nothing
+    // to link, so a Set-Cookie on these pages bought nothing and cost the CDN
+    // a cacheable response. "/plush" is here because a bare startsWith on the
+    // "/plus" entry would wrongly claim it.
+    for (const path of [
+      "/",
+      "/pros",
+      "/guides/water-heater",
+      "/p/some-contractor",
+      "/privacy",
+      "/terms",
+      "/plush",
+    ]) {
+      const res = fakeResponse();
+      attachDeviceCookie(fakeRequest(path), res);
+      expect(res.set).toHaveLength(0);
     }
   });
 

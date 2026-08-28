@@ -14,8 +14,9 @@ describe("hasAuthCookie", () => {
   });
 
   it("is false for a browser carrying only non-auth cookies", () => {
-    // hearth_did is planted on every first visit by attachDeviceCookie, so an
-    // anonymous visitor on their second page view has cookies but no session.
+    // hearth_did is planted by attachDeviceCookie the first time a visitor
+    // loads a signup or payment page, so an anonymous visitor browsing on from
+    // there has cookies but no session.
     // Getting this wrong would put the auth call back on the landing page for
     // essentially every real anonymous visitor.
     expect(hasAuthCookie(c("hearth_did", "hearth_fp", "theme"))).toBe(false);

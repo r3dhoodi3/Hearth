@@ -83,27 +83,26 @@
 --     guide_seen_at       src/lib/appGuideActions.ts markGuideSeenAction
 --     pro_guide_seen_at   same
 --
--- TWO APP PATHS STILL WRITE A LOCKED COLUMN FROM A SESSION CLIENT. Both are
--- app bugs this migration exposes rather than causes, and both must move to
--- createAdminClient() after their server-side validation:
+-- THE TWO WRITERS THAT WOULD OTHERWISE HIT A LOCKED COLUMN FROM A SESSION
+-- CLIENT ARE ALREADY ON THE ADMIN CLIENT, as of tonight's app-side fix. Both
+-- were app bugs this migration would have exposed; both are closed now, so
+-- the trigger below changes nothing about how either one behaves:
 --
---   1. src/app/(app)/account/actions.ts saveAccountAction (~101-110) sends
---      { full_name, phone, sms_consent, sms_consent_at } on the caller's own
---      session client. Because the check below is `is distinct from`, a save
---      that leaves the checkbox where it was still succeeds; only an actual
---      consent CHANGE is refused, and today that surfaces as a thrown server
---      action. The consent decision is validated server-side already (the
---      false -> true transition rule), so the write itself belongs on the
---      admin client.
---   2. src/lib/referralCode.ts getOrCreateReferralCode (~59-64) sets
---      users.referral_code on the session client. It swallows every error and
---      returns null, so the failure mode is "the invite link never appears",
---      not a crash - but the feature is off until that write moves to the
---      admin client.
+--   1. src/app/(app)/account/actions.ts saveAccountAction (~152-155) writes
+--      { sms_consent, sms_consent_at } through createAdminClient(), not the
+--      caller's session client. Name and phone (~126-129) still go through
+--      the session client, which is correct - those two stay writable by
+--      the row's owner. Both writes are scoped to the verified session's
+--      own user.id, never an id the form supplied.
+--   2. src/lib/referralCode.ts getOrCreateReferralCode (~66-72) writes
+--      users.referral_code through createAdminClient() too, also scoped to
+--      the verified session's own user.id. It still swallows every error
+--      and returns null on failure, so the failure mode stays "the invite
+--      link never appears", never a crash.
 --
--- Locking both anyway is deliberate: a consent record and a referral
--- attribution that the account being measured can rewrite are worth less than
--- nothing, and the two app fixes are small.
+-- Locking both anyway is deliberate defense in depth: a consent record and a
+-- referral attribution that the account being measured could rewrite are
+-- worth less than nothing, even with the app-side writers already correct.
 --
 -- ORDER-INDEPENDENT with 0135 and 0137. The list is compared through
 -- to_jsonb(NEW)/to_jsonb(OLD), so a column that does not exist yet reads as
@@ -264,12 +263,13 @@ comment on index public.reports_reporter_target_uniq is
 --    (src/app/api/twilio/inbound/route.ts ~242), the email opt-out writer
 --    (src/app/unsubscribe/route.ts ~72) and 0135's two RPCs.
 --
--- 2. The two session-client writers listed in the header (saveAccountAction's
---    sms_consent, getOrCreateReferralCode's referral_code) WILL be refused
---    once they try to change those columns. That is the intended outcome and
---    the app fix is to move both writes onto the admin client. Until then:
---    toggling SMS consent on /account throws, and the invite link never
---    generates. Saving name and phone with the checkbox untouched is fine.
+-- 2. The two writers named in the header (saveAccountAction's sms_consent
+--    write, getOrCreateReferralCode's referral_code write) are already on
+--    the admin client, so this trigger does not change their behaviour:
+--    both keep working. Spot-check anyway after pasting, since they are the
+--    two writers this migration exists to protect - toggling SMS consent on
+--    /account should still succeed, and the invite link should still
+--    generate.
 --
 -- 3. The trigger is not a substitute for RLS - "users self select" / "users
 --    self update" (0002) still decide WHICH row an account may touch. This

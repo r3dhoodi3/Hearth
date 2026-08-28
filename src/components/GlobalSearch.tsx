@@ -91,7 +91,12 @@ export default function GlobalSearch() {
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search"
           aria-label="Search"
-          className="w-32 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-sm text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:border-bark-500 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 dark:focus:border-bark-500"
+          // w-24 at rest, not w-32: this box sits in a header row capped at
+          // max-w-5xl that was 130px over budget, and 96px is exactly enough
+          // for the magnifier and the word "Search". It still expands to w-48
+          // the moment it has focus, which is when the extra width is worth
+          // anything.
+          className="w-24 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-sm text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:border-bark-500 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 dark:focus:border-bark-500"
         />
       </form>
 

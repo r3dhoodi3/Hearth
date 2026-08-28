@@ -307,7 +307,8 @@ function OnboardingCompanyFormInner({
   // The signed-in account's id, from the server page. The draft key is scoped
   // to it (./draftKey.ts) so a browser two pros share never prefills one of
   // them with the other's company details. Empty string when the page could
-  // not read a user, which falls back to the old unscoped key.
+  // not read a user; there is no unscoped fallback any more, so that case
+  // simply skips the draft entirely - no read, no write, no delete.
   userId: string;
   defaultEmail: string;
   defaultReferralCode?: string;

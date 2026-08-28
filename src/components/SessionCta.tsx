@@ -65,7 +65,10 @@ export function useSignedIn(): boolean {
 export default function SessionCta({
   signedOutHref,
   className = "rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-300",
-  signedInHref = "/dashboard",
+  // "/" rather than "/dashboard": the root already routes a signed-in account
+  // to whichever side it belongs on, so a contractor reading a guide is not
+  // sent to a homeowner dashboard they do not have.
+  signedInHref = "/",
   signedInLabel = "Open your dashboard",
   signedOutLabel = "Get started free",
 }: {

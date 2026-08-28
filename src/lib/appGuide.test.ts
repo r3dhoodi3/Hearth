@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   APP_GUIDE_EXCLUDED_PATHS,
   appGuideSeenKey,
+  appGuideSnoozeKey,
   isAppGuideExcludedPath,
   isEligibleForAppGuide,
 } from "./appGuide";
@@ -71,6 +72,20 @@ describe("isEligibleForAppGuide", () => {
     );
   });
 
+  it("stays shut for the rest of a session that waved it away", () => {
+    // Navigating past the sheet is a "not now", not a "seen": the account is
+    // still un-stamped, so a later visit offers it again.
+    expect(
+      isEligibleForAppGuide({ ...BASE, snoozedInThisSession: true })
+    ).toBe(false);
+  });
+
+  it("treats a caller that does not track the snooze as not snoozed", () => {
+    expect(
+      isEligibleForAppGuide({ ...BASE, snoozedInThisSession: undefined })
+    ).toBe(true);
+  });
+
   it("never takes over onboarding, a payment screen, or an emergency page", () => {
     for (const pathname of [
       "/onboarding",
@@ -93,5 +108,17 @@ describe("appGuideSeenKey", () => {
     expect(appGuideSeenKey("homeowner")).toBe("hearth_app_guide_seen");
     expect(appGuideSeenKey("pro")).toBe("hearth_pro_guide_seen");
     expect(appGuideSeenKey("homeowner")).not.toBe(appGuideSeenKey("pro"));
+  });
+});
+
+describe("appGuideSnoozeKey", () => {
+  it("keeps the two sides apart, and never collides with the seen key", () => {
+    expect(appGuideSnoozeKey("homeowner")).toBe("hearth_app_guide_snoozed");
+    expect(appGuideSnoozeKey("pro")).toBe("hearth_pro_guide_snoozed");
+    expect(appGuideSnoozeKey("homeowner")).not.toBe(appGuideSnoozeKey("pro"));
+    // A snooze lives in sessionStorage and a seen stamp in localStorage, but
+    // the names must not be confusable either: one is temporary, one is not.
+    expect(appGuideSnoozeKey("homeowner")).not.toBe(appGuideSeenKey("homeowner"));
+    expect(appGuideSnoozeKey("pro")).not.toBe(appGuideSeenKey("pro"));
   });
 });

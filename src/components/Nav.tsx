@@ -99,7 +99,7 @@ export default function Nav({
               max-sm twin lives just below the header row so it can't push
               this line into two rows next to the bell and avatar. */}
           {hasPro && <SidePill label="Home" accent="bark" className="hidden sm:inline-block" />}
-          <span className="hidden text-stone-300 sm:inline dark:text-stone-500">·</span>
+          <span className="hidden shrink-0 text-stone-300 sm:inline dark:text-stone-500">·</span>
           {/* Project to just the fields the client switcher renders. The full
               property rows carry sensitive columns (mortgage_balance,
               purchase_price, assessed_value, insurance_premium, owner names,
@@ -114,6 +114,13 @@ export default function Nav({
             activeId={activeId}
           />
         </div>
+        {/* shrink-0 is safe ONLY because the left group above can actually
+            shrink (HomeSwitcher is min-w-0 + truncate at every width now). It
+            was not: with the switcher pinned to min-width:auto from sm up,
+            the left group held its full content width, this group refused to
+            give any back, and between roughly 1024 and 1680px the address ran
+            underneath the nav pills - "Hearth · 3831 [Home]ve[Browse Pros]".
+            If either half is ever made unshrinkable again, that returns. */}
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {/* Primary destinations. Desktop/tablet (sm and up) keep this exact
               top strip, unchanged. Below sm it is hidden and the same links
@@ -159,6 +166,13 @@ export default function Nav({
             name={name}
             hasPlus={hasPlus}
             themeToggle
+            // 7rem, not the shared 12rem default: this header row is capped at
+            // max-w-5xl, so it has the same 976px to spend at 1024px wide and
+            // at 1920px wide. A long name at 12rem took 80 of those pixels off
+            // the home address on the left, which had already truncated away
+            // to its bare caret. ProNav has fewer controls in the same row and
+            // keeps the wider default.
+            nameMaxWidthClass="max-w-[7rem]"
             links={[
               { href: "/account", label: "Edit profile" },
               { href: "/issues", label: "Report a problem" },

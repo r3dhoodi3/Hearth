@@ -186,6 +186,33 @@ export function parseAssistant(content: string): {
   return { text, job, issue, reminder, options };
 }
 
+// parseAssistant runs a handful of brace-matching scans and four regex passes
+// over the whole message. That is nothing once, and it is not nothing once per
+// message per paint: a streamed answer repaints every 60ms (see
+// STREAM_PAINT_MS), and every repaint re-parsed every finished message in the
+// transcript from scratch, so a 40-turn conversation did roughly 8,000
+// redundant parses over one answer. A finished message's text never changes,
+// so its parse is memoized by that text. The message CURRENTLY streaming is
+// deliberately NOT cached (see bubble below): its content is a different
+// string on every delta, so caching it would only churn this map and evict the
+// stable entries the cache exists for.
+const PARSE_CACHE = new Map<string, ReturnType<typeof parseAssistant>>();
+const PARSE_CACHE_MAX = 200;
+
+function parseAssistantCached(content: string): ReturnType<typeof parseAssistant> {
+  const hit = PARSE_CACHE.get(content);
+  if (hit) return hit;
+  const parsed = parseAssistant(content);
+  if (PARSE_CACHE.size >= PARSE_CACHE_MAX) {
+    // Evict the oldest inserted entry. Good enough for a cache whose whole job
+    // is "the messages on screen right now".
+    const oldest = PARSE_CACHE.keys().next();
+    if (!oldest.done) PARSE_CACHE.delete(oldest.value);
+  }
+  PARSE_CACHE.set(content, parsed);
+  return parsed;
+}
+
 function jobHref(job: Job): string {
   const params = new URLSearchParams();
   if (job.category) params.set("category", job.category);
@@ -707,6 +734,22 @@ export default function AskHearth({
   const submitRef = useRef<(t: string) => void>(() => {});
   // Synchronous "a question is already in flight" latch. See submit().
   const sendingRef = useRef(false);
+  // WHICH CONVERSATION A STREAM IN FLIGHT BELONGS TO.
+  //
+  // consumeStream captures the transcript as it stood when the question was
+  // sent (`base`) and rewrites the reply bubble onto it for as long as the
+  // answer takes to arrive. Anything that throws the conversation away while
+  // that is happening - Clear, a retention change that prunes it, deleting the
+  // orphaned question, another tab clearing the same key - used to be undone a
+  // few hundred milliseconds later, when the next repaint or the terminal line
+  // wrote the captured list back to state AND to localStorage. The reader
+  // watched a conversation they had just cleared come back.
+  //
+  // So every one of those bumps this counter, consumeStream captures it, and a
+  // stream whose generation no longer matches stops writing: no repaint, no
+  // save, and no terminal commit. The answer is abandoned, which is exactly
+  // what "clear this conversation" asked for.
+  const generationRef = useRef(0);
   // The conversation as of RIGHT NOW, readable from a callback without going
   // through a render. submit() builds its optimistic append off this rather
   // than off the `messages` closure it was created with: a storage re-read can
@@ -824,9 +867,38 @@ export default function AskHearth({
       if (typeof k === "string" && k !== storageKey) return;
       read();
     }
+    // ANOTHER TAB. SYNC_EVENT above is a window CustomEvent, so it only ever
+    // reaches instances on this page (the dock and the Messages pane). A second
+    // tab is a second window and never hears it, so clearing the conversation
+    // in tab B left tab A holding the whole thing in memory - and `freshest`
+    // (see its comment) deliberately prefers memory over a SHORTER stored list,
+    // because that shape normally means another instance deleted a turn this
+    // one is right to have followed. The next question asked in tab A therefore
+    // rebuilt the cleared conversation and wrote it straight back to disk.
+    //
+    // The storage event is the missing signal. A clear removes the key
+    // (newValue null), and a whole-store clear() fires once with key null, so
+    // both are treated as "this conversation is gone": memory is dropped too,
+    // and the generation is bumped so an answer still streaming in this tab
+    // cannot re-persist the list it captured. Any other write to our key is an
+    // ordinary re-read.
+    function onStorage(e: StorageEvent) {
+      if (e.key !== null && e.key !== storageKey) return;
+      if (e.key === null || e.newValue === null) {
+        generationRef.current += 1;
+        messagesRef.current = [GREETING];
+        setMessages([GREETING]);
+        return;
+      }
+      read();
+    }
     read();
     window.addEventListener(SYNC_EVENT, onSync);
-    return () => window.removeEventListener(SYNC_EVENT, onSync);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(SYNC_EVENT, onSync);
+      window.removeEventListener("storage", onStorage);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, retentionKey, planKey]);
 
@@ -867,6 +939,10 @@ export default function AskHearth({
   }
 
   function clearChat() {
+    // Abandon any answer still streaming: see generationRef above. Without
+    // this, the reply in flight repaints the pre-clear conversation back onto
+    // the screen and saves it again on its terminal line.
+    generationRef.current += 1;
     applyMessages([GREETING]);
     try {
       localStorage.removeItem(storageKey);
@@ -881,6 +957,9 @@ export default function AskHearth({
   // Save the new window and apply it right away; other instances pick it up
   // via the sync event.
   function changeRetention(r: Retention) {
+    // Same reason as clearChat: a shorter window can prune the conversation to
+    // nothing, and a stream in flight must not write the pruned turns back.
+    generationRef.current += 1;
     setRetention(r);
     try {
       localStorage.setItem(retentionKey, r);
@@ -983,6 +1062,13 @@ export default function AskHearth({
   ) {
     const reader = body.getReader();
     const decoder = new TextDecoder();
+    // WHICH CONVERSATION THIS ANSWER BELONGS TO. See generationRef above: if
+    // the transcript is thrown away while this stream is running (Clear, a
+    // retention change, a delete, another tab clearing the same key), the
+    // counter moves and every write below stands down. `base` is a snapshot of
+    // a conversation that no longer exists, so writing it would resurrect it.
+    const gen = generationRef.current;
+    const stale = () => generationRef.current !== gen;
     // One timestamp for the whole reply, so re-rendering the bubble never
     // moves it inside the retention window.
     const ts = Date.now();
@@ -1006,7 +1092,7 @@ export default function AskHearth({
     ];
     // The empty placeholder goes up immediately: the bubble appearing IS the
     // signal that the answer has started.
-    applyMessages(withContent(""));
+    if (!stale()) applyMessages(withContent(""));
 
     // Save the growing answer, marked partial, on the slow clock above.
     //
@@ -1023,6 +1109,7 @@ export default function AskHearth({
     let lastSave = 0;
     const save = () => {
       if (!streamed.trim()) return; // nothing worth saving yet
+      if (stale()) return; // the conversation this belonged to is gone
       lastSave = Date.now();
       persist(withContent(streamed, null, true));
     };
@@ -1038,6 +1125,7 @@ export default function AskHearth({
     };
     const paint = () => {
       cancelPaint();
+      if (stale()) return;
       applyMessages(withContent(streamed));
       if (Date.now() - lastSave >= STREAM_SAVE_MS) save();
     };
@@ -1088,9 +1176,15 @@ export default function AskHearth({
             // localStorage are in step with the transcript before this
             // function returns and the next question can be sent.
             cancelPaint();
-            const updated = withContent(answer, link);
-            applyMessages(updated);
-            persist(updated);
+            // THE TERMINAL COMMIT STANDS DOWN TOO when the conversation was
+            // thrown away mid-answer. The allowance above is still applied:
+            // the server really did spend the question, and the meter should
+            // say so whatever happened to the transcript.
+            if (!stale()) {
+              const updated = withContent(answer, link);
+              applyMessages(updated);
+              persist(updated);
+            }
             settled = true;
             break;
           }
@@ -1107,6 +1201,10 @@ export default function AskHearth({
       // partial, as the real assistant turn - the conversation then ends on
       // an assistant message like any other, so the orphan check below (which
       // only fires when the newest message is a user turn) never flags it.
+      // Nothing to salvage into a conversation that no longer exists, and the
+      // question does not go back in the composer either: the reader cleared
+      // this chat on purpose.
+      if (stale()) return;
       const salvaged = streamed.trim();
       if (salvaged) {
         const updated = withContent(salvaged, null, true);
@@ -1362,6 +1460,10 @@ export default function AskHearth({
     const msgs = messagesRef.current;
     const last = msgs[msgs.length - 1];
     if (!last || last.role !== "user" || loading || sendingRef.current) return;
+    // Nothing should be in flight here (the guard above), but a stream from a
+    // previous, abandoned request can still be draining: bump the generation so
+    // it cannot re-append the question just deleted.
+    generationRef.current += 1;
     const trimmed = msgs.slice(0, -1);
     applyMessages(trimmed.length ? trimmed : [GREETING]);
     persist(trimmed.length ? trimmed : [GREETING]);
@@ -1436,7 +1538,12 @@ export default function AskHearth({
     const streaming = isLast && loading && m.role === "assistant";
     const parsed =
       m.role === "assistant"
-        ? parseAssistant(m.content)
+        ? // The streaming bubble's text is a different string every delta, so
+          // it is parsed directly and kept out of the memo (see
+          // parseAssistantCached). Every finished message is a cache hit.
+          streaming
+          ? parseAssistant(m.content)
+          : parseAssistantCached(m.content)
         : {
             text: m.content,
             job: null,
@@ -1477,7 +1584,13 @@ export default function AskHearth({
             }`}
           >
             {m.role === "assistant" ? (
-              <Markdown text={parsed.text} partial={streaming} />
+              // `m.partial` as well as `streaming`: a reply whose stream died
+              // mid-token is saved with its marks still open ("**Getting ready
+              // for winter" with no closing "**"), and after a reload nothing
+              // is streaming any more - so the finished-text path rendered the
+              // raw asterisks. Same closeOpenMarks treatment either way; the
+              // text is unfinished in both cases.
+              <Markdown text={parsed.text} partial={streaming || !!m.partial} />
             ) : (
               parsed.text
             )}
@@ -1586,10 +1699,16 @@ export default function AskHearth({
         value={retention}
         onChange={(e) => changeRetention(e.target.value as Retention)}
         aria-label="How long chats are kept"
-        // min-h-10 + wider padding gives this a real 40px tap target on a
+        // Locked while an answer is streaming. A shorter window prunes the
+        // conversation the reply is being written into, and the two then race:
+        // the answer stands down (see generationRef) and the reader is left
+        // watching a bubble that stopped filling in with no explanation. One
+        // disabled control for a few seconds is the honest version.
+        disabled={loading}
+        // min-h-11 + wider padding gives this a real 44px tap target on a
         // phone, where it was 59x28 and sat right next to Clear. Both are
         // reset at sm so the desktop row renders exactly as it did before.
-        className="min-h-10 cursor-pointer appearance-none rounded border-0 bg-transparent px-2 py-1.5 text-xs text-stone-500 underline decoration-dotted hover:text-stone-600 focus:outline-none dark:text-stone-400 dark:hover:text-stone-300 sm:min-h-0 sm:px-1"
+        className="min-h-11 cursor-pointer appearance-none rounded border-0 bg-transparent px-2 py-1.5 text-xs text-stone-500 underline decoration-dotted hover:text-stone-600 focus:outline-none disabled:cursor-default disabled:opacity-50 dark:text-stone-400 dark:hover:text-stone-300 sm:min-h-0 sm:px-1"
       >
         <option value="24h">24 hours</option>
         <option value="2w">2 weeks</option>
@@ -1650,7 +1769,13 @@ export default function AskHearth({
           after one). */}
       {photoLocked && !atFreeLimit && (
         <p className="mb-2 text-xs text-stone-500 dark:text-stone-400">
-          Photos need Hearth Plus.{" "}
+          {/* The pro copilot gates photos on Hearth PRO, not Plus (see
+              src/app/api/pro-ask/route.ts), and it shares this component. The
+              link itself already comes from the server's own locked reply, so
+              only the product name has to follow the endpoint. */}
+          {endpoint === "/api/ask"
+            ? "Photos need Hearth Plus."
+            : "Photos need Hearth Pro."}{" "}
           <Link
             href={plusLink.href}
             className="font-medium text-bark-700 underline dark:text-stone-300"
@@ -1663,17 +1788,37 @@ export default function AskHearth({
         <div className="flex flex-col items-start gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-white/10 dark:bg-stone-700/40 sm:flex-row sm:items-center">
           {/* Stacked on a phone: side by side, the sentence was squeezed into a
               four-line column next to the button. */}
-          {!lockEcho && (
+          {/* A TRIALING MEMBER IS NOT A FREE ONE. The server sends the same
+              freeLimit/freeRemaining shape to both (see askTier in
+              src/app/api/ask/route.ts), so this bar used to tell someone
+              currently on Plus for free that they had used their "free
+              questions" and offer to sell them Plus. The number comes from the
+              meter the server just sent, never typed here. The trial line is
+              always rendered (lockEcho only ever goes up alongside the server's
+              upsell reply, which a trialer never gets), so the bar can never
+              end up as an empty box with nothing in it. */}
+          {knownPlan === "trial" ? (
             <p className="min-w-0 flex-1 text-xs text-stone-600 dark:text-stone-300">
-              {freeLockText(freeLimit)}
+              That&apos;s your {freeLimit} questions for today on your trial.
+              They reset tomorrow.
             </p>
+          ) : (
+            !lockEcho && (
+              <p className="min-w-0 flex-1 text-xs text-stone-600 dark:text-stone-300">
+                {freeLockText(freeLimit)}
+              </p>
+            )
           )}
-          <Link
-            href={plusLink.href}
-            className="btn-primary shrink-0 px-3 py-1.5 text-xs"
-          >
-            {plusLink.label}
-          </Link>
+          {/* No upsell for someone already on the trial: the thing the button
+              sells is the thing they are using. */}
+          {knownPlan !== "trial" && (
+            <Link
+              href={plusLink.href}
+              className="btn-primary shrink-0 px-3 py-1.5 text-xs"
+            >
+              {plusLink.label}
+            </Link>
+          )}
         </div>
       ) : (
         <form onSubmit={send} className="flex gap-2">
@@ -1835,7 +1980,11 @@ export default function AskHearth({
             <button
               type="button"
               onClick={clearChat}
-              className="text-sm font-medium text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+              // Same lock as the retention control: clearing while an answer is
+              // streaming abandons the answer (see generationRef), which is
+              // right but reads as a bug if it happens by accident.
+              disabled={loading}
+              className="text-sm font-medium text-stone-500 hover:text-red-600 disabled:opacity-50 disabled:hover:text-stone-500 dark:text-stone-400 dark:hover:text-red-400"
             >
               Clear conversation
             </button>
@@ -1860,12 +2009,15 @@ export default function AskHearth({
           <button
             type="button"
             onClick={clearChat}
+            // Locked while an answer streams, for the same reason the
+            // retention control above it is: see generationRef.
+            disabled={loading}
             // Same treatment as the retention control above it: a 30x16 hit
             // area on a phone, one gesture away from wiping the conversation,
             // is too easy to hit by accident and too hard to hit on purpose.
             // A button centers its own label, so min-h alone does it. Reset at
             // sm so the desktop dock header is unchanged.
-            className="min-h-10 px-2 text-xs text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300 sm:min-h-0 sm:px-0"
+            className="min-h-10 px-2 text-xs text-stone-500 hover:text-stone-700 disabled:opacity-50 disabled:hover:text-stone-500 dark:text-stone-400 dark:hover:text-stone-300 sm:min-h-0 sm:px-0"
           >
             Clear
           </button>

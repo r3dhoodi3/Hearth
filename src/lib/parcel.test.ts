@@ -369,8 +369,10 @@ describe("lookupMarketValue source semantics", () => {
     expect(facts.source).toBe("rentcast");
     expect(writes.map((w) => w.source)).toEqual(["rentcast"]);
     // The AVM key is separate from the property-record key, so the two can
-    // never overwrite each other for the same address.
-    expect(writes[0].cache_key.endsWith("|avm")).toBe(true);
+    // never overwrite each other for the same address. It is a JSON array
+    // tagged "avm" rather than a string with separators in it - see the
+    // collision test below.
+    expect(JSON.parse(writes[0].cache_key)[0]).toBe("avm");
   });
 
   it("keys the cache per unit, so two condos never share one estimate", async () => {
@@ -379,7 +381,38 @@ describe("lookupMarketValue source semantics", () => {
       vi.fn(async () => jsonResponse(200, { price: 500_000 }))
     );
     await lookupMarketValue("17361 Ash St", "92708", "4B");
-    expect(writes[0].cache_key).toContain("/4b");
+    expect(JSON.parse(writes[0].cache_key)).toEqual([
+      "avm",
+      "17361 ash st",
+      "4b",
+      "92708",
+    ]);
+  });
+
+  // The street line is free text a homeowner types, and the old key glued the
+  // parts together with "/" and "|". "17361 Ash St/4b" with no unit built
+  // BYTE-FOR-BYTE the same key as "17361 Ash St" with unit "4B", so one
+  // address could be served - and could overwrite - another's estimate.
+  it("cannot collide when the street itself contains the separator", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(200, { price: 500_000 }))
+    );
+    await lookupMarketValue("17361 Ash St/4b", "92708");
+    await lookupMarketValue("17361 Ash St", "92708", "4B");
+    expect(writes).toHaveLength(2);
+    expect(writes[0].cache_key).not.toBe(writes[1].cache_key);
+  });
+
+  it("cannot collide when the street contains the field separator", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(200, { price: 500_000 }))
+    );
+    await lookupMarketValue("17361 Ash St|92708", "12345");
+    await lookupMarketValue("17361 Ash St", "92708");
+    expect(writes).toHaveLength(2);
+    expect(writes[0].cache_key).not.toBe(writes[1].cache_key);
   });
 
   it('a valid object with no price is a real miss: "none", and is cached', async () => {
@@ -520,6 +553,131 @@ describe("the onboarding refusal gates", () => {
     // which ever runs). A fourth would be the ownership check re-asking a
     // question the gate already answered.
     expect(onboarding.match(/await lookupParcel\(/g)?.length ?? 0).toBeLessThanOrEqual(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The claim path's hardening, 2026-08-28. Each of these is a one-line shape
+// whose absence is silent: the claim still works, the tests still pass, and the
+// only difference is that a hand-made POST gets to choose the answer.
+// ---------------------------------------------------------------------------
+describe("claimPropertyAction's outbound metering", () => {
+  const onboarding = src("../app/onboarding/actions.ts");
+  // Just the claim action, so lookupParcelAction's own limiter next door
+  // cannot stand in for the one being checked here.
+  const claim = onboarding.slice(
+    onboarding.indexOf("export async function claimPropertyAction")
+  );
+
+  // The two calls that can reach a third party from inside the claim. RentCast
+  // is billed per lookup; Photon is free but rate-limited by a stranger, and
+  // both used to be metered only when the homeowner had EDITED the street.
+  // address_line1 and looked_up_address both come from FormData, so a post that
+  // sets them equal to each other and to a fresh street each time took the
+  // "unedited" branch, spent both calls, and consumed nothing on the way.
+  it("spends the budget before either outbound call, on both branches", () => {
+    const meter = claim.indexOf("rate_limit_hit");
+    const rentcast = claim.indexOf("await lookupParcel(");
+    const photon = claim.indexOf("verifyAddressExists(");
+    expect(meter).toBeGreaterThan(-1);
+    expect(rentcast).toBeGreaterThan(meter);
+    expect(photon).toBeGreaterThan(meter);
+  });
+
+  it("spends the same per-user buckets the Continue step does", () => {
+    expect(claim).toContain("parcel:${user.id}");
+    expect(claim).toContain("parcel-day:${user.id}");
+  });
+
+  it("skips both lookups when the budget is spent", () => {
+    // One flag, read by the edited branch, the unedited branch AND the
+    // geocoder call - a refusal that still asked Photon would not be a meter.
+    expect(claim).toContain("if (addressEdited && !lookupBlocked) {");
+    expect(claim).toContain("!addressEdited && !lookupBlocked");
+    expect(claim).toContain("const addressVerdict = lookupBlocked");
+  });
+
+  it("fails open, so a limiter outage never blocks a real claim", () => {
+    // `allowed === false` and nothing looser: `!allowed` would turn a null
+    // from a missing RPC into a refused signup.
+    expect(claim).toContain(
+      "const lookupBlocked = allowedHour === false || allowedDay === false;"
+    );
+  });
+});
+
+describe("claimPropertyAction's parcel facts", () => {
+  const onboarding = src("../app/onboarding/actions.ts");
+  const claim = onboarding.slice(
+    onboarding.indexOf("export async function claimPropertyAction")
+  );
+
+  // Until 2026-08-28 an unedited claim read every one of these back out of a
+  // hidden form field. parcelFactsMatchClaim only ever proved that SOME record
+  // exists for the street - never that the posted numbers came out of it - so a
+  // forged post could pick its own coordinates (which /value, the weather
+  // alerts and pro matching all key off), its own county assessment and its own
+  // parcel number, on a real address, and every one of them would be stored as
+  // county data.
+  it.each([
+    "parcel_id",
+    "latitude",
+    "longitude",
+    "hoa_fee",
+    "county",
+    "assessed_value",
+    "assessed_year",
+    "purchase_date",
+    "purchase_price",
+    "market_value",
+    "market_value_low",
+    "market_value_high",
+    "property_tax_history",
+    "system_facts",
+  ])("never reads %s out of the post", (field) => {
+    expect(claim).not.toContain(`formData.get("${field}")`);
+    expect(claim).not.toContain(`formData, "${field}"`);
+  });
+
+  it("reads them from the server's own lookup instead", () => {
+    // claimFacts, not relookupFacts: the latter is null on the unedited
+    // branch, which is the branch that was being trusted.
+    expect(claim).toContain("parcelText(claimFacts?.parcel_id");
+    expect(claim).toContain("parcelNum(claimFacts?.latitude");
+    expect(claim).toContain("parcelNum(claimFacts?.longitude");
+    expect(claim).toContain("parcelNum(claimFacts?.purchase_price");
+    expect(claim).toContain("parcelNum(claimFacts?.assessed_value");
+    expect(claim).toContain("claimFacts?.property_tax_history");
+    expect(claim).toContain("claimFacts?.system_facts");
+  });
+
+  // lookupParcel asks for the property record only and never for an estimate,
+  // so ParcelFacts.market_value is null on every path through onboarding. The
+  // only numbers that ever filled these columns came from the post.
+  it("writes no AVM at claim time", () => {
+    expect(claim).toContain("market_value: null,");
+    expect(claim).toContain("market_value_low: null,");
+    expect(claim).toContain("market_value_high: null,");
+  });
+
+  // The sanity gate measures a figure against the home's estimate and its
+  // size. Both used to come from the claim: a posted market_value raised the
+  // building-level ceiling to ten times whatever it liked, and a posted sqft
+  // over SMALL_HOME_SQFT switched the absolute ceiling off - either one walks
+  // the $34,000,000 building price this gate exists to refuse onto the row.
+  it("hands the sanity gate nothing the post can set", () => {
+    expect(claim).toContain("estimate: null,");
+    expect(claim).toContain("sqft: parcelInt(claimFacts?.sqft, 1, 1_000_000),");
+    expect(claim).not.toContain("estimate: claimMarketValue");
+  });
+
+  // system_facts is typed Record<string, string>, but a type annotation is not
+  // a runtime check: its values are built out of a third-party JSON body and
+  // land on home_systems.material_or_model for all seven starter rows.
+  it("coerces a system fact before it reaches the column", () => {
+    expect(claim).toContain(
+      'typeof material === "string" ? material.slice(0, 120) : null'
+    );
   });
 });
 

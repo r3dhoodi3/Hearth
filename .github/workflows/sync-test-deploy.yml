@@ -1,6 +1,6 @@
 # Keeps the free Vercel test site (branch deploy/free-test) in step with main.
 #
-# Vercel Hobby allows 2 cron jobs, main's vercel.json declares 17, so the test
+# Vercel Hobby allows 2 cron jobs, main's vercel.json declares 18, so the test
 # site builds from deploy/free-test, whose only intended difference is an
 # empty cron list. On every push to main this merges main into that branch,
 # keeps the branch's own vercel.json, and pushes. Vercel picks up the push

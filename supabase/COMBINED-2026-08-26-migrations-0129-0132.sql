@@ -6,9 +6,10 @@
 --         return zero rows. If one returns rows, fix those rows as its FIX line
 --         says, then come back.
 -- STEP 2: paste this WHOLE file into the Supabase SQL editor and run it once.
---         It runs as one transaction: if anything fails, nothing is applied and
---         the error names the statement. Every section is idempotent, so a
---         re-run after a fix is safe.
+--         In the Supabase SQL editor it runs as one transaction: if anything
+--         fails, nothing is applied and the error names the statement; under
+--         psql use -1. Every section is idempotent, so a re-run after a fix
+--         is safe.
 -- STEP 3: run the VERIFY queries at the bottom of each PASTE-ME-live-2026-08-26-*.sql
 --         file (optional, read-only) to confirm.
 -- ============================================================================

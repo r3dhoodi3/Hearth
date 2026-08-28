@@ -69,7 +69,12 @@ export default async function ProChatsPage(props: {
     .from("contractor_leads")
     .select("id, homeowner_name, category, property_address, created_at")
     .eq("contractor_id", contractor.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    // Bounded like every other list read: the newest 500 threads. Nobody
+    // scrolls past that, and without a cap a long-running pro's inbox pulls
+    // its entire lead history into one render (and, below, one messages
+    // query keyed on every id it returned).
+    .limit(500);
 
   const seen = await readSeenMap();
 

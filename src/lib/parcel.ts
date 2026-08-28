@@ -699,8 +699,11 @@ const UNAVAILABLE_MARKET_VALUE: MarketValueFacts = {
 // lookupParcel's read-through cache (same parcel_cache table, same 30-day
 // freshness for a real hit / 1-day freshness for a miss) so opening /value
 // repeatedly, or multiple household members on the same property, doesn't
-// re-bill RentCast. The cache key gets an "|avm" suffix so it never collides
-// with lookupParcel's property-record cache row for the same address.
+// re-bill RentCast. The cache key is a JSON array tagged "avm" (see below), so
+// it never collides with lookupParcel's property-record cache row for the same
+// address - and, as of 2026-08-28, no street line can collide with another
+// address's row either. That key change makes every row written under the old
+// string key a natural miss: each address re-fetches its estimate once.
 export async function lookupMarketValue(
   street: string,
   zip: string,
@@ -712,12 +715,21 @@ export async function lookupMarketValue(
   unit?: string | null
 ): Promise<MarketValueFacts> {
   const u = (unit ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-  const cacheKey =
-    street.trim().replace(/\s+/g, " ").toLowerCase() +
-    (u ? "/" + u : "") +
-    "|" +
-    zip.trim().slice(0, 5) +
-    "|avm";
+  // JSON, not concatenation with separators. The key used to be
+  // `street + "/" + unit + "|" + zip + "|avm"`, and a street is free text a
+  // homeowner types: "123 Main St/4b" with no unit built exactly the same key
+  // as "123 Main St" with unit "4B", so one address could be served - and
+  // could overwrite - another's estimate. JSON.stringify escapes the
+  // separators into the values instead of letting them run together, so
+  // distinct inputs always produce distinct keys. The leading "avm" is what
+  // keeps this row separate from lookupParcel's property-record row for the
+  // same address.
+  const cacheKey = JSON.stringify([
+    "avm",
+    street.trim().replace(/\s+/g, " ").toLowerCase(),
+    u || null,
+    zip.trim().slice(0, 5),
+  ]);
   const admin = createAdminClient();
 
   try {

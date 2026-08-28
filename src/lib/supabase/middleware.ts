@@ -9,6 +9,15 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 // Refreshes the auth session on every request and guards app routes.
 // Public routes: "/", "/get-started", "/signin", "/reset-password", the
 // sign-up pages, "/auth/*". Everything else requires a session.
+//
+// INVARIANT: NO SERVER ACTION MAY RELY ON THE MIDDLEWARE FOR AUTH. What this
+// function does is redirect page navigations, and that is all it is allowed to
+// be worth. A server action posts to whatever path it was rendered on, the
+// matcher can be narrowed, and a Next release can change when middleware runs
+// at all - so every action must call getVerifiedUser() (or assertContractor,
+// or its own equivalent) and re-check ownership of every id it was handed,
+// exactly as if this file did not exist. Treat a redirect from here as a
+// courtesy to the person navigating, never as a security boundary.
 export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPublic = isPublicPath(path);
