@@ -14,11 +14,24 @@ import { sendContactMessageAction } from "./actions";
 // Name / email / phone are prefilled when the visitor happens to be signed in
 // (the page reads the session and passes them down), so a member who follows a
 // legal-page link here does not retype what we already know.
+//
+// EVERY FIELD IS CONTROLLED, and that is load bearing rather than a style
+// choice. React 19 RESETS a form automatically once the function passed to
+// <form action> has finished - on the error return just as much as on success.
+// With uncontrolled fields (defaultValue) that meant a visitor who wrote three
+// paragraphs, forgot their email address and got "Please add an email or a
+// phone number" back had the whole message wiped by the very submit that
+// produced the message: verified live and locally on 2026-08-30, all four
+// fields empty next to the error. React re-renders a controlled input from
+// state straight after that reset, so holding the values here is what makes
+// the reset a no-op and keeps what somebody typed on screen while they fix
+// whatever the server complained about.
 export default function ContactForm({
   topic,
   // Empty strings for a signed-out visitor, which is the common case here.
-  // defaultValue and not value: a prefilled field must still be editable (the
-  // account email is often not the one someone wants a reply at).
+  // Seeds for the state below, not fixed values: a prefilled field must still
+  // be editable (the account email is often not the one someone wants a reply
+  // at).
   name = "",
   email = "",
   phone = "",
@@ -33,12 +46,39 @@ export default function ContactForm({
   // layout only reads on a fresh GET, i.e. after a redirect). On the success
   // path the action redirects, so control never returns and `res` is undefined.
   const [error, setError] = useState<string | null>(null);
+  const [nameValue, setNameValue] = useState(name);
+  const [emailValue, setEmailValue] = useState(email);
+  const [phoneValue, setPhoneValue] = useState(phone);
+  const [messageValue, setMessageValue] = useState("");
   return (
     <form
       action={async (fd) => {
         setError(null);
-        const res = await sendContactMessageAction(fd);
-        if (res && !res.ok) setError(res.error);
+        try {
+          const res = await sendContactMessageAction(fd);
+          if (res && !res.ok) setError(res.error);
+        } catch (err) {
+          // Same trap as OnboardingForm's onClaim (src/app/onboarding/
+          // OnboardingForm.tsx): the SUCCESS path leaves this action by
+          // redirect(), which reaches the browser as a thrown error carrying a
+          // NEXT_REDIRECT digest. Swallowing that would report a sent message
+          // as a failure and strand the visitor on this page, so it is
+          // rethrown for the router to act on.
+          //
+          // Anything else is the request itself not landing - offline, a
+          // dropped connection, a 500 from the action endpoint. Without this
+          // catch the rejected promise reached the nearest error boundary and
+          // replaced the entire page with the generic "Something went sideways"
+          // screen, taking the typed message with it. An inline message keeps
+          // the visitor on their own words and one click from retrying.
+          if (
+            typeof (err as { digest?: unknown })?.digest === "string" &&
+            (err as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+          ) {
+            throw err;
+          }
+          setError("Something went wrong. Please try again.");
+        }
       }}
       className="card"
     >
@@ -61,7 +101,9 @@ export default function ContactForm({
       {/* Honeypot. Lifted into src/components/Honeypot.tsx when the two in-app
           help forms got the same field, so the name and the markup cannot
           drift between the three forms that write to support_messages. See
-          ./actions.ts for what happens when it comes back non-empty. */}
+          ./actions.ts for what happens when it comes back non-empty.
+          Deliberately NOT controlled: a real visitor never touches it, and
+          restoring it after a reset is the one thing we would not want. */}
       <Honeypot />
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -69,7 +111,8 @@ export default function ContactForm({
           <label className="label">Name</label>
           <input
             name="name"
-            defaultValue={name}
+            value={nameValue}
+            onChange={(e) => setNameValue(e.target.value)}
             className="input"
             maxLength={200}
           />
@@ -79,7 +122,8 @@ export default function ContactForm({
           <input
             name="email"
             type="email"
-            defaultValue={email}
+            value={emailValue}
+            onChange={(e) => setEmailValue(e.target.value)}
             className="input"
             maxLength={254}
           />
@@ -90,7 +134,8 @@ export default function ContactForm({
         <label className="label">Phone</label>
         <input
           name="phone"
-          defaultValue={phone}
+          value={phoneValue}
+          onChange={(e) => setPhoneValue(e.target.value)}
           className="input"
           maxLength={40}
         />
@@ -107,6 +152,8 @@ export default function ContactForm({
           required
           minLength={10}
           maxLength={5000}
+          value={messageValue}
+          onChange={(e) => setMessageValue(e.target.value)}
           className="input"
           placeholder="What can we help with?"
         />

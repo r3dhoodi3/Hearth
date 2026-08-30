@@ -95,7 +95,18 @@ export async function chooseRoleAction(formData: FormData) {
     // of this action, so a failure here can't silently redirect as if it
     // worked - surface it so the user can retry rather than landing role-less
     // again.
-    throw new Error("Could not save your choice. Please try again.");
+    //
+    // A flash and a bounce back to the picker, NOT a throw. Next masks a
+    // server-side throw in production, so `throw new Error("Could not save
+    // your choice")` reached the person as the generic "Something went
+    // sideways" boundary with no picker under it and no way back to the
+    // choice they were making - the message was written for them and they
+    // never saw it. This is the same shape as the failed-check branch above,
+    // and it keeps a carried ?next= so a retry still lands where they were
+    // headed.
+    console.error("chooseRoleAction: failed to stamp role", updateError);
+    await setFlash("Could not save your choice. Please try again.", "error");
+    redirect(`/welcome/role${nextQuery}`);
   }
 
   // The role now lives in auth.users, but the current session cookie still

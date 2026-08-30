@@ -39,6 +39,7 @@ let sides: Sides = {
   checked: true,
 };
 let updateCalls = 0;
+let updateError: { message: string } | null = null;
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -55,7 +56,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       admin: {
         updateUserById: async () => {
           updateCalls++;
-          return { error: null };
+          return { error: updateError };
         },
       },
     },
@@ -94,6 +95,7 @@ function fd(fields: Record<string, string>): FormData {
 beforeEach(() => {
   sides = { hasPro: false, hasHome: false, preferred: null, checked: true };
   updateCalls = 0;
+  updateError = null;
   vi.mocked(setFlash).mockClear();
 });
 
@@ -168,5 +170,33 @@ describe("chooseRoleAction: the row guard cannot fail open", () => {
       "REDIRECT:/pro"
     );
     expect(updateCalls).toBe(0);
+  });
+});
+
+// A failed role stamp used to `throw new Error("Could not save your choice")`.
+// Next masks a server-side throw in production, so the person got the generic
+// "Something went sideways" boundary instead - no picker under it, no way back
+// to the choice they were making, and the message written for them never
+// reached them. It comes back through the flash cookie now, on the picker
+// itself, with any carried ?next= intact.
+describe("chooseRoleAction: a failed stamp is shown, not thrown", () => {
+  it("flashes the retry message and returns to the picker", async () => {
+    updateError = { message: "auth admin unavailable" };
+
+    await expect(chooseRoleAction(fd({ role: "homeowner" }))).rejects.toThrow(
+      "REDIRECT:/welcome/role"
+    );
+    expect(setFlash).toHaveBeenCalledWith(
+      "Could not save your choice. Please try again.",
+      "error"
+    );
+  });
+
+  it("keeps the destination the picker was carrying", async () => {
+    updateError = { message: "auth admin unavailable" };
+
+    await expect(
+      chooseRoleAction(fd({ role: "contractor", next: "/dashboard" }))
+    ).rejects.toThrow("REDIRECT:/welcome/role?next=%2Fdashboard");
   });
 });

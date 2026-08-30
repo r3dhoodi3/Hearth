@@ -64,6 +64,8 @@ let deleteError: { message: string } | null = null;
 let insertedNotes: Record<string, unknown>[] = [];
 let noteInsertError: { message: string } | null = null;
 let noteDeleteError: { message: string } | null = null;
+// Rows the double-submit guard finds (same name added in the last 2 minutes).
+let recentDuplicateRows: { id: string }[] = [];
 
 function supabaseStub() {
   return {
@@ -101,6 +103,11 @@ function supabaseStub() {
             eq: () => ({
               eq: () => ({
                 maybeSingle: async () => ({ data: alreadyTrackedRow }),
+                // addClientAction's two-minute double-submit guard:
+                // .gte("created_at", ...).limit(1)
+                gte: () => ({
+                  limit: async () => ({ data: recentDuplicateRows, error: null }),
+                }),
               }),
             }),
           }),
@@ -145,6 +152,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   insertedRows = [];
   insertError = null;
+  recentDuplicateRows = [];
   ownLeadRow = { id: "lead-1" };
   alreadyTrackedRow = null;
   updatedValues = null;
@@ -158,6 +166,18 @@ beforeEach(() => {
 });
 
 describe("addClientAction", () => {
+  it("treats a second submit of the same name within two minutes as the same add", async () => {
+    // Persona C2 (2026-08-30) double-tapped "Add a client" and got two
+    // identical rows. The guard sees the first row and stops.
+    recentDuplicateRows = [{ id: "c-1" }];
+    const fd = new FormData();
+    fd.set("client_name", "Jordan Ruiz");
+    await addClientAction(fd);
+    expect(insertedRows).toHaveLength(0);
+    expect(setFlash).toHaveBeenCalledWith("Already added.", "info");
+    expect(revalidatePath).toHaveBeenCalledWith("/pro/crm");
+  });
+
   it("inserts the client and revalidates /pro/crm without redirecting", async () => {
     await addClientAction(
       formData({ client_name: "Acme Plumbing", stage: "lead" })

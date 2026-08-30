@@ -26,6 +26,25 @@ import { PLUS_PLAN, PRO_PLAN } from "@/lib/constants";
 
 export type PaidPlan = "weekly" | "monthly" | "yearly" | "pro_monthly" | "pro_yearly";
 
+// Why a plan switch is refused while the free days are still running.
+//
+// A Stripe subscription schedule is how "switch at renewal" is built, and
+// handing a TRIALING subscription to a schedule ends the trial at the moment
+// the schedule takes over: live, a weekly member seven minutes into their
+// 3 free days tapped "Switch to monthly at renewal" and Stripe drafted a $1.99
+// invoice on the spot. Every word around that button ("Nothing changes today",
+// the toast, the auto-renewal disclosure they consented to at checkout, which
+// promises they pay nothing if they cancel before the trial ends) said the
+// opposite - the exact promise ROSCA and California's Automatic Renewal Law
+// police. So the switch is not offered, and not accepted, until the free days
+// are over. It costs a trialing member a 3-day wait; the alternative charged
+// them early against their own consent record.
+//
+// Lives here rather than in the server action because a "use server" module can
+// only export async functions, and /plus renders the same sentence.
+export const TRIAL_PLAN_SWITCH_MESSAGE =
+  "You can switch plans once your free days end.";
+
 export type BillingTerms = {
   // "Hearth Plus", "Hearth Pro" - the thing being bought.
   product: string;

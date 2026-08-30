@@ -755,3 +755,56 @@ describe("OnboardingForm empty suggestion list", () => {
     expect(screen.queryByText(NO_MATCH_HINT)).toBeNull();
   });
 });
+
+// React 19 resets a form as soon as the function passed to <form action>
+// settles, and a refused claim settles like any other. The name box and the
+// optional detail boxes are uncontrolled, so before restoreTypedValues() the
+// very submit that produced "Hearth isn't in your area yet" also wiped what
+// had been typed into them - the retry started over from the county's numbers
+// instead of the corrected ones. Every keystroke is already mirrored into the
+// draft, so the values go back on screen alongside the error.
+describe("a refused claim keeps what was typed", () => {
+  it("puts the name and the corrected details back next to the error", async () => {
+    const { container } = await toReadyStep();
+    const yearBox = container.querySelector(
+      'input[name="year_built"]'
+    ) as HTMLInputElement;
+    fireEvent.change(screen.getByLabelText("Your full name"), {
+      target: { value: "Alex Rivera" },
+    });
+    fireEvent.change(yearBox, { target: { value: "1972" } });
+
+    claimPropertyAction.mockResolvedValue({
+      ok: false,
+      error: "We couldn't claim your home just now. Please try again.",
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Claim/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("We couldn't claim your home just now. Please try again.")
+      ).toBeInTheDocument()
+    );
+    expect(screen.getByLabelText("Your full name")).toHaveValue("Alex Rivera");
+    expect(
+      container.querySelector('input[name="year_built"]')
+    ).toHaveValue(1972);
+  });
+
+  it("does the same when the request itself never lands", async () => {
+    await toReadyStep();
+    fireEvent.change(screen.getByLabelText("Your full name"), {
+      target: { value: "Alex Rivera" },
+    });
+
+    claimPropertyAction.mockRejectedValue(new TypeError("Failed to fetch"));
+    fireEvent.click(screen.getByRole("button", { name: /Claim/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("That didn't go through. Please try again.")
+      ).toBeInTheDocument()
+    );
+    expect(screen.getByLabelText("Your full name")).toHaveValue("Alex Rivera");
+  });
+});

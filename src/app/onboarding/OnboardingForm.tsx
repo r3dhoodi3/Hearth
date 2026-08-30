@@ -588,6 +588,29 @@ export default function OnboardingForm({
     }
   }
 
+  // React 19 RESETS a form as soon as the function passed to <form action>
+  // settles, and it does that on a refused claim exactly as much as on a
+  // successful one. The ready step's name box and the seven optional detail
+  // boxes are uncontrolled (they seed themselves from `draft` and `facts`), so
+  // the very submit that produced "we don't cover that ZIP yet" also wiped
+  // what had been typed into them, and the retry started from the county's
+  // numbers again instead of the corrected ones.
+  //
+  // Nothing is actually lost at that point: the form's onChange has been
+  // mirroring every keystroke into draftRef through persistReady. So push the
+  // live mirror back into the two pieces of state the defaults read from and
+  // bump restoreKey to remount the name box onto its new default - the reset
+  // then lands on the same values it started with, and the error message
+  // appears next to the form the person was already looking at.
+  const restoreTypedValues = useCallback(() => {
+    const live = draftRef.current;
+    // Only when a lookup actually produced facts: setting null here would
+    // collapse the expanded section the person is standing in.
+    if (live.facts) setFacts(live.facts);
+    setDraft((prev) => ({ ...live, savedAt: prev?.savedAt ?? Date.now() }));
+    setRestoreKey((k) => k + 1);
+  }, []);
+
   // Wraps the claim server action so a failure shows a friendly inline
   // message instead of throwing raw to the error boundary. A successful
   // claim redirects server-side, which is handled by the framework, not
@@ -623,8 +646,10 @@ export default function OnboardingForm({
       if (result && !result.ok) {
         setError(result.error);
         // Refused, so they are still standing on this form: give the draft
-        // back before a reload can lose it.
+        // back before a reload can lose it, and put the typed values back on
+        // screen before React's post-action form reset clears them.
         persist({});
+        restoreTypedValues();
       }
     } catch (err: any) {
       // Trap: the successful-claim redirect() surfaces as a NEXT_REDIRECT-digest
@@ -634,6 +659,7 @@ export default function OnboardingForm({
       if (err?.digest?.startsWith("NEXT_REDIRECT")) throw err;
       setError("That didn't go through. Please try again.");
       persist({});
+      restoreTypedValues();
     } finally {
       setBusy(false);
     }

@@ -12,12 +12,17 @@ import {
   getProSubscription,
   isPlusTrialEligible,
 } from "@/lib/subscription";
-import { billingTermsText, trialApplies } from "@/lib/billingTerms";
+import {
+  billingTermsText,
+  trialApplies,
+  TRIAL_PLAN_SWITCH_MESSAGE,
+} from "@/lib/billingTerms";
 import {
   checkoutCadence,
   subscriptionCheckoutData,
 } from "@/lib/checkoutSubscriptionData";
-import { PLUS_PLAN, EXTRA_HOME, extraHomeUnitPrice } from "@/lib/constants";
+import { PLUS_PLAN, EXTRA_HOME } from "@/lib/constants";
+import { plusPriceId, homeSlotPriceId } from "@/lib/stripePlanPrice";
 import {
   checkoutIdempotencyBucket,
   checkoutIdempotencyKey,
@@ -64,14 +69,13 @@ function baseSubItem(sub: Stripe.Subscription): Stripe.SubscriptionItem {
   return sub.items.data.find((i) => !isHomeSlotItem(i)) ?? sub.items.data[0];
 }
 
-// The Stripe product id backing a subscription item's price, for the inline
-// price_data fallback paths (which need a product reference).
-function productIdOf(item: Stripe.SubscriptionItem): string {
-  return typeof item.price.product === "string"
-    ? item.price.product
-    : item.price.product.id;
-}
-
+// NOTE ON PRICES BELOW. The plan-switch paths used to build inline `price_data`
+// pointing at the product the subscription item already carried. That is what
+// broke "Switch to yearly" live: the "Hearth Plus" product on the connected
+// account had been archived, and Stripe will not attach a new price to an
+// inactive product. Every price on an existing subscription now comes from
+// src/lib/stripePlanPrice.ts, which returns the configured STRIPE_PRICE_* id
+// when there is one and otherwise find-or-creates an ACTIVE product and price.
 
 // Start a Hearth Plus checkout on any of the three sold cadences: weekly,
 // monthly, or yearly. Uses the pre-created Stripe Price if one is configured,
@@ -581,7 +585,9 @@ export async function setExtraHomesAction(formData: FormData) {
     redirect("/plus");
   }
 
-  const homeSlotPriceId =
+  // Only the CONFIGURED price id is usable for recognizing an existing add-on
+  // item, since that is the id a subscription created before today carries.
+  const configuredSlotPriceId =
     interval === "yearly"
       ? process.env.STRIPE_PRICE_HOME_SLOT_YEARLY
       : process.env.STRIPE_PRICE_HOME_SLOT_MONTHLY;
@@ -591,10 +597,8 @@ export async function setExtraHomesAction(formData: FormData) {
   const addonItem = stripeSub.items.data.find(
     (i) =>
       (i as any).metadata?.hearth_addon === "home_slots" ||
-      (homeSlotPriceId && i.price.id === homeSlotPriceId)
+      (configuredSlotPriceId && i.price.id === configuredSlotPriceId)
   );
-
-  const stripeInterval = interval === "yearly" ? ("year" as const) : ("month" as const);
 
   try {
     if (quantity <= 0) {
@@ -605,25 +609,14 @@ export async function setExtraHomesAction(formData: FormData) {
         });
       }
     } else {
-      // Inline fallback charges a flat per-slot unit_amount from the volume
-      // tier for THIS quantity (every slot at the crossed-tier price), which
-      // matches how the pre-created Stripe volume Price would bill.
-      const unitAmount = Math.round(
-        extraHomeUnitPrice(interval, quantity) * 100
-      );
-      const pricePart = homeSlotPriceId
-        ? { price: homeSlotPriceId }
-        : {
-            price_data: {
-              currency: "usd",
-              unit_amount: unitAmount,
-              recurring: { interval: stripeInterval },
-              product_data: { name: "Extra Hearth home" },
-            },
-          };
+      // One resolved Price id, never inline price_data: the fallback charges a
+      // flat per-slot amount from the volume tier for THIS quantity (every slot
+      // at the crossed-tier price), which matches how the pre-created Stripe
+      // volume Price would bill, and it is found-or-created on an ACTIVE
+      // product instead of minting a throwaway product per update.
       const itemPayload = {
         ...(addonItem ? { id: addonItem.id } : {}),
-        ...pricePart,
+        price: await homeSlotPriceId(interval, quantity),
         quantity,
         metadata: { hearth_addon: "home_slots" },
       };
@@ -694,8 +687,6 @@ export async function upgradeToYearlyAction() {
   }
   // Convert the BASE plan item (never the add-on) to yearly.
   const base = baseSubItem(stripeSub);
-  const yearlyPriceId = process.env.STRIPE_PRICE_PLUS_YEARLY;
-  const productId = productIdOf(base);
 
   // Stripe requires every item on a subscription to share one interval, so a
   // member holding a monthly extra-home add-on must have that item converted to
@@ -705,59 +696,32 @@ export async function upgradeToYearlyAction() {
   // so the webhook still recognizes it as the add-on.
   const addon = stripeSub.items.data.find(isHomeSlotItem);
   const addonQty = addon?.quantity ?? 0;
-  const yearlyHomeSlotPriceId = process.env.STRIPE_PRICE_HOME_SLOT_YEARLY;
 
   type ItemUpdate = Stripe.SubscriptionUpdateParams.Item;
-  const items: ItemUpdate[] = [
-    yearlyPriceId
-      ? { id: base.id, price: yearlyPriceId, quantity: 1 }
-      : {
-          id: base.id,
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            // Derived from PLUS_PLAN, never typed twice: this fallback only
-            // runs when STRIPE_PRICE_PLUS_YEARLY is unset, which is exactly
-            // when nobody would notice it quoting last year's price. A literal
-            // here could drift away from the number the pricing pages, the
-            // checkout, and the auto-renewal disclosure all read.
-            unit_amount: Math.round(PLUS_PLAN.yearly * 100),
-            recurring: { interval: "year" as const },
-            product: productId,
-          },
-        },
-  ];
-  if (addon && addonQty > 0) {
-    items.push(
-      yearlyHomeSlotPriceId
-        ? {
-            id: addon.id,
-            price: yearlyHomeSlotPriceId,
-            quantity: addonQty,
-            metadata: { hearth_addon: "home_slots" },
-          }
-        : {
-            id: addon.id,
-            quantity: addonQty,
-            price_data: {
-              currency: "usd",
-              unit_amount: Math.round(
-                extraHomeUnitPrice("yearly", addonQty) * 100
-              ),
-              recurring: { interval: "year" as const },
-              product: productIdOf(addon),
-            },
-            metadata: { hearth_addon: "home_slots" },
-          }
-    );
-  }
 
   try {
+    // Price resolution sits INSIDE the try: it talks to Stripe (list/create),
+    // so a failure here is the same "couldn't reach Stripe" story as the update
+    // itself and gets the same flash rather than an unhandled 500.
+    const items: ItemUpdate[] = [
+      { id: base.id, price: await plusPriceId("yearly"), quantity: 1 },
+    ];
+    if (addon && addonQty > 0) {
+      items.push({
+        id: addon.id,
+        price: await homeSlotPriceId("yearly", addonQty),
+        quantity: addonQty,
+        metadata: { hearth_addon: "home_slots" },
+      });
+    }
+
     await stripe.subscriptions.update(sub.stripe_subscription_id, {
       items,
       // Bill the yearly price today; unused monthly time becomes a credit.
       proration_behavior: "always_invoice",
-      // A free-month trial doesn't carry over - yearly starts (and bills) now.
+      // A free trial doesn't carry over - yearly starts (and bills) now. The
+      // button's confirm copy says exactly that before this runs, which is the
+      // consent this early charge rests on (see /plus page.tsx).
       ...(stripeSub.status === "trialing" ? { trial_end: "now" as const } : {}),
     });
   } catch {
@@ -814,6 +778,19 @@ export async function downgradeToMonthlyAction() {
     redirect("/plus");
   }
 
+  // NOT WHILE THE FREE DAYS ARE RUNNING. This is the live billing bug: handing
+  // a trialing subscription to a subscription schedule ended the trial the
+  // moment the schedule took over and drafted a real invoice minutes into a
+  // 3-day free trial, contradicting every disclosure the buyer consented to.
+  // See TRIAL_PLAN_SWITCH_MESSAGE for the full story. Refuse before any Stripe
+  // write happens, which is the only version of this that is provably
+  // incapable of charging early. /plus hides the button in the same state, so
+  // this is the belt to that page's braces (a stale render, a double submit).
+  if (stripeSub.status === "trialing") {
+    await setFlash(TRIAL_PLAN_SWITCH_MESSAGE, "info");
+    redirect("/plus");
+  }
+
   let schedule: Stripe.SubscriptionSchedule;
   try {
     schedule = await stripe.subscriptionSchedules.create({
@@ -830,9 +807,21 @@ export async function downgradeToMonthlyAction() {
   // from_subscription yields a single phase covering the current (already
   // paid) period. Re-send it unchanged and append the monthly phase after it.
   const current = schedule.phases[0];
-  const base = baseSubItem(stripeSub);
-  const monthlyPriceId = process.env.STRIPE_PRICE_PLUS_MONTHLY;
-  const productId = productIdOf(base);
+
+  // SECOND GUARD, on Stripe's own answer rather than on ours. The status read
+  // above can be stale (retrieved a moment earlier, or a trial applied by the
+  // dashboard between the two calls). If the phase Stripe generated carries a
+  // trial that is still running, sending phases back without it is exactly what
+  // ends the trial and invoices - so back out entirely instead: release the
+  // schedule, leave the subscription exactly as it was, and say the same thing
+  // the up-front guard says.
+  const phaseTrialEnd =
+    typeof current?.trial_end === "number" ? current.trial_end : null;
+  if (phaseTrialEnd !== null && phaseTrialEnd * 1000 > Date.now()) {
+    await stripe.subscriptionSchedules.release(schedule.id).catch(() => {});
+    await setFlash(TRIAL_PLAN_SWITCH_MESSAGE, "info");
+    redirect("/plus");
+  }
 
   // The extra-home add-on, if any, must ride into the monthly phase too, priced
   // at the monthly volume tier - otherwise phase 2 lists only the base item and
@@ -842,7 +831,6 @@ export async function downgradeToMonthlyAction() {
   const addon = stripeSub.items.data.find(isHomeSlotItem);
   const addonQty = addon?.quantity ?? 0;
   const addonCurrentPriceId = addon?.price?.id ?? null;
-  const monthlyHomeSlotPriceId = process.env.STRIPE_PRICE_HOME_SLOT_MONTHLY;
 
   type PhaseItem = Stripe.SubscriptionScheduleUpdateParams.Phase.Item;
 
@@ -859,45 +847,28 @@ export async function downgradeToMonthlyAction() {
   });
 
   // Phase 2: the base plan at the monthly price, plus the add-on at the monthly
-  // tier when present.
-  const phase2Items: PhaseItem[] = [
-    monthlyPriceId
-      ? { price: monthlyPriceId, quantity: 1 }
-      : {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            // Same rule as the yearly fallback in upgradeToYearlyAction:
-            // computed from PLUS_PLAN so a price edit moves this with it.
-            unit_amount: Math.round(PLUS_PLAN.monthly * 100),
-            recurring: { interval: "month" as const },
-            product: productId,
-          },
-        },
-  ];
-  if (addon && addonQty > 0) {
-    phase2Items.push(
-      monthlyHomeSlotPriceId
-        ? {
-            price: monthlyHomeSlotPriceId,
-            quantity: addonQty,
-            metadata: { hearth_addon: "home_slots" },
-          }
-        : {
-            quantity: addonQty,
-            price_data: {
-              currency: "usd",
-              unit_amount: Math.round(
-                extraHomeUnitPrice("monthly", addonQty) * 100
-              ),
-              recurring: { interval: "month" as const },
-              // Schedule phase price_data takes a product id (not product_data),
-              // so reuse the add-on's own Stripe product.
-              product: productIdOf(addon),
-            },
-            metadata: { hearth_addon: "home_slots" },
-          }
+  // tier when present. Both are resolved Price ids (never inline price_data
+  // pointing at a product read off the subscription, which is what broke the
+  // yearly switch live - see the note at the top of this file).
+  let phase2Items: PhaseItem[];
+  try {
+    phase2Items = [{ price: await plusPriceId("monthly"), quantity: 1 }];
+    if (addon && addonQty > 0) {
+      phase2Items.push({
+        price: await homeSlotPriceId("monthly", addonQty),
+        quantity: addonQty,
+        metadata: { hearth_addon: "home_slots" },
+      });
+    }
+  } catch {
+    // Nothing has been changed on the subscription yet beyond the schedule
+    // wrapper, so drop that too rather than leave an empty schedule attached.
+    await stripe.subscriptionSchedules.release(schedule.id).catch(() => {});
+    await setFlash(
+      "Couldn't schedule the switch. If your plan is set to cancel, use Manage billing instead.",
+      "error"
     );
+    redirect("/plus");
   }
 
   try {
@@ -922,7 +893,15 @@ export async function downgradeToMonthlyAction() {
   } catch (err) {
     // Don't leave a half-built schedule attached to the subscription.
     await stripe.subscriptionSchedules.release(schedule.id).catch(() => {});
-    throw err;
+    // ...and don't rethrow into the error page either: the subscription is back
+    // exactly as it was, so this is a failed attempt, not a broken account.
+    // Logged rather than shown, since a Stripe error string is not copy.
+    console.error("Plus downgrade schedule update failed:", err);
+    await setFlash(
+      "Couldn't schedule the switch. If your plan is set to cancel, use Manage billing instead.",
+      "error"
+    );
+    redirect("/plus");
   }
 
   await setFlash("Done. You'll switch to monthly at your renewal date.");
@@ -930,7 +909,11 @@ export async function downgradeToMonthlyAction() {
 }
 
 // Undo a scheduled downgrade: release the schedule so the subscription keeps
-// renewing yearly as if nothing happened.
+// renewing on its CURRENT cadence as if nothing happened. Named for the yearly
+// case it was written for, but the button is shown to weekly members too
+// (downgradeToMonthlyAction schedules the same switch from either cadence), so
+// the confirmation names the plan actually being kept - it used to say "yearly"
+// to a weekly subscriber.
 export async function keepYearlyAction() {
   const user = await getUser();
   if (!user) redirect("/signin");
@@ -961,7 +944,22 @@ export async function keepYearlyAction() {
     await stripe.subscriptionSchedules.release(scheduleId);
   }
 
-  await setFlash("You're keeping the yearly plan.");
+  // The stored plan is the one they are keeping: the schedule never took
+  // effect, so nothing switched. An unknown/absent plan falls back to wording
+  // that names no cadence at all rather than guessing one.
+  const keptPlan =
+    sub.plan === "weekly"
+      ? "weekly"
+      : sub.plan === "monthly"
+        ? "monthly"
+        : sub.plan === "yearly"
+          ? "yearly"
+          : null;
+  await setFlash(
+    keptPlan
+      ? `You're keeping the ${keptPlan} plan.`
+      : "You're keeping your current plan."
+  );
   revalidatePath("/plus");
 }
 

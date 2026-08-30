@@ -1,3 +1,33 @@
+// "use client" is a STREAMING fix, not a behaviour one. This component has no
+// state, no effects and no browser APIs; it would work perfectly well as a
+// server component, and it was one until 2026-08-30.
+//
+// The reason it moved: React Flight defers any element it meets once the row
+// it is serializing has passed a byte budget (`3200 < serializedSize ->
+// deferTask` in react-server-dom-webpack-server). The pro Home tab renders
+// this checklist LAST, so on /pro the budget ran out right inside the <ul>
+// and every remaining <li> was chopped into its own Flight row. SSR then
+// suspends on each of those rows and emits an out-of-order stream segment for
+// it, which is a `<template id="P:n">` hole in the flushed markup plus a late
+// `<script>$RS(...)</script>` to fill it: eight of them on /pro, against the
+// single one every healthy pro page has. That chain is the one structural
+// difference between the pro pages that throw a hydration error on load
+// (/pro, /pro/leads) and the ones that never do (/pro/help, /pro/chats,
+// /pro/profile, /pro/crm, /pro/business), and when hydration does give up,
+// every one of those late $RS calls then fails too ("Cannot read properties
+// of null") because React has already removed the nodes they address.
+//
+// As a client component the checklist is a single client reference in the
+// payload and its items are plain data, so there are no elements left at the
+// tail of the row for Flight to defer. Measured on the local production build
+// against the same account: /pro went from 8 `<template id="P:">` holes and 8
+// $RS scripts to 1 and 1 - the same shape as the pro pages that were always
+// clean - and the document shrank by 6.2 kB.
+//
+// Keep it a client component. If it ever needs server-only data, pass that in
+// as a prop rather than moving the markup back across the boundary.
+"use client";
+
 import Link from "next/link";
 
 export type SetupItem = {

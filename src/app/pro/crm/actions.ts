@@ -106,6 +106,24 @@ export async function addClientAction(formData: FormData) {
   }
 
   const supabase = await createClient();
+
+  // Double-submit guard (persona C2, 2026-08-30): a second tap of "Add a
+  // client" inside two minutes with the same name used to create a second
+  // identical row. Treat it as the same add. Same-name clients added later
+  // (a real second Jordan) still go through.
+  const { data: recent } = await supabase
+    .from("pro_clients")
+    .select("id")
+    .eq("contractor_id", contractor.id)
+    .eq("client_name", name)
+    .gte("created_at", new Date(Date.now() - 2 * 60 * 1000).toISOString())
+    .limit(1);
+  if (recent && recent.length > 0) {
+    await setFlash("Already added.", "info");
+    revalidatePath("/pro/crm");
+    return;
+  }
+
   const { error } = await supabase.from("pro_clients").insert({
     contractor_id: contractor.id,
     client_name: name,

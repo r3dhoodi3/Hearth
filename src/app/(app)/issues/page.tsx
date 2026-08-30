@@ -5,7 +5,19 @@ import IssueForm from "./IssueForm";
 import IssueRow from "./IssueRow";
 
 export default async function IssuesPage() {
-  const property = (await getActiveProperty())!;
+  const propertyOrNull = await getActiveProperty();
+  // The (app) layout (src/app/(app)/layout.tsx) is what sends an account with
+  // no claimed home to the right place, and it always redirects when there is
+  // no active property. But Next renders the layout and the page in PARALLEL,
+  // so this function still runs on that request - and reading .id off the
+  // non-null assertion below threw "Cannot read properties of null" on every
+  // such GET (live log, 2026-08-30). The response was still the layout's 307,
+  // so nobody ever saw it, but a TypeError thrown on a routine redirect is
+  // noise that buries real errors. Bail out quietly instead and let the layout
+  // own the destination: it knows whether this account belongs on /onboarding,
+  // /pro/onboarding or the role picker, and this page does not.
+  if (!propertyOrNull) return null;
+  const property = propertyOrNull;
   const supabase = await createClient();
 
   const [{ data: issues }, { data: systems }] = await Promise.all([

@@ -10,6 +10,7 @@ import { FREE_TASTE_PAYWALL } from "@/lib/freeAiTaste";
 import { getUser } from "@/lib/auth";
 import { trackServerEvent } from "@/lib/trackServer";
 import { trialDecision, TRIAL_DECISION_TTL_MS } from "@/lib/risk/decision";
+import { TRIAL_PLAN_SWITCH_MESSAGE } from "@/lib/billingTerms";
 import {
   manageBillingAction,
   upgradeToYearlyAction,
@@ -166,6 +167,11 @@ export default async function PlusPage(
     // monthly/yearly member can buy it. A weekly member must switch cadence
     // first.
     const isWeekly = sub?.plan === "weekly";
+    // Still inside the free days. "trialing" is what the 3-day trial looks like
+    // in Stripe, and the webhook mirrors that status onto the row. Plan changes
+    // read it because a switch scheduled mid-trial ends the trial early and
+    // bills, which is exactly what the copy around those buttons rules out.
+    const inTrial = sub?.status === "trialing";
     const addonInterval: "monthly" | "yearly" | null =
       sub?.plan === "yearly" ? "yearly" : sub?.plan === "monthly" ? "monthly" : null;
     const renewsOn = sub?.current_period_end
@@ -236,31 +242,54 @@ export default async function PlusPage(
                   <form action={upgradeToYearlyAction}>
                     <ConfirmSubmit
                       label={`Switch to yearly, ${formatUsd(PLUS_PLAN.yearly)}/yr (save ${formatUsd(yearlySavings(PLUS_PLAN))} vs monthly)`}
-                      note="You'll be charged today, with your unused time credited toward it. Switch to yearly?"
+                      // Yearly starts and bills immediately, which for a
+                      // trialing member means the free days end today. Say so
+                      // in the confirm step rather than letting them find out
+                      // on the receipt: this is the only place a charge before
+                      // the promised trial end is ever agreed to.
+                      note={
+                        inTrial
+                          ? `Your free days end now and ${formatUsd(PLUS_PLAN.yearly)} is charged today. Switch to yearly?`
+                          : "You'll be charged today, with your unused time credited toward it. Switch to yearly?"
+                      }
                       yesLabel="Yes, switch to yearly"
                     />
                   </form>
                   <p className="text-xs max-sm:text-sm text-stone-500 dark:text-stone-400">
-                    Starts today. Your unused time is credited toward the yearly
-                    charge.
+                    {inTrial
+                      ? "Starts today. Your free days end when the yearly plan begins."
+                      : "Starts today. Your unused time is credited toward the yearly charge."}
                   </p>
                 </>
               )}
-              {(sub.plan === "yearly" || isWeekly) && !scheduledDowngrade && (
-                <>
-                  <form action={downgradeToMonthlyAction}>
-                    <ConfirmSubmit
-                      label="Switch to monthly at renewal"
-                      note={`Nothing changes today. You keep what you have until ${renewsOn}, then it becomes ${formatUsd(PLUS_PLAN.monthly)}/mo. Switch?`}
-                      yesLabel="Yes, switch at renewal"
-                    />
-                  </form>
+              {(sub.plan === "yearly" || isWeekly) &&
+                !scheduledDowngrade &&
+                (inTrial ? (
+                  // Not offered during the free days. Scheduling the switch is
+                  // built on a Stripe subscription schedule, and handing a
+                  // trialing subscription to one ends the trial and bills on
+                  // the spot - the opposite of what this button promises. The
+                  // server action refuses the same case with the same sentence
+                  // (see TRIAL_PLAN_SWITCH_MESSAGE).
                   <p className="text-xs max-sm:text-sm text-stone-500 dark:text-stone-400">
-                    You keep every Plus benefit through {renewsOn}. Monthly
-                    billing starts after that, so you lose nothing you paid for.
+                    {TRIAL_PLAN_SWITCH_MESSAGE} Nothing is charged before then.
                   </p>
-                </>
-              )}
+                ) : (
+                  <>
+                    <form action={downgradeToMonthlyAction}>
+                      <ConfirmSubmit
+                        label="Switch to monthly at renewal"
+                        note={`Nothing changes today. You keep what you have until ${renewsOn}, then it becomes ${formatUsd(PLUS_PLAN.monthly)}/mo. Switch?`}
+                        yesLabel="Yes, switch at renewal"
+                      />
+                    </form>
+                    <p className="text-xs max-sm:text-sm text-stone-500 dark:text-stone-400">
+                      You keep every Plus benefit through {renewsOn}. Monthly
+                      billing starts after that, so you lose nothing you paid
+                      for.
+                    </p>
+                  </>
+                ))}
               {(sub.plan === "yearly" || isWeekly) && scheduledDowngrade && (
                 <>
                   <p className="text-sm text-stone-600 dark:text-stone-300">

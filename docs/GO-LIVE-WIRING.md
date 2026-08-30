@@ -65,11 +65,26 @@ before any Products exist in the dashboard.
    `customer.subscription.updated`, `customer.subscription.deleted`,
    `invoice.payment_succeeded`.
    Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
-3. Optional but recommended for clean reporting: create Products/Prices in Stripe and set
+3. Strongly recommended, and the cleanest setup: create Products/Prices in Stripe and set
    `STRIPE_PRICE_PLUS_WEEKLY` (a week-interval Price, the cadence carrying the 3-day trial),
-   `STRIPE_PRICE_PLUS_MONTHLY`, `STRIPE_PRICE_PLUS_YEARLY`, `STRIPE_PRO_MONTHLY_PRICE_ID`,
-   `STRIPE_PRO_YEARLY_PRICE_ID`, `STRIPE_PRO_INTRO_COUPON_ID`. Without them, checkout uses
-   inline price_data at the amounts in `src/lib/constants.ts`.
+   `STRIPE_PRICE_PLUS_MONTHLY`, `STRIPE_PRICE_PLUS_YEARLY`, `STRIPE_PRICE_HOME_SLOT_MONTHLY`,
+   `STRIPE_PRICE_HOME_SLOT_YEARLY`, `STRIPE_PRO_MONTHLY_PRICE_ID`,
+   `STRIPE_PRO_YEARLY_PRICE_ID`, `STRIPE_PRO_INTRO_COUPON_ID`. A Price you created and can
+   see in the dashboard is what makes revenue reporting, plan reconciliation, and price
+   changes possible; everything below is a fallback.
+
+   Without them, checkout uses inline price_data at the amounts in `src/lib/constants.ts`,
+   and plan changes on an existing subscription (`switch to yearly`, `switch to monthly at
+   renewal`, extra homes) resolve a Price through `src/lib/stripePlanPrice.ts`, which
+   find-or-creates an ACTIVE product tagged `hearth_plan=plus` (or `hearth_plan=home_slots`)
+   and an active recurring price at the right amount and interval.
+
+   Why that fallback exists: on 2026-08-30 "Switch to yearly" failed for every live
+   subscriber, because with `STRIPE_PRICE_PLUS_YEARLY` unset the action pointed inline
+   price_data at the product the subscription already carried, and that "Hearth Plus"
+   product had been archived in the connected account - Stripe refuses to attach a new
+   price to an inactive product. Setting the env vars above avoids the whole class of
+   problem; if you archive or replace a product in Stripe, update these values too.
 4. Verify: run one live-mode Plus checkout with a real card, confirm the webhook shows 200 in
    Stripe's dashboard and the subscription row appears in the DB, then refund yourself.
 
