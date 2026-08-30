@@ -426,9 +426,21 @@ export default function LeadChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, leadId]);
 
+  // Auto-scroll to the newest message. Keyed on the newest message's id, not
+  // the whole `messages` array (HIGH-9): that array gets a new identity on
+  // every load() (45s poll, realtime push, visibilitychange, a reaction
+  // tap, a read receipt catching up), none of which mean "a new message
+  // arrived." Keying on identity alone snapped the view to the bottom on
+  // every one of those, including while someone had scrolled up to read
+  // older messages. Keying on the newest id instead still fires on the
+  // cases that should scroll: initial load (id goes from undefined to a
+  // real id) and a genuinely new message (the last id changes).
+  const newestMessageId = messages.length
+    ? messages[messages.length - 1].id
+    : null;
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "nearest" });
-  }, [messages]);
+  }, [newestMessageId]);
 
   // Close the tap-opened action bar on any tap outside it (or its "…"
   // toggle). Also disarms a pending "Unsend" confirm: without this, a touch
@@ -503,7 +515,16 @@ export default function LeadChat({
         data: i,
       })),
     ];
-    items.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    // Ordinal compare, not locale-sensitive string compare (LOW-11): a
+    // Postgres timestamptz round-trips as
+    // "2026-08-27T12:00:00.123456+00:00" while some of these items carry a
+    // JS-built "...123Z" timestamp (e.g. the optimistic temp message in
+    // send()); localeCompare on the raw strings isn't guaranteed to order
+    // those consistently. Same epoch-millis approach as src/lib/unread.ts.
+    items.sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
     return items;
   }, [messages, quotes, invoices]);
 
@@ -547,8 +568,18 @@ export default function LeadChat({
     // already run the form's default submit, so the lazy client load below
     // must never come before it.
     e.preventDefault();
+    // Synchronous re-entrancy guard (MED-10): disabled={busy} on the Send
+    // button only takes effect once React re-renders, which is after the
+    // first await below (getSupabase's dynamic import, then ensureUid's
+    // getUser call). A fast double-tap fires this function a second time
+    // before either await resolves, so the busy check and the latch that
+    // sets it both have to happen here, synchronously, before anything
+    // below can yield - otherwise both calls proceed and insert the same
+    // message twice.
+    if (busy) return;
     const text = body.trim();
     if (!text || closed) return;
+    setBusy(true);
     // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
     // is no longer part of this route's First Load JS.
     const supabase = await getSupabase();
@@ -569,10 +600,12 @@ export default function LeadChat({
     // typed text, so the combination can never sneak past the DB's own cap.
     if (finalBody.length > MAX_MESSAGE_LENGTH) {
       setTooLong(true);
+      // Clear the latch set above: this is an exit path (MED-10), and
+      // nothing else on it will ever call setBusy(false).
+      setBusy(false);
       return;
     }
     setTooLong(false);
-    setBusy(true);
     setBody("");
     setReplyingTo(null);
 

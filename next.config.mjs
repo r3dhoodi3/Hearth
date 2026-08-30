@@ -19,7 +19,10 @@ const SUPABASE_HOST = (() => {
 //                 guide/city/public pages plus the theme bootstrap in
 //                 layout.tsx), and there is no third-party script tag anywhere:
 //                 Stripe checkout is a server-side redirect, not stripe.js.
-//                 'unsafe-eval' is what Next's dev bundler needs.
+//                 'unsafe-eval' is what Next's dev bundler needs, and only
+//                 that: LOW-36, it is now gated to non-production builds (see
+//                 SCRIPT_SRC below) rather than shipped in the production
+//                 policy this graduates to enforcing.
 //   style-src   - Tailwind ships real stylesheets, but React inline styles and
 //                 the CSS modules' runtime need 'unsafe-inline'.
 //   img-src     - blob:/data: cover the local upload previews
@@ -37,9 +40,20 @@ const SUPABASE_HOST = (() => {
 // Report-only means violations are reported, never blocked. Graduate it to the
 // enforcing "Content-Security-Policy" key after a burn-in period with no
 // unexpected reports.
+// LOW-36: 'unsafe-eval' is only needed for Next's DEV bundler (see the
+// script-src note above) and shipped unconditionally, so the production CSP
+// - Report-Only today, but this is the policy that graduates - carried a
+// wider allowance than the app it describes actually needs. Gated on
+// NODE_ENV so a production build never sends the token at all; local `next
+// dev` (and any verification build that leaves NODE_ENV unset) keeps it.
+const SCRIPT_SRC =
+  process.env.NODE_ENV === "production"
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+
 const CSP_DIRECTIVES = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  SCRIPT_SRC,
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: https://${SUPABASE_HOST}`,
   "media-src 'self'",

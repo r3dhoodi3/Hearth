@@ -164,34 +164,32 @@ export default function PublicProfileForm({
 
   return (
     <form action={saveCompanyAction} className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
-      {/* Cover banner + avatar */}
-      <div className="relative h-32 bg-stone-100 sm:h-40 dark:bg-stone-700">
-        <button
-          type="button"
-          className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-600 shadow-sm hover:bg-stone-50 max-sm:min-h-11 max-sm:px-4 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
-            <circle cx="12" cy="13" r="4" />
-          </svg>
-          Change Cover
-        </button>
-      </div>
+      {/* MED-20: this was a "Change Cover" button with no handler and no
+          feature behind it anywhere in the app - no cover_url column, no
+          upload flow, no bucket, nothing on the public /p/<id> page it could
+          have shown. Removed rather than wired up: building a real cover
+          upload is a new feature, not a fix for a dead button. The banner
+          itself stays as plain decoration behind the avatar below. */}
+      <div className="relative h-32 bg-stone-100 sm:h-40 dark:bg-stone-700" />
 
       <div className="px-6 pb-6">
-        {/* Logo / avatar, overlapping the banner */}
+        {/* Logo, overlapping the banner. This used to be a second, unwired
+            "+" upload button that duplicated (and did not show) the real logo
+            upload, which already exists as a Pro-member perk on the "Your
+            Public Page" tab (LogoUpload.tsx, via PublicPageCard.tsx).
+            Duplicating it here would mean re-deciding that membership gate on
+            a "Basic Information" tab that otherwise has nothing to do with
+            Pro perks, so this is now a plain, non-interactive placeholder
+            with a pointer to where the real control lives. */}
         <div className="-mt-10 mb-6">
-          <button
-            type="button"
-            className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 text-stone-500 shadow-sm hover:bg-stone-100 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
-          >
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 text-stone-500 shadow-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-400">
             <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 21V5l8-2 8 2v16M9 9h.01M9 13h.01M15 9h.01M15 13h.01M10 21v-4h4v4" />
             </svg>
-            <span className="absolute -bottom-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 shadow-sm dark:border-white/10 dark:bg-stone-800 dark:text-stone-400">
-              +
-            </span>
-          </button>
+          </div>
+          <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
+            Add a logo from the &quot;Your Public Page&quot; tab.
+          </p>
         </div>
 
         <div className="grid gap-8 md:grid-cols-2">
@@ -275,8 +273,20 @@ export default function PublicProfileForm({
                     name="contact_phone"
                     className="input pl-9"
                     defaultValue={contractor.contact_phone ?? ""}
+                    required
+                    // HIGH-19: this form has no hidden panels (unlike the
+                    // onboarding wizard's own PhoneInput), so native
+                    // constraint validation works here. Matches
+                    // saveCompanyAction's own 10-digit floor
+                    // (../actions.ts) so an empty or malformed number is
+                    // caught before the request even leaves the browser,
+                    // not just after.
+                    pattern="\(\d{3}\) \d{3}-\d{4}"
                   />
                 </div>
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  Homeowners call this number after they pick you.
+                </p>
               </div>
 
               {/* TCPA SMS consent. Opt-in only: NEVER pre-ticked, and the

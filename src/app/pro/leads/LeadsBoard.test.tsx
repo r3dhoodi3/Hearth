@@ -300,3 +300,17 @@ describe("LeadsBoard: phone glance line reads at 14px, not 12px", () => {
     expect(line).not.toHaveClass("text-xs");
   });
 });
+
+// MED-2: HomeView.tsx's "Active jobs" stat links to `${PRO_LEADS_HREF}#your-jobs`
+// (the count it shows is computed from the same `assigned` list this section
+// renders - see activeCount in page.tsx), so the section that count actually
+// describes has to carry that id for the link to land anywhere.
+describe("LeadsBoard: Your jobs section carries the #your-jobs anchor", () => {
+  afterEach(() => cleanup());
+
+  it("has id=your-jobs on the section rendering the assigned jobs heading", () => {
+    render(<LeadsBoard {...boardProps([])} />);
+    const heading = screen.getByRole("heading", { name: /Your jobs/ });
+    expect(heading.closest("section")).toHaveAttribute("id", "your-jobs");
+  });
+});

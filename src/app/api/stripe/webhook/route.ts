@@ -21,6 +21,18 @@ import {
 } from "@/lib/promoClaimRef";
 import { trackServerEvent } from "@/lib/trackServer";
 
+// The promo_claims reservation key AND ref for the Pro FREE TRIAL (HIGH-31),
+// the twin of PLUS_RESERVATION_REF/'plus_trial' on the homeowner side. Distinct
+// from PRO_RESERVATION_REF, which is the retired intro-coupon reservation: a
+// buyer holds at most one of the two (the trial and the intro coupon are
+// mutually exclusive by construction in startProCheckoutAction). Kept in sync
+// by value with the identical literal in src/app/pro/plus/actions.ts - the two
+// have to agree or the checkout's reservation and this webhook's release/convert
+// would look at different rows. promoClaimRef.ts, where PLUS/PRO_RESERVATION_REF
+// live, is owned by another concern this change does not touch.
+const PRO_TRIAL_PROMO_KEY = "pro_trial";
+const PRO_TRIAL_RESERVATION_REF = "pro_trial_checkout_reservation";
+
 // Notification kind for the post-purchase auto-renewal acknowledgment.
 const ACK_KIND = "renewal_acknowledgment";
 
@@ -904,6 +916,69 @@ async function releaseIntroReservationIfUnused(
   }
 }
 
+// The Pro free-trial twin of releaseIntroReservationIfUnused (HIGH-31): release
+// a reserved-but-never-spent 'pro_trial' claim. startProCheckoutAction claims
+// that row synchronously before the Stripe session exists, so two tabs cannot
+// each mint a free Pro trial for one account. A buyer who then abandons the
+// checkout (declined card, closed tab) must not lose their one trial to a
+// session they never completed, so the same two events that roll back the Plus
+// trial roll this back too: an expired checkout session, and a Pro subscription
+// landing canceled/incomplete_expired without ever having gone live.
+//
+// Guarded like its two siblings: the caller only invokes it when trial_reserved
+// (on the session) or intro_step_up (on the subscription) shows THIS attempt
+// held the reservation, and this function re-confirms no LIVE pro subscription
+// exists before deleting anything, so a trial genuinely in use is never clawed
+// back. Scoped by `ref` for the same reason. Best effort throughout.
+async function releaseProTrialReservationIfUnused(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  refs: string[]
+): Promise<void> {
+  try {
+    const { data: rows } = await (admin as any)
+      .from("subscriptions")
+      .select("plan, status, current_period_end")
+      .eq("user_id", userId)
+      .like("plan", "pro_%");
+    const stillLive = ((rows as any[]) ?? []).some((row) =>
+      isLiveProPlanRow(row)
+    );
+    if (stillLive) return;
+
+    const { error } = await admin
+      .from("promo_claims")
+      .delete()
+      .eq("user_id", userId)
+      .eq("promo_key", PRO_TRIAL_PROMO_KEY)
+      .in("ref", refs);
+    for (const base of refs.filter((r) => !r.startsWith("converted:"))) {
+      const { error: likeError } = await admin
+        .from("promo_claims")
+        .delete()
+        .eq("user_id", userId)
+        .eq("promo_key", PRO_TRIAL_PROMO_KEY)
+        .like("ref", `${base}:%`);
+      if (likeError) {
+        console.error(
+          "promo_claims(pro_trial) session-scoped rollback failed for",
+          userId,
+          likeError.message ?? likeError
+        );
+      }
+    }
+    if (error) {
+      console.error(
+        "promo_claims(pro_trial) rollback failed for",
+        userId,
+        error.message ?? error
+      );
+    }
+  } catch (err) {
+    console.error("promo_claims(pro_trial) rollback threw for", userId, err);
+  }
+}
+
 // The homeowner twin of the function above: release a reserved-but-never-spent
 // Plus free-trial claim (the promo_claims row for 'plus_trial').
 //
@@ -1254,6 +1329,57 @@ async function flagChargebackForCharge(
   }
 }
 
+// The deposit twin of flagChargebackForCharge, and the fix for CRIT-29.
+//
+// flagChargebackForCharge resolves the account through the PaymentIntent's
+// customer -> subscriptions.stripe_customer_id. A wallet deposit is a
+// mode:"payment" Checkout Session created with NO customer (see depositAction),
+// so its PaymentIntent has customer=null and that function returns early and
+// flags nobody. The wallet clawback (reverse_deposit) still runs, but it can
+// only reverse cash that is still in the balance - already-spent lead money is
+// gone - and, crucially, WITHOUT an abuse_flags row the account is never
+// frozen: has_open_chargeback() reads exactly that row, so apply_to_lead and
+// unlock_direct_request keep letting the pro spend. That is the repeatable
+// stolen-card loop the finding describes.
+//
+// So resolve the SAME payment_intent back to its deposit session (the lookup
+// the reversal path already does), map metadata.contractor_id to the owning
+// account, and raise the same sticky chargeback flag has_open_chargeback reads.
+// After this, the pro cannot apply to a lead or unlock a direct request until
+// support clears abuse_flags.cleared_at.
+//
+// Best-effort and idempotent: flagAbuse upserts one row per (user, kind), so a
+// redelivery or a later funds_withdrawn on the same dispute just re-stamps the
+// open flag. Called ONLY on dispute.created, exactly where flagChargebackForCharge
+// is, so the two never disagree about which event owns the flag. A charge is
+// never both a wallet deposit and a membership invoice charge, so at most one of
+// the two flaggers ever resolves an account for a given dispute.
+async function flagDepositChargeback(
+  paymentIntentId: string | null,
+  disputeId: string
+): Promise<void> {
+  if (!paymentIntentId) return;
+  try {
+    const deposit = await resolveDepositSession(paymentIntentId);
+    if (!deposit) return; // not a wallet-deposit charge, nothing to flag here
+    const admin = createAdminClient();
+    const { data: contractorRow } = await (admin as any)
+      .from("contractors")
+      .select("user_id")
+      .eq("id", deposit.contractorId)
+      .maybeSingle();
+    if (contractorRow?.user_id) {
+      await flagAbuse(
+        contractorRow.user_id,
+        "chargeback",
+        `Stripe dispute ${disputeId} (wallet deposit)`
+      );
+    }
+  } catch (err) {
+    console.error("flagDepositChargeback failed:", err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig = req.headers.get("stripe-signature") ?? "";
@@ -1459,6 +1585,18 @@ export async function POST(req: NextRequest) {
         subscription.id
       );
 
+      // The Pro FREE TRIAL reservation is now spent too (HIGH-31). Stamp it
+      // converted so a later checkout can never reclaim it and hand out a
+      // second trial, exactly as the Plus branch does for 'plus_trial'.
+      // Unconditional and harmless when no such claim exists (a full-price or
+      // intro-coupon purchase never reserved it): the update matches no row.
+      await markPromoConverted(
+        admin,
+        meta.user_id,
+        PRO_TRIAL_PROMO_KEY,
+        subscription.id
+      );
+
       // Funnel analytics (docs/ANALYTICS.md). Same reasoning as the Plus
       // checkout_completed below: fired off the webhook, the trustworthy
       // completion signal, not the ?welcome=1 page render, which can beat or
@@ -1590,6 +1728,22 @@ export async function POST(req: NextRequest) {
       ]);
     }
 
+    // The Pro FREE TRIAL half of the same rollback (HIGH-31): an abandoned Pro
+    // checkout whose session won the one-trial reservation. Release it so the
+    // buyer still has their free days for a real attempt later. A session that
+    // lost the race carries trial_reserved "false" and this is a no-op for it.
+    if (
+      meta.type === "pro_subscription" &&
+      meta.user_id &&
+      meta.trial_reserved === "true"
+    ) {
+      const admin = createAdminClient();
+      await releaseProTrialReservationIfUnused(admin, meta.user_id, [
+        PRO_TRIAL_RESERVATION_REF,
+        reservedSessionRef(PRO_TRIAL_RESERVATION_REF, String(session.id)),
+      ]);
+    }
+
     // Funnel analytics (docs/ANALYTICS.md), mirroring checkout_abandoned
     // below: any expired Pro checkout session counts, not only the ones
     // holding an intro-coupon reservation above.
@@ -1680,6 +1834,13 @@ export async function POST(req: NextRequest) {
     // contract and must not be perturbed by this.
     if (event.type === "charge.dispute.created") {
       await flagChargebackForCharge(
+        paymentIntentId,
+        String(dispute.id ?? "unknown")
+      );
+      // CRIT-29: a deposit dispute has no customer for flagChargebackForCharge
+      // to resolve, so freeze the account through its deposit session's
+      // contractor_id instead. One of the two matches for any given charge.
+      await flagDepositChargeback(
         paymentIntentId,
         String(dispute.id ?? "unknown")
       );
@@ -1821,6 +1982,15 @@ export async function POST(req: NextRequest) {
         // stamp never landed, is what this subscription is entitled to release.
         await releaseIntroReservationIfUnused(admin, existing.user_id, [
           PRO_RESERVATION_REF,
+          convertedRef(subscription.id),
+        ]);
+        // The Pro FREE TRIAL reservation shares the intro_step_up flag (both
+        // trial and intro stamp it, and they are mutually exclusive), so the
+        // same never-went-live pro subscription releases whichever of the two
+        // it actually held (HIGH-31). The intro release above is a no-op for a
+        // trial subscription and this is a no-op for an intro one.
+        await releaseProTrialReservationIfUnused(admin, existing.user_id, [
+          PRO_TRIAL_RESERVATION_REF,
           convertedRef(subscription.id),
         ]);
       }

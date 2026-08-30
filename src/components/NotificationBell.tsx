@@ -118,7 +118,12 @@ export default function NotificationBell() {
               : n
           )
         );
-        setUnread(0);
+        // Recompute the true remaining count instead of assuming it's zero:
+        // this only fetched/marked the first `lim` rows, so with more than
+        // `lim` unread notifications (the limit starts at 20), marking this
+        // page read does not clear every unread row - the badge has to keep
+        // showing what's actually left, not 0, until markAllRead is used.
+        await loadCount();
       }
     } catch {
       // Leave whatever was already shown.

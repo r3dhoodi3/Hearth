@@ -334,6 +334,98 @@ describe("saveCompanyAction: validation floors", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/pro/profile");
     expect(lastUpdate).toBeNull();
   });
+
+  // HIGH-19: contact_phone had no server-side floor at all - only the
+  // onboarding wizard's client-side gate checked it, and only on first
+  // signup. The profile-edit form posts this same field on every later save
+  // too, so both paths need the same PHONE_DIGITS rule.
+  it("onboarding, blank phone: flashes in place, never a same-path redirect", async () => {
+    await expect(
+      saveCompanyAction(fd({ name: "Ivy Plumbing" }))
+    ).resolves.toBeUndefined();
+
+    expect(setFlash).toHaveBeenCalledWith(
+      "Add a phone number so homeowners can reach you.",
+      "error"
+    );
+    expect(redirect).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith("/pro/onboarding");
+    expect(lastInsert).toBeNull();
+  });
+
+  it("onboarding, a partial phone number: flashes the same 10-digit message the wizard shows", async () => {
+    await expect(
+      saveCompanyAction(fd({ name: "Ivy Plumbing", contact_phone: "714555" }))
+    ).resolves.toBeUndefined();
+
+    expect(setFlash).toHaveBeenCalledWith(
+      "Enter a full 10-digit phone number.",
+      "error"
+    );
+    expect(lastInsert).toBeNull();
+  });
+
+  it("profile save: an emptied-out phone number is refused, not saved silently", async () => {
+    existingContractor = {
+      id: "contractor-1",
+      name: "Acme Plumbing",
+      contact_phone: "(714) 555-0100",
+      license_number: null,
+      license_verified_status: "unverified",
+      service_state: null,
+    };
+
+    await expect(
+      saveCompanyAction(fd({ name: "Acme Plumbing", contact_phone: "" }))
+    ).resolves.toBeUndefined();
+
+    expect(setFlash).toHaveBeenCalledWith(
+      "Add a phone number so homeowners can reach you.",
+      "error"
+    );
+    expect(revalidatePath).toHaveBeenCalledWith("/pro/profile");
+    expect(lastUpdate).toBeNull();
+  });
+});
+
+// MED-21: WizardFooter's submittedRef latch (OnboardingCompanyForm.tsx)
+// stops a same-tick double click, but not two genuinely separate requests
+// (a slow network retry, two tabs). Migration 0072's contractors_unique_user
+// index means the losing request's insert comes back 23505 - this pins down
+// that the action treats that as a success (falls through to the same
+// downstream work a clean insert triggers) instead of flashing a scary,
+// wrong "Couldn't save your company profile."
+describe("saveCompanyAction: double-submit race (23505)", () => {
+  const UNIQUE_VIOLATION = {
+    code: "23505",
+    message:
+      'duplicate key value violates unique constraint "contractors_unique_user"',
+  };
+
+  it("treats a unique-violation insert as success, not a failure", async () => {
+    insertError = UNIQUE_VIOLATION;
+
+    // Continuing past the "failed" insert reaches the same downstream work a
+    // clean insert does (the preferred-side stamp), which is exactly what
+    // this file's throwing createAdminClient mock exists to prove - a plain
+    // resolve here would mean the action stopped short instead.
+    await expect(
+      saveCompanyAction(
+        fd({
+          name: "Ivy Plumbing",
+          contact_phone: "7145550100",
+          service_state: "CA",
+          service_cities_present: "1",
+          service_cities: ["Irvine"],
+        })
+      )
+    ).rejects.toThrow(/createAdminClient must not be called|REDIRECT/);
+
+    expect(setFlash).not.toHaveBeenCalledWith(
+      expect.stringContaining("Couldn't save"),
+      "error"
+    );
+  });
 });
 
 // D8 / migration 0141. owner_name is the newest column on contractors, so it

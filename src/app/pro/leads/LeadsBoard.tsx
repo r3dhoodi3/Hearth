@@ -64,6 +64,7 @@ import {
   creditNotCashLineRich,
 } from "@/lib/guaranteeCopy";
 import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
+import { STATUS_LABEL } from "../leadStatusLabel";
 
 const STATUS_STYLE: Record<string, string> = {
   new: "border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300",
@@ -74,12 +75,9 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 // Friendly labels for the pipeline statuses a pro sets on their own jobs.
-const STATUS_LABEL: Record<string, string> = {
-  new: "New lead",
-  accepted: "Active",
-  closed: "Won",
-  lost: "Lost",
-};
+// Moved to ../leadStatusLabel.ts and imported above (LOW-3): actions.ts's
+// status-change toast now reads from the exact same map, so the two can
+// never drift ("Won"/"Lost" here vs. a differently-worded toast there).
 
 // One "Asked for you" row. The card itself still takes the raw RPC row (it is
 // plain JSON either way); the only thing pulled out is the clock-dependent
@@ -705,8 +703,13 @@ export default function LeadsBoard({
         )}
       </section>
 
-      {/* ---- Active jobs: ones the homeowner picked you for ---- */}
-      <section className="space-y-3">
+      {/* ---- Active jobs: ones the homeowner picked you for ----
+          MED-2: id="your-jobs" is the anchor HomeView.tsx's "Active jobs"
+          stat links to (../HomeView.tsx). That stat counts THIS list (see
+          activeCount in page.tsx: assigned.filter(status not closed/lost)),
+          so the anchor has to land here, not on /pro/crm - a separate,
+          opt-in client tracker with a different dataset entirely. */}
+      <section id="your-jobs" className="space-y-3">
         <div>
           <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
             Your jobs <span className="text-stone-500 dark:text-stone-400">({assigned.length})</span>

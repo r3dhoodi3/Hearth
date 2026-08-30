@@ -730,7 +730,7 @@ export default async function HomePage(
               </li>
               {scoreLines.map((l, i) => (
                 <li key={i} className="flex justify-between gap-2">
-                  <span className="truncate capitalize">{l.label}</span>
+                  <span className="min-w-0 truncate capitalize">{l.label}</span>
                   <span className="font-medium">{l.points}</span>
                 </li>
               ))}
@@ -1327,7 +1327,10 @@ export default async function HomePage(
                 <form key={q.type} action={addSystemFormAction}>
                   <input type="hidden" name="system_type" value={q.type} />
                   <SubmitButton
-                    className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 disabled:opacity-60 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
+                    // Phone only: this pill was ~32px tall, below the 44px
+                    // tap floor every other button on this page keeps to.
+                    // Desktop pill is unchanged.
+                    className="focus-ring rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 shadow-sm hover:border-bark-500 hover:text-bark-700 disabled:opacity-60 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-bark-600 dark:hover:text-stone-300"
                     pendingLabel="Adding…"
                   >
                     {q.label}

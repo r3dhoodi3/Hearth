@@ -37,6 +37,15 @@ import { trackServerEvent } from "@/lib/trackServer";
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// The promo_claims reservation key AND ref for the Pro FREE TRIAL (HIGH-31),
+// the twin of PLUS_RESERVATION_REF/'plus_trial'. Distinct from
+// PRO_RESERVATION_REF, which is the retired intro-coupon reservation. This
+// literal MUST match the identical one in src/app/api/stripe/webhook/route.ts,
+// which releases and converts the same rows; promoClaimRef.ts (home of the
+// other reservation refs) is outside the surface this change touches.
+const PRO_TRIAL_PROMO_KEY = "pro_trial";
+const PRO_TRIAL_RESERVATION_REF = "pro_trial_checkout_reservation";
+
 // One-time $20-off coupon that makes a first monthly bill $9.99 instead of
 // $29.99. DORMANT while the free trial is on (see PRO_PLAN.introFirstMonth and
 // the trial block in startProCheckoutAction): a duration:"once" coupon is
@@ -173,11 +182,36 @@ export async function startProCheckoutAction(formData: FormData) {
         status: "all",
         limit: 10,
       });
-      alreadyMember = stripeSubs.data.some(
-        (s) =>
-          (s.status === "active" || s.status === "trialing") &&
-          s.id !== homeownerSub?.stripe_subscription_id
-      );
+      // WHICH LIVE SUBSCRIPTION COUNTS AS "already a Pro member" (HIGH-33).
+      //
+      // This used to be "any live subscription on the customer whose id is not
+      // the homeowner row's stripe_subscription_id", and that identity exclusion
+      // has the same hole the homeowner side already fixed: the homeowner Plus
+      // row can carry a NULL stripe_subscription_id (an older row, a manual fix,
+      // a webhook that landed the row before the subscription id). `s.id !== null`
+      // is true of everything, so the pro's OWN live Plus membership was read as
+      // a live Pro one and a homeowner who is also a contractor was told they
+      // already had Pro and could never buy it.
+      //
+      // So match on the PRO prices when we know them: a Plus subscription is on
+      // Plus's prices and can never be mistaken for one of these, whether or not
+      // its id is on file. When no Pro price is configured (the inline
+      // price_data fallback path, where there is nothing to match on), this falls
+      // back to the old behaviour, with the homeowner subscription excluded by id
+      // whenever the id is actually known. Mirrors startPlusCheckoutAction.
+      const proPriceIds = [
+        process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
+        process.env.STRIPE_PRO_YEARLY_PRICE_ID,
+      ].filter((id): id is string => Boolean(id));
+      const homeownerSubId = homeownerSub?.stripe_subscription_id ?? null;
+      alreadyMember = stripeSubs.data.some((s) => {
+        if (s.status !== "active" && s.status !== "trialing") return false;
+        if (homeownerSubId && s.id === homeownerSubId) return false;
+        if (!proPriceIds.length) return true;
+        return s.items.data.some(
+          (i) => i.price?.id && proPriceIds.includes(i.price.id)
+        );
+      });
     } catch {
       // If Stripe is unreachable, fall through to checkout as before.
     }
@@ -239,7 +273,82 @@ export async function startProCheckoutAction(formData: FormData) {
     await setFlash(RISK_BLOCK_MESSAGE, "error");
     redirect("/pro/plus");
   }
-  const freeTrial = (await isProTrialEligible()) && risk.allowTrial;
+  // ONE TRIAL PER ACCOUNT, ENFORCED SYNCHRONOUSLY, HERE (HIGH-31).
+  //
+  // Every guard above reads state the Stripe WEBHOOK writes only AFTER a
+  // checkout completes, so none of them can see a checkout still in flight. A
+  // first-ever pro could open /pro/plus in two tabs - the monthly trial
+  // shortcut in one, the yearly card in the other - and start both: both read
+  // "eligible", both got trial_period_days, and the account minted two Pro
+  // subscriptions on two different Stripe customers. The webhook's
+  // upsert-by-(user_id, side) keeps ONE subscriptions row; the other survived
+  // as an orphan with no row, no in-app cancel button, and - because Checkout
+  // with customer:undefined mints a fresh customer per session - no customer
+  // anyone had on file, so even the billing portal could not reach it. It
+  // billed at trial end forever.
+  //
+  // The fix is the exact one the Plus side uses (startPlusCheckoutAction) and
+  // the one the Pro intro coupon already uses below: atomically claim a
+  // promo_claims row before the Stripe session is created. Its PK is
+  // (user_id, promo_key), so claim_promo's "on conflict do nothing ... return
+  // found" lets exactly ONE of N racing requests win; every other one falls
+  // through to a charged-today checkout with the disclosure and consent record
+  // built from the same `freeTrial` value, so nothing on screen promises free
+  // days that are not coming. claim_promo is service_role-only, hence the admin
+  // client. The webhook releases an abandoned reservation (expired session, or
+  // a subscription landing canceled/incomplete_expired without going live) and
+  // stamps a completed one converted, so a legit pro who bails keeps their one
+  // trial. `trial_reserved` in the session metadata is how the webhook knows
+  // which attempt holds it.
+  //
+  // A FAILED RPC MEANS NO TRIAL. Free days are the thing being farmed, so an
+  // unreadable counter must never be a way to get a second one. And when the
+  // claim is LOST, reclaimCheckoutReservation answers what a bare row cannot:
+  // resume the open session, take over a dead one, or stand down (fail closed).
+  const wantsTrial = (await isProTrialEligible()) && risk.allowTrial;
+  let freeTrial = false;
+  let claimedTrial = false;
+  // An open Stripe Checkout to send the pro back to. Acted on after the block
+  // (redirect() throws, and a try/catch would swallow it).
+  let trialResumeUrl: string | null = null;
+  if (wantsTrial) {
+    const admin = createAdminClient();
+    try {
+      const { data, error } = await admin.rpc("claim_promo", {
+        p_user: user.id,
+        p_key: PRO_TRIAL_PROMO_KEY,
+        p_ref: PRO_TRIAL_RESERVATION_REF,
+      });
+      if (error) {
+        console.error(
+          "claim_promo(pro_trial) reservation failed - no free days:",
+          error.message ?? error
+        );
+      } else if (data === true) {
+        claimedTrial = true;
+        freeTrial = true;
+      } else {
+        const outcome = await reclaimCheckoutReservation(admin, {
+          userId: user.id,
+          promoKey: PRO_TRIAL_PROMO_KEY,
+          reservationRef: PRO_TRIAL_RESERVATION_REF,
+          plan,
+        });
+        if (outcome.kind === "resume") {
+          trialResumeUrl = outcome.url;
+        } else if (outcome.kind === "reclaimed") {
+          claimedTrial = true;
+          freeTrial = true;
+        }
+        // "held": another tab is mid-checkout, or the trial is already spent.
+        // Charge today instead.
+      }
+    } catch (err) {
+      console.error("claim_promo(pro_trial) reservation threw:", err);
+    }
+  }
+  // Back to the checkout they already opened: same trial, same terms.
+  if (trialResumeUrl) redirect(trialResumeUrl);
 
   // Brand-new Pro subscribers on the monthly plan get an intro month: $9.99
   // for the first month via a one-time coupon, then full price. Yearly is
@@ -305,7 +414,12 @@ export async function startProCheckoutAction(formData: FormData) {
   // An open Stripe Checkout to send the pro back to. Acted on after the
   // try/catch: redirect() throws, and the catch would swallow it.
   let resumeUrl: string | null = null;
-  const introOffered = !freeTrial && plan === "pro_monthly" && !existing;
+  // `!wantsTrial`, not `!freeTrial`: a buyer who was ELIGIBLE for the trial but
+  // lost the concurrent-tab reservation race (freeTrial went back to false) is
+  // charged today at full price, never handed the intro coupon instead. Today
+  // the trial is always on for eligible buyers, so this stays equal to the old
+  // `!freeTrial` for every non-racing checkout.
+  const introOffered = !wantsTrial && plan === "pro_monthly" && !existing;
   // Still the cheap ledger pre-check, just no longer a hard skip: when it says
   // a claim exists, the row may still be a reservation this pro can have back,
   // so the reclaim path runs and only the RPC is skipped.
@@ -360,6 +474,43 @@ export async function startProCheckoutAction(formData: FormData) {
   // Back to the checkout they already opened: same offer, same terms, and
   // nothing new for Stripe to object to.
   if (resumeUrl) redirect(resumeUrl);
+
+  // A REACHABLE Stripe customer, always (HIGH-31). When we already know one
+  // (an existing Pro or homeowner row), use it. Otherwise - the brand-new pro,
+  // the exact case the double-checkout guards above cannot cover - create one
+  // NOW and hand it to Checkout, instead of letting Checkout mint an anonymous
+  // customer per session. Two things follow: two concurrent sessions land on
+  // the SAME customer (the idempotency key on the create is stable per user, so
+  // both tabs resolve to one customer), and any subscription this checkout
+  // produces - including an orphan from a second tab that the reservation above
+  // did not manage to stop - is reachable by manageProBillingAction's billing
+  // portal and by cancel. Before this, a customer:undefined orphan billed at
+  // trial end with no row and no customer anyone had on file, so nothing in the
+  // app could ever reach it. Best-effort: if the create fails we fall back to
+  // Checkout's own customer creation, exactly as before.
+  let checkoutCustomerId: string | null = customerId;
+  if (!checkoutCustomerId) {
+    try {
+      const customer = await stripe.customers.create(
+        {
+          email: user.email ?? undefined,
+          metadata: { user_id: user.id, side: "pro" },
+        },
+        // Stable per user: two tabs opening checkout at once both resolve to
+        // this one customer rather than creating two. (Stripe retains an
+        // idempotency key for 24h, which is far longer than the concurrent-tab
+        // window; by the next day a subscriptions row exists and customerId is
+        // populated, so this branch is not even reached.)
+        { idempotencyKey: `pro-customer:${user.id}` }
+      );
+      checkoutCustomerId = customer.id;
+    } catch (err) {
+      console.error(
+        "pro checkout customer create failed, letting Checkout create one:",
+        err
+      );
+    }
+  }
 
   // Consent record, mirroring startPlusCheckoutAction: the exact disclosure
   // text the buyer saw, stored on the Stripe session so California's
@@ -417,7 +568,7 @@ export async function startProCheckoutAction(formData: FormData) {
     varying: {
       freeTrial,
       coupon: discounts?.[0]?.coupon ?? "none",
-      customer: customerId ?? "new",
+      customer: checkoutCustomerId ?? "new",
       price: priceId ?? "inline",
       consentTerms,
       consentAt,
@@ -449,8 +600,8 @@ export async function startProCheckoutAction(formData: FormData) {
         // end and the buyer has given billing information against the
         // disclosure they were shown.
         payment_method_collection: "always",
-        customer: customerId ?? undefined,
-        customer_email: customerId ? undefined : user.email ?? undefined,
+        customer: checkoutCustomerId ?? undefined,
+        customer_email: checkoutCustomerId ? undefined : user.email ?? undefined,
         metadata: {
           type: "pro_subscription",
           user_id: user.id,
@@ -463,6 +614,10 @@ export async function startProCheckoutAction(formData: FormData) {
           // session's own metadata to check when deciding whether to release
           // the reservation.
           intro_reserved: claimedIntro ? "true" : "false",
+          // The FREE TRIAL half of the same signal (HIGH-31): which attempt
+          // holds the 'pro_trial' reservation, so checkout.session.expired can
+          // release an abandoned one. "false" on a session that lost the race.
+          trial_reserved: claimedTrial ? "true" : "false",
         },
         success_url: `${siteUrl()}/pro/plus?welcome=1`,
         cancel_url: `${siteUrl()}/pro/plus`,
@@ -485,6 +640,22 @@ export async function startProCheckoutAction(formData: FormData) {
       if (error) {
         console.error(
           "promo_claims release after failed session create failed:",
+          error.message ?? error
+        );
+      }
+    }
+    // Same inline release for a reserved FREE TRIAL (HIGH-31): a session Stripe
+    // never created fires no expired event, so the webhook cannot roll this back.
+    if (claimedTrial) {
+      const admin = createAdminClient();
+      const { error } = await admin
+        .from("promo_claims")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("promo_key", PRO_TRIAL_PROMO_KEY);
+      if (error) {
+        console.error(
+          "promo_claims(pro_trial) release after failed session create failed:",
           error.message ?? error
         );
       }
@@ -513,6 +684,17 @@ export async function startProCheckoutAction(formData: FormData) {
       userId: user.id,
       promoKey: "pro_intro_monthly",
       reservationRef: PRO_RESERVATION_REF,
+      sessionId: session.id,
+    });
+  }
+  // The same, for the FREE TRIAL reservation (HIGH-31): record which session
+  // holds it so a second click can resume this exact checkout rather than lose
+  // the trial to its own bare marker.
+  if (claimedTrial) {
+    await markReservationSession(createAdminClient(), {
+      userId: user.id,
+      promoKey: PRO_TRIAL_PROMO_KEY,
+      reservationRef: PRO_TRIAL_RESERVATION_REF,
       sessionId: session.id,
     });
   }

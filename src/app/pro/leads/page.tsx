@@ -42,7 +42,7 @@ import {
 import { bestLeadDiscount } from "@/lib/leadPricing";
 import { normalizeLeadSort } from "@/lib/leadSort";
 import { trackServerEvent } from "@/lib/trackServer";
-import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { hasProPlan, hasActivePaidProPlan, getProSubscription } from "@/lib/subscription";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { getOpenJobsForMe } from "@/lib/greeting";
@@ -282,6 +282,11 @@ export default async function ProDashboard(
   // hasProPlan-style read per request" is why this moved above the view
   // models instead of living inside the openJobVms.map() below.
   const isProMember = await hasProPlan();
+  // Active-only membership for the DISCOUNT specifically (migration 0151): a
+  // trialing pro is a full member everywhere else, but the 10% lead discount
+  // now starts only when the trial converts, so the card must show what
+  // apply_to_lead will actually charge. Used only in bestLeadDiscount below.
+  const proDiscountEligible = await hasActivePaidProPlan();
   // Whether that same suggestion may lead with the free trial. Guarded exactly
   // like isProMember, plus the flag: while COLD_START_FREE_ALERTS is on the
   // upsell never renders, so the lookup never runs. Only a pro with no
@@ -318,7 +323,7 @@ export default async function ProDashboard(
     // comparison lives, mirrored byte-for-byte by pro_lead_fee_cents() in the
     // DB, so the price on this card is the price apply_to_lead will actually
     // charge.
-    const best = bestLeadDiscount(payoutDollars, j.created_at, isProMember);
+    const best = bestLeadDiscount(payoutDollars, j.created_at, proDiscountEligible);
     // First big-ticket lead: the fixed intro price replaces the discounted
     // fee above when it's lower, matching what apply_to_lead will actually
     // charge (migration 0113/0149) - a fixed floor, never discounted further

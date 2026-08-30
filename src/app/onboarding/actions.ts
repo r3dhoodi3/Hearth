@@ -873,6 +873,71 @@ export async function claimPropertyAction(
     market_value_high: null,
   };
 
+  // =========================================================================
+  // DUPLICATE-CLAIM GUARD (double-submit / two tabs).
+  //
+  // properties has no unique constraint (0001 only sets the id PK), and the
+  // home-cap trigger (0108) only counts rows, it does not dedupe them - so a
+  // double-tap on "Claim my home", or the same account submitting from two
+  // browser tabs, could reach this insert twice with the same address and
+  // create two property rows for one house: two seed system sets, two billed
+  // RentCast lookups already spent above, and (for a Plus landlord) two of
+  // their paid home slots burned on a single claim.
+  //
+  // A fresh, un-cached read right here - not the `existingHomes` fetched at
+  // the top of this action for the cap check, which is already stale by the
+  // time execution reaches the insert - narrows the race to the gap between
+  // this select and the insert below. It cannot close that gap outright
+  // (only a DB-level lock or constraint can: see the unique-index backstop
+  // planned for a follow-up migration on (user_id, lower(address_line1),
+  // zip)), but it turns the common case - a client-side double-submit, or a
+  // second tab that was already open when the first claim finished - into a
+  // no-op that lands the person on the home they already have instead of a
+  // second row for it.
+  //
+  // Normalized the same way addressEdited compares street lines above, so
+  // "123 Oak St" and "123 oak st" read as the same claim. Scoped to this
+  // user's OWN rows only, same as the cap check - a home shared with this
+  // user as a household member belongs to a different user_id and is neither
+  // a duplicate of, nor a block on, their own claim.
+  const normalizedClaimStreet = addressLine1
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+  const { data: ownRows } = await supabase
+    .from("properties")
+    .select("id, address_line1, zip, unit")
+    .eq("user_id", user.id);
+  const duplicateHome = (ownRows ?? []).find(
+    (row: any) =>
+      (row.zip ?? null) === (claimZip || null) &&
+      // Unit is part of the identity (migration 0127): a landlord who owns
+      // unit 4 and unit 5 at one street address holds two distinct homes, so
+      // they must NOT collapse into one. Compared with coalesce-to-empty, the
+      // same normalization the properties_owner_address_unique index (0151)
+      // uses, so this code guard and the DB backstop agree exactly.
+      (row.unit ?? "") === (unit ?? "") &&
+      String(row.address_line1 ?? "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .toLowerCase() === normalizedClaimStreet
+  );
+  if (duplicateHome) {
+    // Not an error: the claim they asked for already exists, so send them to
+    // it rather than refusing outright or, worse, creating a second row for
+    // it. Same cookie-set-then-redirect shape as a fresh successful claim
+    // below.
+    (await cookies()).set(ACTIVE_HOME_COOKIE, duplicateHome.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+    revalidatePath("/", "layout");
+    const nextDup = safeNextPath(formData.get("next") as string | null);
+    redirect(nextDup ?? "/dashboard?welcome=1");
+  }
+
   // extendedRow's enrichment fields (everything migration 0066 adds) aren't
   // in src/lib/database.types.ts yet, so this call is cast to any - same
   // pattern as saveHomeValueAction (value/actions.ts) and
@@ -937,6 +1002,31 @@ export async function claimPropertyAction(
     // the client: return a plain, user-safe message through the same
     // ActionResult path as the checks above.
     console.error("Could not claim property:", error);
+    // A LOST RACE against the cap trigger's own advisory lock (0108): the
+    // app-level cap check at the top of this action already read
+    // ownedHomes.length < cap, but a concurrent claim from the same account
+    // (another tab, or a request that started just before this one) can
+    // still land its insert first and push the count over the cap by the
+    // time THIS insert reaches the trigger. Postgres then raises with
+    // errcode = 'check_violation' (SQLSTATE 23514, see
+    // enforce_properties_home_cap in supabase/migrations/0108_home_cap.sql),
+    // which lands here as error.code === "23514" - not as a generic insert
+    // failure. Route to the same place the app-level cap check above sends a
+    // free account, instead of the flat "couldn't claim" message that hides
+    // WHY it actually failed.
+    if (error?.code === "23514") {
+      // Plan-aware, mirroring the app-level cap check above: a free account
+      // gets the upsell; a Plus account genuinely at its (higher) cap gets the
+      // "using all N homes" flash, not free-tier copy.
+      if (!plus) {
+        redirect("/plus?reason=home_limit");
+      }
+      await setFlash(
+        `You're using all ${cap} of your homes. You can add more homes anytime from the Plus page.`,
+        "error"
+      );
+      redirect("/plus");
+    }
     return err("We couldn't claim your home just now. Please try again.");
   }
 

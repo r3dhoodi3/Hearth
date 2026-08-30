@@ -12,6 +12,13 @@
 // underneath all of this. Nothing here is a security boundary; it is the
 // difference between a helpful inline message and a dead submit button.
 
+import { JOB_CATEGORIES } from "@/lib/constants";
+import { isAllowedValue } from "@/lib/formFields";
+import {
+  isAcceptableCustomCategory,
+  CUSTOM_CATEGORY_REJECTED,
+} from "@/lib/customCategory";
+
 export type ProOnboardingStep = {
   /** Stable key, used for React keys and the sessionStorage shape. */
   id: string;
@@ -84,11 +91,24 @@ export function validateProOnboardingStep(
       }
       return null;
     }
-    case 1:
+    case 1: {
       if (values.cities.length === 0) return "Pick at least one city you serve.";
-      return values.categories.some((c) => c.trim().length > 0)
-        ? null
-        : "Pick at least one type of work, or describe it under Other.";
+      const picked = values.categories.map((c) => c.trim()).filter(Boolean);
+      if (picked.length === 0) {
+        return "Pick at least one type of work, or describe it under Other.";
+      }
+      // Mirrors saveCompanyAction's own split (../actions.ts): anything not a
+      // canonical checkbox value is the free-text "Other" service, and it has
+      // to clear the same moderation gate the server applies before Finish -
+      // otherwise a junk "Other" box passes Next here, only to be silently
+      // dropped after the final submit, with the pro finding out via a flash
+      // on the page it already redirected away from.
+      const custom = picked.filter((c) => !isAllowedValue(JOB_CATEGORIES, c));
+      if (custom.length > 0 && !custom.some((c) => isAcceptableCustomCategory(c))) {
+        return CUSTOM_CATEGORY_REJECTED;
+      }
+      return null;
+    }
     default:
       return null;
   }

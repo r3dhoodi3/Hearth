@@ -20,6 +20,7 @@ export default function PhoneInput({
   placeholder = "(555) 123-4567",
   className = "input",
   required = false,
+  pattern,
 }: {
   name: string;
   // Lets a surrounding <label htmlFor> point at this input.
@@ -28,6 +29,15 @@ export default function PhoneInput({
   placeholder?: string;
   className?: string;
   required?: boolean;
+  // Optional HTML5 pattern the FORMATTED value must fully match, e.g. the
+  // full "(000) 000-0000" shape - undefined by default, so existing callers
+  // are unaffected. A caller whose form keeps every field mounted inside
+  // hidden panels (the pro onboarding wizard) must NOT pass this: a pattern
+  // mismatch on a hidden control blocks the submit with a message the
+  // browser can neither show nor focus, the same reason that form gates
+  // `required` on the visible step instead of leaving it on always. Pass it
+  // only on a form where this input is always on screen.
+  pattern?: string;
 }) {
   const [value, setValue] = useState(() => format(defaultValue));
   return (
@@ -41,6 +51,7 @@ export default function PhoneInput({
       className={className}
       placeholder={placeholder}
       required={required}
+      pattern={pattern}
       value={value}
       onChange={(e) => setValue(format(e.target.value))}
     />

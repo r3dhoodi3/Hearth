@@ -30,10 +30,12 @@ vi.mock("next/navigation", () => ({
 import OnboardingCompanyForm from "./OnboardingCompanyForm";
 import { proOnboardingDraftKey } from "./draftKey";
 import { LAUNCH_CITIES } from "./launchCities";
+import { saveCompanyAction } from "../actions";
 
 afterEach(cleanup);
 beforeEach(() => {
   window.localStorage.clear();
+  vi.mocked(saveCompanyAction).mockClear();
 });
 
 // Draft saves are deferred by a tick on purpose (a React event handler runs
@@ -435,5 +437,51 @@ describe("pro onboarding wizard: step 1 identity fields", () => {
     const draft = storedDraft("user-1");
     expect(draft.ownerName).toBe("Alex Rivera");
     expect(draft.email).toBe("alex@acmeplumbing.com");
+  });
+});
+
+// MED-21: WizardFooter's "Finish setup" used to only be disabled={pending},
+// and pending is state - it lands a render behind the click, so two clicks
+// in the same tick both still read pending as false. Migration 0072's
+// contractors_unique_user index means the loser of that race hit a raw
+// 23505 and a generic "Couldn't save" flash even though the account had
+// just been created by the winner. Mirrors
+// src/app/pro/profile/PublicProfileForm.test.tsx's own double-submit test
+// for SaveChangesButton.
+describe("pro onboarding wizard: Finish setup double-submit", () => {
+  it("submits once when Finish setup is clicked twice in rapid succession", async () => {
+    renderWizard("user-1");
+    fillStepOne();
+    next();
+    fireEvent.click(screen.getByRole("button", { name: "Plumbing" }));
+    pickSpecificCities();
+    fireEvent.click(screen.getByLabelText("Irvine"));
+    next();
+    await settle();
+    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+
+    const finish = screen.getByRole("button", { name: "Finish setup" });
+    // Two clicks back to back, before React gets a chance to re-render with
+    // useFormStatus's pending flipped to true.
+    fireEvent.click(finish);
+    fireEvent.click(finish);
+
+    expect(saveCompanyAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays submittable if an earlier click never reached the server", async () => {
+    // A single ordinary click still has to work: the latch must only engage
+    // on a click that actually goes through, never pre-emptively.
+    renderWizard("user-1");
+    fillStepOne();
+    next();
+    fireEvent.click(screen.getByRole("button", { name: "Plumbing" }));
+    pickSpecificCities();
+    fireEvent.click(screen.getByLabelText("Irvine"));
+    next();
+    await settle();
+
+    fireEvent.click(screen.getByRole("button", { name: "Finish setup" }));
+    expect(saveCompanyAction).toHaveBeenCalledTimes(1);
   });
 });

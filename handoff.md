@@ -1,4 +1,142 @@
-# Hearth handoff (2026-08-24)
+# Hearth handoff
+
+> The dated sections below are the running history, newest additions at the top.
+> Start with **LATEST** for the current state and what is still owed.
+
+---
+
+## LATEST (2026-08-30 night): security + bug remediation wave
+
+### Goals
+Landen's ask: run a big audit (10 bug agents + 3 money hackers + 3 security researchers),
+fix everything with Fable planning and subagents executing, loop until perfect, push when
+green and smoke-test Vercel. Mid-wave he also asked three research questions (answered, memos
+in the session scratchpad): where home tracking pulls from, viral-share ideas (Wrapped/Strava),
+and what makes the app feel native on iPhone.
+
+### Current state
+Gate GREEN: tsc 0, eslint 0 (2 pre-existing OG-card img-alt warnings only), vitest 241 files
+/ 3126 passed, isolated production build exit 0. Next.js bumped 15.5.23 -> 15.5.24 (AVIF
+image-optimizer RCE patch, GHSA-2xp9-vwfh-vxw4). Three adversarial verifiers all cleared
+(payments all CONFIRMED-FIXED, SQL all correct after a blocker fix, regression 6 must-fixes
+applied). PUSHED to main this commit. **Live DB still through 0150** until Landen pastes the
+new SQL (below).
+
+### Files touched
+59 modified + 8 new. Payments: api/stripe/webhook, pro/plus/actions, pro/billing/actions +
+DepositForm, pro/plus/ProPlanToggle, (app)/plus/actions. Chat: LeadChat. Dashboard/mobile:
+HomeAlerts, WeatherStrip, dashboard/page+loading, ReminderItem, GlobalSearch. Pro: onboarding
+wizardSteps+OnboardingCompanyForm, profile/PublicProfileForm, actions, crm/actions+[id]/page,
+HomeView, leads/LeadsBoard+page, plus/PlusScreens, JobStatusSelect, new leadStatusLabel.ts,
+PhoneInput. Onboarding/auth/notify: onboarding/actions+OnboardingForm, sideActions,
+contractor-signup, NotificationBell. AI: api/ask, api/pro-ask, AskHearth, api/home-alerts,
+api/pro-widget, next.config.mjs. Subscription: lib/subscription (new hasActivePaidProPlan).
+NEW SQL: supabase/migrations/0151_night_security_2026_08_30.sql +
+supabase/PASTE-ME-live-2026-08-30-night.sql.
+
+### What changed (by severity)
+CRITICAL: deposit chargebacks now trip the account freeze (stolen-card deposit-then-dispute
+loop closed). HIGH: deposit velocity cap (fail-closed 3/day + 24h ceiling); pro checkout can
+no longer mint two unreachable subscriptions (pro_trial reservation + reachable Stripe
+customer); Plus member no longer blocked from buying Pro (price-id match); household member
+cap enforced at the DB (one Plus sub can't feed unlimited alias AI - migration 0151);
+contact_phone validated client+server; HomeAlerts freeze/recall panel no longer silently
+hidden on soft nav; chat no longer snaps to bottom on every poll; three dashboard 390px
+overflow fixes. MED: is_pro_member active-only so a free trial can't get the 10% lead discount
+(SQL + TS preview aligned via hasActivePaidProPlan); system-message "Hearth verified..."
+forgery blocked (0151); Ask Hearth client-authored assistant-turn injection dropped; free
+users no longer mislabeled Plus on refusal paths; duplicate home rows blocked (code guard +
+unique index incl. unit); double-submit latches across pro checkout/deposit/finish/plus
+buttons; CRM note timeline + Active-jobs link + status-label drift; home-alerts + pro-widget
+metering. LOW: expire_bonus/messages-delete/contractors-text DB hardening (0151), CSP
+unsafe-eval prod-gated, mobile tap targets, contractor-signup friendly errors, side-switch
+DB-hiccup guard.
+
+### What failed / caught before shipping
+- The SQL PASTE-ME had a self-aborting precheck (tested has_function_privilege for a revoke
+  that migration 0020 already did, so it would raise on a FRESH DB and apply NOTHING). Caught
+  by the SQL verifier, fixed. LOW-55 (expire_bonus never revoked) was a FALSE finding - 0020
+  already handles it; the 0151 statements are harmless idempotent re-assertions.
+- The regression verifier caught 6 real must-fixes in the workers' output (GlobalSearch zoom
+  no-op, onboarding dedup missing unit = silent multi-unit-landlord data loss, wrong plan
+  message on a cap race, CRM legacy-note orphan, JobStatusSelect third label copy, missing
+  cap heads-up) - all fixed and re-gated.
+- Not verifiable without a device/live keys: real iOS behavior, real Stripe/push/Twilio,
+  0151 on a real DB.
+
+### Next steps (OWNER)
+1. **Paste `supabase/PASTE-ME-live-2026-08-30-night.sql` in Supabase** (has a PRECHECK that
+   refuses a double-run, plus a heads-up query for any home already over the 4-member cap).
+   Until then the DB-side fixes (household cap, trial-discount, system-message lockdown,
+   contractors text CHECK, messages delete policy, properties unique index) are NOT live.
+2. Everything on the daytime handoff's owner list still stands (VAPID + RISK_ENFORCE env,
+   Supabase Auth settings, Stripe live prices, RLS audit + backups, test-account cleanup).
+3. Non-blocking follow-ups from the verifiers: Plus-side customer symmetry + LOW-34 retry
+   parity on the pro side; resolveDepositSession redeliver-on-transient-error; confirm 3
+   deposits/day is fine for heavy pros; the three research memos (share cards, app-feel
+   punch-list, home-tracking sources) are in the session scratchpad for when you want them.
+
+---
+
+## (2026-08-30 day): daytime wave shipped to main `4cc627f`
+
+Live: **main `4cc627f`, deployed and healthy** (version endpoint reads 4cc627f; /, /pros,
+/pricing, /fountain-valley, /signin, /p/<x>, /api/health all return 200; DB ok).
+Live DB: **through migration 0150** (owner ran `supabase/PASTE-ME-ALL-PENDING-2026-08-30-day.sql`
+= 0147 reserve, 0148 perf indexes, 0149 Pro lead discount, 0150 pin lead created_at).
+Gate before push: tsc 0, eslint 0, vitest 237 files / 3063 passed, isolated build 0.
+
+What shipped in 4cc627f (227 files): pro Home tab first + billing parity; 3-day trial on
+every plan cadence; forecast value features + repair reserve; bigger draft button + bold
+"lead credit (not cash)" disclaimers; application messages in pro Messages; Pro members 10%
+off lead fees (never stacked with aging); legal pages. Research-driven polish (RA-RE):
+homeowner conversion nudges, sharing surfaces (before/after + PDF share, printable pro QR,
+post-job referral asks), pro convenience (tools prefill, quick status texts, offline draft
+autosave, batched alerts), trust copy + dated badges, notification cap + Stripe dunning
+follow-up. Speed: first-load JS down 31-38%, instant Leads sort, perf indexes, faster
+middleware. AI: Haiku routing for cheap tasks, abuse ceilings. Security (red team + retest):
+0150 back-dating fix, AI output budget on disconnect, /api/track props sanitizer.
+
+### STILL ON THE OWNER (do these; nothing is blocking the site, but each unlocks something)
+
+- [ ] **Vercel env + redeploy:** add `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+      `VAPID_SUBJECT` (values in the session scratchpad `vapid-keys-2026-08-29.txt`) and set
+      `RISK_ENFORCE=true`, then Redeploy. Unlocks push notifications + risk enforcement.
+- [ ] **New dunning cron:** `/api/cron/dunning-followup` is in `vercel.json` (daily). It uses
+      the existing `CRON_SECRET` (already set) - just confirm it runs after the next deploy.
+- [ ] **Supabase Auth settings:** confirm-email ON, session length 30d, URL config, reset
+      email template, secure password change, CAPTCHA, rate limits. Then test forgot-password
+      from your phone.
+- [ ] **Supabase RLS + backups:** run `AUDIT-rls-2026-08-29.sql` and review results; confirm
+      the backup plan and do one restore drill.
+- [ ] **Stripe:** create live Prices and set `STRIPE_PRICE_PLUS_*` / `STRIPE_PRICE_HOME_SLOT_*`
+      in Vercel; void the draft invoice `in_1UA4fFDxdfZrb1rtI92Ihy2B`.
+- [ ] **Delete throwaway test accounts** (full list in the session scratchpad
+      `morning-owner-checklist.md`). Never delete `test1@hearth.app` or your `2e3thyj` pro account.
+- [ ] **Vercel firewall** rule on `/api/health`; **environments split** per `docs/ENVIRONMENTS.md`;
+      **Apple key rotation** before turning Apple sign-in back on.
+- [ ] **Optional:** run the 5-agent live check on `4cc627f`, or click through the phone yourself.
+
+### Open product decisions (my recommendations, not blockers)
+
+- Drop `src/app/pro/loading.tsx` to remove the last cosmetic console-only React #418 on pro
+  routes (page renders fine either way) - your call.
+- Universal review-ask (currently Pro-only): recommend yes.
+- Cancellation save-flow (pause/downgrade before hard cancel): recommend building next.
+- In-house services (lawn/pool): pool has the best economics; separate LLC + licensed crew
+  only; hold until liquidity. Legal writeup in scratchpad `research-money-R5.md`.
+- Data monetization: aggregate insights only, never sell personal data (my standing position).
+
+### What did NOT work / was caught before shipping
+- A stray `*/` inside a CSS comment closed the comment early and broke the build (fixed).
+- Scripted edits flip line endings to CRLF on Windows and broke source-pattern tests (fixed;
+  lesson saved to memory).
+- Research agents had web-search quota exhausted; some market numbers are general-knowledge,
+  flagged unverified in the reports.
+
+---
+
+## Hearth handoff (2026-08-24)
 
 Snapshot after the overnight build + the 08-23/24 morning items shipped and the
 live test site was wired up. Everything below is on `main` and deployed to

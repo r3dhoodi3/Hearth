@@ -198,7 +198,7 @@ export default function ReminderItem({
             ✓
           </span>
           <span
-            className={`truncate text-sm ${
+            className={`min-w-0 truncate text-sm ${
               done ? "text-stone-500 line-through dark:text-stone-400" : "text-stone-800 dark:text-stone-200"
             }`}
           >

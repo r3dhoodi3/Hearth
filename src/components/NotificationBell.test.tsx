@@ -21,6 +21,17 @@ const ROWS = [
 // asking for the whole notifications table.
 const realtime = vi.hoisted(() => ({ configs: [] as Record<string, unknown>[] }));
 
+// The unread `count: exact, head: true` query loadCount() runs. A queue, not
+// a fixed value: MED-17's test needs the SAME query to answer differently on
+// successive calls (a big unread count, then a smaller one after loadList
+// marks a batch read), which a single fixed mock can't express. Defaults to
+// always answering 1 so every other test in this file - none of which cares
+// about the exact badge number - sees the same steady value it always did.
+const unreadCountQueue = vi.hoisted(() => ({ values: [] as number[] }));
+function queueUnreadCounts(...values: number[]) {
+  unreadCountQueue.values = values;
+}
+
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     from: () => {
@@ -29,7 +40,11 @@ vi.mock("@/lib/supabase/client", () => ({
         select: () => api,
         order: () => api,
         limit: async () => ({ data: ROWS }),
-        is: async () => ({ count: 1 }),
+        is: async () => ({
+          count: unreadCountQueue.values.length
+            ? unreadCountQueue.values.shift()
+            : 1,
+        }),
         update: () => api,
         in: async () => ({ error: null }),
       });
@@ -91,6 +106,7 @@ async function settleClose() {
 beforeEach(() => {
   phoneWidth = false;
   realtime.configs.length = 0;
+  unreadCountQueue.values = [];
   installMatchMedia();
 });
 
@@ -305,5 +321,58 @@ describe("NotificationBell on a phone", () => {
     expect(screen.getByRole("link", { name: /New message/ }).className).toContain(
       "max-sm:min-h-11"
     );
+  });
+});
+
+// MED-17: togglePanel used to hardcode setUnread(0) whenever loadList marked
+// its fetched batch read, even though loadList only ever fetches/marks the
+// first 20 rows. With more than 20 unread notifications, opening the panel
+// only clears those 20 - the true remaining count has to come from a fresh
+// loadCount() call, not from assuming every unread row got marked.
+describe("NotificationBell unread badge on open", () => {
+  // Mount's poll() answers first (25 unread overall); loadList's post-mark
+  // loadCount() answers second (5 left after the visible 20 were marked
+  // read) - proving the badge is recomputed, not just zeroed.
+  it("recomputes the remaining unread count instead of assuming it's zero", async () => {
+    queueUnreadCounts(25, 5);
+    render(<NotificationBell />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(
+      screen.getByRole("button", { name: "Notifications, 25 unread" })
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Notifications/ }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Not the old hardcoded 0, and not left at the stale 25 either - the
+    // fresh, smaller count loadCount() actually returned.
+    expect(
+      screen.getByRole("button", { name: "Notifications, 5 unread" })
+    ).toBeInTheDocument();
+  });
+
+  it("still clears to zero when loadCount confirms nothing is left unread", async () => {
+    queueUnreadCounts(1, 0);
+    render(<NotificationBell />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Notifications/ }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Notifications" })
+    ).toBeInTheDocument();
   });
 });

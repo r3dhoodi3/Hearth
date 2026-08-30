@@ -95,8 +95,13 @@ export default function GlobalSearch() {
           // max-w-5xl that was 130px over budget, and 96px is exactly enough
           // for the magnifier and the word "Search". It still expands to w-48
           // the moment it has focus, which is when the extra width is worth
-          // anything.
-          className="w-24 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-sm text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:border-bark-500 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 dark:focus:border-bark-500"
+          // anything. text-base (16px) at EVERY width, with no sm:text-sm
+          // override: this box only ever renders at sm and up (Nav hides it
+          // below sm), so a sm:text-sm here would make it 14px in the only
+          // sizes it is visible - including iPad-portrait touch - and iOS
+          // Safari zooms the page on focus of any input under 16px. Same
+          // reasoning as `.input` in globals.css.
+          className="w-24 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-base text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:border-bark-500 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 dark:focus:border-bark-500"
         />
       </form>
 

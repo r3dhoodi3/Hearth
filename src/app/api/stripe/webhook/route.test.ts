@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { sendNotification } from "@/lib/notify";
+import { flagAbuse } from "@/lib/risk/signals";
 import { billingTerms } from "@/lib/billingTerms";
 import { PLUS_PLAN, PRO_PLAN, formatUsd } from "@/lib/constants";
 
@@ -67,6 +68,11 @@ let tableInserts: { table: string; payload: Record<string, unknown> }[] = [];
 // below set it so the route has a membership to act on.
 let subscriptionRow: Record<string, unknown> | null = null;
 
+// What .from("contractors")...maybeSingle() reads back. Null by default; the
+// deposit-chargeback test (CRIT-29) sets it so flagDepositChargeback can map a
+// deposit session's contractor_id to the account it should freeze.
+let contractorRow: Record<string, unknown> | null = null;
+
 // What .from("notifications")...maybeSingle() reads back, i.e. whether the dup
 // guard finds a notice already sent for this key.
 let existingNotification: Record<string, unknown> | null = null;
@@ -113,6 +119,9 @@ function fakeAdmin() {
           if (table === "notifications") {
             return Promise.resolve({ data: existingNotification, error: null });
           }
+          if (table === "contractors") {
+            return Promise.resolve({ data: contractorRow, error: null });
+          }
           return Promise.resolve({ data: null, error: null });
         },
         insert: (payload: Record<string, unknown>) => {
@@ -156,6 +165,7 @@ beforeEach(() => {
   tableInserts = [];
   updateFilters = [];
   subscriptionRow = null;
+  contractorRow = null;
   existingNotification = null;
   constructEvent.mockReset();
 });
@@ -428,6 +438,76 @@ describe("a deposit credits what Stripe charged, not what metadata claims", () =
     await POST(post());
 
     expect(applyDeposit()).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// CRIT-29: a deposit chargeback must FREEZE the account, not just try to claw
+// back cash that is usually already spent.
+// ===========================================================================
+// A wallet deposit is a mode:"payment" Checkout Session with no Stripe
+// customer, so the PaymentIntent behind a disputed deposit has customer=null
+// and flagChargebackForCharge (which resolves through the customer) flags
+// nobody. flagDepositChargeback closes that by resolving the deposit session's
+// contractor_id to the owning account and raising the same sticky
+// abuse_flags/chargeback row has_open_chargeback() reads.
+describe("a deposit chargeback freezes the contractor's account", () => {
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    vi.mocked(flagAbuse).mockClear();
+  });
+
+  function disputeCreated(paymentIntent = "pi_dep") {
+    return {
+      id: "evt_dispute_1",
+      type: "charge.dispute.created",
+      data: {
+        object: { id: "dp_1", payment_intent: paymentIntent, amount: 50_000 },
+      },
+    };
+  }
+
+  it("flags the account behind the disputed deposit as a chargeback", async () => {
+    // The deposit session the payment_intent resolves back to, and the account
+    // that owns the contractor on it.
+    depositSessions = [
+      {
+        id: "cs_dep",
+        amount_total: 50_000,
+        metadata: { type: "deposit", contractor_id: "con_9", deposit_cents: "50000" },
+      },
+    ];
+    contractorRow = { user_id: "user_9" };
+    constructEvent.mockReturnValue(disputeCreated());
+    const { POST } = await import("./route");
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    // The freeze: abuse_flags row of kind 'chargeback' for the owning account,
+    // which is exactly what has_open_chargeback() reads to refuse spending.
+    const flagged = vi
+      .mocked(flagAbuse)
+      .mock.calls.find((c) => c[0] === "user_9" && c[1] === "chargeback");
+    expect(flagged).toBeTruthy();
+    expect(String(flagged?.[2])).toContain("wallet deposit");
+  });
+
+  it("does not flag when the charge is not a wallet deposit", async () => {
+    // No deposit session resolves back (not a deposit charge): the deposit
+    // freeze path stays quiet and leaves it to the membership/customer path.
+    depositSessions = [];
+    contractorRow = { user_id: "user_9" };
+    constructEvent.mockReturnValue(disputeCreated("pi_not_a_deposit"));
+    const { POST } = await import("./route");
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    const depositFlag = vi
+      .mocked(flagAbuse)
+      .mock.calls.find((c) => String(c[2]).includes("wallet deposit"));
+    expect(depositFlag).toBeUndefined();
   });
 });
 
@@ -878,6 +958,31 @@ describe("a completed checkout marks the promo claim spent", () => {
       props: { plan: "pro_monthly" },
     });
     expect(Object.keys(tracked!.payload.props as object)).toEqual(["plan"]);
+  });
+
+  // HIGH-31: a completed Pro checkout stamps BOTH promo reservations spent -
+  // the retired intro coupon AND the free trial - so a later checkout can never
+  // reclaim either and hand out a second one. Before the pro_trial reservation
+  // existed, only the intro claim was stamped; now there are two conversion
+  // writes, both carrying converted:<subscription id>.
+  it("stamps the pro_trial reservation converted alongside the intro one", async () => {
+    const { stripe } = await import("@/lib/stripe");
+    (stripe.subscriptions.retrieve as any).mockResolvedValue({
+      id: "sub_pro_1",
+      status: "active",
+      items: { data: [{ price: { recurring: { interval: "month" } } }] },
+    });
+    constructEvent.mockReturnValue(completedProSession());
+    const { POST } = await import("./route");
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    const converts = tableUpdates.filter(
+      (u) => u.table === "promo_claims" && u.payload.ref === "converted:sub_pro_1"
+    );
+    // Two: pro_intro_monthly and pro_trial. The pro_trial stamp is the new one.
+    expect(converts.length).toBeGreaterThanOrEqual(2);
   });
 });
 

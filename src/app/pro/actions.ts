@@ -31,7 +31,7 @@ import {
   PRO_LEADS_HREF,
 } from "@/lib/constants";
 import { bestLeadDiscount } from "@/lib/leadPricing";
-import { hasProPlan } from "@/lib/subscription";
+import { hasProPlan, hasActivePaidProPlan } from "@/lib/subscription";
 import { requestReviewForWonLead } from "@/lib/reviewRequest";
 import { lookupCslbLicense, type CslbLookupResult } from "@/lib/cslb";
 import { licenseDigits, licenseNameMatches } from "@/lib/licenseMatch";
@@ -56,12 +56,19 @@ import {
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import { selectLaunchCities } from "./onboarding/launchCities";
 import { trackServerEvent } from "@/lib/trackServer";
+import { leadStatusLabel } from "./leadStatusLabel";
 
 // Ceiling for the free-text "Other" service on CategoryPicker. It renders on
 // the public /p/<id> page and the browse cards next to the canonical labels,
 // which are all short, so this is generous for a real answer and still bounds
 // a forged post.
 const MAX_CUSTOM_CATEGORY = 100;
+
+// A US number, the only shape PhoneInput can produce (it caps input at ten
+// digits and formats them as (000) 000-0000). Mirrors PHONE_DIGITS in
+// ./onboarding/wizardSteps.ts - this is the server-side floor under both that
+// wizard gate and the profile form's own required/pattern PhoneInput (HIGH-19).
+const PHONE_DIGITS = 10;
 
 // Real CSLB check (0055) is debounced off the most recent check we recorded:
 // license_verified_at (stamped only on a 'verified' outcome) or the
@@ -619,6 +626,27 @@ export async function saveCompanyAction(formData: FormData) {
   // and the public /p/<id> page.
   if (!fields.name) {
     await backToForm("Enter your company name.");
+    return;
+  }
+
+  // HIGH-19: contact_phone had no floor here at all - only the onboarding
+  // wizard's client-side gate (./onboarding/wizardSteps.ts) checked it, and
+  // only on first signup. The profile-edit form posts this same field on
+  // every later save with no required attribute of its own (now added, but
+  // that is a browser-side hint, not a guarantee for a non-browser POST), so
+  // an empty or malformed number could reach the row silently and stay there
+  // - the exact number "Homeowners call this number after they pick you"
+  // promises would go to a phone that either does not exist or is not a
+  // number at all. Same PHONE_DIGITS rule and same two messages as the
+  // wizard, applied on both the create and edit paths since this field is
+  // unconditionally present on both forms.
+  const phoneDigits = (fields.contact_phone ?? "").replace(/\D/g, "");
+  if (phoneDigits.length === 0) {
+    await backToForm("Add a phone number so homeowners can reach you.");
+    return;
+  }
+  if (phoneDigits.length !== PHONE_DIGITS) {
+    await backToForm("Enter a full 10-digit phone number.");
     return;
   }
 
@@ -1280,7 +1308,24 @@ export async function saveCompanyAction(formData: FormData) {
       console.error("contractors insert failed:", error.message);
     }
   }
-  if (error) {
+  if (error && error.code === "23505") {
+    // MED-21: WizardFooter's submittedRef latch (OnboardingCompanyForm.tsx)
+    // stops a same-tick double click, but not two genuinely separate
+    // requests in flight at once (a slow network retry, two tabs). Migration
+    // 0072's contractors_unique_user index means the LOSING request
+    // lands here, and the account was already created by the other one -
+    // that is a success, not a failure. Fall through to the same path a
+    // clean insert takes instead of scaring an already-onboarded pro with
+    // "Couldn't save your company profile." Everything below scoped to
+    // newContractorId (the pending license status, the CSLB check) is not
+    // the row that actually landed and harmlessly touches zero rows - a
+    // Postgrest UPDATE matching nothing is not an error - and /pro right
+    // after this shows the real company either way.
+    console.error(
+      "contractors insert: unique violation, treating as an already-created row (double submit):",
+      error.message
+    );
+  } else if (error) {
     // No redirect here, for the exact reason the update branch above gave up
     // its own redirect: this action is always submitted FROM /pro/onboarding,
     // so redirect("/pro/onboarding") is a same-path App Router redirect - the
@@ -1763,7 +1808,13 @@ export async function updateLeadStatusAction(formData: FormData) {
     .update({ status })
     .eq("id", leadId);
   if (error) throw new Error(error.message);
-  const baseFlash = `Lead marked ${labelFor(LEAD_STATUSES, status)}`;
+  // LOW-3: this used to read labelFor(LEAD_STATUSES, status) - a different
+  // list kept for a different purpose - which produced "Closed (won)" /
+  // "Declined" here while LeadsBoard.tsx's own badge on the exact card the
+  // pro is looking at says "Won" / "Lost" for the same status. Same source
+  // of truth as the badge now, so the toast can never say something
+  // different than what is already on screen.
+  const baseFlash = `Lead marked ${leadStatusLabel(status)}`;
   await setFlash(baseFlash);
 
   // Hearth Pro perk: when a member marks a job Won, ask the homeowner for a
@@ -1991,6 +2042,12 @@ export async function applyToJobAction(formData: FormData) {
   // (migration 0149) and the post-success flash message, instead of two
   // separate hasProPlan() calls for the same request.
   const proMember = await hasProPlan();
+  // The stale-price guard must mirror what apply_to_lead ACTUALLY charges, and
+  // migration 0151 made the SQL is_pro_member() (its lead discount) active-only,
+  // so a trialing pro no longer gets the 10% off. proMember above (active OR
+  // trialing) still drives the membership copy in the success flash below; the
+  // discount price uses the active-only check so shown equals charged.
+  const proDiscountEligible = await hasActivePaidProPlan();
 
   // Stale-tab price guard (staleDisplayedFeeError above): if the live price
   // is now HIGHER than the fee this confirm form displayed (typically the
@@ -2001,7 +2058,7 @@ export async function applyToJobAction(formData: FormData) {
     supabase,
     formData.get("fee_cents"),
     leadClosedError ? null : ((leadClosedCheck as any) ?? null),
-    proMember
+    proDiscountEligible
   );
   if (staleError) {
     await setFlash(staleError, "error");

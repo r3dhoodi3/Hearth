@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getUser } from "@/lib/auth";
 import { getActiveProperty } from "@/lib/property";
 import { SYSTEM_TYPES, labelFor } from "@/lib/constants";
 import { assessSystem } from "@/lib/health";
@@ -124,6 +126,79 @@ function whenLabel(i: number): string {
   return `in ${i} days`;
 }
 
+// MED-48: this route had no rate limiter at all, but fans out to a geocode
+// call, a forecast call, and up to 4 CPSC brand lookups (fetchRecalls below),
+// every one of them keyed off values the homeowner fully controls: their
+// city, and each system's material_or_model. Editing material_or_model to a
+// fresh random string before every GET defeats the per-brand fetch cache (a
+// new brand string is always a cache miss) and floods Open-Meteo and CPSC
+// from Hearth's shared Vercel egress IPs - the same "the punishment lands on
+// the whole deployment, and lasts as long as they decide it does" risk
+// address-suggest already guards Photon against (see
+// src/app/api/address-suggest/route.ts, which this mirrors). Same atomic
+// fixed-window rate_limit_hit RPC (migration 0068), same two-bucket shape (a
+// per-user budget, then an owner-wide ceiling set above what real per-user
+// traffic can legitimately add up to), and the same FAIL-OPEN posture:
+// nothing here is billed or destructive, so a limiter hiccup must not blank
+// out a real homeowner's weather strip or recall list.
+const HOME_ALERTS_USER_BUCKET_PREFIX = "home-alerts";
+// 20 per 5 minutes per user: generous next to a real dashboard load (this
+// fires once per mount, occasionally refetched on a home switch) and far
+// short of what a script cycling material_or_model needs to matter.
+const HOME_ALERTS_USER_LIMIT = 20;
+const HOME_ALERTS_USER_WINDOW_SECONDS = 300;
+const HOME_ALERTS_GLOBAL_BUCKET = "home-alerts-global-min";
+// Sized the same way SUGGEST_GLOBAL_PER_MINUTE is: above what the per-user
+// budget can plausibly sum to across real concurrent traffic, so this trips
+// on a flood rather than on a houseful of homeowners loading their dashboards
+// at once.
+const HOME_ALERTS_GLOBAL_PER_MINUTE = 600;
+
+// Same log-once-per-window shape as address-suggest's logSuggestTripOnce: a
+// tripped global ceiling means every request in the window would otherwise
+// log, which turns one flood into two (the second one is the Vercel log
+// bill).
+let homeAlertsTripLoggedWindow = 0;
+function logHomeAlertsTripOnce(): void {
+  const window = Math.floor(Date.now() / 60_000);
+  if (window === homeAlertsTripLoggedWindow) return;
+  homeAlertsTripLoggedWindow = window;
+  console.error(
+    `[ALERT] home-alerts global ceiling tripped (${HOME_ALERTS_GLOBAL_BUCKET} over ${HOME_ALERTS_GLOBAL_PER_MINUTE}/min) - skipping outbound weather/recall calls`
+  );
+}
+
+// Checks the per-user bucket, then the owner-wide one, and reports whether
+// the caller may proceed to the outbound calls below. FAILS OPEN, matching
+// address-suggest: an RPC error or a missing rate_limits row must not blank a
+// real homeowner's dashboard over a limiter hiccup. Only an explicit
+// `allowed === false` from either bucket blocks.
+async function underHomeAlertsRateLimit(userId: string): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const { data: allowedUser } = await admin.rpc("rate_limit_hit", {
+      p_bucket: `${HOME_ALERTS_USER_BUCKET_PREFIX}:${userId}`,
+      p_limit: HOME_ALERTS_USER_LIMIT,
+      p_window_seconds: HOME_ALERTS_USER_WINDOW_SECONDS,
+    });
+    if (allowedUser === false) return false;
+
+    const { data: allowedGlobal } = await admin.rpc("rate_limit_hit", {
+      p_bucket: HOME_ALERTS_GLOBAL_BUCKET,
+      p_limit: HOME_ALERTS_GLOBAL_PER_MINUTE,
+      p_window_seconds: 60,
+    });
+    if (allowedGlobal === false) {
+      logHomeAlertsTripOnce();
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("home-alerts rate_limit_hit failed - allowing:", err);
+    return true;
+  }
+}
+
 // No route-segment caching here: the response is scoped to the signed-in
 // user's active property (getActiveProperty reads the session), so a shared
 // `revalidate` would serve one homeowner's weather/recall data to the next
@@ -146,6 +221,16 @@ export async function GET() {
   let property: any = null;
   let systems: any[] = [];
   try {
+    // MED-48: RATE, before either the property/system read or a single
+    // outbound call - a request that is going to be refused should not pay
+    // for the query that only feeds the calls it's about to be refused
+    // for. getUser() is a cache()-memoized cookie read (src/lib/auth.ts), so
+    // this costs nothing extra: getActiveProperty() below reads the same
+    // session again for free.
+    const user = await getUser();
+    if (!user) return empty;
+    if (!(await underHomeAlertsRateLimit(user.id))) return empty;
+
     property = await getActiveProperty();
     if (!property) return empty;
     const supabase = await createClient();

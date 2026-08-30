@@ -303,6 +303,20 @@ export async function hasProPlan(): Promise<boolean> {
   return isLiveProPlanRow(sub);
 }
 
+// Active-only Pro membership, for the LEAD DISCOUNT ONLY. Migration 0151 made
+// is_pro_member() (the SQL that actually prices apply_to_lead) count status =
+// 'active' only, not 'trialing', so the 10% lead discount begins when money
+// does. This is the TS mirror of that rule, used ONLY where a leads card shows
+// a price or a stale-price guard recomputes one, so the price shown equals the
+// price charged. Every OTHER pro perk (AI tier, tools, alerts, the deposit
+// boost, the "you're a member" copy) still comes from hasProPlan(), which keeps
+// a trialing pro a full member. Do not use this for anything but the discount.
+export async function hasActivePaidProPlan(): Promise<boolean> {
+  const sub = await getProSubscription();
+  if (!sub) return false;
+  return isLiveProPlanRow(sub) && sub.status === "active";
+}
+
 // Whether the current user has already consumed a one-time promo (e.g. the
 // Pro intro month). Explicit, lifecycle-independent guard against repeat
 // intro-price farming: the promo_claims ledger (migration 0071) is never

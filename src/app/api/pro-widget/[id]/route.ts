@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -79,6 +80,34 @@ function htmlResponse(markup: string, status = 200): NextResponse {
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const id = params.id;
+
+  // LOW-50: this route is public, unauthenticated, and CDN-cached per id -
+  // but the id in the URL is a random UUID a caller fully controls, so a loop
+  // over fresh UUIDs is a cache miss every single time and spends one
+  // public_pro_profile RPC per request, same shape as invite-card's abuse
+  // case (see src/app/api/invite-card/[code]/route.tsx, mirrored here). IP,
+  // fixed-window, checked before any lookup so a blocked caller costs
+  // nothing. Fails open on an RPC hiccup - only an explicit `allowed ===
+  // false` blocks - so a limiter outage never breaks a widget actually
+  // embedded on a pro's site. Same 30-per-5-minutes budget as invite-card:
+  // generous next to what one embedded widget's real traffic needs.
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  try {
+    const rlAdmin = createAdminClient();
+    const { data: allowed } = await rlAdmin.rpc("rate_limit_hit", {
+      p_bucket: `prowidget:${ip ?? "unknown"}`,
+      p_limit: 30,
+      p_window_seconds: 300,
+    });
+    if (allowed === false) {
+      return new NextResponse("Too many requests", { status: 429 });
+    }
+  } catch (err) {
+    // FAIL OPEN: nothing here is billed or destructive, and a real embed on a
+    // pro's own site must not go blank over a limiter hiccup.
+    console.error("pro-widget rate_limit_hit failed - allowing:", err);
+  }
+
   if (!UUID_RE.test(id)) {
     return htmlResponse(
       shell("Not found", `<p class="m">This Hearth widget link is invalid.</p>`),

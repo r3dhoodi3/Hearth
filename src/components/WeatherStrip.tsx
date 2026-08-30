@@ -120,6 +120,14 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
 
   useEffect(() => {
     let alive = true;
+    // Reset first: this effect also reruns on a home switch (propertyId
+    // changes without a remount, see the comment above this component), and
+    // without clearing these first the previous home's weather/hasLocation
+    // stay on screen - correct-looking but wrong - for as long as the new
+    // fetch takes. Back to the same "loading" state a fresh mount starts in.
+    setWeather(null);
+    setHasLocation(false);
+    setLoading(true);
     // The shared helper owns the 6s timeout and resolves null on any failure,
     // so this consumer only has to stop listening when unmounted (or when
     // propertyId changes and this run's closure goes stale). The deadline

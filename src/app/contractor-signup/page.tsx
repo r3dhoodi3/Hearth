@@ -13,7 +13,7 @@ import AppleSignInButton, {
 } from "@/components/AppleSignInButton";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
 import { LEAD_TIER_FEES, MAJOR_INTRO_FEE } from "@/lib/constants";
-import { SIGNUP_EMAIL_NEUTRAL } from "@/lib/friendlyAuthError";
+import { SIGNUP_EMAIL_NEUTRAL, friendlyAuthError } from "@/lib/friendlyAuthError";
 import { Eye, EyeOff } from "lucide-react";
 
 // Real per-user contractor sign-up. Creates a Supabase Auth account tagged with
@@ -122,7 +122,7 @@ export default function ContractorSignUpPage(props: {
       setError(
         /registered|exists/i.test(error.message)
           ? SIGNUP_EMAIL_NEUTRAL
-          : error.message
+          : friendlyAuthError(error)
       );
       return;
     }
@@ -174,7 +174,7 @@ export default function ContractorSignUpPage(props: {
 
     setBusy(false);
     if (error) {
-      setError(error.message);
+      setError(friendlyAuthError(error));
       return;
     }
     setNotice("Confirmation email resent. Give it a minute or two.");

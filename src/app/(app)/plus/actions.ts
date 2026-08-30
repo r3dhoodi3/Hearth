@@ -353,20 +353,40 @@ export async function startPlusCheckoutAction(formData: FormData) {
         claimedTrial = true;
         freeTrial = true;
       } else {
-        const outcome = await reclaimCheckoutReservation(admin, {
+        // NARROW THE SAME-PLAN RACE (LOW-34). The tab that WON claim_promo
+        // writes a bare reservation marker first and only records its Stripe
+        // session id after Checkout returns (markReservationSession, a network
+        // round trip later). In that window this losing tab reads the bare
+        // marker, reclaimCheckoutReservation cannot find a session to resume,
+        // and it answers "held" - so this tab builds a no-trial body under a
+        // different idempotency key and mints a SECOND Plus subscription (the
+        // one with no in-app cancel path). Re-poll a few times: once the winner
+        // records its session, "held" becomes "resume" and both tabs converge
+        // on the one checkout. Bounded and still fail-closed - a genuinely spent
+        // or another-tab-held reservation simply stays "held" after the retries.
+        let outcome = await reclaimCheckoutReservation(admin, {
           userId: user.id,
           promoKey: "plus_trial",
           reservationRef: PLUS_RESERVATION_REF,
           plan,
         });
+        for (let i = 0; outcome.kind === "held" && i < 3; i++) {
+          await new Promise((r) => setTimeout(r, 250));
+          outcome = await reclaimCheckoutReservation(admin, {
+            userId: user.id,
+            promoKey: "plus_trial",
+            reservationRef: PLUS_RESERVATION_REF,
+            plan,
+          });
+        }
         if (outcome.kind === "resume") {
           resumeUrl = outcome.url;
         } else if (outcome.kind === "reclaimed") {
           claimedTrial = true;
           freeTrial = true;
         }
-        // "held": another tab is mid-checkout, or the trial is already spent.
-        // Charge today instead.
+        // "held" after the retries: another tab is genuinely mid-checkout, or
+        // the trial is already spent. Charge today instead.
       }
     } catch (err) {
       console.error("claim_promo(plus_trial) reservation threw:", err);

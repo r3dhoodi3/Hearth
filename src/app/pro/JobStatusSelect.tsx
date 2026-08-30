@@ -4,15 +4,16 @@ import { useRef } from "react";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
 import { updateLeadStatusAction } from "./actions";
+import { STATUS_LABEL } from "./leadStatusLabel";
 
 // Compact outcome selector for an assigned job. Replaces the Mark won / Mark
 // lost buttons with one dropdown that submits as soon as you change it.
-const OPTIONS = [
-  { value: "new", label: "New lead" },
-  { value: "accepted", label: "Active" },
-  { value: "closed", label: "Won" },
-  { value: "lost", label: "Lost" },
-];
+// Labels come from the shared STATUS_LABEL map (LOW-3) so this dropdown, the
+// card badge and the post-change toast can never drift apart again; this array
+// owns only the order and which statuses are selectable here.
+const OPTIONS = (["new", "accepted", "closed", "lost"] as const).map(
+  (value) => ({ value, label: STATUS_LABEL[value] })
+);
 
 export default function JobStatusSelect({
   id,

@@ -154,6 +154,18 @@ export default function OnboardingForm({
   // Whether the out-of-area waitlist save actually went through - drives the
   // honest vs. "we couldn't save you" copy on the out_of_area panel below.
   const [waitlistSaved, setWaitlistSaved] = useState(true);
+  // Explicit resolution flag for the address-mismatch panel below. "Use the
+  // county record" always dismisses the panel on its own, because it sets
+  // `street` to a new value the mismatch comparison then sees as agreeing.
+  // "Keep mine" does not: it sets `street` to the value it already holds (the
+  // panel only ever shows the person's OWN line back at them), which is not a
+  // state change at all, so nothing re-evaluates addressMismatch and the
+  // amber panel is stuck on screen even though the choice was made. This flag
+  // is what actually records "the homeowner answered", independent of
+  // whether that answer happened to change `street`. Reset to false whenever
+  // the address fields are edited again (typing a new street, Edit ZIP,
+  // Start over) so a genuinely new mismatch can still ask.
+  const [mismatchDismissed, setMismatchDismissed] = useState(false);
   // Set right before a fresh lookup succeeds, if the name field is about to
   // render empty. Consumed by the effect below the moment the ready section
   // actually mounts - never set on a draft restore, only on a lookup that
@@ -422,6 +434,7 @@ export default function OnboardingForm({
     setPropertyType(FALLBACK_PROPERTY_TYPE);
     setSuggestions([]);
     setActiveSuggestion(-1);
+    setMismatchDismissed(false);
     setStep("address");
   }, []);
 
@@ -436,6 +449,7 @@ export default function OnboardingForm({
     // county's canonical line. Don't drop a list of alternatives over it the
     // instant the fields unlock - the next keystroke opens one normally.
     suppressSuggestRef.current = true;
+    setMismatchDismissed(false);
     persist({ step: "address" });
     setStep("address");
   }, [persist]);
@@ -453,6 +467,7 @@ export default function OnboardingForm({
   async function runLookup() {
     setError(null);
     setNotFound(false);
+    setMismatchDismissed(false);
     closeSuggestions();
 
     // Catch the "just whitespace" / "a few stray characters" case here before
@@ -612,21 +627,39 @@ export default function OnboardingForm({
     setRestoreKey((k) => k + 1);
   }, []);
 
+  // Synchronous double-submit latch for the Claim button (MED-22). `busy` is
+  // state: it lands a render behind the click, so a fast double-tap (or two
+  // browser tabs on the same account both mid-claim) can both read `busy` as
+  // false and both call claimPropertyAction before either sets it - the exact
+  // shape that used to write two property rows for one house. This ref flips
+  // synchronously on the FIRST call, before React re-renders, so a second
+  // call arriving in the same tick is turned away immediately. Same pattern
+  // as SubmitButton.tsx's submittedRef, ported here because this form drives
+  // its own pending state instead of useFormStatus.
+  const claimInFlightRef = useRef(false);
+
   // Wraps the claim server action so a failure shows a friendly inline
   // message instead of throwing raw to the error boundary. A successful
   // claim redirects server-side, which is handled by the framework, not
   // caught here.
   async function onClaim(formData: FormData) {
+    if (claimInFlightRef.current) return;
+
     setError(null);
 
     // Fast client-side check so a blank/whitespace address never even makes
     // the round trip. claimPropertyAction enforces the same floor
     // server-side - that's the real gate, this is just quicker feedback.
+    // Below the latch check but before it is SET: a refused-before-it-starts
+    // submit (a blank address) must not leave the latch stuck closed for a
+    // retry that never comes.
     const addressLine1 = ((formData.get("address_line1") as string) ?? "").trim();
     if (addressLine1.length < MIN_ADDRESS_LENGTH) {
       setError("Enter your home's address before claiming it.");
       return;
     }
+
+    claimInFlightRef.current = true;
 
     // The claim is on its way, so the draft has done its job: drop it here
     // rather than after the fact, since a successful claim leaves this page by
@@ -663,6 +696,7 @@ export default function OnboardingForm({
       restoreTypedValues();
     } finally {
       setBusy(false);
+      claimInFlightRef.current = false;
     }
   }
 
@@ -683,6 +717,7 @@ export default function OnboardingForm({
   // server-side, stores no parcel facts), and taking the county's resolves it.
   const addressMismatch =
     step === "ready" &&
+    !mismatchDismissed &&
     facts != null &&
     facts.source === "rentcast" &&
     street.trim().length > 0 &&
@@ -863,7 +898,12 @@ export default function OnboardingForm({
                 autoComplete="off"
                 maxLength={MAX_ADDRESS_LENGTH}
                 value={street}
-                onChange={(e) => setStreet(e.target.value)}
+                onChange={(e) => {
+                  setStreet(e.target.value);
+                  // A hand edit is a new answer to weigh against the county
+                  // record, so let a genuinely new mismatch ask again.
+                  setMismatchDismissed(false);
+                }}
                 required
                 // Combobox pattern: the input keeps focus and the arrow keys
                 // move a highlight through the list, which is what makes this
@@ -1025,7 +1065,7 @@ export default function OnboardingForm({
               <button
                 type="button"
                 onClick={handleEdit}
-                className="ml-auto text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
+                className="ml-auto max-sm:inline-flex max-sm:min-h-11 max-sm:items-center text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
               >
                 Edit ZIP
               </button>
@@ -1069,7 +1109,7 @@ export default function OnboardingForm({
                 <button
                   type="button"
                   onClick={startOver}
-                  className="mt-2 font-medium underline"
+                  className="mt-2 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center font-medium underline"
                 >
                   Try another address
                 </button>
@@ -1213,6 +1253,11 @@ export default function OnboardingForm({
                         suppressSuggestRef.current = true;
                         const mine = pickedLine1 || street;
                         setStreet(mine);
+                        // Setting `street` to the value it already holds is
+                        // not a state change React re-renders on, so this
+                        // flag is what actually records the choice and hides
+                        // the panel - see the note on mismatchDismissed above.
+                        setMismatchDismissed(true);
                         persist({ street: mine });
                       }}
                     >
@@ -1224,6 +1269,7 @@ export default function OnboardingForm({
                       onClick={() => {
                         suppressSuggestRef.current = true;
                         setStreet(facts.address_line1);
+                        setMismatchDismissed(true);
                         persist({ street: facts.address_line1 });
                       }}
                     >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
 import { depositAction } from "./actions";
@@ -10,8 +10,36 @@ import { depositAction } from "./actions";
 // rendering the form itself.
 function DepositButton({ disabled, num }: { disabled: boolean; num: number }) {
   const { pending } = useFormStatus();
+  // Synchronous double-submit latch (MED-14), the same one SubmitButton uses.
+  // `pending` is state and lands a render behind the click, so two taps in one
+  // tick both read it as false and both reach the native submit - which, before
+  // the deposit action gained an idempotency key, meant two Stripe checkout
+  // sessions. This ref flips the instant the first click happens, so the second
+  // is stopped before it starts. Belt (latch) and braces (idempotency key).
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    // Release once the action is no longer in flight, so a failed submit can be
+    // retried. Only the pending -> not-pending edge resets it.
+    if (!pending) submittedRef.current = false;
+  }, [pending]);
+  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+    if (submittedRef.current) {
+      e.preventDefault();
+      return;
+    }
+    // Only latch when a submit will actually start: a form that fails the
+    // browser's own validation never runs the action, so `pending` never flips
+    // and the effect above would never release the latch.
+    const form = e.currentTarget.form;
+    if (form && !form.noValidate && !form.checkValidity()) return;
+    submittedRef.current = true;
+  }
   return (
-    <button className="btn-primary" disabled={disabled || pending}>
+    <button
+      className="btn-primary"
+      disabled={disabled || pending}
+      onClick={handleClick}
+    >
       {pending && <InlineSpinner />}
       Deposit ${num || 0}
     </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { ChevronRight } from "lucide-react";
 import { startProCheckoutAction } from "./actions";
@@ -22,8 +22,35 @@ import {
 // rendering the form itself.
 function CheckoutButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
+  // Synchronous double-submit latch (MED-13), the same one SubmitButton uses.
+  // `pending` is state and lags a render behind the click, so a fast double tap
+  // both reads it as false and both reach the native submit - two POSTs, two
+  // Stripe checkout redirects. This ref flips before React re-renders, so the
+  // second click is stopped before it starts.
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    // Release once the action is no longer in flight, so a failed submit can be
+    // retried. Only the pending -> not-pending edge resets it.
+    if (!pending) submittedRef.current = false;
+  }, [pending]);
+  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+    if (submittedRef.current) {
+      e.preventDefault();
+      return;
+    }
+    // Only latch when a submit will actually start (see SubmitButton): a form
+    // that fails native validation never runs the action, so `pending` never
+    // flips and the latch would otherwise never release.
+    const form = e.currentTarget.form;
+    if (form && !form.noValidate && !form.checkValidity()) return;
+    submittedRef.current = true;
+  }
   return (
-    <button className="btn-primary w-full" disabled={pending}>
+    <button
+      className="btn-primary w-full"
+      disabled={pending}
+      onClick={handleClick}
+    >
       {pending && <InlineSpinner />}
       {label}
     </button>

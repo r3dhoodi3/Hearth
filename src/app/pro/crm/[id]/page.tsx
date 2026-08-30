@@ -57,7 +57,24 @@ export default async function ClientDetailPage(
     .select("*")
     .eq("client_id", client.id)
     .order("created_at", { ascending: false });
-  const notes = noteRows ?? [];
+  // Fallback for clients created before the "Add a client" note was written
+  // into pro_client_notes (it used to land only in the legacy pro_clients.note
+  // column, which this timeline never read - MED-1). If the timeline is empty
+  // but a legacy note exists, surface it read-only so a pre-existing client's
+  // first note is not orphaned. The synthetic id has no pro_client_notes row,
+  // so an attempted delete is a harmless no-op; deleteNote scopes by id +
+  // contractor and simply matches nothing.
+  const notes =
+    (noteRows ?? []).length === 0 && client.note
+      ? [
+          {
+            id: `legacy-${client.id}`,
+            client_id: client.id,
+            body: client.note,
+            created_at: client.created_at ?? new Date(0).toISOString(),
+          },
+        ]
+      : (noteRows ?? []);
 
   let lead: { id: string; category: string | null } | null = null;
   if (client.lead_id) {

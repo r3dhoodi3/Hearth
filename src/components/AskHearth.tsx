@@ -1096,13 +1096,22 @@ export default function AskHearth({
       // own model call failed - means the bar comes off again.
       if (data.freeRemaining === 0) writeAskLock(limitKey, data.freeLimit);
       else if (typeof data.freeRemaining === "number") clearAskLock(limitKey);
-    } else if (ok) {
+    } else if (ok && data?.askTier === "paid") {
+      // MED-46: this used to fire on ANY ok reply with no freeLimit field,
+      // which is also exactly the shape of a bare `{ answer }` refusal (no
+      // ANTHROPIC key, no property on file) - so an outage or an
+      // unfinished-onboarding account got mislabeled as a paying member and
+      // that lie was cached to localStorage, surviving reloads. The server
+      // now sends askTier on every reply that reaches this branch (see
+      // api/ask/route.ts), so require its EXPLICIT "paid" signal rather than
+      // inferring membership from missing fields. A free/trialing homeowner
+      // always carries a numeric freeLimit and lands in the branch above
+      // instead; a genuinely paid member is the only caller that reaches
+      // here.
       setFreeLeft(null);
       setFreeLimit(null);
-      // No allowance on a successful answer means a member (or the pro
-      // copilot, whose endpoint never sends one). Remembered so the free
-      // hint under the composer never greets a paying member with a pitch
-      // for something they already bought.
+      // Remembered so the free hint under the composer never greets a paying
+      // member with a pitch for something they already bought.
       rememberPlan("plus");
       // A member has no daily bar to be behind, so any lock left over from a
       // free day is stale.

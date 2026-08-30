@@ -23,49 +23,48 @@ const ICON_STYLE: Record<Alert["kind"], string> = {
 // clutters the dashboard. propertyId comes from the dashboard server
 // component: switching homes via HomeSwitcher soft-redirects here without
 // remounting, so the fetch effect keys on it to load the new home's alerts.
+//
+// This used to also gate the skeleton on a `pageLoaded` flag (true once
+// document.readyState / window's "load" fired), the same per-DOCUMENT (not
+// per-navigation) signal WeatherStrip removed for the identical reason: once
+// true for the session, every later soft navigation back to /dashboard mounts
+// with it already true, collapsing the skeleton before fetchHomeAlerts had a
+// realistic chance to resolve and falling straight through to "no alerts yet"
+// (rendered as nothing). Keying the skeleton on `loading` alone - with
+// HARD_DEADLINE_MS as the only ceiling - fixes that for both cases. See
+// WeatherStrip.tsx for the same fix applied first.
+const HARD_DEADLINE_MS = 8_000;
+
 export default function HomeAlerts({ propertyId }: { propertyId: string }) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
-  // Once the rest of the page has fully loaded, a still-pending alerts
-  // fetch no longer earns a placeholder: the skeleton gives up (renders
-  // nothing) and real alerts simply appear if/when they arrive. Keeps a
-  // slow nice-to-have widget from being the last skeleton on an otherwise
-  // finished page.
-  const [pageLoaded, setPageLoaded] = useState(false);
-
-  useEffect(() => {
-    if (document.readyState === "complete") {
-      setPageLoaded(true);
-      return;
-    }
-    const onLoad = () => setPageLoaded(true);
-    window.addEventListener("load", onLoad);
-    return () => window.removeEventListener("load", onLoad);
-  }, []);
 
   useEffect(() => {
     let alive = true;
-    // fetchHomeAlerts owns the hard 6s cap (past that the skeleton row below
-    // would float on the dashboard indefinitely; alerts are nice-to-have, so
-    // we show nothing rather than a stuck placeholder) and it dedupes with
-    // WeatherStrip's call so the dashboard hits the route once per load. On
-    // any failure it resolves null, which lands here as zero alerts.
+    // fetchHomeAlerts owns the hard 6s cap and it dedupes with WeatherStrip's
+    // call so the dashboard hits the route once per load. On any failure it
+    // resolves null, which lands here as zero alerts. The deadline below is a
+    // second, independent cap - see HARD_DEADLINE_MS.
+    const deadline = setTimeout(() => {
+      if (alive) setLoading(false);
+    }, HARD_DEADLINE_MS);
     fetchHomeAlerts(propertyId).then((d) => {
       if (!alive) return;
+      clearTimeout(deadline);
       setAlerts([...(d?.weather ?? []), ...(d?.recalls ?? [])]);
       setLoading(false);
     });
     return () => {
       alive = false;
+      clearTimeout(deadline);
     };
   }, [propertyId]);
 
-  // Brief skeleton only while the first fetch is in flight AND the page
-  // itself is still settling - most loads resolve to zero alerts, so this
-  // must not linger or reserve space once we know there's nothing to show,
-  // and it must never be the last skeleton standing on a loaded page.
-  if (loading && !pageLoaded) {
+  // Brief skeleton only while the first fetch is in flight - most loads
+  // resolve to zero alerts, so this must not linger or reserve space once we
+  // know there's nothing to show.
+  if (loading) {
     return (
       <div className="flex items-start gap-2 rounded-lg border border-stone-200 p-3 dark:border-white/10" aria-hidden="true">
         <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
@@ -106,7 +105,8 @@ export default function HomeAlerts({ propertyId }: { propertyId: string }) {
                   href={a.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-0.5 inline-block font-medium text-bark-700 hover:underline dark:text-stone-300"
+                  // Phone only: matches the "Show N more" toggle below it.
+                  className="mt-0.5 inline-block font-medium text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
                 >
                   View the official notice →
                 </a>

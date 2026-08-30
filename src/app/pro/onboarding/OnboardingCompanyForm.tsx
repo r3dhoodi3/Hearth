@@ -192,6 +192,46 @@ function WizardFooter({
   const last = step === LAST_STEP;
   const checkingLicense =
     String(data?.get("license_number") ?? "").trim().length > 0;
+
+  // MED-21: same synchronous double-submit guard as SaveChangesButton
+  // (../profile/PublicProfileForm.tsx) and src/components/SubmitButton.tsx.
+  // `pending` is state and lands a render behind the click, so two clicks on
+  // "Finish setup" in the same tick both still read `pending` as false - and
+  // unlike those two, this button has no native `required`/checkValidity of
+  // its own to lean on (every field lives in ./wizardSteps.ts's JS gate
+  // instead, see the header comment on this file), so the ref has to key off
+  // that gate's own outcome rather than form.checkValidity().
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    // Release the latch once the action is no longer in flight, so a save
+    // that comes back with a flash (a CSLB timeout, a write failure) can be
+    // retried with another click. Only the pending -> not-pending edge
+    // resets it, never while still pending.
+    if (!pending) submittedRef.current = false;
+  }, [pending]);
+
+  function handleNext(event: ReactMouseEvent<HTMLButtonElement>) {
+    if (!last) {
+      onNext(event);
+      return;
+    }
+    if (submittedRef.current) {
+      event.preventDefault();
+      return;
+    }
+    // onNext is advance() (OnboardingCompanyFormInner below): it calls
+    // event.preventDefault() itself when the wizard's own gate rejects the
+    // current values (an invalid step, a gap on an earlier one), and leaves
+    // the event alone when everything is valid and the native submit should
+    // proceed. Reading defaultPrevented after calling it, rather than
+    // re-deriving validity here, is what keeps this guard from engaging on a
+    // click that never actually reaches the server - the same failure mode
+    // SubmitButton's own comment warns about: latch too early and a second,
+    // corrected attempt would be dead.
+    onNext(event);
+    if (!event.defaultPrevented) submittedRef.current = true;
+  }
+
   return (
     // data-wizard-nav marks this row off from the form-wide "the pro touched
     // something, clear the error" handler, which would otherwise wipe the
@@ -218,7 +258,7 @@ function WizardFooter({
           click on an earlier step can never post a half-filled form. */}
       <button
         type={last ? "submit" : "button"}
-        onClick={onNext}
+        onClick={handleNext}
         disabled={pending}
         className="btn-primary flex-1 sm:ml-auto sm:flex-none sm:px-6"
       >

@@ -328,8 +328,14 @@ export default function HomeView({
                 {openCount}
               </p>
             </Link>
+            {/* MED-2: this used to link to /pro/crm, a separate opt-in
+                client tracker with its own dataset - confusing, since the
+                count here (activeCount, computed in page.tsx from `assigned`
+                filtered to non-closed/lost) has nothing to do with what
+                /pro/crm shows. Points at the "Your jobs" section on the
+                leads board instead, the list this stat actually counts. */}
             <Link
-              href="/pro/crm"
+              href={`${PRO_LEADS_HREF}#your-jobs`}
               className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
             >
               <p className="stat-label">Active jobs</p>

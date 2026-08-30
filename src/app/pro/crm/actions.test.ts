@@ -72,9 +72,23 @@ function supabaseStub() {
     from: (table: string) => {
       if (table === "pro_clients") {
         return {
-          insert: async (values: Record<string, unknown>) => {
+          // Thenable AND chainable, mirroring the real Supabase-js query
+          // builder: most callers `await` an insert directly for `{ error }`
+          // (trackLeadAction), while addClientAction also chains
+          // `.select("id").single()` to get the new row's id back for the
+          // MED-1 note mirror below.
+          insert: (values: Record<string, unknown>) => {
             if (!insertError) insertedRows.push(values);
-            return { error: insertError };
+            const result = { data: null, error: insertError };
+            return {
+              select: () => ({
+                single: async () => ({
+                  data: insertError ? null : { id: "client-1" },
+                  error: insertError,
+                }),
+              }),
+              then: (resolve: (v: typeof result) => void) => resolve(result),
+            };
           },
           update: (values: Record<string, unknown>) => {
             if (!updateError) updatedValues = values;
@@ -228,6 +242,42 @@ describe("addClientAction", () => {
       "Client name must be 80 characters or fewer.",
       "error"
     );
+  });
+
+  // MED-1: the initial note used to land only on pro_clients.note, which the
+  // detail page's timeline (crm/[id]/page.tsx) never reads - it queries
+  // pro_client_notes exclusively. Once a real note got added there, the very
+  // first one a pro typed on this form became permanently invisible on the
+  // detail page. Mirroring it into pro_client_notes at add time fixes that.
+  it("mirrors the initial note into pro_client_notes so the detail timeline shows it", async () => {
+    await addClientAction(
+      formData({ client_name: "Acme Plumbing", note: "Met at the job site." })
+    );
+
+    expect(insertedRows[0]).toMatchObject({ note: "Met at the job site." });
+    expect(insertedNotes).toHaveLength(1);
+    expect(insertedNotes[0]).toMatchObject({
+      client_id: "client-1",
+      body: "Met at the job site.",
+    });
+    expect(setFlash).toHaveBeenCalledWith("Client added.");
+  });
+
+  it("does not insert into pro_client_notes when no note was typed", async () => {
+    await addClientAction(formData({ client_name: "Acme Plumbing" }));
+    expect(insertedNotes).toHaveLength(0);
+  });
+
+  it("still adds the client and flashes success even if the note mirror fails", async () => {
+    noteInsertError = { message: "insert failed" };
+
+    await addClientAction(
+      formData({ client_name: "Acme Plumbing", note: "Met at the job site." })
+    );
+
+    expect(insertedRows).toHaveLength(1);
+    expect(setFlash).toHaveBeenCalledWith("Client added.");
+    expect(revalidatePath).toHaveBeenCalledWith("/pro/crm");
   });
 });
 

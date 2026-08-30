@@ -41,7 +41,11 @@ const CONTRACTOR: any = {
   id: "c1",
   name: "Acme Plumbing",
   contact_email: "acme@example.com",
-  contact_phone: "",
+  // HIGH-19: PhoneInput is now required+pattern on this form, so a fixture
+  // an existing contractor row normally has a real number - most tests below
+  // exercise unrelated behavior and should not be blocked by an incidentally
+  // blank phone. The phone-specific behavior gets its own describe block.
+  contact_phone: "(714) 555-0100",
   categories: ["plumbing"],
   license_number: null,
   license_verified_status: null,
@@ -100,16 +104,72 @@ describe("PublicProfileForm stays mounted across a save", () => {
   });
 });
 
-describe("PublicProfileForm phone tap targets", () => {
-  // "Change Cover" is a small pill floating on the cover banner, sized for a
-  // mouse (px-3 py-1.5 lands around 34px). The phone-only bump is what brings
-  // it to the 44px thumb minimum. jsdom applies no CSS, so the class is what
-  // there is to assert; the bump is max-sm:, so desktop is unchanged.
-  it("gives the Change Cover pill a 44px minimum on a phone", () => {
+// HIGH-19: contact_phone had no client-side validation on this form at all
+// (no required, no pattern), so an empty or malformed number could be saved
+// silently - the exact number "Homeowners call this number after they pick
+// you" promises would go nowhere. Mirrors src/components/SubmitButton.test.tsx's
+// own "browser blocks an invalid submit" pattern: jsdom does not show the
+// browser's validation bubble, but it does refuse to dispatch the form's
+// submit event (and so the action prop never runs) while a required/pattern
+// control is invalid.
+describe("PublicProfileForm phone validation", () => {
+  function phoneField(container: HTMLElement): HTMLInputElement {
+    return container.querySelector(
+      'input[name="contact_phone"]'
+    ) as HTMLInputElement;
+  }
+
+  it("blocks the save when the phone number is blank", () => {
+    const { container } = render(
+      <PublicProfileForm contractor={{ ...CONTRACTOR, contact_phone: "" }} />
+    );
+    expect(phoneField(container).checkValidity()).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(saveCompanyAction).not.toHaveBeenCalled();
+  });
+
+  it("blocks the save when the phone number has fewer than ten digits", () => {
+    const { container } = render(
+      <PublicProfileForm
+        contractor={{ ...CONTRACTOR, contact_phone: "714555" }}
+      />
+    );
+    expect(phoneField(container).checkValidity()).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(saveCompanyAction).not.toHaveBeenCalled();
+  });
+
+  it("allows the save once a full ten-digit number is entered", () => {
+    const { container } = render(
+      <PublicProfileForm contractor={{ ...CONTRACTOR, contact_phone: "" }} />
+    );
+    const input = phoneField(container);
+    fireEvent.change(input, { target: { value: "7145550100" } });
+    expect(input.checkValidity()).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(saveCompanyAction).toHaveBeenCalledTimes(1);
+  });
+});
+
+// MED-20: "Change Cover" and the avatar "+" were both buttons with no
+// handler and nothing behind them - no cover feature anywhere in the app,
+// and the real logo upload already lives on the Pro-gated "Your Public
+// Page" tab (LogoUpload.tsx via PublicPageCard.tsx). Removed rather than
+// wired up; these tests pin that removal instead of the old dead controls.
+describe("PublicProfileForm has no dead cover/logo buttons", () => {
+  it("renders no 'Change Cover' control", () => {
     render(<PublicProfileForm contractor={CONTRACTOR} />);
     expect(
-      screen.getByRole("button", { name: /change cover/i }).className
-    ).toContain("max-sm:min-h-11");
+      screen.queryByRole("button", { name: /change cover/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders no clickable '+' avatar control, and points to the real place to add a logo", () => {
+    render(<PublicProfileForm contractor={CONTRACTOR} />);
+    expect(screen.queryByText("+")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/add a logo from the "your public page" tab/i)
+    ).toBeInTheDocument();
   });
 });
 

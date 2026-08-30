@@ -84,6 +84,36 @@ describe("validateProOnboardingStep", () => {
     ).toBeNull();
   });
 
+  // MED-18: a junk "Other" service used to pass Next unchecked (only
+  // non-empty was required) and get silently dropped by saveCompanyAction
+  // after the final submit, with the reason surfacing as a flash on a page
+  // the pro had already left. The step gate now runs the same
+  // isAcceptableCustomCategory moderation check the server does.
+  it("blocks step 2 on a custom service the moderation gate would reject", () => {
+    expect(
+      validateProOnboardingStep(
+        1,
+        values({ categories: ["Visit joesplumbing.net today"] })
+      )
+    ).toMatch(/custom service/i);
+    expect(
+      validateProOnboardingStep(1, values({ categories: ["Fencing (714) 555 0100"] }))
+    ).toMatch(/custom service/i);
+  });
+
+  it("still blocks step 2 on a rejected custom service even when a canonical category is also picked", () => {
+    // Server-side the rejected custom entry is dropped, not fatal - the
+    // canonical picks still save. The client gate is stricter on purpose: it
+    // catches the junk text right where it was typed, instead of letting it
+    // ride to Finish only to vanish silently after the redirect.
+    expect(
+      validateProOnboardingStep(
+        1,
+        values({ categories: ["plumbing", "Visit joesplumbing.net today"] })
+      )
+    ).toMatch(/custom service/i);
+  });
+
   it("checks the city gap before the category gap on step 2", () => {
     expect(
       validateProOnboardingStep(1, values({ cities: [], categories: [] }))

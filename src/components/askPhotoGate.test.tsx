@@ -261,6 +261,96 @@ describe("askTier tells a trial member apart from a free one", () => {
   });
 });
 
+// MED-46: applyAllowance used to treat ANY ok:true reply with no numeric
+// freeLimit as proof of membership (rememberPlan("plus")), which is exactly
+// the shape of a bare `{ answer }` refusal - no ANTHROPIC key, no property on
+// file - that carries neither `locked` nor a meter. That mislabeled a FREE
+// homeowner as Plus and cached the lie in localStorage. The server routes now
+// send askTier on every reply that reaches this branch (api/ask/route.ts),
+// and the client requires that EXPLICIT "paid" signal rather than inferring
+// membership from missing fields - these two cases prove the client side of
+// that fix independent of what the server happens to send, in case a future
+// branch forgets the field the way these three did.
+describe("MED-46: membership is never inferred from a bare ok reply", () => {
+  it("does not overwrite an already-remembered free plan with plus", async () => {
+    // A RETURNING free homeowner: the device already correctly knows "free"
+    // from an earlier reply (this is the realistic shape of the bug - the
+    // very first ask, before anything is remembered, cannot demonstrate a
+    // plan being OVERWRITTEN). Simulates a malformed/incomplete server reply
+    // (the exact shape of the pre-fix bug): ok:true, no `locked`, no
+    // freeLimit, no askTier at all.
+    rememberedPlan("free");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: { get: () => "application/json" },
+        body: null,
+        json: async () => ({
+          answer: "Ask Hearth is temporarily unavailable. Please try again soon.",
+        }),
+      }))
+    );
+
+    render(<AskHearth fill />);
+    const input = await screen.findByPlaceholderText("Ask anything");
+    fireEvent.change(input, { target: { value: "What's this noise?" } });
+    const send = screen.getByRole("button", { name: "Send" });
+    await waitFor(() => expect(send).not.toBeDisabled());
+    await act(async () => {
+      fireEvent.click(send);
+    });
+
+    await screen.findByText(
+      "Ask Hearth is temporarily unavailable. Please try again soon."
+    );
+
+    // Still free: an outage-shaped reply must never silently relabel a free
+    // homeowner as Plus.
+    expect(window.localStorage.getItem(PLAN_KEY)).toBe("free");
+    // The photo button stays gated: a real free user's picker never opens off
+    // the back of this reply.
+    expect(
+      await screen.findByRole("button", {
+        name: "Attach a photo, requires Hearth Plus",
+      })
+    ).toBeInTheDocument();
+  });
+
+  it("remembers plus only when the server explicitly says askTier: paid", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: { get: () => "application/json" },
+        body: null,
+        json: async () => ({
+          answer: "Sure, here's what I'd check.",
+          askTier: "paid",
+        }),
+      }))
+    );
+
+    render(<AskHearth fill />);
+    const input = await screen.findByPlaceholderText("Ask anything");
+    fireEvent.change(input, { target: { value: "What's this noise?" } });
+    const send = screen.getByRole("button", { name: "Send" });
+    await waitFor(() => expect(send).not.toBeDisabled());
+    await act(async () => {
+      fireEvent.click(send);
+    });
+
+    await screen.findByText("Sure, here's what I'd check.");
+
+    expect(window.localStorage.getItem(PLAN_KEY)).toBe("plus");
+    await waitFor(() => {
+      expect(screen.getByTitle("Attach a photo")).toBeInTheDocument();
+    });
+  });
+});
+
 describe("a server photo lock", () => {
   it("remembers the plan as free so the tag shows from then on", async () => {
     // Nothing remembered yet, so the picker opens - this is the ONE time a

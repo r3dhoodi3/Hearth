@@ -124,17 +124,44 @@ export async function addClientAction(formData: FormData) {
     return;
   }
 
-  const { error } = await supabase.from("pro_clients").insert({
-    contractor_id: contractor.id,
-    client_name: name,
-    stage,
-    note: noteRaw || null,
-    follow_up_on: followUp.value,
-  });
+  const { data: inserted, error } = await supabase
+    .from("pro_clients")
+    .insert({
+      contractor_id: contractor.id,
+      client_name: name,
+      stage,
+      note: noteRaw || null,
+      follow_up_on: followUp.value,
+    })
+    .select("id")
+    .single();
   if (error) {
     await setFlash("Couldn't add that client. Please try again.", "error");
     revalidatePath("/pro/crm");
     return;
+  }
+
+  // MED-1: the initial note used to live only on pro_clients.note. The
+  // detail page's timeline (crm/[id]/page.tsx) reads exclusively from
+  // pro_client_notes, so that first note rendered fine on the client card
+  // here in the list, then went permanently invisible on the detail page the
+  // moment any real note got added there (the timeline has entries, so the
+  // "no notes yet" fallback never runs either). Mirror it into
+  // pro_client_notes so it shows up in the timeline from the start.
+  // pro_clients.note is left as-is too: ClientRow.tsx's list preview still
+  // falls back to that column when pro_client_notes has nothing yet.
+  // Best-effort - the client row landed either way, and a note mirror
+  // failure must not undo that or block the flash below.
+  if (noteRaw && inserted?.id) {
+    const { error: noteError } = await supabase
+      .from("pro_client_notes")
+      .insert({ client_id: inserted.id, body: noteRaw });
+    if (noteError) {
+      console.error(
+        "addClientAction: initial note mirror failed:",
+        noteError.message
+      );
+    }
   }
 
   await setFlash("Client added.");

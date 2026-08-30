@@ -38,6 +38,7 @@ import ProPlanToggle from "./ProPlanToggle";
 import PerksList, { PERKS } from "./PerksList";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
+import SubmitButton from "@/components/SubmitButton";
 
 /** A server action with no arguments, handed down as a `<form action>`. */
 type FormAction = () => Promise<void>;
@@ -185,8 +186,15 @@ export function PlusMember({
           {planLabel} plan
           {periodSuffix}
         </p>
+        {/* MED-45: plain <button>s here had no useFormStatus pending state
+            and no double-submit guard - a fast double tap could fire two
+            Stripe portal sessions / two resume-membership writes. Same
+            SubmitButton every other pro-side form in this file's family
+            uses (src/components/SubmitButton.tsx). */}
         <form action={manageAction}>
-          <button className="btn-secondary">Manage billing</button>
+          <SubmitButton className="btn-secondary" pendingLabel="Opening billing…">
+            Manage billing
+          </SubmitButton>
         </form>
         {cancelsAtLabel && (
           <div className="space-y-2 border-t border-stone-100 pt-4 dark:border-white/10">
@@ -195,7 +203,9 @@ export function PlusMember({
               keep every perk until then, and your lead access never changes.
             </p>
             <form action={resumeAction}>
-              <button className="btn-secondary">Keep my membership</button>
+              <SubmitButton className="btn-secondary" pendingLabel="Saving…">
+                Keep my membership
+              </SubmitButton>
             </form>
           </div>
         )}
@@ -296,8 +306,12 @@ export function PlusPastDue({
           access is unaffected either way. Update your payment method to
           switch the perks back on, or cancel so nothing further is charged.
         </p>
+        {/* MED-45: same double-submit guard as the two buttons in PlusMember
+            above. */}
         <form action={manageAction}>
-          <button className="btn-primary">Update payment method</button>
+          <SubmitButton className="btn-primary" pendingLabel="Opening billing…">
+            Update payment method
+          </SubmitButton>
         </form>
         <div className="border-t border-stone-100 pt-4 dark:border-white/10">
           <form action={cancelAction}>

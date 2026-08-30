@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSides } from "@/lib/contractor";
+import { setFlash } from "@/lib/flash";
 
 // Switches which side of Hearth this account lands on, from the profile menu
 // in either nav (Nav.tsx / ProNav.tsx post to it).
@@ -37,6 +38,30 @@ export async function setPreferredSideAction(formData: FormData) {
   // sent to the setup flow for that side instead, which is the only way to
   // acquire it (and which records the right terms acceptance on the way).
   const sides = await getSides();
+
+  // `checked` is false only when the hasPro/hasHome lookups themselves could
+  // not be completed (a DB outage), not when they legitimately came back
+  // empty - see the comment on Sides.checked in src/lib/contractor.ts. Without
+  // this guard, a transient read failure reports both sides as false, and a
+  // real dual-sided user (someone who genuinely owns both a contractors row
+  // and a home) gets misrouted into re-running the setup flow for a side they
+  // already have, on a preference switch that should have been a no-op.
+  // Mirrors the same guard in chooseRoleAction (src/app/welcome/role/
+  // actions.ts): refuse and ask for a retry rather than act on a check that
+  // never actually ran.
+  if (sides.checked === false) {
+    await setFlash(
+      "We couldn't check your account just now. Try again in a minute.",
+      "error"
+    );
+    // "/", not either shell directly: this account may hold the OTHER side
+    // too, and a failed check here says nothing about which. "/" re-derives
+    // the landing from a fresh getSides() call (src/app/page.tsx), which is
+    // the same self-correcting redirect every other landing decision in the
+    // app relies on.
+    redirect("/");
+  }
+
   const has = side === "contractor" ? sides.hasPro : sides.hasHome;
   if (!has) {
     redirect(side === "contractor" ? "/pro/onboarding" : "/onboarding?add=home");

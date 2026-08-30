@@ -679,16 +679,38 @@ describe("OnboardingForm county record disagrees with the picked address", () =>
     expect(street.readOnly).toBe(false);
   });
 
-  it("keeps their own line when they say so, and keeps asking", async () => {
+  // LOW-23: "Keep mine" sets `street` to the value it already holds, which is
+  // not a state change React re-renders on - so before the mismatchDismissed
+  // flag existed, this click was a silent no-op and the amber panel stayed on
+  // screen forever, unlike "Use the county record" (which resolves the panel
+  // because it genuinely changes `street`). Both choices are now an answer:
+  // the panel goes either way, and only actually retyping the street (a new
+  // answer to weigh) brings it back.
+  it("keeps their own line when they say so, and dismisses the panel", async () => {
     const street = await pickThenLookUp();
 
     fireEvent.click(screen.getByRole("button", { name: "Keep mine" }));
     expect(street.value).toBe(PICKED);
-    // Still standing, because keeping their own line does not make the two
-    // addresses agree - and claimPropertyAction runs the same comparison
-    // server-side, so the claim lands with none of that record's facts on it.
+    // claimPropertyAction runs the same street comparison server-side, so the
+    // claim still lands with none of that record's facts on it - but the
+    // homeowner has answered, and the panel must not keep asking.
     expect(
-      screen.getByRole("button", { name: "Use the county record" })
+      screen.queryByRole("button", { name: "Use the county record" })
+    ).toBeNull();
+    expect(street.readOnly).toBe(false);
+  });
+
+  it("brings the panel back if the street is edited again after Keep mine", async () => {
+    const street = await pickThenLookUp();
+    fireEvent.click(screen.getByRole("button", { name: "Keep mine" }));
+    expect(screen.queryByRole("button", { name: "Keep mine" })).toBeNull();
+
+    // A fresh edit is a new answer to weigh against the county record, not a
+    // continuation of the one already given.
+    fireEvent.change(street, { target: { value: PICKED + " " } });
+
+    expect(
+      screen.getByRole("button", { name: "Keep mine" })
     ).toBeInTheDocument();
   });
 });
@@ -829,5 +851,52 @@ describe("a refused claim keeps what was typed", () => {
       ).toBeInTheDocument()
     );
     expect(screen.getByLabelText("Your full name")).toHaveValue("Alex Rivera");
+  });
+});
+
+// MED-22: `busy` is state, and state lands a render behind the click, so a
+// fast double-tap on "Claim my home" - or a submit fired twice in the same
+// tick some other way - could reach claimPropertyAction twice before either
+// call's setBusy(true) actually disabled the button, which is exactly the
+// shape that wrote two property rows for one house. The synchronous
+// claimInFlightRef latch closes that window without waiting on a render.
+describe("OnboardingForm double-submit guard", () => {
+  it("only calls claimPropertyAction once for two submits in the same tick", async () => {
+    await toReadyStep();
+    fireEvent.change(screen.getByLabelText("Your full name"), {
+      target: { value: "Alex Rivera" },
+    });
+
+    // Never resolves within the test, so the first call is still "in flight"
+    // when the second submit fires right after it.
+    let resolveClaim: (value: unknown) => void = () => {};
+    claimPropertyAction.mockReturnValue(
+      new Promise((resolve) => {
+        resolveClaim = resolve;
+      })
+    );
+
+    const claimButton = screen.getByRole("button", { name: /Claim/i });
+    fireEvent.click(claimButton);
+    fireEvent.click(claimButton);
+
+    expect(claimPropertyAction).toHaveBeenCalledTimes(1);
+
+    // Release the pending call and confirm the latch lets a genuine retry
+    // through afterward - it only blocks a submit that arrives while one is
+    // already running, not every submit forever.
+    resolveClaim({ ok: false, error: "We couldn't claim your home just now. Please try again." });
+    await waitFor(() =>
+      expect(
+        screen.getByText("We couldn't claim your home just now. Please try again.")
+      ).toBeInTheDocument()
+    );
+
+    claimPropertyAction.mockResolvedValue({
+      ok: false,
+      error: "We couldn't claim your home just now. Please try again.",
+    });
+    fireEvent.click(claimButton);
+    await waitFor(() => expect(claimPropertyAction).toHaveBeenCalledTimes(2));
   });
 });

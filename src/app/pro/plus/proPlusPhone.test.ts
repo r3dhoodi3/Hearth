@@ -16,6 +16,7 @@ function src(rel: string): string {
 
 const page = src("./page.tsx");
 const toggle = src("./ProPlanToggle.tsx");
+const actions = src("./actions.ts");
 const homeownerToggle = src("../../(app)/plus/PlanToggle.tsx");
 const perksList = src("./PerksList.tsx");
 // All four render branches moved into this client module for streaming reasons
@@ -339,5 +340,47 @@ describe("pro plus keeps every branch in one client component (DBG3 follow-up)",
       expect(page, a).toContain(a);
     }
     expect(screens).toContain("type FormAction = () => Promise<void>;");
+  });
+});
+
+// Money-safety fixes on the Pro checkout (2026-08-30 payments pass).
+describe("pro plus: checkout double-submit + reservation + reachable customer", () => {
+  // MED-13: the CheckoutButton carries the same synchronous latch SubmitButton
+  // does, so a fast double tap cannot fire two checkout POSTs.
+  it("CheckoutButton has the submittedRef double-submit latch", () => {
+    expect(toggle).toContain("const submittedRef = useRef(false)");
+    expect(toggle).toContain("if (submittedRef.current)");
+    expect(toggle).toContain("if (!pending) submittedRef.current = false");
+    expect(toggle).toMatch(/onClick=\{handleClick\}/);
+  });
+
+  // HIGH-33: the already-a-member guard matches on the Pro price ids, not on
+  // "any live sub whose id is not the homeowner sub id" (which misfires when
+  // that column is null and permanently blocks a Plus member from buying Pro).
+  it("matches Pro membership by STRIPE_PRO_*_PRICE_ID, mirroring the Plus fix", () => {
+    expect(actions).toContain("STRIPE_PRO_MONTHLY_PRICE_ID");
+    expect(actions).toContain("STRIPE_PRO_YEARLY_PRICE_ID");
+    expect(actions).toContain("proPriceIds.includes(i.price.id)");
+    // The old id-only exclusion is gone as the sole test.
+    expect(actions).not.toContain("s.id !== homeownerSub?.stripe_subscription_id");
+  });
+
+  // HIGH-31a: the free trial is reserved through promo_claims BEFORE the Stripe
+  // session, exactly like the Plus side, so two tabs cannot mint two trials.
+  it("reserves the Pro free trial via claim_promo before creating the session", () => {
+    expect(actions).toContain('p_key: PRO_TRIAL_PROMO_KEY');
+    expect(actions).toContain("reclaimCheckoutReservation");
+    expect(actions).toContain('trial_reserved: claimedTrial ? "true" : "false"');
+    // A lost-race tab (freeTrial false but was eligible) must not fall into the
+    // intro-coupon path instead: the gate is on wantsTrial, not freeTrial.
+    expect(actions).toContain("const introOffered = !wantsTrial");
+  });
+
+  // HIGH-31b: a first-time pro gets a stable, reachable Stripe customer, so an
+  // orphan subscription from a second tab is still reachable by cancel/portal.
+  it("attaches a reachable Stripe customer instead of customer:undefined", () => {
+    expect(actions).toContain("stripe.customers.create");
+    expect(actions).toContain("idempotencyKey: `pro-customer:${user.id}`");
+    expect(actions).toContain("customer: checkoutCustomerId ?? undefined");
   });
 });

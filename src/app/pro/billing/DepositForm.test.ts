@@ -11,6 +11,7 @@ function src(rel: string): string {
 }
 
 const form = src("./DepositForm.tsx");
+const actions = src("./actions.ts");
 
 // Strip every max-sm:-prefixed token from a class string. What's left is
 // what a desktop viewport (sm and up) actually renders, so two class lists
@@ -106,5 +107,47 @@ describe("pro billing: phone Details block replaces the disclaimers under the bu
     );
     expect(block).toContain("Any amount from $5.");
     expect(block).toContain("without Pro leaves $");
+  });
+});
+
+// MED-14: the Deposit button needs the synchronous double-submit latch (the
+// same one SubmitButton carries), because useFormStatus `pending` lags a
+// render and a fast double tap would otherwise fire two submits - two Stripe
+// checkout sessions.
+describe("pro billing: Deposit button has the double-submit latch", () => {
+  it("guards on a submittedRef flipped before the pending state can catch up", () => {
+    expect(form).toContain("const submittedRef = useRef(false)");
+    expect(form).toContain("if (submittedRef.current)");
+    expect(form).toContain("submittedRef.current = true");
+    // Released on the pending -> not-pending edge, so a failed submit can retry.
+    expect(form).toContain("if (!pending) submittedRef.current = false");
+    // Wired onto the actual button.
+    expect(form).toMatch(/onClick=\{handleClick\}/);
+  });
+});
+
+// MED-14 (server half) + HIGH-30: the deposit action needs an idempotency key
+// on the Stripe session create AND the three velocity/freeze guards before it.
+describe("depositAction: idempotency key and velocity guards", () => {
+  it("passes an idempotency key to checkout.sessions.create", () => {
+    expect(actions).toContain("checkoutIdempotencyKey");
+    expect(actions).toContain("{ idempotencyKey }");
+  });
+
+  it("refuses deposits while an open chargeback freezes the account", () => {
+    expect(actions).toContain('rpc("has_open_chargeback"');
+  });
+
+  it("caps deposits per day and by a rolling 24h dollar ceiling", () => {
+    expect(actions).toContain("DEPOSIT_MAX_PER_DAY");
+    expect(actions).toContain("DEPOSIT_DAILY_CENTS_CEILING");
+    expect(actions).toContain('rpc("rate_limit_hit"');
+    expect(actions).toContain("deposit:${contractor.id}");
+  });
+
+  it("fails closed on the count cap: proceeds only on an explicit within-limit", () => {
+    // The count cap is the guaranteed gate, so it must refuse on false/null/throw.
+    expect(actions).toContain("withinCountLimit = data === true");
+    expect(actions).toContain("if (!withinCountLimit)");
   });
 });

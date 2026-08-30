@@ -146,6 +146,20 @@ describe("pro home: the blocks below", () => {
     expect(view).toContain("appliedCount >= 3");
   });
 
+  // MED-2: "Active jobs" used to link to /pro/crm, a separate opt-in client
+  // tracker with an entirely different dataset than the count this stat
+  // shows (activeCount, computed in page.tsx from `assigned`). It now points
+  // at the leads board's own "Your jobs" section, which LeadsBoard.tsx marks
+  // with id="your-jobs" for exactly this link.
+  it("links Active jobs to the leads board's Your jobs section, not /pro/crm", () => {
+    const activeJobsBlock = view.slice(
+      view.indexOf(">Active jobs</p>") - 300,
+      view.indexOf(">Active jobs</p>")
+    );
+    expect(activeJobsBlock).toContain("href={`${PRO_LEADS_HREF}#your-jobs`}");
+    expect(view).not.toContain('href="/pro/crm"');
+  });
+
   it("reuses the Business page's own trend numbers, members only", () => {
     expect(page).toContain("buildProStats(apps, new Date())");
     expect(page).toContain("const stats = member ?");
