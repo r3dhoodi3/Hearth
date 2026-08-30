@@ -155,6 +155,15 @@ vi.mock("../value/ValueAutoFetch", () => ({
   default: () => null,
 }));
 
+// Home Wins feature: the dashboard now lazily reads/creates the referral share
+// code. The real module has `import "server-only"`, which throws under vitest,
+// so it is stubbed like every other server dependency here. Returning null
+// means the <HomeWinsShare> block renders nothing, keeping every assertion in
+// this file unaffected by the feature.
+vi.mock("@/lib/referralCode", () => ({
+  getOrCreateReferralCode: vi.fn(async () => null),
+}));
+
 // The tool-tile reorder (PLAN A1#2) reads this cookie server-side; the real
 // value is written client-side by PaywallReasonBanner.
 vi.mock("next/headers", () => ({

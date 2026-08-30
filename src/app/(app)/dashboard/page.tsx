@@ -39,6 +39,11 @@ import SystemsPhoneList from "./SystemsPhoneList";
 import WalkthroughNudge from "./WalkthroughNudge";
 import HomeAlerts from "@/components/HomeAlerts";
 import WeatherStrip from "@/components/WeatherStrip";
+// Home Wins feature - remove these three imports and the <HomeWinsShare /> block
+// below to remove the feature.
+import { selectHomeWins } from "@/lib/homeWins";
+import HomeWinsShare from "@/components/HomeWinsShare";
+import { getOrCreateReferralCode } from "@/lib/referralCode";
 import {
   Home,
   TrendingUp,
@@ -150,11 +155,21 @@ export default async function HomePage(
   // them together instead of stacking round trips before the redirect check.
   // getUser is the cached, network-free read; its id keys the per-user
   // "This month" open/closed memory further down the page.
-  const [property, plus, user] = await Promise.all([
-    getActiveProperty(),
-    hasPlus(),
-    getUser(),
-  ]);
+  // homeWinsCode / homeWinsProfile added for the Home Wins feature: the
+  // referral code (lazily created, migration 0099) is reused as the share code
+  // so the card lookup and the acquisition attribution share ONE code, and the
+  // profile supplies a first name only. Both are network-cheap here - the
+  // profile read is React-cached and shared with readFreeCredits below, and the
+  // code is a single read after its one-time creation. Run in parallel with the
+  // rest so they add no sequential round trip.
+  const [property, plus, user, homeWinsCode, homeWinsProfile] =
+    await Promise.all([
+      getActiveProperty(),
+      hasPlus(),
+      getUser(),
+      getOrCreateReferralCode(),
+      getUserProfileResult(),
+    ]);
   if (!property) redirect("/onboarding");
   const supabase = await createClient();
 
@@ -259,6 +274,25 @@ export default async function HomePage(
 
   const sys = systems ?? [];
   const openIssues = issues ?? [];
+
+  // Home Wins feature: POSITIVE-ONLY, shareable wins for this home (never the
+  // 0-100 score). Pure and computed from data already loaded above, so it costs
+  // no extra query. Rendered only when a share code exists (feature/migration
+  // live); the pure function always returns at least an encouraging starter
+  // variant, so it is never a bad number.
+  const ownerFirstName =
+    (
+      (homeWinsProfile.profile as { full_name?: string | null } | null)
+        ?.full_name ?? ""
+    )
+      .trim()
+      .split(/\s+/)[0] || null;
+  const homeWins = selectHomeWins({
+    firstName: ownerFirstName,
+    createdAt: property.created_at,
+    systems: sys,
+    tasksDoneCount: (tasks ?? []).filter((t) => t.status === "done").length,
+  });
   // Systems whose details are still an onboarding estimate (migration 0056:
   // confirmed_at null), powering the "walk your home" entry points below.
   const unconfirmedCount = sys.filter((s) => !s.confirmed_at).length;
@@ -1269,6 +1303,11 @@ export default async function HomePage(
           ))}
         </div>
       </section>
+
+      {/* Home Wins feature - remove this block (one insertion point) to remove
+          the in-app surface. Dismissible, positive-only, never a score. Renders
+          only when a referral share code exists (migration 0099 live). */}
+      {homeWinsCode && <HomeWinsShare wins={homeWins} code={homeWinsCode} />}
 
       {/* Systems inventory (the old Home Profile) */}
       {/* Open by default, always. It used to collapse on a first visit
