@@ -43,6 +43,10 @@ import BudgetField from "./BudgetField";
 import ProjectScopeFields from "./ProjectScopeFields";
 import { DraftJobProvider } from "./DraftJobContext";
 import { budgetBracketForCategory } from "@/lib/health";
+import { getOrCreateReferralCode } from "@/lib/referralCode";
+import { imgSrc } from "@/lib/storage";
+import { licenseVerifiedOnLine } from "@/lib/guaranteeCopy";
+import PostJobDoneReferralAsk from "./PostJobDoneReferralAsk";
 import PhotoTips from "@/components/PhotoTips";
 import ExistingJobPhotos from "./ExistingJobPhotos";
 import ReviewButton from "./ReviewButton";
@@ -299,28 +303,48 @@ export default async function ContractorsPage(
   // Applications on the owner's jobs, with each applying pro's public info.
   // lead_applications isn't in the generated types yet, so query via any.
   const appsByLead = new Map<string, any[]>();
+  // The issue behind each job, if any (a lead posted straight from Issues
+  // carries issue_id; one typed with no issue link has none). Feeds
+  // firstPhotoByLead below - RB wave, CR4#2: the post-review share prompt
+  // also offers a before/after photo when the job had one attached.
+  const issueIds = Array.from(
+    new Set(
+      jobLeads.map((l) => l.issue_id).filter((id): id is string => Boolean(id))
+    )
+  );
+  const firstPhotoByLead = new Map<string, string>();
   if (leadIds.length) {
-    // None of these three depend on each other - only on leadIds - so they
-    // run as one parallel wave instead of three stacked round trips.
-    const [{ data: revs }, { data: sys }, { data: apps }] = await Promise.all([
-      supabase
-        .from("reviews")
-        .select("lead_id, rating, comment")
-        .in("lead_id", leadIds),
-      supabase
-        .from("messages")
-        .select("lead_id, body, created_at")
-        .eq("sender_role", "system")
-        .in("lead_id", leadIds)
-        .order("created_at", { ascending: false }),
-      (supabase as any)
-        .from("lead_applications")
-        .select(
-          "id, lead_id, contractor_id, message, created_at, status, refunded_at, contractors(name, rating, review_count, service_area, license_number, license_verified_at, logo_url)"
-        )
-        .in("lead_id", leadIds)
-        .order("created_at", { ascending: true }),
-    ]);
+    // None of these four depend on each other - only on leadIds/issueIds -
+    // so they run as one parallel wave instead of four stacked round trips.
+    const [{ data: revs }, { data: sys }, { data: apps }, { data: pics }] =
+      await Promise.all([
+        supabase
+          .from("reviews")
+          .select("lead_id, rating, comment")
+          .in("lead_id", leadIds),
+        supabase
+          .from("messages")
+          .select("lead_id, body, created_at")
+          .eq("sender_role", "system")
+          .in("lead_id", leadIds)
+          .order("created_at", { ascending: false }),
+        (supabase as any)
+          .from("lead_applications")
+          .select(
+            "id, lead_id, contractor_id, message, created_at, status, refunded_at, contractors(name, rating, review_count, service_area, license_number, license_verified_at, logo_url)"
+          )
+          .in("lead_id", leadIds)
+          .order("created_at", { ascending: true }),
+        issueIds.length
+          ? supabase
+              .from("photos")
+              .select("related_id, url")
+              .eq("related_type", "issue")
+              .eq("property_id", property.id)
+              .in("related_id", issueIds)
+              .order("uploaded_at", { ascending: true })
+          : Promise.resolve({ data: [] as { related_id: string; url: string }[] }),
+      ]);
     for (const r of revs ?? [])
       reviewByLead.set(r.lead_id, { rating: r.rating, comment: r.comment });
 
@@ -334,7 +358,32 @@ export default async function ContractorsPage(
       list.push(a);
       appsByLead.set(a.lead_id, list);
     }
+
+    // First photo per issue, then mapped onto every lead that issue backs -
+    // this page's own photo grid (ExistingJobPhotos) already treats "first
+    // uploaded" as the lead photo, so the share prompt agrees with what the
+    // homeowner sees while posting. Stored through imgSrc(), same as
+    // ExistingJobPhotos does: the bucket is private, so the raw stored value
+    // (a bare object path, sometimes a legacy public-URL string) is never
+    // fetchable as-is - it has to go through the authenticated /api/img proxy.
+    const firstPhotoByIssue = new Map<string, string>();
+    for (const p of pics ?? []) {
+      if (firstPhotoByIssue.has(p.related_id)) continue;
+      const served = imgSrc(p.url);
+      if (served) firstPhotoByIssue.set(p.related_id, served);
+    }
+    for (const l of jobLeads) {
+      if (!l.issue_id) continue;
+      const url = firstPhotoByIssue.get(l.issue_id);
+      if (url) firstPhotoByLead.set(l.id, url);
+    }
   }
+
+  // The homeowner's own invite link, fetched (and lazily generated) only
+  // when it will actually be used: at least one job on this page has been
+  // marked done. See PostJobDoneReferralAsk.tsx for why this is a separate,
+  // once-per-account prompt from the review flow's own share panels.
+  const postJobReferralCode = closedIds.size > 0 ? await getOrCreateReferralCode() : null;
 
   // Which job card gets the full "Your job is live..." explainer, and which
   // ones get one compact line instead.
@@ -943,6 +992,7 @@ export default async function ContractorsPage(
                               existing={reviewByLead.get(l.id)}
                               proProfilePath={`/p/${l.contractor_id}`}
                               categoryLabel={labelFor(JOB_CATEGORIES, l.category)}
+                              photoUrl={firstPhotoByLead.get(l.id) ?? null}
                             />
                           </div>
                         </div>
@@ -1120,7 +1170,18 @@ export default async function ContractorsPage(
                                     {a.contractors?.license_number
                                       ? `Lic. ${a.contractors.license_number} · `
                                       : ""}
-                                    Checked against the CSLB public database.
+                                    {/* Same wording as the public profile page's
+                                        badge (src/lib/guaranteeCopy.ts): what was
+                                        checked and when, not a bare "Checked". */}
+                                    {licenseVerifiedOnLine(
+                                      new Date(
+                                        a.contractors.license_verified_at
+                                      ).toLocaleDateString("en-US", {
+                                        month: "long",
+                                        day: "numeric",
+                                        year: "numeric",
+                                      })
+                                    )}
                                   </span>
                                 </p>
                               ) : a.contractors?.license_number ? (
@@ -1198,6 +1259,12 @@ export default async function ContractorsPage(
           </ul>
         </section>
       )}
+
+      {/* MR3#12 / CR4#7: the referral ask for the moment a job actually got
+          done, separate from ReviewButton's own post-rating share panels.
+          One card for the whole page, not one per closed job - see
+          postJobReferralCode above for why it's only fetched when needed. */}
+      <PostJobDoneReferralAsk code={postJobReferralCode} />
 
       {/* The just-posted job did not come back in the read above. That is a
           server-side fault (see the console.error on the leads query), not

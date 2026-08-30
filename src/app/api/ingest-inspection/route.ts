@@ -371,9 +371,9 @@ export async function POST(req: NextRequest) {
       // Pulling every system and defect out of a multi-page report is the
       // heaviest extraction in the app, and one it has to get right: reasoning
       // on, and a generous output budget so a long report is not truncated
-      // mid-object (which would parse to null and lose the whole read).
-      maxTokens: 16000,
-      thinking: true,
+      // mid-object (which would parse to null and lose the whole read). Both
+      // now live in ROUTES in src/lib/claude.ts, with every other model call.
+      route: "ingest-inspection",
       timeoutMs: 170_000,
       label: "ingest-inspection",
     });

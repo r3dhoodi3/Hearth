@@ -82,11 +82,15 @@ export default function DirectRequestActions({
         {Number.isFinite(feeCents) && (
           <input type="hidden" name="fee_cents" value={feeCents} />
         )}
+        {/* Fee amount and the credit-back words bolded on request, same
+            treatment as ApplyJobButton.tsx's confirm step. */}
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          Unlocking accepts this request and charges the {fee} lead fee from your
-          wallet. You get the homeowner&apos;s contact and the chat opens. If they
-          never message you, ghost protection puts the fee back in your wallet
-          as credit after {GHOST_PROTECTION_DAYS} days.
+          Unlocking accepts this request and charges the <strong>{fee}</strong>{" "}
+          lead fee from your wallet. You get the homeowner&apos;s contact and
+          the chat opens. If they never message you, ghost protection puts
+          the fee back in your wallet as{" "}
+          <strong>lead credit (not cash)</strong> after {GHOST_PROTECTION_DAYS}{" "}
+          days.
         </p>
         <div className="flex gap-2">
           <button

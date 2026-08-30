@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { getUser } from "@/lib/auth";
+import { getUserProfileResult } from "@/lib/user";
 import { hasPlus } from "@/lib/subscription";
 import { generateMaintenancePlanAction } from "./actions";
 import SubmitButton from "@/components/SubmitButton";
@@ -30,6 +32,8 @@ import SeasonalChecklist from "@/components/SeasonalChecklist";
 import ChecklistProvider from "@/components/ChecklistProvider";
 import RememberedDetails from "@/components/RememberedDetails";
 import ReviewMomentReporter from "@/components/ReviewMomentReporter";
+import AhaEventReporter from "@/components/AhaEventReporter";
+import { AHA_HOME_SCORE } from "@/lib/trackAhaEvents";
 import ReminderItem from "./ReminderItem";
 import SystemsPhoneList from "./SystemsPhoneList";
 import WalkthroughNudge from "./WalkthroughNudge";
@@ -63,28 +67,62 @@ function PlusChip({ className = "" }: { className?: string }) {
   );
 }
 
-// The two one-time free-taste credits (migration 0099), read in one row so the
-// query can ride along in the dashboard's main parallel wave instead of being
-// a third sequential round trip.
+// Which tool tile a /plus?reason= value points back at, for the "lead with
+// the tile that matches the paywall you just hit" reorder below (PLAN A1#2 /
+// R1#5). Only the three reasons that actually have a tile in the grid are
+// listed here; a cookie value like "ask" or "value" (a real reason, just not
+// one of these three tools) simply matches nothing and the order is left
+// alone.
+const REASON_TILE_HREF: Record<string, string> = {
+  forecast: "/forecast",
+  quote: "/quote-check",
+  report: "/home-report",
+};
+
+// Moves the tile matching `leadHref` to the front, keeping the rest in their
+// original order. A no-op when there is no cookie, the value does not map to
+// a tile, or the matching tile is already first - so a homeowner who has
+// never hit a paywall (the common case) sees byte-identical output.
+function reorderToolTiles<T extends { href: string }>(
+  tiles: T[],
+  leadHref: string | undefined
+): T[] {
+  if (!leadHref) return tiles;
+  const idx = tiles.findIndex((t) => t.href === leadHref);
+  if (idx <= 0) return tiles;
+  const reordered = tiles.slice();
+  const [lead] = reordered.splice(idx, 1);
+  reordered.unshift(lead);
+  return reordered;
+}
+
+// The two one-time free-taste credits (migration 0099), read off the users row
+// the app shell has ALREADY loaded this request (getUserProfileResult is
+// React-cached and selects "*"), so the dashboard no longer opens a second
+// query against the same row for two of its columns. That is one Supabase
+// round trip saved on every dashboard render, and it was the slowest one in
+// the wave when measured (2026-08-30).
 //
 // FAIL OPEN on any read error, including the columns not being live yet: a
-// homeowner must never be told a free credit is used when it never was. No
-// user id (signed out, which the (app) layout already prevents) reads as "no
-// credits", exactly as before.
-async function readFreeCredits(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string | null
-): Promise<{ planUnused: boolean; quoteUnused: boolean }> {
-  if (!userId) return { planUnused: false, quoteUnused: false };
-  const { data, error } = await supabase
-    .from("users")
-    .select("free_plan_used_at, free_quote_used_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) return { planUnused: true, quoteUnused: true };
+// homeowner must never be told a free credit is used when it never was. Same
+// three outcomes as the old private query: read failed is both credits
+// available, no row (signed out, which the (app) layout already prevents) is
+// neither, a real row answers from its own columns.
+async function readFreeCredits(): Promise<{
+  planUnused: boolean;
+  quoteUnused: boolean;
+}> {
+  const { profile, errored } = await getUserProfileResult();
+  if (errored) return { planUnused: true, quoteUnused: true };
+  // The two columns are migration 0099 and are not in the generated Database
+  // type yet, the same convention every other post-0029 column read uses.
+  const row = profile as unknown as {
+    free_plan_used_at: string | null;
+    free_quote_used_at: string | null;
+  } | null;
   return {
-    planUnused: !!data && data.free_plan_used_at === null,
-    quoteUnused: !!data && data.free_quote_used_at === null,
+    planUnused: !!row && row.free_plan_used_at === null,
+    quoteUnused: !!row && row.free_quote_used_at === null,
   };
 }
 
@@ -97,6 +135,12 @@ export default async function HomePage(
   // "View my plan" lands here with ?plan=open so the collapsed task groups
   // start expanded, making the click visibly do something.
   const planOpen = searchParams.plan === "open";
+  // Set client-side by PaywallReasonBanner (src/components/PaywallReasonBanner.tsx)
+  // the moment a /plus?reason= banner shows. No cookie, or a reason with no
+  // matching tile, leaves REASON_TILE_HREF's lookup undefined and
+  // reorderToolTiles below is a no-op.
+  const leadToolHref =
+    REASON_TILE_HREF[(await cookies()).get("hearth_last_reason")?.value ?? ""];
   // First visit after claiming a home (?welcome=1): drives the welcome banner
   // at the bottom of the page. It used to also force "This month" open, which
   // is no longer needed: that section defaults open on every visit now (see
@@ -104,8 +148,8 @@ export default async function HomePage(
   const isFirstVisit = !!searchParams.welcome;
   // getActiveProperty, hasPlus and getUser don't depend on each other - run
   // them together instead of stacking round trips before the redirect check.
-  // getUser is the cached, network-free read, and its id is needed by the
-  // free-credit query that now rides along in the wave below.
+  // getUser is the cached, network-free read; its id keys the per-user
+  // "This month" open/closed memory further down the page.
   const [property, plus, user] = await Promise.all([
     getActiveProperty(),
     hasPlus(),
@@ -174,11 +218,10 @@ export default async function HomePage(
       .order("warranty_expires", { ascending: true }),
     // The free-credit read used to be a THIRD sequential wave below (it only
     // ran for non-Plus homeowners, i.e. most of them), so the dashboard paid
-    // three stacked round trips before it could render. Fired here instead:
-    // same query, same cost when it runs, but off the critical path. Plus
-    // members pay one extra parallel read they then ignore, which is cheaper
-    // than an extra serial hop for everyone else.
-    readFreeCredits(supabase, user?.id ?? null),
+    // three stacked round trips before it could render. Fired here instead,
+    // and since 2026-08-30 it costs no query at all: it reads the users row
+    // the shell already loaded this request (see readFreeCredits above).
+    readFreeCredits(),
   ]);
 
   // Open jobs = postings the owner has put up that no pro has been picked for yet.
@@ -561,6 +604,12 @@ export default async function HomePage(
 
   return (
     <div className="space-y-8">
+      {/* Renders nothing. Reports the aha_home_score moment once per account
+          (PLAN A1#6 / CR2#8): the first dashboard render with a real score
+          AND at least one system on file. Same "server page, client-only
+          storage" shape as ReviewMomentReporter below - see
+          src/components/AhaEventReporter.tsx. */}
+      <AhaEventReporter event={AHA_HOME_SCORE} eligible={sys.length > 0} />
       {/* Current conditions for the home's city, one quiet row. Renders only
           when the lookup succeeds; shares its fetch with HomeAlerts below. */}
       <WeatherStrip propertyId={property.id} />
@@ -1169,32 +1218,35 @@ export default async function HomePage(
         </div>
 
         <div className="grid grid-cols-3 gap-2 sm:gap-4">
-          {[
-            // All three go straight to the tool, member or not. Each page
-            // handles its own gating in context (the forecast masks the
-            // per-system detail, the quote analyzer spends the one free check
-            // then redirects, the home report opens and gates the export), so
-            // routing a free user to a pitch page first only hid the product
-            // behind an ad for the product.
-            {
-              href: "/forecast",
-              icon: TrendingUp,
-              title: "Cost forecast",
-              line: "Plan future costs",
-            },
-            {
-              href: "/quote-check",
-              icon: Search,
-              title: "Quote analyzer",
-              line: "Check a quote",
-            },
-            {
-              href: "/home-report",
-              icon: ClipboardList,
-              title: "Home report",
-              line: "Shareable home record",
-            },
-          ].map((t) => (
+          {reorderToolTiles(
+            [
+              // All three go straight to the tool, member or not. Each page
+              // handles its own gating in context (the forecast masks the
+              // per-system detail, the quote analyzer spends the one free check
+              // then redirects, the home report opens and gates the export), so
+              // routing a free user to a pitch page first only hid the product
+              // behind an ad for the product.
+              {
+                href: "/forecast",
+                icon: TrendingUp,
+                title: "Cost forecast",
+                line: "Plan future costs",
+              },
+              {
+                href: "/quote-check",
+                icon: Search,
+                title: "Quote analyzer",
+                line: "Check a quote",
+              },
+              {
+                href: "/home-report",
+                icon: ClipboardList,
+                title: "Home report",
+                line: "Shareable home record",
+              },
+            ],
+            leadToolHref
+          ).map((t) => (
             <Link key={t.title} href={t.href} className="card-link p-3 text-center">
               <p className="icon-chip">
                 <t.icon className="h-5 w-5" aria-hidden="true" />

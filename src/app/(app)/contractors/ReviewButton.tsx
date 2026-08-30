@@ -20,6 +20,12 @@ import InlineSpinner from "@/components/InlineSpinner";
 // right after a good review is the highest-intent moment to ask. No reward is
 // ever offered here (FTC-clean): just the pro's own public page.
 //
+// CR4#2: when the job had a before/after photo attached (photoUrl, resolved
+// server-side in page.tsx from the lead's issue photos), that share tries a
+// FILE share first - a picture beats a bare link here - falling back to the
+// same link-only share the moment a browser can't accept files, or has no
+// photo to offer at all.
+//
 // A SECOND follow-up appears after ANY successful submit (the peak-satisfaction
 // moment): a "Invite a neighbor" panel with the homeowner's OWN Hearth invite
 // link (their lazy referral code, migration 0099 - see inviteActions.ts). This
@@ -34,6 +40,7 @@ export default function ReviewButton({
   existing,
   proProfilePath,
   categoryLabel,
+  photoUrl,
 }: {
   leadId: string;
   contractorName: string;
@@ -45,6 +52,10 @@ export default function ReviewButton({
   // production share sheet if the env var were ever unset.
   proProfilePath: string;
   categoryLabel: string;
+  // The job's first attached photo (imgSrc()'d /api/img path), when it has
+  // one. Undefined/null on every existing caller until it's threaded
+  // through: the photo share is additive, never required.
+  photoUrl?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState(existing?.rating ?? 0);
@@ -131,14 +142,36 @@ export default function ReviewButton({
     setSharePending(true);
     try {
       const url = `${window.location.origin}${proProfilePath}`;
-      const shareData = {
-        title: `${contractorName} on Hearth`,
-        text: `${contractorName} did great work. Here's their Hearth page:`,
-        url,
-      };
+      const text = `${contractorName} did great work. Here's their Hearth page:`;
       if (typeof navigator !== "undefined" && navigator.share) {
+        // A photo was attached to this job: try sharing it as a FILE first,
+        // since a before/after picture is the whole point (CR4#2). Gated on
+        // navigator.canShare so a browser that would silently drop an
+        // unsupported `files` field falls through to the link share below
+        // instead of the share sheet quietly opening with no photo in it.
+        if (photoUrl && typeof navigator.canShare === "function") {
+          try {
+            const res = await fetch(photoUrl);
+            const blob = await res.blob();
+            const file = new File([blob], "hearth-photo.jpg", {
+              type: blob.type || "image/jpeg",
+            });
+            if (navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                title: `${contractorName} on Hearth`,
+                text,
+                files: [file],
+              });
+              return;
+            }
+          } catch {
+            // Fetching or attaching the photo failed (CORS, network, an
+            // unsupported type) - fall through to the ordinary link share
+            // rather than failing the whole share over a missing picture.
+          }
+        }
         try {
-          await navigator.share(shareData);
+          await navigator.share({ title: `${contractorName} on Hearth`, text, url });
           return;
         } catch (err) {
           // The user closing the share sheet is a decision, not a failure:
@@ -282,7 +315,11 @@ export default function ReviewButton({
               className="btn-primary text-sm inline-flex items-center justify-center gap-1.5"
             >
               {sharePending && <InlineSpinner />}
-              {shareState === "copied" ? "Link copied" : "Share"}
+              {shareState === "copied"
+                ? "Link copied"
+                : photoUrl
+                ? "Share photo"
+                : "Share"}
             </button>
             <button
               type="button"

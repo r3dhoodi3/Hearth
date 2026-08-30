@@ -83,25 +83,33 @@ describe("open redirect via the inner ?next= of /onboarding", () => {
   });
 });
 
-describe("weekly plan + 3-day trial", () => {
-  it("weekly is the only Plus cadence that trials", () => {
-    expect(trialApplies("weekly", true)).toBe(true);
-    expect(trialApplies("monthly", true)).toBe(false);
-    expect(trialApplies("yearly", true)).toBe(false);
+describe("three Plus cadences + one 3-day trial", () => {
+  // Was "weekly is the only Plus cadence that trials". Since 2026-08-30 the
+  // free days come with whichever cadence was picked; one per account is
+  // enforced by the promo_claims reservation in startPlusCheckoutAction, not
+  // by refusing the trial on two of the three plans.
+  it("every Plus cadence trials for an eligible account, and none for anyone else", () => {
+    for (const plan of ["weekly", "monthly", "yearly"] as const) {
+      expect(trialApplies(plan, true)).toBe(true);
+      expect(trialApplies(plan, false)).toBe(false);
+    }
   });
 
-  it("an unreadable plan field falls back to monthly, never to the trialing cadence", () => {
+  it("an unreadable plan field falls back to the cadence the picker preselects", () => {
     expect(checkoutCadence(undefined, "monthly")).toBe("monthly");
     expect(checkoutCadence("WEEKLY", "monthly")).toBe("monthly");
     expect(checkoutCadence(["weekly"], "monthly")).toBe("monthly");
-    // But an exact "weekly" from any client does select the trial cadence.
+    // But an exact "weekly" from any client still selects weekly.
     expect(checkoutCadence("weekly", "monthly")).toBe("weekly");
   });
 
-  it("the disclosure for the trialing cadence names the real step-up", () => {
-    const t = billingTerms("weekly", true);
-    expect(t.summary).toContain("Free for 3 days");
-    expect(t.summary).toContain("$1.99 a week");
+  it("each cadence's disclosure names its own step-up", () => {
+    expect(billingTerms("weekly", true).summary).toContain("Free for 3 days");
+    expect(billingTerms("weekly", true).summary).toContain("$1.99 a week");
+    expect(billingTerms("yearly", true).summary).toContain("Free for 3 days");
+    expect(billingTerms("yearly", true).summary).toContain(
+      "$39.99, and it renews every 12 months"
+    );
   });
 });
 

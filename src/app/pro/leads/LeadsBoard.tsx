@@ -34,6 +34,7 @@
 // resolved on the server and arrives here as a finished string, so hydration
 // cannot disagree with SSR about it.
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import OpenChatButton from "@/components/OpenChatButton";
@@ -49,9 +50,18 @@ import {
 } from "@/lib/constants";
 import { SEVERITY_STYLE } from "@/lib/proLeadCard";
 import {
-  GHOST_PROTECTION_GUARANTEE,
-  FIRST_APPLICATION_GUARANTEE,
-  CREDIT_NOT_CASH_LINE,
+  LEAD_SORT_OPTIONS,
+  normalizeLeadSort,
+  sortLeads,
+  type LeadSort,
+} from "@/lib/leadSort";
+import type { LeadDiscountKind } from "@/lib/leadPricing";
+import AhaEventReporter from "@/components/AhaEventReporter";
+import { AHA_FIRST_LEAD } from "@/lib/trackAhaEvents";
+import {
+  ghostProtectionGuaranteeRich,
+  firstApplicationGuaranteeRich,
+  creditNotCashLineRich,
 } from "@/lib/guaranteeCopy";
 import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 
@@ -70,14 +80,6 @@ const STATUS_LABEL: Record<string, string> = {
   closed: "Won",
   lost: "Lost",
 };
-
-// Leads-board sort options. Newest is the default (and the order the RPC
-// already returns); the others are cheap re-sorts done on the server.
-const SORT_OPTIONS = [
-  { value: "new", label: "Newest" },
-  { value: "fee", label: "Cheapest fee" },
-  { value: "deal", label: "Biggest deal" },
-] as const;
 
 // One "Asked for you" row. The card itself still takes the raw RPC row (it is
 // plain JSON either way); the only thing pulled out is the clock-dependent
@@ -104,10 +106,14 @@ export type OpenJobVM = {
   feeStr: string;
   /** Pre-markdown fee, shown struck through when a markdown applies. */
   baseStr: string;
-  /** Aging-deal percent off, 0 when the listing is still fresh. */
+  /** Winning discount's percent off, 0 when the listing is still fresh or the intro price won. */
   off: number;
   /** True when the one-time big-ticket intro price is what is being charged. */
   introPrice: boolean;
+  /** Which single discount priced this card (never two at once, migration 0149). */
+  discountKind: LeadDiscountKind;
+  /** "Pro members pay $X" quiet line, already money()-formatted; null when membership would not actually beat this card's price. */
+  memberQuoteStr: string | null;
   description: string | null;
   photoUrls: string[];
   budgetLabel: string | null;
@@ -156,6 +162,19 @@ export type ApplicationVM = {
   refunded: boolean;
 };
 
+// "posted 3 days ago" from the postedAgoLabel string ("Posted 3 days ago"),
+// so the aging-deal chip reads "15% off, posted 3 days ago" - the actual day
+// count this listing has been sitting, not the tier's threshold day count -
+// lower-cased so it reads as a clause after the percent, not a new sentence.
+// Falls back to a plain phrase if postedAgoLabel is ever missing (defensive
+// only: an aging discount cannot exist without a real created_at, so
+// postedAgoLabel is always set whenever this chip renders).
+function agingDealPhrase(postedAgoLabel: string | null): string {
+  return postedAgoLabel
+    ? postedAgoLabel.charAt(0).toLowerCase() + postedAgoLabel.slice(1)
+    : "aging deal";
+}
+
 export default function LeadsBoard({
   lowBalance,
   directRequests,
@@ -184,6 +203,34 @@ export default function LeadsBoard({
   pendingApps: ApplicationVM[];
   declinedApps: ApplicationVM[];
 }) {
+  // The sort lives here, not on the server. It used to be three links to
+  // /pro/leads?sort=..., so every tap re-queried and re-rendered the whole
+  // page to reorder a list the browser already had: slow on a phone, and a
+  // double tap read as a bug. `sort` is still the order the URL asked for, so
+  // the server paints the right one and hydration matches.
+  const [activeSort, setActiveSort] = useState<LeadSort>(() =>
+    normalizeLeadSort(sort)
+  );
+  // openJobs is never mutated: "Newest" is simply this array's own order, so
+  // switching back to it costs nothing and needs no second request.
+  const sortedOpenJobs = useMemo(
+    () => sortLeads(openJobs, activeSort),
+    [openJobs, activeSort]
+  );
+
+  function chooseSort(next: LeadSort) {
+    setActiveSort(next);
+    // Reflected in the URL, NOT navigated to: replaceState means a reload or
+    // a shared link still lands on this order (the server reads ?sort=), while
+    // the tap itself costs nothing but a re-render. Next 15 supports
+    // history.replaceState here and syncs useSearchParams from it; the
+    // existing history.state is passed straight back so the App Router's own
+    // entry survives.
+    const url =
+      next === "new" ? PRO_LEADS_HREF : `${PRO_LEADS_HREF}?sort=${next}`;
+    window.history.replaceState(window.history.state, "", url);
+  }
+
   return (
     <>
       {/* One compact line, not a card: the only banner this page still carries
@@ -235,6 +282,11 @@ export default function LeadsBoard({
         </section>
       )}
 
+      {/* First real lead seen is the pro-side aha moment: fires once per
+          account when the board has at least one open job (research wave RA,
+          2026-08-30; reporter dedupes in localStorage). */}
+      <AhaEventReporter event={AHA_FIRST_LEAD} eligible={openJobs.length > 0} />
+
       {/* ---- Open jobs: posted by homeowners, pay the fee to apply ---- */}
       <section id="open-jobs" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
@@ -253,8 +305,8 @@ export default function LeadsBoard({
                 per-card fee shown below. */}
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               Applying costs ${LEAD_TIER_FEES.light} to ${LEAD_TIER_FEES.major}{" "}
-              per lead depending on the trade. {GHOST_PROTECTION_GUARANTEE}{" "}
-              {FIRST_APPLICATION_GUARANTEE} {CREDIT_NOT_CASH_LINE}{" "}
+              per lead depending on the trade. {ghostProtectionGuaranteeRich()}{" "}
+              {firstApplicationGuaranteeRich()} {creditNotCashLineRich()}{" "}
               <Link
                 href="/pro/billing"
                 className="underline hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:hover:text-stone-300"
@@ -265,25 +317,26 @@ export default function LeadsBoard({
             </p>
           </div>
           {openJobs.length > 1 && (
+            // Buttons, not links: nothing is being navigated to any more. Each
+            // one keeps the 44px phone target it had, adds touch-manipulation
+            // (no 300ms tap delay) and an active: state so a tap shows
+            // instantly, and carries aria-pressed so a screen reader hears
+            // which order is on.
             <div className="flex gap-2">
-              {SORT_OPTIONS.map((o) => (
-                <Link
+              {LEAD_SORT_OPTIONS.map((o) => (
+                <button
                   key={o.value}
-                  // Through PRO_LEADS_HREF, never a literal "/pro": the board
-                  // lives on its own tab now and "/pro" is the Home screen.
-                  href={
-                    o.value === "new"
-                      ? PRO_LEADS_HREF
-                      : `${PRO_LEADS_HREF}?sort=${o.value}`
-                  }
-                  className={`inline-flex min-h-[44px] items-center rounded-full border px-3 py-1.5 text-xs sm:inline-block sm:min-h-0 ${
-                    sort === o.value
+                  type="button"
+                  onClick={() => chooseSort(o.value)}
+                  aria-pressed={activeSort === o.value}
+                  className={`inline-flex min-h-[44px] touch-manipulation items-center rounded-full border px-3 py-1.5 text-xs transition-colors active:bg-stone-100 sm:inline-block sm:min-h-0 dark:active:bg-white/10 ${
+                    activeSort === o.value
                       ? "border-hearth-300 bg-hearth-50 font-medium text-hearth-700 dark:border-hearth-500/40 dark:bg-hearth-500/15 dark:text-hearth-300"
                       : "border-stone-200 text-stone-500 hover:border-stone-300 dark:border-white/10 dark:text-stone-400 dark:hover:border-stone-600"
                   }`}
                 >
                   {o.label}
-                </Link>
+                </button>
               ))}
             </div>
           )}
@@ -368,7 +421,7 @@ export default function LeadsBoard({
           </div>
         ) : (
           <ul className="space-y-3">
-            {openJobs.map((j) => {
+            {sortedOpenJobs.map((j) => {
               // Folded detail (0128 phone density pass): description, photos,
               // budget/quality/scope chips, posted-ago/timing. Rendered once
               // here and reused below in both the phone <details> and the
@@ -456,12 +509,31 @@ export default function LeadsBoard({
                         <span className="min-w-0 flex-1 font-medium text-stone-900 dark:text-stone-100">
                           {j.categoryLabel}
                         </span>
-                        <span className="shrink-0 text-sm font-semibold text-stone-700 [font-variant-numeric:tabular-nums] dark:text-stone-300">
+                        {/* The base price struck through and a "Pro" chip
+                            ride along on the phone glance line too (not just
+                            the desktop row below): a pro should never have to
+                            widen their browser to see the deal a card is
+                            offering. */}
+                        <span className="shrink-0 text-right text-sm font-semibold text-stone-700 [font-variant-numeric:tabular-nums] dark:text-stone-300">
+                          {(j.off > 0 || j.introPrice) && (
+                            <span className="mr-1 text-xs font-normal text-stone-400 line-through dark:text-stone-500">
+                              {j.baseStr}
+                            </span>
+                          )}
                           {j.feeGlance}
+                          {j.discountKind === "member" && (
+                            <span className="chip ml-1 border border-hearth-200 bg-hearth-50 align-middle font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                              Pro
+                            </span>
+                          )}
                         </span>
                       </div>
                       {j.glanceLine2 && (
-                        <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
+                        // CR3#6: this line sat at the 12px floor; text-sm
+                        // reads at 14px, the minimum for phone body text.
+                        // Already sm:hidden-scoped, so desktop (which never
+                        // rendered this block) is untouched.
+                        <p className="mt-0.5 truncate text-sm text-stone-500 dark:text-stone-400">
                           {j.glanceLine2}
                         </p>
                       )}
@@ -498,9 +570,18 @@ export default function LeadsBoard({
                             First big-ticket lead
                           </span>
                         )}
-                        {j.off > 0 && !j.introPrice && (
+                        {/* Never two badges at once (0149): a card shows
+                            EITHER the member discount OR the aging deal,
+                            whichever actually won - never both, and never the
+                            loser silently applied underneath. */}
+                        {j.discountKind === "member" && (
+                          <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                            Pro
+                          </span>
+                        )}
+                        {j.discountKind === "aging" && (
                           <span className="chip border border-amber-200 bg-amber-100 font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
-                            {j.off}% off, aging deal
+                            {j.off}% off, {agingDealPhrase(j.postedAgoLabel)}
                           </span>
                         )}
                         <span className="[font-variant-numeric:tabular-nums]">
@@ -511,9 +592,29 @@ export default function LeadsBoard({
                             </span>
                           )}{" "}
                           {j.feeStr}
+                          {j.discountKind === "member" && " with Pro"}
                         </span>
                       </span>
                     </div>
+                    {/* The honest "Pro members pay $X" quiet line (marketplace
+                        trust: a price change is always a visible line, never
+                        a silent adjustment - research-money-R3.md). Lives
+                        outside both breakpoint-gated blocks above so it is
+                        rendered exactly once for the list item's space-y-3 to
+                        count, and only appears when this pro is NOT a member
+                        AND membership would actually beat the price already
+                        shown - never a number that reads as a saving but
+                        would not be one (see memberQuoteStr in page.tsx). */}
+                    {j.memberQuoteStr && (
+                      <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                        <Link
+                          href="/pro/plus?reason=leads"
+                          className="underline hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:hover:text-stone-300"
+                        >
+                          Pro members pay {j.memberQuoteStr}
+                        </Link>
+                      </p>
+                    )}
                   </div>
 
                   {/* Folded detail: description, photos, budget/quality/scope
@@ -544,13 +645,23 @@ export default function LeadsBoard({
 
                   {/* Applicant count: shown on every card so a pro can judge
                       competition before paying the apply fee, not just once
-                      the cap is already hit. */}
+                      the cap is already hit. CR5 remove #3: "X of N spots
+                      taken" read as the same blind-bidding pressure pros
+                      resent about Angi/HomeAdvisor (pay for a lead, then find
+                      out how many others also bought it); Hearth's own
+                      guarantees already soften the real risk, so this now
+                      reads as transparency, not a countdown - red only once
+                      the job is actually full, same as before. */}
                   <p
                     className={`text-xs font-semibold ${
                       j.full ? "text-red-600 dark:text-red-400" : "text-stone-500 dark:text-stone-400"
                     }`}
                   >
-                    {j.spots} of {MAX_APPLICANTS_PER_JOB} spots taken
+                    {j.full
+                      ? `Full: ${MAX_APPLICANTS_PER_JOB} pros applied`
+                      : j.spots === 1
+                        ? "1 pro has applied"
+                        : `${j.spots} pros have applied`}
                   </p>
 
                   {j.conflict ? (
@@ -580,6 +691,9 @@ export default function LeadsBoard({
                       feeCents={j.feeCents}
                       category={j.categoryLabel}
                       introPrice={j.introPrice}
+                      baseFee={j.off > 0 || j.introPrice ? j.baseStr : null}
+                      discountKind={j.discountKind}
+                      memberQuoteStr={j.memberQuoteStr}
                       canAfford={j.canAfford}
                       billingHref={j.billingHref}
                     />
@@ -626,8 +740,8 @@ export default function LeadsBoard({
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400">
               Ghost protection: if the homeowner never responds and no one is
-              picked, your fee comes back as wallet credit after 7 days. One
-              reply from them ends it.
+              picked, your fee comes back as <strong>wallet credit</strong>{" "}
+              after 7 days. One reply from them ends it.
             </p>
           </div>
           <ul className="space-y-2">
@@ -671,9 +785,9 @@ export default function LeadsBoard({
               the narrow one-time guarantee, not a blanket "not chosen" refund,
               so it is rendered from the canonical sentence. */}
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            {FIRST_APPLICATION_GUARANTEE} {CREDIT_NOT_CASH_LINE} The credit
-            lands on its own and is good for 60 days. Check your billing page
-            for it.
+            {firstApplicationGuaranteeRich()} {creditNotCashLineRich()} The
+            credit lands on its own and is good for 60 days. Check your
+            billing page for it.
           </p>
           <ul className="space-y-2">
             {declinedApps.map((a) => (
@@ -761,11 +875,23 @@ function AssignedJobCard({ l }: { l: AssignedJobVM }) {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <OpenChatButton
-          leadId={l.id}
-          name={l.chatName}
-          label="Message"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <OpenChatButton
+            leadId={l.id}
+            name={l.chatName}
+            label="Message"
+          />
+          {/* Straight into the back-office tools with this job prefilled, so
+              the pro does not retype the category and description they are
+              looking at (research wave RC, 2026-08-30; the tools page verifies
+              the contractor owns the lead before it reads anything). */}
+          <Link
+            href={`/pro/tools?lead=${l.id}`}
+            className="btn-secondary text-sm"
+          >
+            Estimate
+          </Link>
+        </div>
         <JobStatusSelect id={l.id} status={l.status} />
       </div>
     </li>

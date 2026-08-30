@@ -21,8 +21,8 @@ const proCheckout = (trialEligible: boolean) =>
   });
 
 // startPlusCheckoutAction, exactly: the trial is gated through trialApplies,
-// which grants it to the weekly plan only. Pass the plan so a test cannot
-// assert a trial the real action would never send to Stripe.
+// which grants it on any cadence to an eligible account. Pass the plan anyway
+// so a test cannot assert a trial the real action would never send to Stripe.
 const plusCheckout = (
   plan: "weekly" | "monthly" | "yearly",
   trialEligible: boolean
@@ -81,9 +81,9 @@ describe("checkoutCadence", () => {
   });
 
   // /plus preselects Monthly and passes it, so an unreadable field lands on
-  // the anchor plan - and never on weekly, the only cadence carrying free
-  // days. A garbled submit is charged today rather than silently trialed.
-  it("falls back to monthly for the Plus picker, never to the trial cadence", () => {
+  // the anchor plan the buyer was looking at rather than on a cheaper or
+  // dearer one. Every cadence trials now, so what this protects is the PRICE.
+  it("falls back to monthly for the Plus picker, the cadence its card preselects", () => {
     expect(checkoutCadence(null, "monthly")).toBe("monthly");
     expect(checkoutCadence("", "monthly")).toBe("monthly");
     expect(checkoutCadence("week", "monthly")).toBe("monthly");
@@ -172,16 +172,25 @@ describe("the default cadence flowing into a disclosure", () => {
     );
   });
 
-  it("promises no trial on the default Plus cadence, which bills today", () => {
-    // The Plus trial belongs to the weekly plan only, so the fallback
-    // (monthly) path must never quote it - not in the copy, and not in the
-    // Stripe session the same value builds.
-    expect(billingTerms(plusPlanFor(null), true).stepUp).toBeNull();
+  it("carries the trial onto the default Plus cadence too", () => {
+    // The trial used to belong to weekly alone, so the fallback (monthly) path
+    // quoted a charge today. Every cadence trials now, so the fallback quotes
+    // the free days AND the monthly price they step up to - and the Stripe
+    // session the same value builds carries trial_period_days.
     expect(billingTerms(plusPlanFor(null), true).summary).toBe(
+      `Free for ${PLUS_PLAN.trialDays} days. After that it is $${PLUS_PLAN.monthly.toFixed(2)} a month, and it renews every month until you cancel.`
+    );
+    expect(plusCheckout("monthly", true).trial_period_days).toBe(
+      PLUS_PLAN.trialDays
+    );
+    expect(plusCheckout("yearly", true).trial_period_days).toBe(
+      PLUS_PLAN.trialDays
+    );
+    // A returning subscriber still bills on day one, on every cadence.
+    expect(billingTerms(plusPlanFor(null), false).stepUp).toBeNull();
+    expect(billingTerms(plusPlanFor(null), false).summary).toBe(
       `$${PLUS_PLAN.monthly.toFixed(2)} today, and it renews every month until you cancel.`
     );
-    expect("trial_period_days" in plusCheckout("monthly", true)).toBe(false);
-    expect("trial_period_days" in plusCheckout("yearly", true)).toBe(false);
     // Pro is untouched: both its cadences still trial.
     expect(billingTerms(proPlanFor(null), true).stepUp).toContain(
       `Free for ${PRO_PLAN.trialDays} days`
@@ -190,24 +199,47 @@ describe("the default cadence flowing into a disclosure", () => {
   });
 });
 
-// The 3 free days are part of the WEEKLY plan and nothing else. Four things
-// have to agree on that: the /plus copy, the Stripe trial, the consent record
-// written into session metadata, and the acknowledgment sent afterwards. They
-// all read trialApplies(), so these tests pin the one predicate plus the
-// sentences it decides.
-describe("the Plus trial is weekly-only", () => {
-  it("grants the trial to a brand-new weekly checkout", () => {
-    expect(trialApplies("weekly", true)).toBe(true);
-    expect(plusCheckout("weekly", true).trial_period_days).toBe(
-      PLUS_PLAN.trialDays
-    );
-    expect(plusCheckout("weekly", true).metadata.intro_step_up).toBe("true");
+// The 3 free days come with EVERY Plus cadence for an eligible account, and the
+// subscription then renews at the price of the cadence that was picked. Four
+// things have to agree on that: the /plus copy, the Stripe trial, the consent
+// record written into session metadata, and the acknowledgment sent afterwards.
+// They all read trialApplies(), so these tests pin the one predicate plus the
+// sentences it decides. It was weekly-only until 2026-08-30, which forced
+// anyone who wanted to try the annual plan to buy weekly first and switch.
+describe("the Plus trial rides on every cadence", () => {
+  it("grants the trial to a brand-new checkout on any of the three", () => {
+    for (const plan of ["weekly", "monthly", "yearly"] as const) {
+      expect(trialApplies(plan, true)).toBe(true);
+      const data = plusCheckout(plan, true);
+      expect(data.trial_period_days).toBe(PLUS_PLAN.trialDays);
+      // The step-up flag the renewal cron reads: the next charge is higher
+      // than this one (nothing), on every cadence.
+      expect(data.metadata.intro_step_up).toBe("true");
+    }
   });
 
-  it("never grants it on monthly or yearly, however eligible the buyer is", () => {
-    for (const plan of ["monthly", "yearly"] as const) {
-      expect(trialApplies(plan, true)).toBe(false);
-      const data = plusCheckout(plan, true);
+  it("renews at the picked cadence's own price after the free days", () => {
+    // The case the weekly-only rule could not express: free days on annual,
+    // then the annual charge on the annual cycle.
+    const yearly = billingTerms("yearly", true);
+    expect(yearly.summary).toBe(
+      `Free for ${PLUS_PLAN.trialDays} days. After that it is $${PLUS_PLAN.yearly.toFixed(2)}, and it renews every 12 months until you cancel.`
+    );
+    expect(yearly.chargedToday).toContain("Nothing today");
+    const monthly = billingTerms("monthly", true);
+    expect(monthly.summary).toBe(
+      `Free for ${PLUS_PLAN.trialDays} days. After that it is $${PLUS_PLAN.monthly.toFixed(2)} a month, and it renews every month until you cancel.`
+    );
+    const weekly = billingTerms("weekly", true);
+    expect(weekly.summary).toBe(
+      `Free for ${PLUS_PLAN.trialDays} days. After that it is $${PLUS_PLAN.weekly.toFixed(2)} a week, and it renews every week until you cancel.`
+    );
+  });
+
+  it("never grants it to a returning subscriber on any cadence", () => {
+    for (const plan of ["weekly", "monthly", "yearly"] as const) {
+      expect(trialApplies(plan, false)).toBe(false);
+      const data = plusCheckout(plan, false);
       // Omitted, not zero: Stripe rejects a 0, and the step-up flag the
       // renewal cron reads has to say there is no step-up coming.
       expect("trial_period_days" in data).toBe(false);
@@ -215,10 +247,19 @@ describe("the Plus trial is weekly-only", () => {
     }
   });
 
-  it("never grants it to a returning subscriber on any cadence", () => {
-    expect(trialApplies("weekly", false)).toBe(false);
-    expect(trialApplies("monthly", false)).toBe(false);
-    expect(trialApplies("yearly", false)).toBe(false);
+  it("charges a returning subscriber today, in one sentence, on every cadence", () => {
+    expect(billingTerms("monthly", false).summary).toBe(
+      `$${PLUS_PLAN.monthly.toFixed(2)} today, and it renews every month until you cancel.`
+    );
+    expect(billingTerms("yearly", false).summary).toBe(
+      `$${PLUS_PLAN.yearly.toFixed(2)} today, and it renews every 12 months until you cancel.`
+    );
+    // No trial anywhere in those disclosures, including the cancellation
+    // sentence, which gains a trial clause only when a trial exists.
+    for (const plan of ["weekly", "monthly", "yearly"] as const) {
+      expect(billingTermsText(plan, false)).not.toContain("trial");
+      expect(billingTermsText(plan, false)).not.toContain("free");
+    }
   });
 
   it("leaves both Pro cadences trialing", () => {
@@ -226,45 +267,18 @@ describe("the Plus trial is weekly-only", () => {
     expect(trialApplies("pro_yearly", true)).toBe(true);
   });
 
-  it("says the weekly step-up in one sentence", () => {
-    const terms = billingTerms("weekly", true);
-    expect(terms.summary).toBe(
-      `Free for ${PLUS_PLAN.trialDays} days. After that it is $${PLUS_PLAN.weekly.toFixed(2)} a week, and it renews every week until you cancel.`
-    );
-    expect(terms.chargedToday).toContain("Nothing today");
-  });
-
-  it("says the monthly charge lands today, in one sentence", () => {
-    const terms = billingTerms("monthly", true);
-    expect(terms.summary).toBe(
-      `$${PLUS_PLAN.monthly.toFixed(2)} today, and it renews every month until you cancel.`
-    );
-    expect(terms.chargedToday).toBe(`$${PLUS_PLAN.monthly.toFixed(2)} today.`);
-    expect(billingTermsText("monthly", true)).not.toContain("trial");
-    expect(billingTermsText("monthly", true)).not.toContain("free");
-  });
-
-  it("says the yearly charge lands today, in one sentence", () => {
-    const terms = billingTerms("yearly", true);
-    expect(terms.summary).toBe(
-      `$${PLUS_PLAN.yearly.toFixed(2)} today, and it renews every 12 months until you cancel.`
-    );
-    expect(terms.chargedToday).toBe(`$${PLUS_PLAN.yearly.toFixed(2)} today.`);
-    // No trial anywhere in the yearly disclosure, including the cancellation
-    // sentence, which gains a trial clause only when a trial exists.
-    expect(billingTermsText("yearly", true)).not.toContain("trial");
-    expect(billingTermsText("yearly", true)).not.toContain("free");
-  });
-
   it("keeps the consent record the checkout stores in step with the trial", () => {
     // What startPlusCheckoutAction writes into Stripe session metadata, built
     // from the same predicate that decides trial_period_days.
     for (const plan of ["weekly", "monthly", "yearly"] as const) {
-      const trial = trialApplies(plan, true);
-      const text = billingTermsText(plan, true);
-      expect(text.includes(`first ${PLUS_PLAN.trialDays} days are free`)).toBe(
-        trial
-      );
+      for (const eligible of [true, false]) {
+        const trial = trialApplies(plan, eligible);
+        const text = billingTermsText(plan, eligible);
+        expect(
+          text.includes(`first ${PLUS_PLAN.trialDays} days are free`)
+        ).toBe(trial);
+        expect("trial_period_days" in plusCheckout(plan, eligible)).toBe(trial);
+      }
     }
   });
 });

@@ -11,6 +11,147 @@ import Anthropic from "@anthropic-ai/sdk";
 // visibly changed character between turns. One model, one voice.
 export const MODEL = "claude-sonnet-5";
 
+// The cheap model, for the mechanical routes only. Half the price of MODEL
+// ($1/$5 per million tokens against $2/$10), 200K context, 64K max output.
+//
+// HALF, not a tenth. Haiku 4.5 is the budget tier next to Opus, but next to
+// claude-sonnet-5 it is a 2x saving, and it is a materially weaker model. So
+// it is used ONLY where a human reads and edits the output before it matters
+// (a draft the pro rewrites, a data plate the homeowner confirms on screen)
+// and never where the model's answer IS the product or lands straight in a
+// record nobody re-reads. See ROUTES below for which is which.
+export const FAST_MODEL = "claude-haiku-4-5";
+
+// What each model will actually accept. Sending a field a model does not
+// support is a 400, not a graceful degrade, so the request builders consult
+// this instead of every call site having to remember.
+//
+// Haiku 4.5 predates adaptive thinking (that starts at the 4.6 line) and does
+// not take the full effort ladder, so both fields are dropped for it. Its
+// prompt-cache minimum is also 4096 tokens against 1024 on claude-sonnet-5,
+// which means the short tool prompts simply will not cache on it - no error,
+// just no cache read. That is fine: those prompts are small, and the caching
+// that matters is on the two chat routes, which stay on MODEL.
+type ModelCaps = {
+  effort: boolean;
+  adaptiveThinking: boolean;
+  // Whether output_config.format (structured outputs) is known-good on this
+  // model. "unverified" means the first rejection falls back to MODEL for the
+  // rest of the process rather than failing the user's request.
+  structuredOutputs: "yes" | "unverified";
+};
+
+const MODEL_CAPS: Record<string, ModelCaps> = {
+  [MODEL]: { effort: true, adaptiveThinking: true, structuredOutputs: "yes" },
+  [FAST_MODEL]: {
+    effort: false,
+    adaptiveThinking: false,
+    structuredOutputs: "unverified",
+  },
+};
+
+function capsFor(model: string): ModelCaps {
+  return (
+    MODEL_CAPS[model] ?? {
+      effort: true,
+      adaptiveThinking: true,
+      structuredOutputs: "yes",
+    }
+  );
+}
+
+// Published list price per MILLION tokens, used only for the debug cost line.
+// Not a billing source of truth: prices move, and the real number is the one
+// on the invoice. Kept next to the models so a stale figure is obvious.
+const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
+  [MODEL]: { input: 2, output: 10 },
+  [FAST_MODEL]: { input: 1, output: 5 },
+};
+
+/**
+ * EVERY model call in Hearth, in one table.
+ *
+ * Each route names its model, its output ceiling, and its reasoning settings
+ * here rather than at the call site, so "what does this feature cost" is one
+ * file to read and a model change is one line to edit. Call sites pass
+ * `route: "draft-job"` and stop repeating themselves; anything they still pass
+ * explicitly (a timeout, an override in a test) still wins.
+ *
+ * HOW A ROUTE EARNS THE CHEAP MODEL: a person reads the output and can fix it
+ * before it does anything. A pro rewrites a draft apply message; a homeowner
+ * confirms the model number read off a data plate. The routes that stay on
+ * MODEL are the ones where the answer either IS the product (the two chats) or
+ * is written into a record, a letter, or a claim that nobody re-reads line by
+ * line, where a quiet mistake is expensive and invisible.
+ *
+ * max_tokens is a BACKSTOP, not a dial: output is billed for what is actually
+ * generated, so a generous ceiling costs nothing unless it is used, and a
+ * tight one truncates mid-answer. The numbers here are sized to the longest
+ * legitimate output of each route, not trimmed for savings.
+ */
+export type AiRoute =
+  | "ask"
+  | "pro-ask"
+  | "draft-apply"
+  | "draft-job"
+  | "confirm-system"
+  | "pro-compliance"
+  | "pro-past-jobs"
+  | "pro-tools"
+  | "extract-document"
+  | "ingest-inspection"
+  | "insurance-packet"
+  | "tax-appeal"
+  | "quote-transcribe"
+  | "quote-diagnose";
+
+type RouteConfig = {
+  model: string;
+  maxTokens: number;
+  effort?: ClaudeEffort;
+  thinking?: boolean;
+};
+
+export const ROUTES: Record<AiRoute, RouteConfig> = {
+  // The two chats. The answer is the product, so they keep MODEL, thinking
+  // explicitly off (a homeowner is watching a spinner) and low effort.
+  // Roughly 2.2K input tokens against a cached prefix plus ~300 out.
+  ask: { model: MODEL, maxTokens: 4096, effort: "low", thinking: false },
+  "pro-ask": { model: MODEL, maxTokens: 2048, effort: "low", thinking: false },
+
+  // Drafts and plate reads: a person edits the result on screen before it
+  // does anything, so the cheap model is the right trade. No effort and no
+  // thinking fields, because Haiku 4.5 takes neither (see MODEL_CAPS).
+  "draft-apply": { model: FAST_MODEL, maxTokens: 1024 },
+  "draft-job": { model: FAST_MODEL, maxTokens: 1024 },
+  "confirm-system": { model: FAST_MODEL, maxTokens: 1024 },
+  "pro-past-jobs": { model: FAST_MODEL, maxTokens: 16000 },
+  "pro-tools": { model: FAST_MODEL, maxTokens: 8000 },
+
+  // Stays on MODEL, deliberately. Each of these writes something a person
+  // will not re-read line by line: fields into their home record, an appeal
+  // letter to an assessor, a requote packet to an insurer, a verdict on
+  // whether a contractor's price is fair. A wrong install year or a soft
+  // argument in a letter is invisible until it costs money, and the saving
+  // (half of a route that runs a handful of times a day) does not buy that
+  // risk. Flipping any of them to FAST_MODEL is a one-line change here, and
+  // wants an eval first.
+  "extract-document": { model: MODEL, maxTokens: 4096, thinking: true },
+  // Transcribing a quote LOOKS mechanical and is not: it reads dollar amounts
+  // off a photo, and the verdict below is built entirely on those numbers. A
+  // misread $4,200 as $4,700 produces a confident, wrong answer about whether
+  // a contractor is overcharging, and the homeowner has no reason to doubt it.
+  // Nobody re-checks a transcript line by line against the original.
+  "quote-transcribe": { model: MODEL, maxTokens: 16000, thinking: true },
+  "ingest-inspection": { model: MODEL, maxTokens: 16000, thinking: true },
+  "insurance-packet": { model: MODEL, maxTokens: 8000, thinking: true },
+  "tax-appeal": { model: MODEL, maxTokens: 8000, thinking: true },
+  "quote-diagnose": { model: MODEL, maxTokens: 16000, thinking: true },
+  // Compliance wording (licence, insurance, permits) read off a document.
+  // Cheap and low volume, and being wrong here is a legal-shaped problem.
+  "pro-compliance": { model: MODEL, maxTokens: 1024, effort: "low" },
+};
+
 // Constructed lazily on first use, NOT at import time, matching the lazy
 // Stripe client in src/lib/stripe.ts. A dev machine without the key can still
 // render every page that never calls the model; the first real call throws a
@@ -154,6 +295,13 @@ export type ClaudeResult = {
 
 export type GenerateTextOptions = {
   /**
+   * Which entry in ROUTES this call is. Supplies the model, the output
+   * ceiling, and the reasoning settings so a call site does not restate them.
+   * Anything passed explicitly alongside it still wins, which is what lets a
+   * test pin a value and what keeps every pre-routing call site working.
+   */
+  route?: AiRoute;
+  /**
    * The stable system prompt. This is the part that gets the cache
    * breakpoint, so it must be byte-identical from one request to the next.
    */
@@ -251,11 +399,60 @@ export type ClaudeJsonResult<T> = ClaudeResult & { data: T | null };
 
 // Debug-level cost log. Not console.log: this fires on every AI request and
 // should stay out of normal server output. Run with DEBUG unset to silence it.
-function logUsage(label: string, usage: Anthropic.Usage) {
+//
+// NO PII, ever: a route label, a model id, and four token counts. The
+// homeowner's question and the model's answer never appear here.
+//
+// cache_read is the field that says whether caching is actually working. It
+// is the only ground truth for that - the code can look right and still miss
+// on every request if something upstream changed a byte of the prefix - so it
+// is printed on every call rather than measured once and assumed.
+function logUsage(label: string, model: string, usage: Anthropic.Usage) {
+  const price = PRICE_PER_MTOK[model];
+  // Cache reads bill at about a tenth of the input rate and 1h writes at
+  // double it. Close enough to spot a route that costs ten times what it
+  // should; the invoice is still the real number.
+  const cost = price
+    ? ((usage.input_tokens ?? 0) * price.input +
+        (usage.cache_read_input_tokens ?? 0) * price.input * 0.1 +
+        (usage.cache_creation_input_tokens ?? 0) * price.input * 2 +
+        (usage.output_tokens ?? 0) * price.output) /
+      1_000_000
+    : null;
   console.debug(
-    `[claude] ${label} model=${MODEL} in=${usage.input_tokens} out=${usage.output_tokens} ` +
-      `cache_read=${usage.cache_read_input_tokens ?? 0} cache_write=${usage.cache_creation_input_tokens ?? 0}`
+    `[claude] ${label} model=${model} in=${usage.input_tokens} out=${usage.output_tokens} ` +
+      `cache_read=${usage.cache_read_input_tokens ?? 0} cache_write=${usage.cache_creation_input_tokens ?? 0}` +
+      (cost === null ? "" : ` est=$${cost.toFixed(5)}`)
   );
+}
+
+/**
+ * The model, output ceiling, and reasoning settings for one call: the route's
+ * row from ROUTES, with anything the caller passed explicitly layered on top.
+ *
+ * A caller with no route keeps the old defaults exactly (MODEL, 4096 tokens,
+ * whatever thinking and effort it passed), so nothing that has not been moved
+ * onto the table changes behaviour.
+ */
+function resolveRoute(opts: GenerateTextOptions): {
+  model: string;
+  maxTokens: number;
+  effort?: ClaudeEffort;
+  thinking?: boolean;
+} {
+  const row = opts.route ? ROUTES[opts.route] : undefined;
+  const model = row?.model ?? MODEL;
+  const caps = capsFor(model);
+  const effort = opts.effort ?? row?.effort;
+  const thinking = opts.thinking ?? row?.thinking;
+  return {
+    model,
+    maxTokens: opts.maxTokens ?? row?.maxTokens ?? 4096,
+    // Dropped rather than sent-and-rejected on a model that does not take
+    // them. A 400 here would be a broken feature, not a slower one.
+    effort: caps.effort ? effort : undefined,
+    thinking: caps.adaptiveThinking ? thinking : undefined,
+  };
 }
 
 function toUsage(usage: Anthropic.Usage): ClaudeUsage {
@@ -421,6 +618,15 @@ export function isRateLimitError(e: unknown): boolean {
 }
 
 /**
+ * True when the API rejected the request itself (400). Written against
+ * Anthropic.APIError rather than the BadRequestError subclass so it keeps
+ * working under the SDK stub the tests use, exactly like isRateLimitError.
+ */
+export function isBadRequestError(e: unknown): boolean {
+  return e instanceof Anthropic.APIError && e.status === 400;
+}
+
+/**
  * Plain-English reason a reply came back unusable, or null when it is fine.
  * Callers surface this instead of a raw stop_reason or an empty bubble.
  */
@@ -458,19 +664,24 @@ function buildTextRequest(
 ): Anthropic.MessageCreateParamsNonStreaming {
   const system = buildSystem(opts);
   const messages = requireMessages(opts);
+  // Model, ceiling, and reasoning come from the ROUTES table unless the caller
+  // overrode them. Caches are model-scoped, so two routes on different models
+  // never share a cache entry even with a byte-identical prompt - which is
+  // fine, because the prompts that are worth caching are per-route anyway.
+  const { model, maxTokens, effort, thinking } = resolveRoute(opts);
   return {
-    model: MODEL,
-    max_tokens: opts.maxTokens ?? 4096,
+    model,
+    max_tokens: maxTokens,
     ...(system ? { system } : {}),
     messages,
     // Three-state, see the `thinking` doc above: omitting the field is NOT
     // the same as disabling it on this model.
-    ...(opts.thinking === true
+    ...(thinking === true
       ? { thinking: { type: "adaptive" as const } }
-      : opts.thinking === false
+      : thinking === false
         ? { thinking: { type: "disabled" as const } }
         : {}),
-    ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
+    ...(effort ? { output_config: { effort } } : {}),
   };
 }
 
@@ -485,12 +696,13 @@ function buildTextRequest(
 export async function generateText(
   opts: GenerateTextOptions
 ): Promise<ClaudeResult> {
+  const request = buildTextRequest(opts);
   const res = await getClaude().messages.create(
-    buildTextRequest(opts),
+    request,
     opts.timeoutMs ? { timeout: opts.timeoutMs } : undefined
   );
 
-  logUsage(opts.label ?? "generateText", res.usage);
+  logUsage(opts.label ?? "generateText", request.model, res.usage);
   return {
     text: textOf(res.content),
     stopReason: res.stop_reason,
@@ -550,7 +762,7 @@ export function streamText(opts: GenerateTextOptions): ClaudeStream {
   const final = stream.finalMessage().then((msg) => {
     // Same cost line as the non-streaming path, on the same label, so the two
     // are indistinguishable in the logs.
-    logUsage(opts.label ?? "streamText", msg.usage);
+    logUsage(opts.label ?? "streamText", request.model, msg.usage);
     return {
       text: textOf(msg.content),
       stopReason: msg.stop_reason,
@@ -583,27 +795,90 @@ export function streamText(opts: GenerateTextOptions): ClaudeStream {
  * the parsed object, or null when the model refused, ran out of output budget
  * mid-object, or returned nothing.
  */
+/**
+ * Models that turned out NOT to accept structured outputs, learned the only
+ * way there is to learn it: the API said no.
+ *
+ * MODEL_CAPS marks a model "unverified" when the documentation does not state
+ * whether output_config.format works on it. Sending it anyway and handling the
+ * rejection is safer than either guessing yes (every JSON route breaks the
+ * first time it runs) or guessing no (the schema quietly stops being enforced
+ * and we are back to regex-ing JSON out of prose). The first rejection is
+ * remembered for the life of the process, so the fallback costs one extra call
+ * per deploy, not one per request.
+ */
+const noStructuredOutputs = new Set<string>();
+
+function buildJsonRequest<T>(
+  opts: GenerateJsonOptions<T>,
+  model: string,
+  effort: ClaudeEffort | undefined,
+  thinking: boolean | undefined,
+  maxTokens: number
+): Anthropic.MessageCreateParamsNonStreaming {
+  const system = buildSystem(opts);
+  return {
+    model,
+    max_tokens: maxTokens,
+    ...(system ? { system } : {}),
+    messages: requireMessages(opts),
+    ...(thinking ? { thinking: { type: "adaptive" as const } } : {}),
+    output_config: {
+      ...(effort ? { effort } : {}),
+      format: { type: "json_schema", schema: opts.schema },
+    },
+  };
+}
+
 export async function generateJson<T>(
   opts: GenerateJsonOptions<T>
 ): Promise<ClaudeJsonResult<T>> {
-  const system = buildSystem(opts);
-  const messages = requireMessages(opts);
-  const res = await getClaude().messages.create(
-    {
-      model: MODEL,
-      max_tokens: opts.maxTokens ?? 4096,
-      ...(system ? { system } : {}),
-      messages,
-      ...(opts.thinking ? { thinking: { type: "adaptive" as const } } : {}),
-      output_config: {
-        ...(opts.effort ? { effort: opts.effort } : {}),
-        format: { type: "json_schema", schema: opts.schema },
-      },
-    },
-    opts.timeoutMs ? { timeout: opts.timeoutMs } : undefined
-  );
+  const resolved = resolveRoute(opts);
+  // A model already known to reject schemas never gets asked again.
+  const model = noStructuredOutputs.has(resolved.model)
+    ? MODEL
+    : resolved.model;
+  const caps = capsFor(model);
+  const effort = caps.effort ? resolved.effort : undefined;
+  const thinking = caps.adaptiveThinking ? resolved.thinking : undefined;
 
-  logUsage(opts.label ?? "generateJson", res.usage);
+  let usedModel = model;
+  let res: Anthropic.Message;
+  try {
+    res = await getClaude().messages.create(
+      buildJsonRequest(opts, model, effort, thinking, resolved.maxTokens),
+      opts.timeoutMs ? { timeout: opts.timeoutMs } : undefined
+    );
+  } catch (err) {
+    // A 400 from a model whose schema support was never confirmed is the one
+    // failure worth retrying: the request itself was fine everywhere else, so
+    // rerunning it on MODEL gives the caller the enforced schema it asked for
+    // instead of a broken feature. Anything else (a 429, a timeout, a real bad
+    // request) still throws, exactly as it always has.
+    const unverified = capsFor(model).structuredOutputs === "unverified";
+    if (!unverified || model === MODEL || !isBadRequestError(err)) {
+      throw err;
+    }
+    console.error(
+      `[claude] ${model} rejected structured outputs, falling back to ${MODEL} for the rest of this process:`,
+      err instanceof Error ? err.message : err
+    );
+    noStructuredOutputs.add(model);
+    usedModel = MODEL;
+    const fallbackCaps = capsFor(MODEL);
+    res = await getClaude().messages.create(
+      buildJsonRequest(
+        opts,
+        MODEL,
+        fallbackCaps.effort ? resolved.effort : undefined,
+        fallbackCaps.adaptiveThinking ? resolved.thinking : undefined,
+        resolved.maxTokens
+      ),
+      opts.timeoutMs ? { timeout: opts.timeoutMs } : undefined
+    );
+  }
+
+  logUsage(opts.label ?? "generateJson", usedModel, res.usage);
   const text = textOf(res.content);
   let data: T | null = null;
   if (text) {

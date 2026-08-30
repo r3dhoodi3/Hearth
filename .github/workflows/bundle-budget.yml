@@ -1,0 +1,47 @@
+# Fails the build if a route's First Load JS grows more than 10% over the
+# checked-in baseline in perf-budget.json (docs/PERFORMANCE.md). This is the
+# CI half of the "perceived speed" wave: a bundle regression should show up
+# as a red check on the PR that caused it, not get noticed weeks later in a
+# Lighthouse run.
+name: Bundle size budget
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  budget:
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned to a COMMIT SHA, not the v4 tag - see the same note in
+      # sync-test-deploy.yml. Bumping either pin is a one-line, reviewable
+      # change: look up the next tag's commit with
+      # `gh api repos/<org>/<repo>/git/ref/tags/vX.Y.Z`.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # A dummy value for every env var next.config.mjs or a route reads at
+      # build time, so the build doesn't fail on a missing secret in this
+      # workflow's environment - this job only cares about bundle SIZE, never
+      # runs the server, and never talks to a real Supabase/Stripe project.
+      - name: Build and check the budget
+        run: npm run perf:budget
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          # REQUIRED per .env.local.example: several signed-in pages throw at
+          # render time without it, which would fail this build for a reason
+          # that has nothing to do with bundle size.
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000/

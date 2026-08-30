@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AI_GLOBAL_DAILY_LIMIT, AI_GLOBAL_BUCKET } from "@/lib/constants";
+import { trackServerEvent } from "@/lib/trackServer";
 
 // Shared per-user daily cap for the AI-backed TOOL routes (analyze-quote,
 // extract-document, ingest-inspection, insurance-packet, tax-appeal, the pro
@@ -24,9 +25,9 @@ export const DAILY_LIMIT_TRIAL = DAILY_LIMIT_PLUS;
 export const ASK_DAILY_FREE = 3;
 export const ASK_DAILY_PLUS = 15;
 // The trial gets the SAME ceiling as a paid plan, as an alias so the two can
-// never drift. The trial rides on the weekly plan, and the owner's rule is that
+// never drift. The trial can run on any cadence, and the owner's rule is that
 // weekly, monthly, and annual include exactly the same things: a smaller trial
-// number made the weekly card look like a lesser plan, and someone who paid for
+// number made a trialing member a lesser member, and someone who paid for
 // a week of Plus was getting less Plus than someone who paid for a month.
 // The trade-off, kept here so a future reader knows it was a choice: a trial
 // costs nothing to start and nothing to start again from a fresh email, so full
@@ -796,6 +797,203 @@ export async function allowAbortRefund(userId: string): Promise<boolean> {
     console.error("allowAbortRefund failed - refunding anyway:", err);
     return true;
   }
+}
+
+// HOW MANY REFUSED OR EMPTY ANSWERS AN HOUR STILL EARN A REFUND.
+//
+// Both chat routes hand the question back when the model returns no text at
+// all, which includes a hard safety refusal (stop_reason "refusal"). That is
+// right for a hiccup and wrong as an unlimited rule: a caller who can reliably
+// make the model refuse - and someone probing for a jailbreak is doing exactly
+// that, over and over - never depletes their daily allowance, while every one
+// of those attempts still opens a paid model call. The red-team writeup filed
+// this as RT3-3.
+//
+// Three an hour is far more than an honest person ever sees (a genuine refusal
+// on a home question is rare) and far too few to farm with. Past that the
+// refusal still gets its honest answer on screen, the question just stays
+// spent, so probing costs the prober their own allowance.
+export const ASK_REFUSAL_REFUND_LIMIT = 3;
+export const ASK_REFUSAL_REFUND_WINDOW_SECONDS = 3600;
+
+// Counts one refused/empty answer for this user and reports whether it still
+// earns a refund. Its own bucket, so it can never interact with the daily,
+// burst, or abort counters.
+//
+// FAILS OPEN, like allowAbortRefund and for the same reason: this decides
+// whether to give something BACK. A counter blip must not cost an honest
+// homeowner a question, and during an outage their questions are not being
+// counted either.
+export async function allowRefusalRefund(userId: string): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const { data: allowed, error } = await admin.rpc("rate_limit_hit", {
+      p_bucket: `ask-refusal:${userId}`,
+      p_limit: ASK_REFUSAL_REFUND_LIMIT,
+      p_window_seconds: ASK_REFUSAL_REFUND_WINDOW_SECONDS,
+    });
+    if (error) throw error;
+    return allowed !== false;
+  } catch (err) {
+    console.error("allowRefusalRefund failed - refunding anyway:", err);
+    return true;
+  }
+}
+
+// A PER-DAY OUTPUT-TOKEN BUDGET, on top of the per-day question count.
+//
+// Counting questions bounds how OFTEN someone asks, not how much they get
+// back. "Write me the longest possible answer" repeated fifteen times is the
+// same fifteen questions as fifteen one-line answers and several times the
+// output bill, and output tokens are the expensive half ($10 per million
+// against $2 for input). This is the second ceiling: a day's questions may
+// also only produce so many words.
+//
+// Sized as questions x ASK_OUTPUT_TOKENS_PER_ANSWER rather than a flat number,
+// so it scales with whatever allowance the tier already has and cannot
+// accidentally bite before the question cap does. 2,000 tokens is roughly
+// three times the longest answer the prompt asks for (an answer under about
+// 150 words plus its trailing blocks lands near 300 to 600), so a normal
+// conversation never comes near it and a farmer asking for maximum-length
+// output every time runs out around half way through their day.
+export const ASK_OUTPUT_TOKENS_PER_ANSWER = 2000;
+
+export function askOutputBudgetFor(
+  tier: AiTier,
+  surface: AskSurface = "homeowner"
+): number {
+  return askDailyLimitFor(tier, surface) * ASK_OUTPUT_TOKENS_PER_ANSWER;
+}
+
+// The bucket the day's output tokens accumulate in. Per user, per surface,
+// same 24 hour window as the question counter, so the two reset together.
+function askOutputBucket(userId: string, surface: AskSurface): string {
+  return `ask-out:${surface}:${userId}`;
+}
+
+/**
+ * Has this caller already produced their day's worth of answer text?
+ *
+ * Read-only: it does not count anything, so calling it costs one indexed row
+ * read and it can safely run in front of the question counter (an over-budget
+ * request is refused without spending a question on the refusal).
+ *
+ * FAILS OPEN, deliberately, unlike the gates above it. This is a second
+ * ceiling behind the authoritative one: the per-user question cap still binds,
+ * still fails closed, and already bounds the day. Failing closed here would
+ * turn a single unreadable row into "Ask Hearth is down" for someone who has
+ * asked nothing today, which is a much worse trade than one extra long answer.
+ */
+export async function overAskOutputBudget(
+  userId: string,
+  tier: AiTier,
+  surface: AskSurface = "homeowner"
+): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("rate_limits")
+      .select("count")
+      .eq("bucket", askOutputBucket(userId, surface))
+      .eq("window_start", askWindowStart())
+      .maybeSingle();
+    if (error || !data) return false;
+    return data.count >= askOutputBudgetFor(tier, surface);
+  } catch (err) {
+    console.error("overAskOutputBudget read failed - continuing:", err);
+    return false;
+  }
+}
+
+/**
+ * Add the output tokens one answer actually cost to today's budget.
+ *
+ * WHY NOT rate_limit_hit: that RPC increments by exactly one, and this needs
+ * to add a few hundred. Rather than ship a migration for a counter that only
+ * ever informs a soft ceiling, this walks the row directly with the
+ * service-role client (the only client that can: rate_limits has RLS on and no
+ * policies), under the same compare-and-swap the refunds use, so two answers
+ * finishing at once cannot lose one of the two writes.
+ *
+ * Best effort, exactly like addAiUsage: never throws, never blocks the answer
+ * on its way to the person waiting for it.
+ */
+export async function addAskOutputTokens(
+  userId: string,
+  surface: AskSurface,
+  tokens: number
+): Promise<void> {
+  if (!Number.isFinite(tokens) || tokens <= 0) return;
+  const bucket = askOutputBucket(userId, surface);
+  const windowStart = askWindowStart();
+  try {
+    const admin = createAdminClient();
+    for (let attempt = 0; attempt < REFUND_CAS_ATTEMPTS; attempt++) {
+      const { data, error } = await admin
+        .from("rate_limits")
+        .select("count")
+        .eq("bucket", bucket)
+        .eq("window_start", windowStart)
+        .maybeSingle();
+      if (error) return;
+
+      if (!data) {
+        // First answer of the day in this window. A concurrent insert wins the
+        // primary key and this loops round to the update branch instead.
+        const { error: insertError } = await admin
+          .from("rate_limits")
+          .insert({ bucket, window_start: windowStart, count: Math.round(tokens) });
+        if (!insertError) return;
+        continue;
+      }
+
+      const { data: updated, error: updateError } = await admin
+        .from("rate_limits")
+        .update({ count: data.count + Math.round(tokens) })
+        .eq("bucket", bucket)
+        .eq("window_start", windowStart)
+        // The COMPARE half: a row somebody else moved matches nothing, so we
+        // re-read and try again rather than clobbering their write.
+        .eq("count", data.count)
+        .select("count");
+      if (updateError) return;
+      if (updated && updated.length > 0) return;
+    }
+  } catch (err) {
+    console.error("addAskOutputTokens failed:", err);
+  }
+}
+
+// THE ABUSE SIGNAL, as an enum and nothing else.
+//
+// These land in app_events next to the product analytics, so the payload rule
+// from docs/ANALYTICS.md applies at its strictest: a KIND, never the text that
+// triggered it. A homeowner's question, a pasted document, and a jailbreak
+// attempt are all free text, and free text in an analytics table is a data
+// leak waiting for someone to run the wrong query. Knowing that a user tripped
+// "burst" eleven times in an hour is the whole signal; knowing what they typed
+// adds nothing an operator can act on.
+export type AiAbuseKind =
+  | "burst" // firing requests faster than a person can read them
+  | "daily" // spent their own day's allowance
+  | "output_budget" // spent their day's worth of answer text
+  | "global" // an owner-wide breaker or ceiling shed this request
+  | "oversize" // a body past the hard byte ceiling
+  | "empty" // a send with no question and no photo in it
+  | "refusal" // the model itself declined to answer
+  | "refund_denied"; // an abort or refusal refund that was not granted
+
+/**
+ * Record one abuse signal. Fire-and-forget, and deliberately not awaited on
+ * the hot path by every caller: a counter that slows down the answer is a
+ * counter that gets removed later.
+ */
+export async function trackAiAbuse(
+  userId: string | null,
+  kind: AiAbuseKind,
+  surface: AskSurface | "tool" = "homeowner"
+): Promise<void> {
+  await trackServerEvent(userId, "ai_abuse_signal", { kind, surface });
 }
 
 // Add N extra usages for this user today (e.g. a route that fans out to the

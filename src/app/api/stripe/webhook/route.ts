@@ -1526,10 +1526,10 @@ export async function POST(req: NextRequest) {
         subscription.id
       );
 
-      // Same card re-check as the Pro branch above. Plus only trials on the
-      // weekly plan, so on monthly and yearly this is a no-op (the
-      // subscription is never "trialing"), which is correct and costs one
-      // status comparison.
+      // Same card re-check as the Pro branch above. Every Plus cadence can
+      // trial now, so this reaches monthly and yearly signups too rather than
+      // being a no-op on them; it gates on the subscription's own "trialing"
+      // status, so nothing here had to change with the rule.
       await endTrialIfRisky(
         admin,
         meta.user_id,
@@ -2091,7 +2091,14 @@ export async function POST(req: NextRequest) {
   //      account pages) stops treating the membership as healthy.
   //   2. The member gets ONE in-app notice per failed invoice pointing at the
   //      page whose "Manage billing" button opens the Stripe Customer Portal,
-  //      which is where a card is actually replaced.
+  //      which is where a card is actually replaced. notifyOnce below passes
+  //      the member's email through, so email already goes out whenever
+  //      RESEND_API_KEY is set; "payment_failed" is also on
+  //      PUSH_NOTIFICATION_KINDS (src/lib/notifyGating.ts), so push goes out
+  //      too once VAPID is configured. If nobody has fixed the card 72 hours
+  //      later, src/app/api/cron/dunning-followup/route.ts sends one more
+  //      notice off this same in-app row and then leaves the invoice alone.
+  //      See docs/NOTIFICATIONS.md.
   if (event.type === "invoice.payment_failed") {
     const invoice = event.data.object as any;
     const subscriptionId = subscriptionIdFromInvoice(invoice);

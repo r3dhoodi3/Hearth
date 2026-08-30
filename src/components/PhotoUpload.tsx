@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/lazySupabase";
 import { imgSrc } from "@/lib/storage";
 import TakePhotoButton from "@/components/TakePhotoButton";
 import { FilePreviewGrid } from "@/components/FilePreview";
@@ -23,7 +23,6 @@ export default function PhotoUpload({
   // undefined by every other caller, so their behavior is unchanged.
   onUrlsChange?: (urls: string[]) => void;
 }) {
-  const supabase = createClient();
   const [urls, setUrls] = useState<string[]>([]);
   // The files just picked, shown as small previews immediately, before (and
   // while) they upload, so the owner can see what they selected. Cleared once
@@ -78,6 +77,9 @@ export default function PhotoUpload({
       // Avoid Math.random/Date in this environment-agnostic path; use crypto.
       const id = crypto.randomUUID();
       const path = `${propertyId}/${id}.${ext}`;
+      // Fetched at upload time, not at import time, so supabase-js stays out
+      // of this route's First Load JS (src/lib/lazySupabase.ts).
+      const supabase = await getSupabase();
       const { error } = await supabase.storage
         .from("home-photos")
         .upload(path, file, { upsert: false });

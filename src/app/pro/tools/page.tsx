@@ -2,13 +2,13 @@ import { redirect } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import { ClipboardList, ReceiptText, Mail, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentContractor } from "@/lib/contractor";
+import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { PRO_DEPOSIT_BOOST_PTS, COLD_START_FREE_ALERTS } from "@/lib/constants";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
 import { PRO_TOOLS_PAYWALL } from "@/lib/freeAiTaste";
 import { proDraftsLeft } from "@/lib/freeAiTasteServer";
-import ProToolsClient from "./ProToolsClient";
+import ProToolsClient, { type Tool } from "./ProToolsClient";
 
 // AI back office (Hearth Pro membership perk): writing tools that turn a pro's
 // plain-words notes into paperwork they can send: an estimate, an invoice, a
@@ -20,6 +20,27 @@ import ProToolsClient from "./ProToolsClient";
 // nothing to judge it by. Lead access is never involved here: this is
 // perks-only surface, and the wall only ever stands between a pro and a DRAFT,
 // never between a pro and their own work.
+
+// Prefill data resolved server-side from an owned lead/CRM row (CR5#1). See
+// the ownership check where this is built, below.
+export type PrefilledLead = {
+  category: string | null;
+  homeownerFirstName: string | null;
+  description: string | null;
+  amount: string | null;
+};
+
+// Valid ?tool= values, so a link from a lead card or a CRM row can also open
+// the right tab (e.g. straight to Invoice) instead of always landing on
+// Estimate. Anything else is ignored, same "never trust the URL" spirit as
+// the lead ownership check below - just for a tab choice instead of data.
+const TOOL_VALUES = new Set([
+  "estimate",
+  "invoice",
+  "followup",
+  "review_response",
+  "overdue",
+]);
 
 const TOOLS: Array<{ icon: LucideIcon; title: string; body: string }> = [
   {
@@ -39,13 +60,26 @@ const TOOLS: Array<{ icon: LucideIcon; title: string; body: string }> = [
   },
 ];
 
-export default async function ProToolsPage() {
+export default async function ProToolsPage(
+  props: {
+    searchParams: Promise<{ lead?: string; tool?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
   const member = await hasProPlan();
+  // The route refuses an unverified business before it spends anything, so
+  // showing that pro a "2 of 2 free drafts left" meter above a locked button
+  // promised something they cannot use (post-migration check, 2026-08-30).
+  // Locked pros get no meter and no "being switched on" note; the button's
+  // own locked reply says how to unlock.
+  const established = member || (await isEstablishedPro(contractor.id));
   // How many free drafts are left, for the meter. Null for a member.
-  const draftsLeft = await proDraftsLeft(contractor.id, member);
+  const draftsLeft = established
+    ? await proDraftsLeft(contractor.id, member)
+    : null;
 
   // Out of free drafts and not a member: the pitch, led by the exact sentence
   // the route would have sent. Anyone with drafts still on the meter falls
@@ -158,6 +192,56 @@ export default async function ProToolsPage() {
     .neq("status", "lost")
     .order("created_at", { ascending: false });
 
+  // Prefill from the lead a tool link was opened with (?lead=<id>, added to
+  // the lead card and the CRM row). The id is client input off the URL, so it
+  // never gets trusted on its own: both reads below filter on
+  // contractor_id = contractor.id, the same ownership check
+  // sendDraftToLeadAction (./actions.ts) already uses for this table. A
+  // lead id that isn't this contractor's own - typed in, guessed, or copied
+  // from another tab - just prefills nothing, no error shown.
+  const leadParam =
+    typeof searchParams.lead === "string" ? searchParams.lead.trim() : "";
+  let initialLead: PrefilledLead | null = null;
+  if (leadParam) {
+    const [{ data: ownedLead }, { data: trackedClient }] = await Promise.all([
+      supabase
+        .from("contractor_leads")
+        .select("id, category, homeowner_name, issue_description")
+        .eq("id", leadParam)
+        .eq("contractor_id", contractor.id)
+        .maybeSingle(),
+      // est_value_cents is the pro's OWN estimate of the job's worth, typed
+      // in on the CRM. contractor_leads.payout_amount is deliberately never
+      // used here even though it looks like "the amount": it is what the pro
+      // pays HEARTH for the lead (see the NOTE in src/lib/proStats.ts), not
+      // what the homeowner owes them, and prefilling an invoice with it
+      // would quote a pro's own lead fee back to their customer.
+      supabase
+        .from("pro_clients")
+        .select("est_value_cents")
+        .eq("lead_id", leadParam)
+        .eq("contractor_id", contractor.id)
+        .maybeSingle(),
+    ]);
+    if (ownedLead) {
+      const firstName = (ownedLead.homeowner_name || "").trim().split(/\s+/)[0];
+      initialLead = {
+        category: ownedLead.category ?? null,
+        homeownerFirstName: firstName || null,
+        description: ownedLead.issue_description ?? null,
+        amount:
+          trackedClient?.est_value_cents != null
+            ? `$${Math.round(trackedClient.est_value_cents / 100).toLocaleString("en-US")}`
+            : null,
+      };
+    }
+  }
+  const initialTool: Tool | null =
+    typeof searchParams.tool === "string" &&
+    TOOL_VALUES.has(searchParams.tool)
+      ? (searchParams.tool as Tool)
+      : null;
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="text-center">
@@ -172,7 +256,7 @@ export default async function ProToolsPage() {
       {/* Migration 0145 not on this database yet: proDraftsLeft is null for a
           non-member, and the route will answer 503 "being switched on". Say it
           here so nobody types a whole job description first (live check L3). */}
-      {!member && draftsLeft === null && (
+      {!member && established && draftsLeft === null && (
         <p className="rounded-lg bg-stone-50 p-3 text-sm text-stone-700 dark:bg-stone-800 dark:text-stone-300">
           Drafting is being switched on for your account. Check back later today.
         </p>
@@ -183,6 +267,8 @@ export default async function ProToolsPage() {
         categories={contractor.categories ?? []}
         leads={leadRows ?? []}
         initialDraftsLeft={draftsLeft}
+        initialLead={initialLead}
+        initialTool={initialTool}
       />
       <p className="text-center text-xs text-stone-500 dark:text-stone-400">
         Drafts use only the details you type in. Always give them a quick read

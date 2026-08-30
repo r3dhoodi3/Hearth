@@ -27,7 +27,8 @@ import {
   SUGGEST_LIMIT,
   type AddressSuggestion,
 } from "@/lib/addressSuggest";
-import { Hammer, Bell, FileText } from "lucide-react";
+import OnboardingValueBullets from "@/components/OnboardingValueBullets";
+import { Home } from "lucide-react";
 
 // LAUNCH_ONLY_MESSAGE used to be duplicated here by hand, because ./actions.ts
 // is a "use server" file and can only export async functions to a client
@@ -739,6 +740,15 @@ export default function OnboardingForm({
     street.trim().length >= MIN_SUGGEST_QUERY &&
     /\d/.test(street);
 
+  // Step indicator, copied from the pro wizard's markup (CR2#3 /
+  // OnboardingCompanyForm.tsx around line 564-587) so the two match. Real
+  // step count for THIS flow, not the pro wizard's: address, then ready-to-
+  // claim. "out_of_area" is an exception panel, not a numbered step, so it
+  // renders no indicator at all rather than a bar that can never reach the
+  // end.
+  const ONBOARDING_STEP_COUNT = 2;
+  const stepNumber = step === "ready" ? 2 : 1;
+
   return (
     <div className="card">
       {step !== "out_of_area" && (
@@ -777,6 +787,34 @@ export default function OnboardingForm({
           }}
           className="space-y-4"
         >
+          {/* Step indicator, same markup as the pro wizard (CR2#3): a label
+              row plus a bar that fills one segment per step. */}
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-2 text-xs font-medium text-stone-500 dark:text-stone-400">
+                <Home className="h-4 w-4 text-bark-700 dark:text-bark-400" aria-hidden="true" />
+                Set up your home
+              </span>
+              <span className="text-xs text-stone-500 dark:text-stone-400">
+                Step {stepNumber} of {ONBOARDING_STEP_COUNT}
+              </span>
+            </div>
+            {/* Decorative: the "Step X of Y" text above already says this out
+                loud, so the bar stays out of the accessibility tree. */}
+            <div className="mt-3 flex gap-1.5" aria-hidden="true">
+              {Array.from({ length: ONBOARDING_STEP_COUNT }).map((_, i) => (
+                <span
+                  key={i}
+                  className={`h-1 flex-1 rounded-full ${
+                    i < stepNumber
+                      ? "bg-bark-600 dark:bg-bark-400"
+                      : "bg-stone-200 dark:bg-white/10"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+
           {step === "address" && (
             <div>
               <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
@@ -789,26 +827,10 @@ export default function OnboardingForm({
             </div>
           )}
 
-          {step === "address" && (
-            <ul className="space-y-1.5 rounded-lg bg-bark-50 p-3 text-sm text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
-              <li className="flex items-start gap-2">
-                <Hammer className="h-4 w-4 shrink-0 translate-y-0.5" aria-hidden="true" />
-                <span>Track every system and know what needs attention</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <Bell className="h-4 w-4 shrink-0 translate-y-0.5" aria-hidden="true" />
-                <span>
-                  Proactive freeze, heat, and recall alerts for YOUR home
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <FileText className="h-4 w-4 shrink-0 translate-y-0.5" aria-hidden="true" />
-                <span>
-                  Scan a warranty or receipt and Hearth files it for you
-                </span>
-              </li>
-            </ul>
-          )}
+          {/* Same three bullets as the sign-up screen (CR2#2), one shared
+              component so the wording can't drift between the two: see
+              src/components/OnboardingValueBullets.tsx. */}
+          {step === "address" && <OnboardingValueBullets />}
 
           {/* Three fields on one 12-column grid. items-end bottom-aligns the
               cells, so the unit's two-line label on a narrow phone can't push

@@ -135,14 +135,24 @@ export const PUSH_NOTIFICATION_KINDS: ReadonlySet<string> = new Set([
   "high_wind",
   "heavy_rain",
   "recall",
+  // A card was just declined. Unlike the renewal/annual notices grouped as
+  // silent below (a heads-up before anything has charged), this is a decline
+  // that already happened during a live retry window - waking the phone is
+  // what gets a card updated before the membership lapses. The 72-hour
+  // follow-up (src/app/api/cron/dunning-followup/route.ts) is the same
+  // moment repeated once, so it earns the same buzz.
+  "payment_failed",
+  "payment_failed_followup",
 ]);
 
 // Everything else is in-app (and email/SMS) only. Named here rather than left
 // implicit so the reasoning is written down somewhere: the digests
 // (home_digest, weekly_digest, support_digest), the maintenance and seasonal
-// reminders, the billing and renewal notices, the referral and winback
-// credits, the compliance nudges. None of them is worth waking a phone for,
-// and several of them fire from crons at whatever hour the scheduler runs.
+// reminders, the pre-charge renewal/annual notices (nothing has been declined
+// yet, so there is nothing urgent to wake a phone for), the referral and
+// winback credits, the compliance nudges. None of them is worth waking a
+// phone for, and several of them fire from crons at whatever hour the
+// scheduler runs.
 
 // Should this kind be pushed to the person's device at all?
 export function isPushKind(kind: string): boolean {
@@ -185,4 +195,96 @@ export function isPushHeldForQuietHours(kind: string, hour: number): boolean {
   if (!PUSH_QUIET_HOURS_KINDS.has(kind)) return false;
   if (!Number.isFinite(hour)) return true;
   return hour < PUSH_QUIET_END_HOUR || hour >= PUSH_QUIET_START_HOUR;
+}
+
+// ---------------------------------------------------------------------------
+// Marketing / campaign frequency cap
+// ---------------------------------------------------------------------------
+//
+// A hard ceiling on how many non-transactional notifications one person can
+// receive in a rolling week, counted across every campaign combined (a
+// seasonal nudge, a digest, a win-back credit, a review ask all draw from the
+// same budget rather than each getting their own). This is a guardrail, not a
+// growth lever: industry numbers put the uninstall-risk line at roughly two
+// pushes a week, and a per-feature cap does not stop three independently
+// well-behaved campaigns from adding up to six.
+//
+// TRANSACTIONAL_NOTIFICATION_KINDS is the ONLY list this cap consults, and it
+// is an ALLOWLIST OF EXEMPTIONS - deliberately the OPPOSITE default from
+// isPlusGatedKind above. A kind nobody has classified yet counts against the
+// budget here, where isPlusGatedKind would ship it free. That is not an
+// inconsistency, it is the correct default for each gate: withholding a paid
+// perk by accident is the safe direction for the Plus gate, while a forgotten
+// campaign that ships unmetered is exactly the bug this cap exists to
+// prevent. The actual database read lives in withinMarketingBudget
+// (src/lib/notify.ts), at the one door every sender goes through, so a new
+// cron cannot forget to call it.
+export const TRANSACTIONAL_NOTIFICATION_KINDS: ReadonlySet<string> = new Set([
+  // Someone is waiting on this: a reply, a quote, a job status change, an
+  // application update, a review that already landed.
+  "message",
+  "direct_request",
+  "direct_accepted",
+  "direct_declined",
+  "quote",
+  "quote_sent",
+  "invoice",
+  "invoice_sent",
+  "invoice_signed",
+  "job_closed",
+  "new_lead",
+  "new_review",
+  "applicant_waiting",
+  "quote_analysis",
+  // Money moved, or a card just failed to move it. Also the auto-renewal
+  // disclosures the law requires - see the "never gate a billing notice" note
+  // on PLUS_GATED_NOTIFICATION_KINDS above; the same reasoning applies here.
+  "apply_receipt",
+  "apply_credit_back",
+  "ghost_refund",
+  "first_apply_guarantee",
+  "referral_reward",
+  "payment_failed",
+  "payment_failed_followup",
+  "renewal_reminder",
+  "annual_notice",
+  "renewal_acknowledgment",
+  // Account security and compliance status: required action items, not asks.
+  "background_check_clear",
+  "compliance",
+  "license",
+  "insurance",
+  "trial_abuse",
+  // Safety alerts: time-critical by definition, the same reasoning
+  // PUSH_QUIET_HOURS_KINDS uses to bypass quiet hours above. A freeze warning
+  // and a heat warning three days apart in one bad week must not compete with
+  // a seasonal upsell email for the same two-a-week budget.
+  "freeze",
+  "heat",
+  "high_wind",
+  "heavy_rain",
+  "recall",
+  // An internal digest to the app owner about support tickets. Not a
+  // customer-facing message, so it is not a campaign.
+  "support_digest",
+]);
+
+export function isTransactionalKind(kind: string): boolean {
+  return TRANSACTIONAL_NOTIFICATION_KINDS.has(kind);
+}
+
+// The rolling window and the ceiling. Both live here, next to the list they
+// govern, so a future change to either only has to happen in one place.
+export const MARKETING_BUDGET_WINDOW_DAYS = 7;
+export const MARKETING_BUDGET_MAX_PER_WINDOW = 2;
+export const MARKETING_BUDGET_WINDOW_MS =
+  MARKETING_BUDGET_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+// Pure window math, split out from the database read in
+// withinMarketingBudget (src/lib/notify.ts) so a unit test can drive the
+// actual decision without a Supabase client: given how many non-transactional
+// notifications a person has already received inside the rolling window, is
+// one more allowed?
+export function marketingBudgetAllows(countInWindow: number): boolean {
+  return countInWindow < MARKETING_BUDGET_MAX_PER_WINDOW;
 }

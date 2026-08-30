@@ -17,6 +17,7 @@ import AppleSignInButton, {
   APPLE_SIGNIN_ENABLED,
 } from "@/components/AppleSignInButton";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
+import OnboardingValueBullets from "@/components/OnboardingValueBullets";
 import { Eye, EyeOff } from "lucide-react";
 
 // Real per-user sign-up. Creates a Supabase Auth account from the user's email
@@ -268,6 +269,14 @@ export default function HomeownerSignUpPage(props: {
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Start tracking your home with Hearth.
           </p>
+        </div>
+
+        {/* Same three bullets onboarding's address step shows, moved up to
+            the very first screen a visitor reads (CR2#2): one shared
+            component, src/components/OnboardingValueBullets.tsx, so the
+            wording is identical in both places by construction. */}
+        <div className="mb-4">
+          <OnboardingValueBullets />
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">

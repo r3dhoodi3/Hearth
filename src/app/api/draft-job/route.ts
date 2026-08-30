@@ -171,8 +171,9 @@ export async function POST(req: NextRequest) {
         "Describe what needs doing, in the homeowner's voice, based on this photo.",
       images: [{ data: image, mime }],
       schema: RESPONSE_SCHEMA,
-      maxTokens: 1024,
-      effort: "low",
+      // Model, ceiling and effort come from ROUTES in src/lib/claude.ts. Cheap
+      // model: the homeowner edits this draft in the job form before posting.
+      route: "draft-job",
       timeoutMs: 30_000,
       label: "draft-job",
     });

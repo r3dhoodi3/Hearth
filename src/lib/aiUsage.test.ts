@@ -549,7 +549,7 @@ describe("an empty reply is refunded like any other failure", () => {
     }
   });
 
-  it("sends the REFUNDED meter with that reply, not the spent one", () => {
+  it("sends the meter that matches what actually happened to the question", () => {
     // refundedRemaining is freeRemaining + 1: the meter has to agree with the
     // counter, or the chat shows a question spent that was just handed back.
     expect(askRoute).toContain(
@@ -557,10 +557,19 @@ describe("an empty reply is refunded like any other failure", () => {
     );
     const emptyAt = askRoute.indexOf("if (!text) {");
     const doneAt = askRoute.indexOf("encodeDone({", emptyAt);
-    const meterAt = askRoute.indexOf("freeRemaining: refundedRemaining", doneAt);
+    // CONDITIONAL now, and that is the point of red-team finding RT3-3: the
+    // refund on a refused or empty turn is metered (allowRefusalRefund), so
+    // once a caller has burned through the hourly allowance the question stays
+    // spent - and the meter has to say so. Showing a refunded count for a
+    // question that was NOT handed back is the same lie as the other way
+    // round, just pointed at the person instead of at the bill.
+    const meterAt = askRoute.indexOf(
+      "freeRemaining: refundable ? refundedRemaining : freeRemaining",
+      doneAt
+    );
     expect(meterAt).toBeGreaterThan(doneAt);
     // ...and it is close by: the same encodeDone call, not one further down.
-    expect(meterAt - doneAt).toBeLessThan(300);
+    expect(meterAt - doneAt).toBeLessThan(500);
   });
 
   it("also sends the refunded meter on a pre-stream throw", () => {

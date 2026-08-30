@@ -226,6 +226,41 @@ body {
            focus-visible:ring-bark-600 focus-visible:ring-offset-1
            dark:focus-visible:ring-bark-500 dark:focus-visible:ring-offset-stone-900;
   }
+
+  /* Spacing scale (CR3#12). Every gap-*, p-*, and space-y-* value across the
+     app already lands on Tailwind's default 4px grid by accident; this
+     documents the steps actually in use so a future value doesn't drift off
+     it rather than adding any new mechanism:
+       1   = 4px     1.5 = 6px     2 = 8px
+       3   = 12px    4   = 16px
+       6   = 24px    8   = 32px
+     (Tailwind's own scale continues both directions past this list; these
+     are the steps this codebase draws from today.) */
+
+  /* Type ramp (CR3#3). Four sizes for the roles text sizing actually plays
+     across the app - a big number, a heading, body copy, a caption - in
+     place of the five ad hoc sizes (text-xs/sm/lg/2xl/4xl) currently mixed
+     per call site for the same three or four roles (see the dashboard for
+     an example: five sizes doing the work of three). Deliberately size (and
+     weight, where the role implies one) only, no color, matching the shape
+     of the .text-title example below - a call site keeps whatever
+     text-stone color (and its dark variant) it already has and only swaps the
+     size utility.
+     NOT migrated onto any existing call site this wave (PLAN A1#8): a new
+     screen can reach for these, nothing already shipped changes size out
+     from under it. */
+  .text-display {
+    @apply text-3xl font-semibold tracking-tight sm:text-4xl;
+  }
+  .text-title {
+    @apply text-lg font-semibold sm:text-xl;
+  }
+  .text-body {
+    @apply text-sm leading-relaxed sm:text-base;
+  }
+  .text-label {
+    @apply text-xs font-medium uppercase tracking-wide;
+  }
 }
 
 /* Print: keep the Home report (PrintButton -> window.print()) readable no

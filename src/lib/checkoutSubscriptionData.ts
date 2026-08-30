@@ -31,9 +31,11 @@ export type SubscriptionCheckoutData = {
 // page is built around) and passes "monthly"; the Pro toggle preselects the
 // yearly card and takes the default.
 //
-// The Plus fallback is also the SAFE one now that the free trial rides on
-// weekly: an unreadable field can never resolve to the cadence that hands out
-// free days, so a garbled submit is charged today rather than silently trialed.
+// The free trial no longer changes which fallback is "safe": an eligible
+// account gets the 3 free days on whichever of the three cadences it lands on
+// (trialApplies in src/lib/billingTerms.ts), so the only thing the fallback
+// decides is the PRICE that is quoted, charged, and disclosed. That is exactly
+// why it must be the cadence the buyer was looking at.
 //
 // Both checkout actions rebuild everything downstream from this single value -
 // the Stripe line item, the billingTerms consent record stashed in session

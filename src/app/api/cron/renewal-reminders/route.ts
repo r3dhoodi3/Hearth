@@ -10,9 +10,9 @@ export const runtime = "nodejs";
 // Daily job (Vercel Cron, see vercel.json) that warns paying members BEFORE a
 // charge they might not be expecting. Four cases:
 //
-//   1. Trial ending. A brand-new Hearth Plus subscriber who starts on the
-//      WEEKLY plan (the only Plus cadence carrying free days; monthly and
-//      yearly bill at signup) gets a 3-day Stripe free trial, and the notice
+//   1. Trial ending. A brand-new Hearth Plus subscriber gets a 3-day Stripe
+//      free trial on whichever cadence they picked (weekly, monthly or
+//      yearly all carry it now), and the notice
 //      fires about a day before that trial ends and the first real charge
 //      lands. Both Pro cadences trial the same way. California's Automatic Renewal Law
 //      3-to-21-day
@@ -196,8 +196,8 @@ async function runCron(req: NextRequest) {
   )
     .select("user_id, plan, status, stripe_subscription_id, current_period_end")
     .in("status", ["active", "trialing"])
-    // Weekly is sold again and is now the cadence that carries the free days,
-    // so this filter matters more than ever. An ACTIVE weekly sub gets no
+    // Weekly is sold again and can carry the free days like every other
+    // cadence, so this filter matters more than ever. An ACTIVE weekly sub gets no
     // notice here (a renewal every 7 days is not news, and case 4 below gives
     // it the once-a-year notice the law asks for), yet its current_period_end
     // is always inside this query's short horizon, so it would sit in the
@@ -409,7 +409,7 @@ async function runCron(req: NextRequest) {
 
           // Pick the notice this subscription is due for, if any. Trial-end
           // wins over everything else: it applies to any subscription Stripe
-          // reports as trialing (Plus weekly, both Pro cadences), and a trial
+          // reports as trialing (every Plus cadence, both Pro ones), and a trial
           // about to end is the most time-sensitive of the three notices.
           let due: "trial_end" | "step_up" | "renewal" | null = null;
           if (
@@ -425,7 +425,7 @@ async function runCron(req: NextRequest) {
             // Plus stamps intro_step_up="true" on every new subscriber
             // regardless of cadence (see startPlusCheckoutAction), so a
             // trialing sub also carries flaggedStepUp. Without !trialing
-            // here, a brand-new weekly/monthly trial would match this
+            // here, a brand-new trial on any cadence would match this
             // branch on day one and send a premature "intro price ends"
             // notice - a trialing sub belongs to the trial_end branch above
             // only.

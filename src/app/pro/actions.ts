@@ -30,7 +30,7 @@ import {
   isMajorCategory,
   PRO_LEADS_HREF,
 } from "@/lib/constants";
-import { agingLeadFee } from "@/lib/leadPricing";
+import { bestLeadDiscount } from "@/lib/leadPricing";
 import { hasProPlan } from "@/lib/subscription";
 import { requestReviewForWonLead } from "@/lib/reviewRequest";
 import { lookupCslbLicense, type CslbLookupResult } from "@/lib/cslb";
@@ -1818,17 +1818,25 @@ function feeString(cents: number) {
 // Stale-tab price guard shared by applyToJobAction and
 // unlockDirectRequestAction. The confirm form posts the fee it DISPLAYED
 // (fee_cents); this recomputes what the charge RPC will derive right now:
-// the aging price from the lead row (agingLeadFee mirrors the DB's
-// lead_fee_cents) with the first big-ticket intro (0113) applied on top,
-// using the same my_applications-based check page.tsx uses for
-// hasPaidMajor, run fresh here. Returns an error message when the live
-// price is HIGHER than what the pro saw, so a tab rendered before the intro
-// was consumed elsewhere can't confirm $49.99 and silently charge $99.
-// Never blocks when the live price is lower or equal to the displayed one,
-// and fails open (null) whenever an input is unreadable: the DB still
-// derives the true price under the wallet lock either way, this only closes
-// the minutes-long stale-display window (the few-ms race between this check
-// and the RPC is acceptable).
+// the best single discount from the lead row (bestLeadDiscount mirrors the
+// DB's pro_lead_fee_cents - the aging markdown or the 10% Pro member
+// discount, never both, migration 0149) with the first big-ticket intro
+// (0113) applied on top, using the same my_applications-based check
+// page.tsx uses for hasPaidMajor, run fresh here. Returns an error message
+// when the live price is HIGHER than what the pro saw, so a tab rendered
+// before the intro was consumed elsewhere can't confirm $49.99 and silently
+// charge $99. Never blocks when the live price is lower or equal to the
+// displayed one, and fails open (null) whenever an input is unreadable: the
+// DB still derives the true price under the wallet lock either way, this
+// only closes the minutes-long stale-display window (the few-ms race
+// between this check and the RPC is acceptable).
+//
+// isMember: false unless the caller passes true. applyToJobAction (open-job
+// apply) passes this pro's real membership status; unlockDirectRequestAction
+// deliberately does NOT (defaults false) - unlock_direct_request (0104) was
+// not changed by migration 0149, so membership never discounts that path,
+// and predicting a discount here that the RPC will not actually grant would
+// under-predict the live price and mask a genuine increase.
 async function staleDisplayedFeeError(
   supabase: any,
   displayedEntry: FormDataEntryValue | null,
@@ -1836,14 +1844,15 @@ async function staleDisplayedFeeError(
     payout_amount: number | string | null;
     created_at: string | null;
     category: string | null;
-  } | null
+  } | null,
+  isMember = false
 ): Promise<string | null> {
   const displayedCents = Number(displayedEntry);
   if (!lead || !lead.created_at || !Number.isFinite(displayedCents) || displayedCents <= 0) {
     return null;
   }
   let currentCents = Math.round(
-    agingLeadFee(Number(lead.payout_amount ?? 0), lead.created_at).fee * 100
+    bestLeadDiscount(Number(lead.payout_amount ?? 0), lead.created_at, isMember).fee * 100
   );
   const major = isMajorCategory(lead.category ?? "");
   if (major) {
@@ -1978,14 +1987,21 @@ export async function applyToJobAction(formData: FormData) {
 
   const supabase = (await createClient()) as any;
 
+  // Read once, reused below for both the stale-price guard's member discount
+  // (migration 0149) and the post-success flash message, instead of two
+  // separate hasProPlan() calls for the same request.
+  const proMember = await hasProPlan();
+
   // Stale-tab price guard (staleDisplayedFeeError above): if the live price
   // is now HIGHER than the fee this confirm form displayed (typically the
-  // first big-ticket intro was consumed in another tab), refuse to charge
-  // and ask for a refresh instead of silently billing the higher amount.
+  // first big-ticket intro was consumed in another tab, or the member
+  // discount no longer applies), refuse to charge and ask for a refresh
+  // instead of silently billing the higher amount.
   const staleError = await staleDisplayedFeeError(
     supabase,
     formData.get("fee_cents"),
-    leadClosedError ? null : ((leadClosedCheck as any) ?? null)
+    leadClosedError ? null : ((leadClosedCheck as any) ?? null),
+    proMember
   );
   if (staleError) {
     await setFlash(staleError, "error");
@@ -2031,8 +2047,9 @@ export async function applyToJobAction(formData: FormData) {
     // src/app/pro/plus/page.tsx), so promising it here would overpromise to
     // exactly the pros most likely to start a trial next. PRO_DEPOSIT_BOOST_PTS
     // is the same constant the webhook passes to apply_deposit, so this can
-    // never quote a match the wallet does not actually pay.
-    const proMember = await hasProPlan();
+    // never quote a match the wallet does not actually pay. proMember was
+    // already read above for the stale-price guard; reused here rather than
+    // a second hasProPlan() call for the same request.
     await setFlash(
       proMember
         ? "Applied. The homeowner will review your application."

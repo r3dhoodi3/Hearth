@@ -98,7 +98,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/notify", () => ({ sendNotification: vi.fn() }));
-vi.mock("@/lib/leadPricing", () => ({ agingLeadFee: vi.fn() }));
+vi.mock("@/lib/leadPricing", () => ({ bestLeadDiscount: vi.fn() }));
 vi.mock("@/lib/subscription", () => ({ hasProPlan: vi.fn() }));
 vi.mock("@/lib/reviewRequest", () => ({ requestReviewForWonLead: vi.fn() }));
 vi.mock("@/lib/cslb", () => ({ lookupCslbLicense: vi.fn() }));

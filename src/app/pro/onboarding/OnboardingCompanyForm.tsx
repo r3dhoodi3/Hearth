@@ -857,6 +857,17 @@ function OnboardingCompanyFormInner({
             localStorage draft: a consent has to be given on the form that is
             actually submitted, not restored from a week-old draft.
             TODO(legal): have counsel review this consent copy before launch. */}
+        {/* Said once, here, on purpose: homeowners often reply to whoever
+            answers first, so a fast reply wins jobs. It used to be stamped on
+            every single new-lead alert, which manufactured the same reply-race
+            anxiety Hearth is trying to be the calm alternative to (research
+            wave RC, 2026-08-30). One quiet mention in onboarding, tied to why
+            the texts below are worth turning on, does the job without the
+            drumbeat. */}
+        <p className="text-sm text-stone-600 dark:text-stone-400">
+          Homeowners often reply to the first pro who answers, so turning on
+          texts helps you get to new jobs quickly.
+        </p>
         <input type="hidden" name="sms_consent_present" value="1" />
         <label className="flex min-h-11 items-start gap-2">
           <input

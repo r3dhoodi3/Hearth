@@ -18,17 +18,16 @@ afterEach(() => {
   cleanup();
 });
 
-// The form that carries the plan picker is the one with the hidden "plan"
-// field the reader can actually change. The trial button at the top of the
-// component has its own form with a hard-coded weekly field.
+// There is exactly ONE checkout form now, and its hidden "plan" field is the
+// cadence the selected card set. A second form used to sit above it carrying a
+// hard-coded weekly field and its own "Start 3 free days" button; it went away
+// with the weekly-only trial, and the assertion below is what keeps it away.
 function pickerForm(): HTMLFormElement {
   const hidden = document.querySelectorAll<HTMLInputElement>(
     'input[type="hidden"][name="plan"]'
   );
-  // Two forms: [0] is the top trial button (always weekly), [1] is the
-  // picker. When the trial is not offered, the picker is the only one.
-  const picker = hidden[hidden.length - 1];
-  return picker.closest("form") as HTMLFormElement;
+  expect(hidden).toHaveLength(1);
+  return hidden[0].closest("form") as HTMLFormElement;
 }
 
 function postedPlan(): string {
@@ -61,58 +60,47 @@ describe("PlanToggle plan selection", () => {
     );
   });
 
-  it("preselects Weekly and posts weekly when the trial is on offer, agreeing with the top trial button", () => {
+  it("preselects Monthly and posts monthly whether or not the trial is on offer", () => {
+    // The free days used to belong to weekly, so an eligible reader landed on
+    // the Weekly card. They come with every cadence now, so the page opens on
+    // the anchor plan either way - and on the same cadence
+    // startPlusCheckoutAction falls back to.
+    for (const eligible of [true, false]) {
+      render(<PlanToggle trialEligible={eligible} />);
+      expect(card(/^Monthly/)).toHaveAttribute("aria-checked", "true");
+      expect(card(/^Weekly/)).toHaveAttribute("aria-checked", "false");
+      expect(card(/^Annual/)).toHaveAttribute("aria-checked", "false");
+      expect(postedPlan()).toBe("monthly");
+      cleanup();
+    }
+  });
+
+  it("labels the one button by the trial, not by the cadence", () => {
     render(<PlanToggle />);
-    expect(card(/^Weekly/)).toHaveAttribute("aria-checked", "true");
-    expect(card(/^Monthly/)).toHaveAttribute("aria-checked", "false");
-    expect(card(/^Annual/)).toHaveAttribute("aria-checked", "false");
-    expect(postedPlan()).toBe("weekly");
-    expect(
-      within(pickerForm()).getByRole("button", {
-        name: `Start ${PLUS_PLAN.trialDays} days free`,
-      })
-    ).toBeInTheDocument();
+    for (const [name, plan] of [
+      [/^Weekly/, "weekly"],
+      [/^Annual/, "yearly"],
+      [/^Monthly/, "monthly"],
+    ] as const) {
+      fireEvent.click(card(name));
+      expect(postedPlan()).toBe(plan);
+      // Same label on every cadence: each one starts the same free days.
+      expect(
+        within(pickerForm()).getByRole("button", {
+          name: `Start ${PLUS_PLAN.trialDays} free days`,
+        })
+      ).toBeInTheDocument();
+    }
   });
 
-  it("preselects Monthly and posts monthly when there is no trial to offer", () => {
-    render(<PlanToggle trialEligible={false} />);
-    expect(card(/^Monthly/)).toHaveAttribute("aria-checked", "true");
-    expect(card(/^Weekly/)).toHaveAttribute("aria-checked", "false");
-    expect(card(/^Annual/)).toHaveAttribute("aria-checked", "false");
-    expect(postedPlan()).toBe("monthly");
-    expect(
-      within(pickerForm()).getByRole("button", { name: "Get Monthly" })
-    ).toBeInTheDocument();
-  });
-
-  it("moves the selection and the posted plan when a card is tapped", () => {
-    render(<PlanToggle />);
-
-    fireEvent.click(card(/^Weekly/));
-    expect(card(/^Weekly/)).toHaveAttribute("aria-checked", "true");
-    expect(card(/^Monthly/)).toHaveAttribute("aria-checked", "false");
-    expect(postedPlan()).toBe("weekly");
-    expect(
-      within(pickerForm()).getByRole("button", {
-        name: `Start ${PLUS_PLAN.trialDays} days free`,
-      })
-    ).toBeInTheDocument();
-
-    fireEvent.click(card(/^Annual/));
-    expect(postedPlan()).toBe("yearly");
-    expect(
-      within(pickerForm()).getByRole("button", { name: "Get Annual" })
-    ).toBeInTheDocument();
-  });
-
-  it("labels the weekly button without trial copy when the trial is gone", () => {
+  it("promises no free days anywhere when the trial is gone", () => {
     render(<PlanToggle trialEligible={false} />);
     fireEvent.click(card(/^Weekly/));
+    // One button, and it says what it does rather than naming free days a
+    // returning subscriber will not get.
     expect(
-      within(pickerForm()).getByRole("button", { name: "Start weekly" })
+      within(pickerForm()).getByRole("button", { name: "Start Hearth Plus" })
     ).toBeInTheDocument();
-    // No trial means no top trial button either, and nothing anywhere may
-    // promise free days.
     expect(
       screen.queryByRole("button", {
         name: `Start ${PLUS_PLAN.trialDays} free days`,
@@ -120,6 +108,19 @@ describe("PlanToggle plan selection", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText(new RegExp(`${PLUS_PLAN.trialDays} days free`))
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the free days on all three paid cards, not just weekly", () => {
+    render(<PlanToggle />);
+    for (const name of [/^Weekly/, /^Monthly/, /^Annual/]) {
+      expect(
+        within(card(name)).getByText(`${PLUS_PLAN.trialDays} days free`)
+      ).toBeInTheDocument();
+    }
+    // Free is not a checkout, so it promises nothing.
+    expect(
+      within(card(/^Free/)).queryByText(`${PLUS_PLAN.trialDays} days free`)
     ).not.toBeInTheDocument();
   });
 
@@ -178,19 +179,20 @@ describe("PlanToggle phone description panel", () => {
 
   it("shows the selected plan's name and price, and updates when another card is tapped", () => {
     render(<PlanToggle />);
-    expect(
-      within(panel()).getByText(`Weekly, ${formatUsd(PLUS_PLAN.weekly)} a week`)
-    ).toBeInTheDocument();
-
-    fireEvent.click(card(/^Monthly/));
+    // Monthly is the preselected card in every state now.
     expect(
       within(panel()).getByText(
         `Monthly, ${formatUsd(PLUS_PLAN.monthly)} a month`
       )
     ).toBeInTheDocument();
+
+    fireEvent.click(card(/^Weekly/));
+    expect(
+      within(panel()).getByText(`Weekly, ${formatUsd(PLUS_PLAN.weekly)} a week`)
+    ).toBeInTheDocument();
     expect(
       within(panel()).queryByText(
-        `Weekly, ${formatUsd(PLUS_PLAN.weekly)} a week`
+        `Monthly, ${formatUsd(PLUS_PLAN.monthly)} a month`
       )
     ).not.toBeInTheDocument();
 
@@ -253,22 +255,26 @@ describe("PlanToggle checkout disclosure", () => {
   // getAllByText(...) with a length assertion is that: it also pins the count,
   // so a future edit that quietly drops one breakpoint's copy fails here.
   it("keeps the auto-renewal terms inside the checkout form, next to the button", () => {
-    // No trial, so the picker defaults to Monthly and "Get Monthly" is on
-    // screen without needing to tap a card first.
+    // No trial, so the one button says what it does ("Start Hearth Plus")
+    // without needing to tap a card first.
     render(<PlanToggle trialEligible={false} />);
     const form = pickerForm();
     const terms = within(form).getAllByText(
       "This subscription renews automatically"
     );
     expect(terms).toHaveLength(2);
-    const button = within(form).getByRole("button", { name: "Get Monthly" });
+    const button = within(form).getByRole("button", {
+      name: "Start Hearth Plus",
+    });
     expect(button).toBeInTheDocument();
     // The desktop disclosure is still the element immediately before the
-    // button, so nothing can be slipped between the terms and the act of
-    // consent. terms[1] is the second copy in document order, which is the
-    // sm-and-up one; the phone copy inside the <details> comes first.
+    // button's own wrapper (CR3#4's sticky-on-phone bar, a no-op on desktop),
+    // so nothing can be slipped between the terms and the act of consent.
+    // terms[1] is the second copy in document order, which is the sm-and-up
+    // one; the phone copy inside the <details> comes first.
     const desktopBlock = terms[1].closest("div")?.parentElement as HTMLElement;
-    expect(desktopBlock.nextElementSibling).toBe(button);
+    const buttonWrapper = desktopBlock.nextElementSibling as HTMLElement;
+    expect(buttonWrapper.contains(button)).toBe(true);
   });
 
   it("collapses the phone disclosure by default but keeps the full terms in it", () => {
@@ -303,12 +309,10 @@ describe("PlanToggle checkout disclosure", () => {
       expect(line.closest("details")).toBeNull();
     }
   });
-  it("restates the terms for the plan actually selected", () => {
-    render(<PlanToggle />);
-    // The trial default is Weekly (see above); select Monthly explicitly to
-    // check its terms first.
-    fireEvent.click(card(/^Monthly/));
-    // Monthly bills on day one: no free-days promise in the picker's terms.
+  it("restates the terms for the plan actually selected, without a trial", () => {
+    render(<PlanToggle trialEligible={false} />);
+    // A returning subscriber is charged on day one on every cadence, so no
+    // copy here may promise free days.
     expect(
       within(pickerForm()).getAllByText(
         new RegExp(
@@ -324,44 +328,105 @@ describe("PlanToggle checkout disclosure", () => {
 
     fireEvent.click(card(/^Weekly/));
     expect(
-      within(pickerForm()).getAllByText(
+      within(pickerForm()).queryByText(
         new RegExp(`Free for ${PLUS_PLAN.trialDays} days`)
       )
-    ).toHaveLength(2);
+    ).not.toBeInTheDocument();
   });
 
-  it("carries its own weekly terms next to the top trial button", () => {
+  it("carries the free days into the terms of whichever cadence is selected", () => {
     render(<PlanToggle />);
-    const trialButton = screen.getByRole("button", {
-      name: `Start ${PLUS_PLAN.trialDays} free days`,
-    });
-    const form = trialButton.closest("form") as HTMLFormElement;
-    // The trial belongs to weekly only, so the button that starts it posts
-    // weekly and the terms beside it are weekly's.
-    expect(
-      form.querySelector<HTMLInputElement>('input[name="plan"]')?.value
-    ).toBe("weekly");
-    // Two copies here too: phone (inside a closed <details>) and desktop.
-    expect(
-      within(form).getAllByText("This subscription renews automatically")
-    ).toHaveLength(2);
-    expect(
-      within(form).getAllByText(
-        new RegExp(`Free for ${PLUS_PLAN.trialDays} days`)
-      )
-    ).toHaveLength(2);
-    expect((form.querySelector("details") as HTMLDetailsElement).open).toBe(
-      false
-    );
-    // The one line under the button quotes the real price, never a typed one.
-    expect(
-      within(form).getByText(
+    // Two copies of the itemized block per cadence, phone and desktop, and the
+    // step-up sentence names the price the trial ends into. Annual is the case
+    // the old weekly-only rule could not express at all.
+    for (const [name, price, renews] of [
+      [/^Annual/, formatUsd(PLUS_PLAN.yearly), "every 12 months"],
+      [/^Monthly/, `${formatUsd(PLUS_PLAN.monthly)} a month`, "every month"],
+      [/^Weekly/, `${formatUsd(PLUS_PLAN.weekly)} a week`, "every week"],
+    ] as const) {
+      fireEvent.click(card(name));
+      const stepUp = within(pickerForm()).getAllByText(
         new RegExp(
-          `${PLUS_PLAN.trialDays} days free, then \\${formatUsd(
-            PLUS_PLAN.weekly
-          )}/week`
+          `Free for ${PLUS_PLAN.trialDays} days\\. After that it is \\${price}, and it renews ${renews} until you cancel\\.`
         )
-      )
-    ).toBeInTheDocument();
+      );
+      expect(stepUp).toHaveLength(2);
+    }
+  });
+
+  it("states the one-line material terms per cadence, beside the button", () => {
+    // The exact sentence the owner asked for, per card, never behind a tap:
+    // free days, the price they step up to, and how to stop it.
+    render(<PlanToggle />);
+    for (const [name, expected] of [
+      [
+        /^Weekly/,
+        `${PLUS_PLAN.trialDays} days free, then ${formatUsd(PLUS_PLAN.weekly)}/week. Cancel anytime before the trial ends.`,
+      ],
+      [
+        /^Monthly/,
+        `${PLUS_PLAN.trialDays} days free, then ${formatUsd(PLUS_PLAN.monthly)}/month. Cancel anytime before the trial ends.`,
+      ],
+      [
+        /^Annual/,
+        `${PLUS_PLAN.trialDays} days free, then ${formatUsd(PLUS_PLAN.yearly)}/year. Cancel anytime before the trial ends.`,
+      ],
+    ] as const) {
+      fireEvent.click(card(name));
+      const lines = screen.getAllByText(expected);
+      expect(lines.length).toBeGreaterThan(0);
+      for (const line of lines) {
+        expect(line.closest("details")).toBeNull();
+      }
+    }
+  });
+});
+
+// CR3#4 and CR3#9: the phone-only sticky checkout bar, and the mobile price
+// blocks no longer reserving height for a bullet list that is hidden below
+// sm. jsdom applies no CSS, so these assert the classes rather than actual
+// layout - reading them is the verification, per the hard rules.
+describe("PlanToggle phone checkout bar", () => {
+  it("wraps the submit button in a sticky bottom bar, phone only", () => {
+    render(<PlanToggle trialEligible={false} />);
+    const button = within(pickerForm()).getByRole("button", {
+      name: "Start Hearth Plus",
+    });
+    const wrapper = button.parentElement as HTMLElement;
+    expect(wrapper.className).toContain("max-sm:sticky");
+    expect(wrapper.className).toContain("max-sm:bottom-");
+    // No sm: sticky/positioning class, so desktop keeps its normal
+    // in-flow button.
+    expect(wrapper.className).not.toMatch(/(?<!max-)sm:sticky/);
+  });
+
+  it("keeps the sticky bar for the disabled Free-plan button too", () => {
+    render(<PlanToggle trialEligible={false} />);
+    fireEvent.click(card(/^Free/));
+    const button = screen.getByRole("button", { name: "Keep Free" });
+    expect(button).toBeDisabled();
+    const wrapper = button.parentElement as HTMLElement;
+    expect(wrapper.className).toContain("max-sm:sticky");
+  });
+
+  it("drops the phone min-h floor on the three paid price blocks", () => {
+    const { container } = render(<PlanToggle trialEligible={false} />);
+    const priceBlocks = Array.from(
+      container.querySelectorAll("span.mt-0\\.5.block")
+    ).filter((el) => el.className.includes("sm:min-h-11"));
+    // Weekly, Monthly, Annual, Free: one such block per card.
+    expect(priceBlocks).toHaveLength(4);
+    // The Free card's own block (inside its max-sm:hidden button) keeps its
+    // min-h on purpose - it never renders on a phone at all, so there is no
+    // dead space to remove there. Identified by its "$0" price, since Free
+    // is the one card with no bulletList-matching min-h to drop.
+    const freeBlock = priceBlocks.find((el) => el.textContent?.includes("$0"));
+    const paidBlocks = priceBlocks.filter((el) => el !== freeBlock);
+    expect(freeBlock).toBeTruthy();
+    expect(paidBlocks).toHaveLength(3);
+    expect(freeBlock!.className).toContain("min-h-10");
+    for (const el of paidBlocks) {
+      expect(el.className).not.toContain("min-h-10");
+    }
   });
 });

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/lazySupabase";
 import { SYSTEM_TYPES } from "@/lib/constants";
 import { saveDocumentAction } from "@/lib/document-actions";
 import TakePhotoButton from "@/components/TakePhotoButton";
@@ -75,7 +75,6 @@ export default function DocumentUpload({
   propertyId: string;
   freeReadsLeft?: number | null;
 }) {
-  const supabase = createClient();
   const [phase, setPhase] = useState<"idle" | "working" | "review">("idle");
   const [note, setNote] = useState<Note | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -265,6 +264,9 @@ export default function DocumentUpload({
       const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
       const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : "jpg";
       const path = `${propertyId}/docs/${crypto.randomUUID()}.${ext}`;
+      // Fetched at upload time, not at import time, so supabase-js stays out
+      // of this route's First Load JS (src/lib/lazySupabase.ts).
+      const supabase = await getSupabase();
       const { error: upErr } = await supabase.storage
         .from("home-photos")
         .upload(path, file, { upsert: false });

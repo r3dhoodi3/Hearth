@@ -4,7 +4,8 @@ import { describe, it, expect } from "vitest";
 
 // The pro side split into a Home tab and a Leads tab on 2026-08-29: /pro is
 // Home, /pro/leads is the board, and the phone bottom bar carries five tabs
-// with Home in the middle.
+// with Home first (it was centred for one night; the owner asked for the
+// best placement on 2026-08-30 and reading position won).
 //
 // These read the SOURCE rather than a render, on purpose and in a NODE
 // environment rather than jsdom. ProNav is a server component whose LINKS
@@ -21,7 +22,7 @@ const proNavSrc = src("./ProNav.tsx");
 const navLinksSrc = src("./NavLinks.tsx");
 
 
-describe("ProNav: five tabs, Home in the centre", () => {
+describe("ProNav: five tabs, Home first", () => {
   it("lists all five destinations, with Home on /pro and Leads on /pro/leads", () => {
     expect(proNavSrc).toContain('{ href: "/pro", label: "Home", icon: "home" }');
     expect(proNavSrc).toContain(
@@ -34,23 +35,23 @@ describe("ProNav: five tabs, Home in the centre", () => {
     expect(proNavSrc).not.toContain('{ href: "/pro", label: "Leads"');
   });
 
-  it("puts Home in the CENTRE of the phone bottom bar", () => {
-    // The owner asked for Home in the middle of the phone HUD: Leads,
-    // Messages, Home, Clients, Business.
+  it("puts Home FIRST in the phone bottom bar", () => {
+    // Reading position for the primary destination: Home, Leads, Messages,
+    // Clients, Business (Apple HIG / Material convention).
     const at = proNavSrc.indexOf("const BOTTOM_LINKS = [");
     expect(at).toBeGreaterThan(-1);
     const block = proNavSrc.slice(at, proNavSrc.indexOf("];", at));
     const order = [...block.matchAll(/LINKS\[(\d)\]/g)].map((m) => m[1]);
-    // LINKS is [Home, Leads, Messages, Clients, Business], so the middle slot
+    // LINKS is [Home, Leads, Messages, Clients, Business], so the first slot
     // of the phone bar must be index 0.
-    expect(order).toEqual(["1", "2", "0", "3", "4"]);
-    expect(order[2]).toBe("0");
+    expect(order).toEqual(["0", "1", "2", "3", "4"]);
+    expect(order[0]).toBe("0");
   });
 
   it("keeps every bottom-bar short label inside the 8-character budget", () => {
     // Five tabs share the width. NavLinks' own comment sets 8 characters as
     // the ceiling before truncation bites at 360px.
-    for (const label of ["Leads", "Messages", "Home", "Clients", "Business"]) {
+    for (const label of ["Home", "Leads", "Messages", "Clients", "Business"]) {
       expect(label.length).toBeLessThanOrEqual(8);
     }
   });

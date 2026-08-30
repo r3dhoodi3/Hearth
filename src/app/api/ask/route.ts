@@ -8,16 +8,24 @@ import {
 } from "@/lib/property";
 import { getPlusTier } from "@/lib/subscription";
 import {
+  addAskOutputTokens,
   allowAbortRefund,
+  allowRefusalRefund,
   countAskUsage,
   countAiUsageWindow,
   overAiGlobalHourlyLimit,
+  overAskOutputBudget,
   refundAskUsage,
+  trackAiAbuse,
   ASK_DAILY_FREE,
 } from "@/lib/aiUsage";
 import { readJsonBounded } from "@/lib/boundedBody";
 import { TOPIC_GUARD_HOMEOWNER, newTurnHasImage } from "@/lib/aiGuard";
-import { hasAskableContent, pickImageIndexes } from "@/lib/askRequest";
+import {
+  hasAskableContent,
+  pickImageIndexes,
+  trimHistoryToBudget,
+} from "@/lib/askRequest";
 import { wrapUntrusted } from "@/lib/promptSafe";
 import { REPLACEMENT_INFO } from "@/lib/health";
 import {
@@ -114,6 +122,9 @@ export async function POST(req: NextRequest) {
   // countAiUsageWindow, a DB blip costs one retry, a fail-open costs money.
   const { overLimit: overBurst } = await countAiUsageWindow(authUser.id);
   if (overBurst) {
+    // The kind only, never the question: see trackAiAbuse. Not awaited, so a
+    // slow analytics write never becomes a slow refusal.
+    void trackAiAbuse(authUser.id, "burst", "homeowner");
     return NextResponse.json(
       { answer: "Slow down a little. Try again in a minute." },
       { status: 429 }
@@ -122,6 +133,7 @@ export async function POST(req: NextRequest) {
 
   const parsedBody = await readJsonBounded(req, MAX_BODY_BYTES);
   if (!parsedBody.ok) {
+    if (parsedBody.status === 413) void trackAiAbuse(authUser.id, "oversize", "homeowner");
     return parsedBody.status === 413
       ? NextResponse.json(
           { answer: "That message is too large to send." },
@@ -131,9 +143,12 @@ export async function POST(req: NextRequest) {
   }
   const body = parsedBody.data;
   // Only keep the most recent turns so a caller can't send an unbounded
-  // history and blow up the paid request.
+  // history and blow up the paid request, AND only as much conversation text
+  // as fits a total budget. The turn count alone was not a bound: forty turns
+  // of eight thousand characters is eighty thousand input tokens, re-sent on
+  // every single turn of the conversation. See trimHistoryToBudget.
   const history = Array.isArray(body.messages)
-    ? body.messages.slice(-MAX_HISTORY_MESSAGES)
+    ? trimHistoryToBudget(body.messages.slice(-MAX_HISTORY_MESSAGES))
     : null;
   const question =
     typeof body.question === "string"
@@ -151,6 +166,7 @@ export async function POST(req: NextRequest) {
   // front of the property read and every limit below.
   const askable = history ? hasAskableContent(history) : Boolean(question.trim());
   if (!askable) {
+    void trackAiAbuse(authUser.id, "empty", "homeowner");
     return NextResponse.json(
       { answer: "Type a question first." },
       { status: 400 }
@@ -178,7 +194,7 @@ export async function POST(req: NextRequest) {
   // The TIER, not the boolean, so the three cases stay tellable apart in the
   // copy below (a trialer must not be pitched the plan they are already on).
   // A trial gets photos AND the full paid daily ceiling: ASK_DAILY_TRIAL is an
-  // alias for ASK_DAILY_PLUS, because the trial rides on the weekly plan and
+  // alias for ASK_DAILY_PLUS, because the trial can run on any cadence and
   // weekly, monthly, and annual include exactly the same things. See PlusTier
   // in src/lib/subscription.ts.
   const tier = await getPlusTier();
@@ -219,6 +235,27 @@ export async function POST(req: NextRequest) {
   // starts at 23:59:59 and fails at 00:00:01 refunds the row it was charged
   // in instead of decrementing tomorrow's (which would leave the question
   // silently spent). See refundAskUsage in src/lib/aiUsage.ts.
+  // THE DAY'S WORTH OF WORDS, checked before the day's worth of questions.
+  //
+  // Counting questions bounds how often someone asks; it does not bound how
+  // much text comes back, and output tokens are the expensive half. "Write the
+  // longest answer you can" fifteen times is fifteen questions and several
+  // times the bill. This read counts nothing, so an over-budget caller is
+  // turned away without also spending a question on the refusal. It fails
+  // OPEN: the question cap below is the authoritative gate and still fails
+  // closed. See overAskOutputBudget.
+  if (await overAskOutputBudget(authUser.id, tier, "homeowner")) {
+    void trackAiAbuse(authUser.id, "output_budget", "homeowner");
+    return NextResponse.json({
+      // Same words as the daily question cap, because it is the same thing
+      // from the person's side: today's allowance is spent and tomorrow it is
+      // not. No number, since the limit is described rather than counted
+      // everywhere else in the product.
+      answer: "You have reached today's Ask Hearth limit. It resets tomorrow.",
+      askTier: tier,
+    });
+  }
+
   const { overLimit, reason, remaining, dailyLimit, windowStart } =
     await countAskUsage(authUser.id, tier);
   // Quiet meter for everyone on a countable allowance: free homeowners and
@@ -243,6 +280,11 @@ export async function POST(req: NextRequest) {
     // spent nothing, so the client should keep whatever meter it already had
     // rather than being handed a blank one (it only updates when a limit
     // arrives).
+    void trackAiAbuse(
+      authUser.id,
+      reason === "user_daily" ? "daily" : "global",
+      "homeowner"
+    );
     if (reason !== "user_daily") {
       return NextResponse.json(
         { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
@@ -428,17 +470,14 @@ export async function POST(req: NextRequest) {
     // Shared word for word with the pro route via src/lib/aiGuard.ts.
     TOPIC_GUARD_HOMEOWNER +
     "\n\n" +
-    (firstName
-      ? `The homeowner's name is ${firstName}; greet and address them by their first name naturally, without overusing it. `
-      : "") +
-    "Give a genuinely detailed, useful answer, but break it up so it is easy to skim. Lead with one short sentence that answers the question directly. Then, if there is more to say, add a few short bullets or two to three sentence steps, with a line break between chunks and a small header before a list when it helps, like 'Likely cause:' or 'Next steps:'. Never write a long wall of text. Each chunk should be short enough to read in a few seconds. " +
-    // LENGTH. The reply streams now, so the first words land in about a
-    // second either way, but every extra sentence is still another second
-    // before the answer is finished (and more output tokens to pay for).
-    // This caps the usual answer without capping the useful one:
-    // "unless the homeowner asks for detail" keeps the long form available on
-    // request.
-    "Answer in under 150 words unless the homeowner asks for detail; lead with the answer, then at most 3 short bullets. " +
+    // LENGTH AND SHAPE, in ONE place. This used to be two instructions that
+    // pulled against each other: "give a genuinely detailed answer" three
+    // lines above "answer in under 150 words". A model reconciles a
+    // contradiction by splitting the difference, so the chat produced answers
+    // that were both padded and clipped. One rule, stated once, in the terms
+    // the answer is actually judged on: did it answer, and could you read it
+    // on a phone in a few seconds.
+    "Answer in the fewest words that fully answer the question, usually three to five short lines. Lead with the answer itself: no preamble, no restating the question, no 'great question'. Use bullets only when you are genuinely listing things, at most three, with a short header in front when it helps, like 'Likely cause:' or 'Next steps:'. Put a line break between chunks so it is easy to skim. Go longer only when the homeowner asks for detail or the answer truly needs it. " +
     "Write in plain, complete sentences. Do NOT use dashes as connectors: no em dashes, and never a hyphen used as a dash. Use a comma, a colon, or a new sentence instead. Never use emoji. " +
     "CONVERSATION CONTINUITY, non-negotiable: before answering, re-read the entire conversation above and stay consistent with what you already said in it. A short homeowner reply - 'yes', 'the second one', 'ok do that', or a tapped option button - is ALWAYS a response to YOUR immediately previous message: interpret it that way and continue from there. NEVER ask what they are replying to, and NEVER ask them to repeat information that already appears anywhere in the conversation - go find it. If new information genuinely changes an earlier recommendation of yours, say plainly what changed and why; otherwise your advice must not drift between turns. " +
     "ALWAYS reply in the language the homeowner writes in. If they write in Spanish, answer entirely in Spanish; same for any other language. Match their language even if the home details below are in English. The machine-readable blocks at the end (POSTJOB, LOGISSUE, REMINDER, OPTIONS) keep their exact English field values for category, timing, severity, and system_type, but any human-readable text inside them (summary, description, title, option labels) should be in the homeowner's language. " +
@@ -451,9 +490,12 @@ export async function POST(req: NextRequest) {
     "You have a record of their recently logged issues below, with dates. Refer back to them naturally and follow up (for example, 'last month you logged a leaking water heater, did that get sorted?') so it feels like you remember their home. " +
     "Talk like a real person having a genuine back-and-forth conversation: warm, casual, never stiff. Be PROACTIVELY useful, don't just state a fact and stop, and don't end with a hollow 'anything else?'. Always move things forward with a concrete next step or suggestion. " +
     "Keep the homeowner engaged: end almost every reply with a natural, SPECIFIC follow-up question that draws out more about their home or their goal, about the system in question, its age or symptoms, what they've noticed, or what they want to happen next, so the conversation feels genuinely two-way. Make it easy and inviting to answer, never generic. " +
-    `Today's date is ${today}. ` +
     "When you mention a reminder or issue, say whether it is overdue, explain what to do about it, and offer to help (find a local pro, set or adjust a reminder, or mark it done). " +
-    "When you need more info, ask only ONE short follow-up question at a time and wait for the answer before asking the next, never list several questions at once. Keep each question quick and casual, the way you would text a friend, for example 'Got it. How old is the water heater, roughly?' or 'Gotcha, is it making any noise?'. " +
+    // AMBIGUITY. One question, not a long answer hedged three ways: if the
+    // request could mean two different things, the cheap and useful move is to
+    // ask which. Folded into the existing one-question-at-a-time rule rather
+    // than added as a second instruction saying the same thing.
+    "When the request is ambiguous, or you need more info, ask ONE short clarifying question and wait for the answer instead of guessing or covering every case. Never list several questions at once. Keep each question quick and casual, the way you would text a friend, for example 'Got it. How old is the water heater, roughly?' or 'Gotcha, is it making any noise?'. " +
     "If a job is risky, large, or code-regulated, recommend hiring a licensed pro (they can post a job in the app). " +
     "You are the homeowner's helper for their own home, and you do not coach contractors. If they ask how to apply to jobs as a pro, how lead fees, the wallet, or Pro membership work for contractors, or other contractor-only mechanics, gently say that lives on the Hearth for Pros side and steer back to their home, and never emit a POSTJOB block for that kind of question.\n\n" +
     // When the owner wants to hire, emit a machine-readable block the app turns
@@ -482,7 +524,20 @@ export async function POST(req: NextRequest) {
   // cache entry every turn and never read one back, which costs MORE than not
   // caching at all. Passed as systemSuffix it renders in exactly the same
   // place, after the same text, with the cache breakpoint in front of it.
-  const systemHomeDetails = wrapUntrusted(context, { label: "HOME DETAILS" });
+  //
+  // THE NAME AND THE DATE MOVED DOWN HERE TOO, and that is the bigger win.
+  // Both used to sit inside the cached block. The homeowner's first name made
+  // the cached prefix PER PERSON, so every homeowner wrote their own copy of
+  // the same 2,000-token prompt and nobody ever read anybody else's; today's
+  // date threw all of them away again at midnight. Below the breakpoint, one
+  // cache entry now serves every homeowner on the app, and the model reads the
+  // identical text either way - only where the breakpoint sits changed.
+  const systemHomeDetails =
+    (firstName
+      ? `The homeowner's name is ${firstName}; greet and address them by their first name naturally, without overusing it.\n`
+      : "") +
+    `Today's date is ${today}.\n` +
+    wrapUntrusted(context, { label: "HOME DETAILS" });
 
   // Map the client's replayed history onto Claude turns. Images ride along in
   // the same turn as their text.
@@ -578,15 +633,14 @@ export async function POST(req: NextRequest) {
       system,
       systemSuffix: systemHomeDetails,
       messages: turns,
-      thinking: false,
-      effort: "low",
-      // Generous enough that a full skimmable answer plus its trailing
-      // machine-readable blocks (POSTJOB, OPTIONS, ...) never gets clipped
-      // halfway through, which used to strand the client parsing a partial
-      // block. 2048 was clipping long answers with several blocks on the end,
-      // and output tokens are only billed for what is actually generated, so
-      // the headroom is free unless it gets used.
-      maxTokens: 4096,
+      // Model, output ceiling, thinking and effort all live in ROUTES in
+      // src/lib/claude.ts now, with every other model call in the app, so
+      // "what does Ask Hearth cost" is one table to read. The chat keeps the
+      // strong model: here the answer IS the product. The ceiling there is
+      // generous enough that a full answer plus its trailing machine-readable
+      // blocks (POSTJOB, OPTIONS, ...) never gets clipped halfway through,
+      // which used to strand the client parsing a partial block.
+      route: "ask",
       timeoutMs: 90_000,
       // Stop paying for an answer nobody is waiting for. When the browser
       // hangs up, ndjsonBody drops every remaining line (and deliberately does
@@ -634,12 +688,21 @@ export async function POST(req: NextRequest) {
       // only "the deltas already delivered are the answer" if there WERE
       // deltas. See the catch below.
       let sentAny = false;
+      // Characters actually delivered, so a disconnect can still be charged.
+      // See the abort branch below (red team H2, 2026-08-30).
+      let deliveredChars = 0;
       try {
         for await (const delta of stream.textDeltas) {
           emit(encodeDelta(delta));
           sentAny = true;
+          deliveredChars += delta.length;
         }
-        const { text, stopReason } = await stream.final;
+        const { text, stopReason, usage } = await stream.final;
+        // Bank what this answer actually cost in output tokens against the
+        // day's word budget. Best effort and not awaited before the reply is
+        // emitted: the person waiting for their answer should never wait on a
+        // counter. See addAskOutputTokens.
+        void addAskOutputTokens(authUser.id, "homeowner", usage.outputTokens);
         // AN EMPTY REPLY IS NOT AN ANSWER, and it must be refunded like any
         // other failure. The call did not throw, so nothing above catches it:
         // the stream simply ended with no text (a refusal, a stop before the
@@ -650,14 +713,33 @@ export async function POST(req: NextRequest) {
         // to it. The meter goes back with the reply, so the count on screen
         // agrees with the counter in the database instead of ticking down on a
         // turn that never happened.
+        //
+        // METERED, though, which is the fix for red-team finding RT3-3. An
+        // unconditional refund here means anyone who can reliably make the
+        // model refuse - which is exactly what someone probing for a jailbreak
+        // is doing, over and over - never depletes their daily allowance,
+        // while every attempt still opens a paid model call. The first few
+        // refusals an hour are a hiccup and are handed back; after that the
+        // honest answer still appears on screen and the question stays spent,
+        // so probing costs the prober. See allowRefusalRefund.
         if (!text) {
-          await refundOnce();
+          const refundable = await allowRefusalRefund(authUser.id);
+          if (refundable) await refundOnce();
+          void trackAiAbuse(
+            authUser.id,
+            stopReason === "refusal" ? "refusal" : "empty",
+            "homeowner"
+          );
+          if (!refundable) void trackAiAbuse(authUser.id, "refund_denied", "homeowner");
           emit(
             encodeDone({
               answer:
                 claudeFailureMessage(stopReason, text) ||
                 "Sorry, I couldn't generate an answer. Please try again.",
-              freeRemaining: refundedRemaining,
+              // The meter only ticks back up if the question actually came
+              // back. Showing a refunded count for a question that stayed
+              // spent is the same lie as the other way round.
+              freeRemaining: refundable ? refundedRemaining : freeRemaining,
               freeLimit,
               askTier: tier,
             })
@@ -710,6 +792,21 @@ export async function POST(req: NextRequest) {
         if (req.signal.aborted) {
           if (!sentAny && (await allowAbortRefund(authUser.id))) {
             await refundOnce();
+          }
+          // THE WORD BUDGET IS CHARGED ON THIS PATH TOO. The real token count
+          // only arrives with stream.final, which a hang-up never reaches, so
+          // a script that read the answer and dropped the socket a beat before
+          // the end was spending the day's question allowance while never
+          // paying into the output-token ceiling (red team H2, 2026-08-30).
+          // What was delivered is what gets banked, estimated at 3.5
+          // characters a token, which is on the generous side for English so
+          // the estimate never under-charges by much.
+          if (deliveredChars > 0) {
+            void addAskOutputTokens(
+              authUser.id,
+              "homeowner",
+              Math.ceil(deliveredChars / 3.5)
+            );
           }
           return;
         }

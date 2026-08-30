@@ -1,7 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import LeadChat from "@/components/LeadChat";
+import dynamic from "next/dynamic";
+import InlineSpinner from "@/components/InlineSpinner";
+
+// LeadChat is the largest client component in the app and this drawer is shut
+// on every page that mounts it until someone taps "Message". Loading it on
+// demand keeps it (and the whole message thread's code) out of the First Load
+// JS of /pro, /pro/leads, /pro/crm and every other page that renders the
+// drawer. ssr: false because nothing is rendered until a click anyway.
+const LeadChat = dynamic(() => import("@/components/LeadChat"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center">
+      <InlineSpinner />
+    </div>
+  ),
+});
 
 type ActiveChat = { leadId: string; name: string };
 

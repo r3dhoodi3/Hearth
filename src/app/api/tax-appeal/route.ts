@@ -241,8 +241,10 @@ export async function POST(req: NextRequest) {
       prompt:
         "Draft the appeal letter from these facts about my home:\n\n" +
         facts.map((f) => `- ${f}`).join("\n"),
-      maxTokens: 8000,
-      thinking: true,
+      // Model, ceiling and reasoning come from ROUTES in src/lib/claude.ts.
+      // Stays on the strong model: this letter goes to a county assessor, and
+      // a weak argument in it is worth real money to the homeowner.
+      route: "tax-appeal",
       // Reasoning plus a full letter: a slow call the owner is watching a
       // progress bar for. An explicit ceiling, like the other document
       // routes, so a hung request fails on our clock, not the platform's.

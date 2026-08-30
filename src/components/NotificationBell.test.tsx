@@ -165,19 +165,23 @@ describe("NotificationBell on a phone", () => {
     );
   });
 
-  // THE REPORTED BUG: tapping the bell and then scrolling or touching anywhere
-  // dropped the list, so it had to be reopened. A touch scroll dispatches a
-  // synthesized mousedown at the touch point, which is indistinguishable from
-  // "tapped outside" - so on the phone that listener is gone entirely.
-  it("stays open when something outside it is tapped", async () => {
+  // Closes on outside tap, same as the desktop dropdown: a tap anywhere
+  // outside the sheet - the backdrop or the page beyond it - closes it.
+  it("closes when something outside it is tapped", async () => {
     await openPanel();
     await act(async () => {
       fireEvent.mouseDown(document.body);
       fireEvent.click(document.body);
     });
-    expect(screen.getByTestId("notification-sheet")).toBeInTheDocument();
+    await settleClose();
+    expect(screen.queryByTestId("notification-sheet")).toBeNull();
   });
 
+  // Only pointer events close it, never scroll: a touch scroll dispatches a
+  // synthesized mousedown at the touch point, which used to be indistinguishable
+  // from "tapped outside" and closed the sheet out from under a page that was
+  // merely moving. Listening only for mousedown, and never for scroll, keeps a
+  // scroll from closing the panel even though an outside tap now does.
   it("stays open when the page behind it scrolls", async () => {
     await openPanel();
     await act(async () => {
@@ -187,9 +191,9 @@ describe("NotificationBell on a phone", () => {
     expect(screen.getByTestId("notification-sheet")).toBeInTheDocument();
   });
 
-  // The backdrop dims the page but is not a close affordance: the owner asked
-  // for a panel that stays put until the X.
-  it("stays open when the dimmed backdrop is tapped", async () => {
+  // The backdrop is part of "outside the panel": tapping it closes the sheet
+  // just like tapping the page beyond it does.
+  it("closes when the dimmed backdrop is tapped", async () => {
     await openPanel();
     const backdrop = screen
       .getByTestId("notification-sheet")
@@ -197,6 +201,23 @@ describe("NotificationBell on a phone", () => {
     await act(async () => {
       fireEvent.mouseDown(backdrop);
       fireEvent.click(backdrop);
+    });
+    await settleClose();
+    expect(screen.queryByTestId("notification-sheet")).toBeNull();
+  });
+
+  // Tapping inside the sheet itself (not a link or the X) must not close it -
+  // only outside taps do. panelRef is what tells the outside-click check the
+  // sheet's own content, portalled outside the trigger's DOM subtree, is
+  // "inside".
+  it("stays open when the sheet's own content is tapped", async () => {
+    await openPanel();
+    const dialog = screen
+      .getByTestId("notification-sheet")
+      .querySelector('[role="dialog"]') as HTMLElement;
+    await act(async () => {
+      fireEvent.mouseDown(dialog);
+      fireEvent.click(dialog);
     });
     expect(screen.getByTestId("notification-sheet")).toBeInTheDocument();
   });

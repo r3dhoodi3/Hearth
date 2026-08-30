@@ -104,3 +104,69 @@ export function buildAlertNotificationRows(
     url: payload.url ?? null,
   }));
 }
+
+// CR5#6: same-pro new-lead alerts posted close together collapse into one
+// notification instead of a fresh ping per job - a pro who gets three
+// separate "New X job" pushes in five minutes on a job site reads that as
+// noise, not urgency. proAlerts.ts anchors the window to each pro's most
+// recent "new_lead" row's own created_at (a fixed window from the FIRST
+// alert, not a sliding one) so a slow trickle across a whole day still gets
+// its own notification each time - only alerts landing close together
+// collapse. This module never touches the clock or the database: it decides
+// the fan-out shape from a plain title, given by the caller.
+
+export const ALERT_COLLAPSE_WINDOW_MS = 10 * 60 * 1000;
+
+// Turns a previous "new_lead" notification title into the next collapsed
+// count: the very first collapse turns a single-job title into "2 new jobs
+// in your trades"; a title already in that shape just increments.
+export function nextCollapsedAlertTitle(previousTitle: string): string {
+  const m = /^(\d+) new jobs in your trades$/.exec(previousTitle.trim());
+  const count = m ? parseInt(m[1], 10) + 1 : 2;
+  return `${count} new jobs in your trades`;
+}
+
+// The body that goes with a collapsed title, kept in lockstep with it (the
+// count in one must always match the count in the other).
+export function collapsedAlertBody(title: string): string {
+  const m = /^(\d+) new jobs in your trades$/.exec(title);
+  const count = m ? m[1] : "Multiple";
+  return `${count} new jobs just posted in your trades. Check the board to apply.`;
+}
+
+export type CollapsedAlertUpdate = {
+  userId: string;
+  title: string;
+  body: string;
+};
+
+export type AlertFanoutPlan = {
+  // Targets with no recent "new_lead" row: get the normal bulk insert.
+  freshTargets: string[];
+  // Targets with one inside the collapse window: their existing row gets
+  // updated in place instead of a second row going in.
+  collapsedUpdates: CollapsedAlertUpdate[];
+};
+
+// Splits this posting's target ids into the fresh-insert group and the
+// collapsed-update group, given which targets already have a recent
+// "new_lead" row (proAlerts.ts queries that; this only decides what to do
+// with the answer). recentTitleByUser should already be narrowed to at most
+// one row per user - the newest one inside the window - before calling this.
+export function planAlertFanout(
+  targetIds: readonly string[],
+  recentTitleByUser: ReadonlyMap<string, string>
+): AlertFanoutPlan {
+  const freshTargets: string[] = [];
+  const collapsedUpdates: CollapsedAlertUpdate[] = [];
+  for (const userId of targetIds) {
+    const previousTitle = recentTitleByUser.get(userId);
+    if (previousTitle === undefined) {
+      freshTargets.push(userId);
+      continue;
+    }
+    const title = nextCollapsedAlertTitle(previousTitle);
+    collapsedUpdates.push({ userId, title, body: collapsedAlertBody(title) });
+  }
+  return { freshTargets, collapsedUpdates };
+}

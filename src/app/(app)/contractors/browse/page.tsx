@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { JOB_CATEGORIES, SERVICE_CATEGORIES, labelFor } from "@/lib/constants";
 import { isAcceptableCustomCategory } from "@/lib/customCategory";
+import { licenseVerifiedOnLine } from "@/lib/guaranteeCopy";
 
 // Homeowner-facing pro directory. Lists claimed, launch-market pros from the
 // browse_pros() RPC (migration 0104, trust fields added in 0111), which
@@ -348,6 +349,21 @@ function ProCard({ pro }: { pro: BrowsePro }) {
                 </a>
               )}
           </div>
+          {/* What the green badge actually checked, and when: same wording
+              the public profile page uses (src/lib/guaranteeCopy.ts), so a
+              "License verified" chip is never just a claim with nothing
+              behind it. */}
+          {pro.license_verified_at && (
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              {licenseVerifiedOnLine(
+                new Date(pro.license_verified_at).toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              )}
+            </p>
+          )}
 
           {shownCategories.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">

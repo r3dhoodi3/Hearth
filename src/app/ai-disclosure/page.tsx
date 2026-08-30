@@ -45,7 +45,7 @@ export default function AiDisclosurePage() {
         How Hearth Uses AI
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-        Last updated August 28, 2026. Plain English, and specific about what
+        Updated 2026-08-30. Plain English, and specific about what
         the software actually does.
       </p>
 
@@ -162,6 +162,15 @@ export default function AiDisclosurePage() {
             and adds photo answers. There is also a short burst limit on both
             plans, so a script can&apos;t fire hundreds of questions in a row.
             When you hit a cap, the assistant tells you so.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            Ask Hearth for Pros has its own daily cap, higher for a Hearth Pro
+            member than for a free contractor account. It also stays locked
+            for a brand-new sign-up until the business looks real: a
+            CSLB-confirmed license, a paid lead application, a settled wallet
+            deposit, or a Hearth Pro membership. That is a fraud control, not a
+            paywall on top of the daily cap - it exists because anyone can type
+            a company name into the sign-up form.
           </p>
         </section>
 

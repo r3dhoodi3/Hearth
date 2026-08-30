@@ -53,6 +53,54 @@ export function hasAskableContent(messages: unknown): boolean {
   return typeof newest.content === "string" && newest.content.trim().length > 0;
 }
 
+/**
+ * The most conversation text either chat will replay to the model, in
+ * characters, across the whole history.
+ *
+ * WHY A SECOND CAP. The routes already keep the newest 40 turns and trim each
+ * one to 8,000 characters, which sounds bounded and is not: 40 x 8,000 is
+ * 320,000 characters, roughly 80,000 input tokens, and the whole history is
+ * re-sent on EVERY turn of the conversation. A caller who pastes an 8,000
+ * character wall into each of forty turns pays for it forty times over, at
+ * full price, because none of it is below a cache breakpoint. Two people doing
+ * that deliberately is a bigger bill than a thousand real conversations.
+ *
+ * 24,000 characters is about 6,000 tokens: comfortably more than a long real
+ * conversation about a water heater (a hundred turns of ordinary chat), and
+ * about 4% of what the old caps allowed at their worst.
+ */
+export const MAX_HISTORY_CHARS = 24_000;
+
+/**
+ * Keep the newest turns that fit inside a total character budget, dropping the
+ * oldest first.
+ *
+ * NEWEST FIRST, and the newest turn is always kept even if it alone blows the
+ * budget: dropping the thing the person just asked would leave the model
+ * answering the turn before it, which is worse than an expensive request. The
+ * per-message cap the routes apply separately is what bounds that one turn.
+ *
+ * Returns the kept turns in their original order, because the model reads a
+ * conversation, not a bag of messages.
+ */
+export function trimHistoryToBudget<T>(
+  messages: readonly T[],
+  budget: number = MAX_HISTORY_CHARS
+): T[] {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+  let used = 0;
+  let firstKept = messages.length - 1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = asMessage(messages[i]);
+    const size = typeof m?.content === "string" ? m.content.length : 0;
+    // The newest turn is kept unconditionally; everything older has to fit.
+    if (i < messages.length - 1 && used + size > budget) break;
+    used += size;
+    firstKept = i;
+  }
+  return messages.slice(firstKept) as T[];
+}
+
 // How far back an image is allowed to be re-sent from. The clients replay the
 // WHOLE local conversation on every request, so without a floor here a photo
 // from twenty turns ago rides along on every later text question, at full

@@ -1,4 +1,7 @@
 import { redirect } from "next/navigation";
+// after(): run work once the response has been sent. Used below to keep the
+// funnel-analytics insert off the render path.
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
@@ -36,7 +39,8 @@ import {
   scopeChips,
   introFeeFor,
 } from "@/lib/proLeadCard";
-import { agingLeadFee } from "@/lib/leadPricing";
+import { bestLeadDiscount } from "@/lib/leadPricing";
+import { normalizeLeadSort } from "@/lib/leadSort";
 import { trackServerEvent } from "@/lib/trackServer";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
@@ -92,17 +96,25 @@ export default async function ProDashboard(
       // generated types don't narrow cleanly across a cascading reassignment
       // like this - same reasoning as the contractor_leads cascade on the
       // homeowner side (src/app/(app)/contractors/page.tsx).
+      // Bounded at the same 500 the pro inbox uses (src/app/pro/chats/
+      // page.tsx): same table, same "newest first, nobody scrolls past that"
+      // reasoning, and these rows are the wide ones - issue_description and
+      // material_notes are unbounded free text, so an uncapped read is the
+      // one query on this page that can grow without limit as a pro's
+      // history does.
       let res = await (supabase as any)
         .from("contractor_leads")
         .select(ASSIGNED_COLUMNS_WITH_SCOPE)
         .eq("contractor_id", contractor.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(500);
       if (res.error && isMissingSchemaError(res.error)) {
         res = await (supabase as any)
           .from("contractor_leads")
           .select(ASSIGNED_BASE_COLUMNS)
           .eq("contractor_id", contractor.id)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .limit(500);
       }
       return res;
     })(),
@@ -220,23 +232,27 @@ export default async function ProDashboard(
   // Funnel analytics (docs/ANALYTICS.md), once per render of the board -
   // same "fires on render" convention as paywall_seen. Count only, never the
   // job ids or any detail from them.
-  await trackServerEvent(contractor.user_id, "lead_viewed", {
-    count: open.length,
-  });
+  //
+  // after(), not await: this is an INSERT into app_events with the admin
+  // client, and awaiting it put a whole extra Supabase round trip (measured
+  // at 150-240 ms on 2026-08-30) between the last query this page needs and
+  // the first byte a pro sees, purely so a counter could be written. after()
+  // runs it once the response is done, so the event is still recorded exactly
+  // once per render and nobody waits for it. trackServerEvent already
+  // swallows its own errors, so nothing here can reject.
+  after(() =>
+    trackServerEvent(contractor.user_id, "lead_viewed", {
+      count: open.length,
+    })
+  );
 
-  // Sort the open-jobs board. The effective fee (after the aging markdown) is
-  // what "cheapest" means to a pro, and "deal" surfaces the biggest markdowns.
-  const sort =
-    searchParams?.sort === "fee" || searchParams?.sort === "deal"
-      ? searchParams.sort
-      : "new";
-  const effFee = (j: any) =>
-    agingLeadFee(Number(j.payout_amount ?? 0), j.created_at);
-  if (sort === "fee") open.sort((a, b) => effFee(a).fee - effFee(b).fee);
-  else if (sort === "deal")
-    open.sort(
-      (a, b) => effFee(b).off - effFee(a).off || effFee(a).fee - effFee(b).fee
-    );
+  // Which sort the URL asked for. The ordering itself happens in LeadsBoard
+  // now (2026-08-30): the three buttons re-sort the rows the browser already
+  // has instead of navigating, so a tap is instant. The board is still
+  // server-rendered, so a shared /pro/leads?sort=fee link paints in that order
+  // with no flash. Both sides read the same comparators from
+  // src/lib/leadSort.ts, so they cannot drift apart.
+  const sort = normalizeLeadSort(searchParams?.sort);
 
   const assignedPhotos = photoUrlsByLead(assigned, photoRows);
 
@@ -259,12 +275,13 @@ export default async function ProDashboard(
   const balance = balanceCents / 100;
   const lowBalance = balanceCents < 5000;
 
-  // Only the empty-state card needs membership status (to hide the Pro-alerts
-  // suggestion from members), so skip the lookup when the board has jobs. This
-  // one stays sequential on purpose: it depends on the board AFTER the
-  // closed-job filter above, and on the common path (jobs on the board) it
-  // never runs at all.
-  const isProMember = open.length === 0 ? await hasProPlan() : false;
+  // Read once per request, not once per lead: this pro's Pro membership
+  // status. Used to be skipped whenever the board had jobs (only the
+  // empty-state card needed it), but every open-job card's price line needs
+  // it too now (the 10% member discount, migration 0149) - that "one
+  // hasProPlan-style read per request" is why this moved above the view
+  // models instead of living inside the openJobVms.map() below.
+  const isProMember = await hasProPlan();
   // Whether that same suggestion may lead with the free trial. Guarded exactly
   // like isProMember, plus the flag: while COLD_START_FREE_ALERTS is on the
   // upsell never renders, so the lookup never runs. Only a pro with no
@@ -294,13 +311,37 @@ export default async function ProDashboard(
   }));
 
   const openJobVms: OpenJobVM[] = open.map((j) => {
-    const aged = agingLeadFee(Number(j.payout_amount ?? 0), j.created_at);
-    // First big-ticket lead: the intro price replaces the normal (possibly
-    // aging-discounted) fee when it's lower, matching what apply_to_lead will
-    // actually charge (migration 0113).
-    const introFee = introFeeFor(j.category, aged.fee, hasPaidMajor);
-    const fee = introFee ?? aged.fee;
+    const payoutDollars = Number(j.payout_amount ?? 0);
+    // Best SINGLE discount: this pro's own Hearth Pro membership (10% off) or
+    // the aging markdown, never both (migration 0149; owner's words: "it does
+    // NOT stack with the 15-30%"). bestLeadDiscount is the one place this
+    // comparison lives, mirrored byte-for-byte by pro_lead_fee_cents() in the
+    // DB, so the price on this card is the price apply_to_lead will actually
+    // charge.
+    const best = bestLeadDiscount(payoutDollars, j.created_at, isProMember);
+    // First big-ticket lead: the fixed intro price replaces the discounted
+    // fee above when it's lower, matching what apply_to_lead will actually
+    // charge (migration 0113/0149) - a fixed floor, never discounted further
+    // by membership or aging.
+    const introFee = introFeeFor(j.category, best.fee, hasPaidMajor);
+    const fee = introFee ?? best.fee;
     const feeStr = money(fee);
+    const discountKind = introFee !== null ? "intro" : best.kind;
+    // The honest "Pro members pay $X" quiet line (never a silent adjustment -
+    // see research-money-R3.md on marketplace trust): shown ONLY when this
+    // non-member would actually pay less as a member on THIS SAME lead. A
+    // member's own discount never beats aging once aging is winning (the
+    // 15/30% tiers both already beat the flat 10%), and it never changes the
+    // fixed intro price, so the line disappears exactly when membership would
+    // not have helped - never a number that reads as a saving but isn't one.
+    const memberWouldPay =
+      !isProMember && introFee === null
+        ? bestLeadDiscount(payoutDollars, j.created_at, true)
+        : null;
+    const memberQuoteStr =
+      memberWouldPay && memberWouldPay.fee < best.fee
+        ? money(memberWouldPay.fee)
+        : null;
     const spots = Number(j.application_count ?? 0);
     const conflict = relationshipConflicts.get(j.id);
     // Homeowner's rough budget band (0047): a pricing signal, not a quote.
@@ -321,9 +362,11 @@ export default async function ProDashboard(
         .filter(Boolean)
         .join(" · "),
       feeStr,
-      baseStr: money(introFee !== null ? aged.fee : j.payout_amount),
-      off: aged.off,
+      baseStr: money(introFee !== null ? best.fee : j.payout_amount),
+      off: introFee !== null ? 0 : best.off,
       introPrice: introFee !== null,
+      discountKind,
+      memberQuoteStr,
       description: j.issue_description ?? null,
       photoUrls: Array.isArray(j.photo_urls) ? (j.photo_urls as string[]) : [],
       budgetLabel,

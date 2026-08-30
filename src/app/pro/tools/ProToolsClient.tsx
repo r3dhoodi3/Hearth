@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ClipboardList,
@@ -20,6 +20,11 @@ import {
   recordToolEditAction,
   sendDraftToLeadAction,
 } from "./actions";
+import {
+  readComposeDraft,
+  saveComposeDraftDebounced,
+  clearComposeDraft,
+} from "@/lib/proComposeDraft";
 
 // The member-side AI back office: five tabs (estimate, invoice, follow-up,
 // review response, overdue invoice reminder), each a small form that posts
@@ -27,7 +32,12 @@ import {
 // Each tab keeps its own draft and result so switching tools mid-thought
 // doesn't lose work.
 
-type Tool = "estimate" | "invoice" | "followup" | "review_response" | "overdue";
+export type Tool =
+  | "estimate"
+  | "invoice"
+  | "followup"
+  | "review_response"
+  | "overdue";
 
 const TABS: Array<{ id: Tool; icon: LucideIcon; label: string }> = [
   { id: "estimate", icon: ClipboardList, label: "Estimate" },
@@ -76,11 +86,23 @@ type ToolsLead = {
   created_at: string;
 };
 
+// Prefill data resolved server-side from an owned lead/CRM row (CR5#1), see
+// src/app/pro/tools/page.tsx. Null when the page opened with no ?lead= or the
+// id didn't belong to this contractor.
+export type PrefilledLead = {
+  category: string | null;
+  homeownerFirstName: string | null;
+  description: string | null;
+  amount: string | null;
+};
+
 export default function ProToolsClient({
   initialPastJobs,
   categories,
   leads,
   initialDraftsLeft = null,
+  initialLead = null,
+  initialTool = null,
 }: {
   initialPastJobs: ProPastJob[];
   categories: string[];
@@ -89,8 +111,12 @@ export default function ProToolsClient({
   // member, who sees no meter at all: they are bounded only by the shared
   // daily ceiling, exactly as before.
   initialDraftsLeft?: number | null;
+  initialLead?: PrefilledLead | null;
+  // Opens straight to a specific tab when a link names one (?tool=invoice),
+  // instead of always landing on Estimate.
+  initialTool?: Tool | null;
 }) {
-  const [tool, setTool] = useState<Tool>("estimate");
+  const [tool, setTool] = useState<Tool>(initialTool ?? "estimate");
 
   // The meter counts down in front of the pro rather than surprising them
   // afterwards. Server-rendered starting value, decremented locally on each
@@ -109,20 +135,32 @@ export default function ProToolsClient({
     ? JOB_CATEGORIES.filter((c) => categories.includes(c.value))
     : JOB_CATEGORIES;
 
+  // Prefill from the lead this page was opened for (?lead=<id>, CR5#1): the
+  // category goes on the Estimate tab's own field, the amount on whichever
+  // tab asks for one, and the description/homeowner name combine into one
+  // line that seeds every tool's free-text job description. Empty when there
+  // was no ?lead= or the id wasn't this contractor's own lead.
+  const prefillDescription = initialLead?.description
+    ? initialLead.homeownerFirstName
+      ? `${initialLead.description} for ${initialLead.homeownerFirstName}`
+      : initialLead.description
+    : "";
+  const prefillAmount = initialLead?.amount ?? "";
+
   // Estimate fields
-  const [estDescription, setEstDescription] = useState("");
-  const [estCategory, setEstCategory] = useState("");
-  const [estPrice, setEstPrice] = useState("");
+  const [estDescription, setEstDescription] = useState(prefillDescription);
+  const [estCategory, setEstCategory] = useState(initialLead?.category ?? "");
+  const [estPrice, setEstPrice] = useState(prefillAmount);
   const [estMaterials, setEstMaterials] = useState("");
 
   // Invoice fields
-  const [invDescription, setInvDescription] = useState("");
-  const [invAmount, setInvAmount] = useState("");
+  const [invDescription, setInvDescription] = useState(prefillDescription);
+  const [invAmount, setInvAmount] = useState(prefillAmount);
   const [invWorkDone, setInvWorkDone] = useState("");
 
   // Follow-up fields
   const [fuSituation, setFuSituation] = useState("no_reply");
-  const [fuContext, setFuContext] = useState("");
+  const [fuContext, setFuContext] = useState(prefillDescription);
 
   // Review response fields
   const [rrReviewText, setRrReviewText] = useState("");
@@ -131,10 +169,31 @@ export default function ProToolsClient({
 
   // Overdue invoice ladder fields
   const [odStage, setOdStage] = useState("friendly");
-  const [odAmount, setOdAmount] = useState("");
+  const [odAmount, setOdAmount] = useState(prefillAmount);
   const [odOverdue, setOdOverdue] = useState("");
-  const [odJob, setOdJob] = useState("");
+  const [odJob, setOdJob] = useState(prefillDescription);
   const [odContext, setOdContext] = useState("");
+
+  // Autosave (CR5#4): each tool's job description survives a dropped signal
+  // or a backgrounded app before "Write it for me" is tapped - job sites have
+  // bad cell coverage, and a lost description is retyping the same work
+  // twice. A saved draft wins over the lead prefill above: it can only exist
+  // if the pro typed something after this page loaded, so it is always the
+  // more recent text. Restored once on mount; the debounced save on change
+  // and the clear on a successful draft live below, next to each field and
+  // inside generate().
+  useEffect(() => {
+    const est = readComposeDraft("tool", "estimate");
+    if (est) setEstDescription(est);
+    const inv = readComposeDraft("tool", "invoice");
+    if (inv) setInvDescription(inv);
+    const fu = readComposeDraft("tool", "followup");
+    if (fu) setFuContext(fu);
+    const rr = readComposeDraft("tool", "review_response");
+    if (rr) setRrReviewText(rr);
+    const od = readComposeDraft("tool", "overdue");
+    if (od) setOdJob(od);
+  }, []);
 
   // Per-tool results, so switching tabs doesn't wipe a draft you just made.
   // `results` is the AI's original text for that tool, kept untouched so we
@@ -360,6 +419,9 @@ export default function ProToolsClient({
         // One draft delivered, one off the meter. Only on a real document: a
         // failed call is refunded server-side, so the counter must not move.
         setDraftsLeft((n) => (n === null ? null : Math.max(0, n - 1)));
+        // The typed-in description did its job; the generated result is what
+        // matters from here, so the autosaved draft for it is done too.
+        clearComposeDraft("tool", tool);
       } else if (data?.reason === "locked") {
         // The business is not verified yet; copy comes from the server.
         setError(data?.error || "Drafting opens once your business is verified.");
@@ -478,7 +540,10 @@ export default function ProToolsClient({
               <label className="label">The job, in your words</label>
               <textarea
                 value={estDescription}
-                onChange={(e) => setEstDescription(e.target.value)}
+                onChange={(e) => {
+                  setEstDescription(e.target.value);
+                  saveComposeDraftDebounced("tool", "estimate", e.target.value);
+                }}
                 rows={4}
                 placeholder="Tear out the old 40-gallon water heater in the garage, haul it away, install a new 50-gallon gas unit, new supply lines and expansion tank, bring the venting up to code"
                 className="input"
@@ -617,7 +682,10 @@ export default function ProToolsClient({
               <label className="label">The job, in your words</label>
               <textarea
                 value={invDescription}
-                onChange={(e) => setInvDescription(e.target.value)}
+                onChange={(e) => {
+                  setInvDescription(e.target.value);
+                  saveComposeDraftDebounced("tool", "invoice", e.target.value);
+                }}
                 rows={3}
                 placeholder="Replaced the water heater at the Hendersons' place on Maple St, finished Tuesday"
                 className="input"
@@ -670,7 +738,10 @@ export default function ProToolsClient({
               <label className="label">Details (optional)</label>
               <textarea
                 value={fuContext}
-                onChange={(e) => setFuContext(e.target.value)}
+                onChange={(e) => {
+                  setFuContext(e.target.value);
+                  saveComposeDraftDebounced("tool", "followup", e.target.value);
+                }}
                 rows={3}
                 placeholder="Quoted them $1,850 for a water heater swap last Thursday, seemed interested but haven't heard back"
                 className="input"
@@ -689,7 +760,10 @@ export default function ProToolsClient({
               <label className="label">The review</label>
               <textarea
                 value={rrReviewText}
-                onChange={(e) => setRrReviewText(e.target.value)}
+                onChange={(e) => {
+                  setRrReviewText(e.target.value);
+                  saveComposeDraftDebounced("tool", "review_response", e.target.value);
+                }}
                 rows={4}
                 placeholder="Paste the customer's review here"
                 className="input"
@@ -770,7 +844,10 @@ export default function ProToolsClient({
               <input
                 type="text"
                 value={odJob}
-                onChange={(e) => setOdJob(e.target.value)}
+                onChange={(e) => {
+                  setOdJob(e.target.value);
+                  saveComposeDraftDebounced("tool", "overdue", e.target.value);
+                }}
                 placeholder="Water heater replacement at the Hendersons' place"
                 className="input"
               />
@@ -840,14 +917,17 @@ export default function ProToolsClient({
             </button>
           </div>
           {/* Editable, seeded from the AI's text: read it, tweak the wording
-              if you want, and Copy/Send both act on what's in this box. */}
+              if you want, and Copy/Send both act on what's in this box.
+              Phone only: 14px in a box this size was the small-text-in-a-
+              small-box complaint; max-sm:text-base reads at 16px with a bit
+              more line spacing, desktop stays the original 14px. */}
           <textarea
             value={draft ?? ""}
             onChange={(e) =>
               setDrafts((d) => ({ ...d, [tool]: e.target.value }))
             }
             rows={10}
-            className="w-full whitespace-pre-wrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-700 focus:border-hearth-500 focus:outline-none focus:ring-1 focus:ring-hearth-500 dark:border-white/10 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-hearth-400 dark:focus:ring-hearth-400"
+            className="w-full whitespace-pre-wrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm max-sm:text-base max-sm:leading-relaxed text-stone-700 focus:border-hearth-500 focus:outline-none focus:ring-1 focus:ring-hearth-500 dark:border-white/10 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-hearth-400 dark:focus:ring-hearth-400"
           />
           <AiNotice detail="This is a starting point: read it over and edit anything before you send or post it, because it goes out under your name." />
 

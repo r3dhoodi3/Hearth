@@ -122,6 +122,20 @@ const GLANCE_ROWS: {
     linked: "Yes",
     leaves: "No.",
   },
+  {
+    data: "Push notification subscription",
+    why: "So we can ask your browser or phone to show you a notification when something needs your attention",
+    linked: "Yes",
+    leaves:
+      "Never sent to anyone outside Hearth. Used only to ask your browser's or phone's own push service (Apple, Google, or Mozilla) to deliver a notification to that device.",
+  },
+  {
+    data: "App usage events",
+    why: "Which features get used (a job was posted, a video was played), so we can see what is and isn't working",
+    linked: "Yes, while signed in",
+    leaves:
+      "Never sold or shared. Stored only in Hearth's own database, as ids and category names, never your typed questions or messages.",
+  },
 ];
 
 export default function PrivacyPage() {
@@ -139,7 +153,7 @@ export default function PrivacyPage() {
         Privacy Policy
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-        Last updated August 28, 2026. Plain English, and honest about what
+        Updated 2026-08-30. Plain English, and honest about what
         actually happens in the app today.
       </p>
 
@@ -367,6 +381,16 @@ export default function PrivacyPage() {
             served through a short-lived signed link that expires rather than
             a permanent public URL.
           </p>
+          <p className="mt-3 leading-relaxed">
+            Before anything you upload is stored, we check what the file
+            actually is by reading its bytes, not just the label your browser
+            sends, against a short list of accepted formats, and enforce a
+            size cap. For a photo, we also automatically strip out hidden
+            metadata, including GPS location, before it is saved, so a
+            picture of your water heater doesn&apos;t also quietly publish
+            your exact coordinates. A file that doesn&apos;t pass these checks
+            is never stored.
+          </p>
         </section>
 
         <section>
@@ -410,7 +434,37 @@ export default function PrivacyPage() {
               A cookie that remembers which home is active, for anyone
               managing more than one property.
             </li>
+            <li>
+              <span className="font-medium text-stone-900 dark:text-stone-100">
+                hearth_seen
+              </span>
+              , a private timestamp of your last visit, marked httpOnly (no
+              page script can read or extend it) and kept for 35 days. If a
+              device goes more than 30 days without a visit, the next request
+              signs that device out automatically and asks you to sign back
+              in; this is a security measure and cannot be turned off.
+            </li>
+            <li>
+              <span className="font-medium text-stone-900 dark:text-stone-100">
+                hearth_flash
+              </span>
+              , a one-shot confirmation or error message (for example,
+              &ldquo;Job posted&rdquo;) that is read once and cleared right
+              after, kept for at most 30 seconds.
+            </li>
           </ul>
+          <p className="mt-3 leading-relaxed">
+            Separately, a handful of small values live in your browser&apos;s
+            own local storage, not a cookie, and never sent to our servers:
+            which dashboard panels you&apos;ve collapsed, whether
+            you&apos;ve already used today&apos;s Ask Hearth questions (so the
+            composer can stay locked without asking the server again), the
+            timing behind the &ldquo;Enjoying Hearth?&rdquo; rating prompt,
+            and whether you&apos;ve recently dismissed the notification
+            permission prompt. None of it leaves your device, and clearing
+            your browser&apos;s site data clears all of it. No advertising or
+            third-party analytics cookies are set anywhere in Hearth.
+          </p>
         </section>
 
         <section>
@@ -450,6 +504,16 @@ export default function PrivacyPage() {
             Hearth&apos;s own messaging is rejected and the pro is told why,
             rather than published and reviewed later.
           </p>
+          <p className="mt-3 leading-relaxed">
+            {/* TODO(legal): confirm that a pro typing their own name into a
+                profile field they can see is public counts as adequate
+                consent to publish it, or whether a separate confirmation
+                step is needed. */}
+            If a pro chooses to add their own name, not just their business
+            name, it shows on their public profile page too, so you know who
+            is likely to show up at your door. It is optional, and it is the
+            pro&apos;s own decision to add it.
+          </p>
         </section>
 
         <section>
@@ -477,7 +541,32 @@ export default function PrivacyPage() {
             in Account settings, and pros use the same checkbox to opt into
             texts about new job leads. Twilio only sends to 10-digit US
             phone numbers, and every text ends with &ldquo;Reply STOP to opt
-            out,&rdquo; which unsubscribes that number right away.
+            out,&rdquo; which unsubscribes that number right away.{" "}
+            {/* TODO(legal): counsel to review the SMS consent checkbox
+                wording (homeowner Account settings and the pro sign-up form)
+                and confirm the STOP-handling and quiet-hours description here
+                satisfies TCPA and CTIA messaging requirements. */}
+            Texts are never sent between 9pm and 8am Pacific time, no matter
+            what time an alert is generated; anything held for quiet hours is
+            still visible in the app right away.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            A third channel, push notifications, works differently. Turning it
+            on in your browser or phone stores a small subscription record (a
+            web address and two keys your browser generates, not your email
+            or phone number) so Hearth&apos;s server can ask your browser or
+            phone&apos;s own push service, run by Apple, Google, or Mozilla,
+            to deliver a notification to that device. It costs us nothing to
+            send, so, unlike some email and text alerts, it is not held back
+            from anyone on the free plan. Only certain kinds of notifications
+            are ever pushed, such as a message from a pro or homeowner, a new
+            lead, a quote or invoice, or a weather or safety alert; routine
+            reminders and digests only ever show up in-app. Weather and safety
+            pushes are also held between 9pm and 8am Pacific time; a message
+            from an actual person is not held, the same as a text. You can
+            turn push off in Account &gt; Notifications or in your
+            browser&apos;s or phone&apos;s own settings; either way removes
+            the subscription record.
           </p>
         </section>
 
@@ -561,7 +650,17 @@ export default function PrivacyPage() {
             working and improve the app. Those events are stored as rows in
             Hearth&apos;s own database, linked to your account when you&apos;re
             signed in, and are never sold or shared with any third-party ad or
-            analytics company.
+            analytics company.{" "}
+            {/* TODO(legal): retention period for app_events - deleting an
+                account today unlinks these rows (user_id is set to null)
+                rather than deleting them outright, since they carry no
+                content beyond an id and a category. Confirm this is
+                acceptable retention practice and whether the CCPA notice
+                above needs to say so explicitly. */}
+            Deleting your account disconnects these rows from your account
+            rather than deleting them outright; without an account attached
+            they carry no free text or contact detail, only an event name and
+            a category.
           </p>
           <p className="mt-3 leading-relaxed">
             The other honest exception is free-trial abuse. Hearth stores
@@ -608,12 +707,26 @@ export default function PrivacyPage() {
             happens that affects your personal information, we&apos;ll notify
             you as required by California law.
           </p>
+          <p className="mt-3 leading-relaxed">
+            If a device goes 30 days without using Hearth, that session is
+            automatically signed out the next time it&apos;s used, and has to
+            sign back in (see the hearth_seen cookie above). Anything our own
+            servers write to their debugging logs has values like passwords,
+            tokens, emails, and phone numbers automatically stripped out
+            before the line is ever written.
+          </p>
         </section>
 
         <section>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Your privacy rights
           </h2>
+          {/* TODO(legal): counsel to confirm the "Hearth does not sell your
+              data or share it for advertising" statement below, and the
+              sale/share clarification in the paragraph after it, still hold
+              under current CCPA/CPRA guidance as new data flows (push
+              subscriptions, app usage events, the trial-abuse hashes
+              described in "What we don't do" above) are added. */}
           <p className="mt-2 leading-relaxed">
             If you are a California resident, you have these rights over your
             personal information: to know what we&apos;ve collected about you
@@ -639,10 +752,19 @@ export default function PrivacyPage() {
             contact details to a pro you picked, at your request, is a
             different thing.
           </p>
+          {/* TODO(legal): a written data retention schedule doesn't exist yet
+              (see docs/LEGAL-TODO.md item 19). Until one does, the honest
+              default stated below is "until you delete your account or ask
+              us to remove it sooner", except the narrow legally-required
+              records named, and except app_events rows, which are unlinked
+              from the account rather than deleted (see "What we don't do"
+              above) - counsel to confirm both defaults and set real
+              retention periods. */}
           <p className="mt-3 leading-relaxed">
             We keep each category of data for as long as your account is
-            open, aside from a narrow set of records the law requires us to
-            keep, such as invoices and payment records.
+            open, or until you ask us to remove it sooner, aside from a
+            narrow set of records the law requires us to keep, such as
+            invoices and payment records.
           </p>
           <p className="mt-3 leading-relaxed">
             The controls to act on these rights, downloading your data,

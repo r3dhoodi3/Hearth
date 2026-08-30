@@ -35,7 +35,7 @@ export default function TermsPage() {
         Terms of Service
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-        Last updated August 28, 2026. The plain-English basics, not legalese.
+        Updated 2026-08-30. The plain-English basics, not legalese.
       </p>
 
       <div className="mt-8 space-y-8 text-stone-700 dark:text-stone-300">
@@ -174,6 +174,18 @@ export default function TermsPage() {
             and it does not change how payment disputes and chargebacks are
             handled.
           </p>
+          {/* TODO(legal): attorney review required — auto-renewal disclosures
+              against California's Automatic Renewal Law as amended by AB 2863,
+              effective July 1, 2025: express affirmative consent to the
+              renewal terms kept SEPARATE from general terms acceptance,
+              annual reminder notices, a one-step cancel at least as easy as
+              signing up, and consent records retained for the required
+              period. src/lib/billingTerms.ts is the one place the disclosure
+              text is generated (both memberships, every cadence, all carry
+              the same 3-day free trial per PLUS_PLAN.trialDays and
+              PRO_PLAN.trialDays in src/lib/constants.ts); confirm the
+              checkout flow and the acknowledgment notification actually
+              collect a separate, itemized consent, not just this paragraph. */}
           <p className="mt-3 leading-relaxed">
             Paid memberships that start with a free trial are described in full
             at checkout before you enter a payment method. Your card is
@@ -181,7 +193,9 @@ export default function TermsPage() {
             trial, and the membership renews automatically at the price shown
             once the trial ends unless you cancel first. Cancel before the trial
             ends and you are not charged. You can cancel at any time from the
-            membership page in the app.
+            membership page in the app. The free trial is 3 days on every
+            Hearth Plus and Hearth Pro plan, whichever billing cadence you
+            pick.
           </p>
         </section>
 
@@ -262,7 +276,10 @@ export default function TermsPage() {
             the job finished first, because that would let a pro avoid a bad
             review by never marking anything finished. We don&apos;t pay for
             reviews, we don&apos;t write them, and we don&apos;t delete a
-            review for being negative.{" "}
+            review for being negative. The same rule applies to any in-app
+            prompt asking you to rate Hearth itself, on Hearth or in the App
+            Store or Play Store: nothing, credit or otherwise, is ever offered
+            in exchange for a rating.{" "}
             {/* LAWYER: check this against the FTC Rule on Consumer Reviews and Testimonials (16 CFR 465), in particular the review-suppression and insider-review provisions, and confirm we can say "we don't delete a review for being negative" given the moderation gate above can refuse one at submission time. */}
           </p>
           <p className="mt-3 leading-relaxed">

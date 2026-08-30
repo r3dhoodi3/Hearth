@@ -109,7 +109,9 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
       {
         title: "Let the drafter start, then make it yours",
         body: [
-          "The Draft it for me button on any job writes a first pass from the posting and your company profile. Edit it before sending: one detail only you would know beats anything generated.",
+          // Label kept in sync with ApplyJobButton.tsx's "Draft a message for
+          // me" button (renamed 2026-08-30 for clarity on a phone).
+          "The Draft a message for me button on any job writes a first pass from the posting and your company profile. Edit it before sending: one detail only you would know beats anything generated.",
         ],
       },
     ],

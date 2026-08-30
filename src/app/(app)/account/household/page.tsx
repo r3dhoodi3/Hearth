@@ -100,6 +100,14 @@ export default async function HouseholdPage() {
           Plus is personal, so a member doesn&apos;t get the owner&apos;s
           Plus.
         </p>
+        {/* Names the case that actually creates a genuinely new account (a
+            parent's home, a managed rental), not just a second login inside
+            the same household - the caretaking use case CR4's research
+            flagged as unaddressed in this card's old, purely neutral copy. */}
+        <p className="text-sm text-stone-600 dark:text-stone-300">
+          Managing a parent&apos;s home or a rental? Add them so you both see
+          the same list.
+        </p>
       </div>
 
       {invitesToMe.length > 0 && (

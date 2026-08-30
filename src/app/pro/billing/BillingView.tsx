@@ -146,18 +146,26 @@ export default function BillingView({
         </div>
       )}
 
-      {/* Balances */}
-      <section className="grid gap-4 sm:grid-cols-2">
-        <div className="card-hero">
+      {/* Balances. Side by side on a phone too (not just from sm up): the
+          owner's ask was "add credit" reachable with no scroll, and a
+          stacked pair of cards alone was pushing the deposit buttons off the
+          first screen. Tighter padding and a smaller number below sm buy
+          back the height the second row used to cost; the label stays full
+          size since the number, not the caption, is what the row is for.
+          CR3#10: gap-3 -> gap-2 and p-3 -> p-2.5 on phone tighten the rhythm
+          further, closing the rest of the gap between here and "Add credit"
+          with no scroll. */}
+      <section className="grid gap-4 max-sm:grid-cols-2 max-sm:gap-2 sm:grid-cols-2">
+        <div className="card-hero max-sm:p-2.5">
           <p className="stat-label text-hearth-800 dark:text-hearth-400">Lead credit</p>
-          <p className="stat-number mt-1 text-4xl text-hearth-900 dark:text-hearth-200">
+          <p className="stat-number mt-1 text-4xl max-sm:text-xl text-hearth-900 dark:text-hearth-200">
             {cashLabel}
           </p>
           <p className="mt-1 text-xs text-hearth-700">Never expires.</p>
         </div>
-        <div className="card border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/15">
+        <div className="card border-amber-200 bg-amber-50 max-sm:p-2.5 dark:border-amber-500/30 dark:bg-amber-500/15">
           <p className="stat-label text-amber-800 dark:text-amber-400">Bonus credit</p>
-          <p className="stat-number mt-1 text-2xl text-amber-900 dark:text-amber-300">
+          <p className="stat-number mt-1 text-2xl max-sm:text-xl text-amber-900 dark:text-amber-300">
             {bonusLabel}
           </p>
           <p className="mt-1 text-xs text-amber-700">

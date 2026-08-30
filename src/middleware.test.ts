@@ -23,12 +23,15 @@ describe("middleware matcher", () => {
     expect(matches("/favicon.ico")).toBe(false);
   });
 
-  it("skips the two /public asset folders", () => {
+  it("skips everything served straight out of /public", () => {
     for (const asset of [
       "/demo-vo/hook.mp3",
       "/demo-vo/pro/leads.mp3",
       "/photos/plumber-pipe-fittings.jpg",
       "/photos/CREDITS.md",
+      // public/sw.js, fetched by the browser on every service-worker update
+      // check. There is nothing to guard and nothing to refresh on it.
+      "/sw.js",
     ]) {
       expect(matches(asset), asset).toBe(false);
     }
@@ -52,30 +55,41 @@ describe("middleware matcher", () => {
   });
 
   // Generated routes out of src/app that keep their own file-ish names. They
-  // now run the middleware, which is fine: each is either public by name or
-  // falls through as an unrouted GET, so none of them 307s to /signin. The
-  // curl checks in the PR that introduced this pin the live behavior; these
-  // assertions pin the two halves the middleware itself decides.
-  it("lets the generated icon/metadata routes answer without a session", () => {
+  // used to run the middleware and be answered anonymously by it; now they are
+  // skipped by name, which is the same answer for one less invocation. Both
+  // halves are asserted: the matcher no longer runs on them, AND the middleware
+  // would still have let them through if it did - so if one of these names is
+  // ever removed from the matcher, nothing about the response changes.
+  it("skips the generated icon/metadata routes, which never needed a session", () => {
     for (const path of [
       "/icon.svg",
       "/icon-192.png",
       "/icon-512.png",
       "/manifest.webmanifest",
     ]) {
-      expect(matches(path), path).toBe(true);
-      // Not public by name, but not guarded either, so a GET falls through to
-      // the route instead of being bounced to /signin.
+      expect(matches(path), path).toBe(false);
+      // Not public by name, but not guarded either, so a GET would have fallen
+      // through to the route rather than being bounced to /signin.
       expect(isGuardedPath(path), path).toBe(false);
     }
+    for (const path of ["/apple-icon", "/opengraph-image", "/robots.txt", "/sitemap.xml"]) {
+      expect(matches(path), path).toBe(false);
+      expect(isPublicPath(path), path).toBe(true);
+    }
+  });
+
+  // The exclusions are anchored at the start of the path, so a guarded route
+  // cannot inherit one by ending in the same name. This is the same class of
+  // mistake as the old extension alternation, one level subtler.
+  it("does not let a lookalike path borrow an exclusion", () => {
     for (const path of [
-      "/apple-icon",
-      "/opengraph-image",
-      "/robots.txt",
-      "/sitemap.xml",
+      "/pro/sw.js",
+      "/account/robots.txt",
+      "/chats/icon.svg",
+      "/api/photos/1",
+      "/pro/apple-icon",
     ]) {
       expect(matches(path), path).toBe(true);
-      expect(isPublicPath(path), path).toBe(true);
     }
   });
 });

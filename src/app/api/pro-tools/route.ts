@@ -592,8 +592,10 @@ export async function POST(req: NextRequest) {
       system: instruction,
       prompt: userPrompt,
       schema,
-      maxTokens: 8000,
-      thinking: true,
+      // Model, ceiling and reasoning come from ROUTES in src/lib/claude.ts.
+      // Cheap model: every pro tool produces a draft the pro edits before it
+      // reaches a homeowner.
+      route: "pro-tools",
       timeoutMs: 120_000,
       label: `pro-tools:${tool}`,
     });

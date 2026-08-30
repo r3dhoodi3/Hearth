@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   buildAlertOutbound,
   buildAlertNotificationRows,
+  nextCollapsedAlertTitle,
+  collapsedAlertBody,
+  planAlertFanout,
   type AlertRecipientRow,
 } from "./proAlertBatch";
 
@@ -152,5 +155,74 @@ describe("buildAlertNotificationRows", () => {
 
   it("produces no rows for no targets, so an empty fan-out inserts nothing", () => {
     expect(buildAlertNotificationRows([], PAYLOAD)).toEqual([]);
+  });
+});
+
+// CR5#6: same-pro alerts posted close together collapse into one message.
+describe("nextCollapsedAlertTitle", () => {
+  it("turns a single-job title into the first collapsed count", () => {
+    expect(nextCollapsedAlertTitle("New plumbing job just posted")).toBe(
+      "2 new jobs in your trades"
+    );
+  });
+
+  it("increments an already-collapsed title", () => {
+    expect(nextCollapsedAlertTitle("2 new jobs in your trades")).toBe(
+      "3 new jobs in your trades"
+    );
+    expect(nextCollapsedAlertTitle("9 new jobs in your trades")).toBe(
+      "10 new jobs in your trades"
+    );
+  });
+
+  it("tolerates stray whitespace on the stored title", () => {
+    expect(nextCollapsedAlertTitle("  2 new jobs in your trades  ")).toBe(
+      "3 new jobs in your trades"
+    );
+  });
+});
+
+describe("collapsedAlertBody", () => {
+  it("matches the count in the title it was built from", () => {
+    expect(collapsedAlertBody("3 new jobs in your trades")).toBe(
+      "3 new jobs just posted in your trades. Check the board to apply."
+    );
+  });
+
+  it("falls back to a plain word if the title shape is unexpected", () => {
+    expect(collapsedAlertBody("New plumbing job just posted")).toBe(
+      "Multiple new jobs just posted in your trades. Check the board to apply."
+    );
+  });
+});
+
+describe("planAlertFanout", () => {
+  it("sends every target with no recent row to the fresh-insert group", () => {
+    const plan = planAlertFanout(["u1", "u2"], new Map());
+    expect(plan.freshTargets).toEqual(["u1", "u2"]);
+    expect(plan.collapsedUpdates).toEqual([]);
+  });
+
+  it("routes a target with a recent row to a collapsed update instead", () => {
+    const plan = planAlertFanout(
+      ["u1", "u2"],
+      new Map([["u1", "New plumbing job just posted"]])
+    );
+    expect(plan.freshTargets).toEqual(["u2"]);
+    expect(plan.collapsedUpdates).toEqual([
+      {
+        userId: "u1",
+        title: "2 new jobs in your trades",
+        body: "2 new jobs just posted in your trades. Check the board to apply.",
+      },
+    ]);
+  });
+
+  it("keeps incrementing a pro who is alerted a third time inside the window", () => {
+    const plan = planAlertFanout(
+      ["u1"],
+      new Map([["u1", "2 new jobs in your trades"]])
+    );
+    expect(plan.collapsedUpdates[0].title).toBe("3 new jobs in your trades");
   });
 });

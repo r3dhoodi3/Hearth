@@ -156,6 +156,36 @@ describe("a streamed answer", () => {
     expect(screen.getByText("2 of 3 free questions left today")).toBeInTheDocument();
   });
 
+  // R1#3 / PLAN A1: a free homeowner on their last question sees it coming,
+  // above the field, before the locked bar ever shows up.
+  it("shows a one-line warning above the field on the last free question", async () => {
+    const stream = makeStream();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.response));
+
+    render(<AskHearth fill />);
+    await ask("How old is my water heater?");
+
+    stream.push(delta("About 9 years, going by the install date on file."));
+    stream.push(
+      done({
+        answer: "About 9 years, going by the install date on file.",
+        freeRemaining: 1,
+        freeLimit: 3,
+      })
+    );
+    await settle();
+
+    expect(
+      screen.getByText(/1 free question left today\./)
+    ).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "See what Hearth Plus adds" });
+    expect(link).toHaveAttribute("href", "/plus?reason=ask");
+    // No number attached to Plus itself: the owner's rule is to keep the
+    // Plus allowance vague (see the "gives you more, plus photo answers"
+    // line further down AskHearth.tsx).
+    expect(screen.queryByText(/15/)).not.toBeInTheDocument();
+  });
+
   it("hides a half-written machine block, and holds its buttons until the end", async () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));

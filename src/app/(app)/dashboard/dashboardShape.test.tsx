@@ -37,6 +37,9 @@ const fixtures = vi.hoisted(() => ({
   // maintenance-plan CTA tests fill it with a real plan-schedule title so
   // hasOpenPlan flips true.
   tasks: [] as Record<string, unknown>[],
+  // hearth_last_reason cookie value, read by the tool-tile reorder (PLAN
+  // A1#2). null is "no cookie sent", matching a first-ever visit.
+  lastReasonCookie: null as string | null,
 }));
 
 vi.mock("@/lib/subscription", () => ({
@@ -152,6 +155,17 @@ vi.mock("../value/ValueAutoFetch", () => ({
   default: () => null,
 }));
 
+// The tool-tile reorder (PLAN A1#2) reads this cookie server-side; the real
+// value is written client-side by PaywallReasonBanner.
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(async () => ({
+    get: (name: string) =>
+      name === "hearth_last_reason" && fixtures.lastReasonCookie
+        ? { name, value: fixtures.lastReasonCookie }
+        : undefined,
+  })),
+}));
+
 import HomePage from "./page";
 // Real helper, not a stub: the page decides "a plan exists" by matching open
 // task titles against this set, so the fixture has to use a title from it.
@@ -227,6 +241,64 @@ describe("Hearth's briefing rows", () => {
     expect(row!.textContent).not.toContain("→");
     // The whole sentence is inside the tap target, not just the CTA words.
     expect(row!.textContent).toContain("issue needs attention");
+  });
+});
+
+// The tile matching the most recent /plus?reason= paywall someone hit leads
+// the row, read from the hearth_last_reason cookie PaywallReasonBanner sets
+// (PLAN A1#2 / R1#5).
+describe("Tool tile order", () => {
+  afterEach(() => {
+    fixtures.lastReasonCookie = null;
+  });
+
+  function toolTileHrefs(container: HTMLElement): string[] {
+    const grid = container.querySelector(".grid-cols-3");
+    return Array.from(grid?.querySelectorAll("a") ?? []).map(
+      (a) => a.getAttribute("href")!
+    );
+  }
+
+  it("defaults to forecast, quote, report with no cookie", async () => {
+    fixtures.lastReasonCookie = null;
+    const { container } = await renderDashboard();
+    expect(toolTileHrefs(container)).toEqual([
+      "/forecast",
+      "/quote-check",
+      "/home-report",
+    ]);
+  });
+
+  it("leads with the quote analyzer after the quote paywall", async () => {
+    fixtures.lastReasonCookie = "quote";
+    const { container } = await renderDashboard();
+    expect(toolTileHrefs(container)).toEqual([
+      "/quote-check",
+      "/forecast",
+      "/home-report",
+    ]);
+  });
+
+  it("leads with the home report after the report paywall", async () => {
+    fixtures.lastReasonCookie = "report";
+    const { container } = await renderDashboard();
+    expect(toolTileHrefs(container)).toEqual([
+      "/home-report",
+      "/forecast",
+      "/quote-check",
+    ]);
+  });
+
+  it("leaves the order alone for a reason with no matching tile", async () => {
+    // "ask" is a real paywall reason (see plus/page.tsx) but none of these
+    // three tools is Ask Hearth, so nothing here should move.
+    fixtures.lastReasonCookie = "ask";
+    const { container } = await renderDashboard();
+    expect(toolTileHrefs(container)).toEqual([
+      "/forecast",
+      "/quote-check",
+      "/home-report",
+    ]);
   });
 });
 

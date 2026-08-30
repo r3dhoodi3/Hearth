@@ -146,8 +146,10 @@ async function extractExpiry(
         ? { documents: [{ data: base64 }] }
         : { images: [{ data: base64, mime }] }),
       schema: RESPONSE_SCHEMA,
-      maxTokens: 1024,
-      effort: "low",
+      // Model, ceiling and effort come from ROUTES in src/lib/claude.ts. Kept
+      // on the strong model: licence, insurance and permit wording read off a
+      // document is a legal-shaped answer, and this route is cheap and rare.
+      route: "pro-compliance",
       timeoutMs: 60_000,
       label: "pro-compliance",
     });

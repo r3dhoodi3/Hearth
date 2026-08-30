@@ -204,12 +204,13 @@ export default function PricingPage() {
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               About {YEARLY_PER_MONTH} a month, billed once a year.
             </p>
-            {/* The trial belongs to the weekly plan only, so this card says
-                plainly what yearly does instead: it charges at signup. Saying
-                nothing here would leave the trial line elsewhere on the page to
-                be read as covering this plan too. */}
+            {/* The free days now come with every cadence, so this card states
+                its own version of them rather than the "No trial on yearly"
+                line it used to carry: free first, then the price it renews at.
+                trialApplies() in src/lib/billingTerms.ts is the rule. */}
             <p className="mt-3 text-sm font-medium text-bark-700 dark:text-stone-300">
-              {YEARLY} today, then every 12 months. No trial on yearly.
+              {TRIAL_DAYS} days free, then {YEARLY} and it renews every 12
+              months.
             </p>
           </div>
           <ul className="mt-5 space-y-2">
@@ -248,13 +249,11 @@ export default function PricingPage() {
             <p className="mt-2 text-sm text-stone-700 dark:text-stone-300">
               The same Plus, month to month.
             </p>
-            {/* Monthly is billed on day one. The {TRIAL_DAYS} free days ride on
-                the weekly plan and nowhere else, so this card names the plan
-                that has them rather than implying it has them itself. */}
+            {/* Same shape as the yearly card: the free days come first on
+                every cadence now, so this card no longer has to send a reader
+                to the weekly plan to try Plus before paying. */}
             <p className="mt-3 text-sm font-medium text-bark-700 dark:text-stone-300">
-              {MONTHLY} today, then every month. Want to try it first? The
-              weekly plan is {WEEKLY} a week and starts with {TRIAL_DAYS} free
-              days.
+              {TRIAL_DAYS} days free, then {MONTHLY} and it renews every month.
             </p>
           </div>
           {/* The page's one loss-framed line, and the loss is real today: the
@@ -292,22 +291,19 @@ export default function PricingPage() {
           How the Plus trial and billing work
         </h2>
         <p className="mt-2 text-base leading-relaxed text-stone-700 dark:text-stone-300">
-          The free trial is part of the weekly plan. If you start Plus weekly,
-          your first {TRIAL_DAYS} days are free and nothing is charged, then it
-          renews automatically at {WEEKLY} a week until you cancel.
+          The first {TRIAL_DAYS} days are free on whichever plan you pick, once
+          per account. Nothing is charged during them.
         </p>
         <p className="mt-2 text-base leading-relaxed text-stone-700 dark:text-stone-300">
-          The monthly and yearly plans have no trial: monthly charges {MONTHLY}
-          {" "}
-          today and renews every month, yearly charges {YEARLY} today and renews
-          every 12 months, both until you cancel.
+          When the free days end, your plan renews automatically at its own
+          price until you cancel: {WEEKLY} a week on weekly, {MONTHLY} a month
+          on monthly, or {YEARLY} every 12 months on yearly.
         </p>
         <p className="mt-2 text-base leading-relaxed text-stone-700 dark:text-stone-300">
           You can cancel anytime from your account with one button. There is
-          nothing to call or email. If you cancel during the weekly plan&apos;s
-          {" "}
-          {TRIAL_DAYS}-day trial, you are never charged, and if you cancel later
-          you keep Plus until the end of the period you already paid for.
+          nothing to call or email. If you cancel during the {TRIAL_DAYS}-day
+          free trial, you are never charged, and if you cancel later you keep
+          Plus until the end of the period you already paid for.
         </p>
       </div>
 

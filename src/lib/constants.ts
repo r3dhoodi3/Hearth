@@ -374,6 +374,17 @@ export const LEAD_TIER_FEES = { light: 25, skilled: 50, major: 99 } as const;
 // sync with major_lead_price_cents() in 0113 (4999 cents).
 export const MAJOR_INTRO_FEE = 49.99;
 
+// Hearth Pro members' lead-fee discount: 10% off every lead's apply fee.
+// Owner's words: "if they buy it they start off with a 10% discount for
+// leads. It does NOT stack with the 15-30% [aging discount]. More incentive
+// to buy." Never combines with the aging markdown above: apply_to_lead
+// (migration 0149) and src/lib/leadPricing.ts's bestLeadDiscount() both take
+// the BIGGER of this percent and the aging tier, never their sum. Does not
+// touch MAJOR_INTRO_FEE either: the intro price is fixed and can only ever
+// undercut this discount, never be discounted further by it. Keep this
+// literal 10 in sync with pro_lead_fee_cents() in migration 0149.
+export const PRO_LEAD_DISCOUNT_PCT = 10;
+
 export const LEAD_FEES: Record<string, number> = {
   // Tier 3 - major
   roof: LEAD_TIER_FEES.major,
@@ -438,9 +449,10 @@ export const PRO_PLAN = {
 // src/lib/billingTerms.ts, and the renewal-reminder cron can never quote a
 // price the card isn't actually charged. Three cadences are sold: weekly,
 // monthly, and yearly. The 3-day free trial (a Stripe trial, so nothing is
-// charged until it ends) belongs to WEEKLY only since 2026-08-26 - monthly and
-// yearly are billed on day one. trialApplies() in src/lib/billingTerms.ts is
-// the single predicate that says so.
+// charged until it ends) comes with ALL THREE for an eligible account, and the
+// subscription then renews at the chosen cadence's price. It was weekly-only
+// between 2026-08-26 and 2026-08-30. trialApplies() in src/lib/billingTerms.ts
+// is the single predicate that says so.
 export const PLUS_PLAN = {
   // $1.99 a week, about $8.62 a month at 52/12 weeks. Priced from consumer
   // subscription comparables rather than from a round number: the 2026 in-app
@@ -460,9 +472,9 @@ export const PLUS_PLAN = {
   // 33% off monthly x 12 ($59.88), about $3.33/mo. Always compare against
   // monthly x 12 in copy, never an invented list price.
   yearly: 39.99,
-  // The trial rides on the WEEKLY plan and nothing else. Monthly and yearly
-  // are charged at signup, so neither ever quotes trial copy or sends
-  // trial_period_days to Stripe. See trialApplies() in src/lib/billingTerms.ts.
+  // The trial rides on whichever cadence the buyer picked: weekly, monthly and
+  // yearly all send the same trial_period_days for an eligible account and then
+  // renew at their own price. See trialApplies() in src/lib/billingTerms.ts.
   trialDays: 3,
 } as const;
 
@@ -567,9 +579,9 @@ export const FREE_ASK_PER_DAY = 3;
 // src/lib/constants.test.ts fails if the two drift.
 //
 // The SAME as PLUS_ASK_PER_DAY, written as an alias so the two cannot drift.
-// The trial rides on the weekly plan, and weekly, monthly, and annual include
-// exactly the same things: a smaller trial ceiling made the weekly card look
-// like a lesser plan. The trade-off is spelled out on ASK_DAILY_TRIAL in
+// The trial can run on any cadence, and weekly, monthly, and annual include
+// exactly the same things: a smaller trial ceiling made a trialing member look
+// like a lesser member. The trade-off is spelled out on ASK_DAILY_TRIAL in
 // src/lib/aiUsage.ts.
 export const TRIAL_ASK_PER_DAY = PLUS_ASK_PER_DAY;
 

@@ -1,0 +1,24 @@
+{
+  "_comment": "Checked-in bundle-size budget baseline for scripts/checkBundleBudget.mjs (npm run perf:budget). Values are First Load JS in bytes, taken from `next build`'s own table (1024-based kB, matching Next's formatter). A route may grow up to PERCENT_TOLERANCE (10%) over its number here before CI fails. Update the number for a route in the same PR as a change that grows it on purpose, and say why in the PR description - this file exists to catch accidental bloat, not to block real feature growth.",
+  "generatedAt": "2026-08-30",
+  "generatedFrom": "NEXT_DIST_DIR=.next-p5 npx next build, local prod build on main mid-speed-wave",
+  "toleranceRatio": 0.1,
+  "routes": {
+    "/": 118784,
+    "/dashboard": 135168,
+    "/ask": 122880,
+    "/chats": 209920,
+    "/pro": 205824,
+    "/pro/ask": 122880,
+    "/pro/business": 124928,
+    "/pro/chats": 198656,
+    "/pro/leads": 206848,
+    "/pro/plus": 121856,
+    "/pro/profile": 199680,
+    "/pros": 118784,
+    "/signin": 183296,
+    "/plus": 122880,
+    "/pricing": 108544,
+    "/guides/home-maintenance-schedule": 109568
+  }
+}

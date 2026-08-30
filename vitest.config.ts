@@ -29,6 +29,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.{ts,tsx}"],
+    // scripts/**/*.test.mjs: the bundle-budget CI script (checkBundleBudget.mjs)
+    // is plain JS run standalone via `node`, not compiled TypeScript, so its
+    // tests live outside src/ - added here rather than converted to .ts so the
+    // script needs no build step to run in CI.
+    include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.mjs"],
   },
 });

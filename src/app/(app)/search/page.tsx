@@ -2,8 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { labelFor, SYSTEM_TYPES, ISSUE_CATEGORIES } from "@/lib/constants";
-import AskHearth from "@/components/AskHearth";
-import { FileText, Bell, Search, type LucideIcon } from "lucide-react";
+import { FileText, Bell, Search, Sparkles, type LucideIcon } from "lucide-react";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
 // Pages the search can jump to, each with a few keywords so a homeowner does
@@ -172,21 +171,39 @@ export default async function SearchPage(
           <p className="text-sm text-stone-500 dark:text-stone-400">
             {total > 0
               ? `Found ${total} match${total === 1 ? "" : "es"} in your home and pages.`
-              : "Nothing on the site matched. Ask Hearth below."}
+              : "Nothing on the site matched."}
           </p>
         )}
       </div>
 
-      {/* No route, system, document, issue, or reminder matched: the answer
-          path IS the result, so Ask Hearth renders first and prominent
-          instead of trailing the page. With matches, it waits at the bottom
-          as the fallback it usually is. */}
+      {/* Ask Hearth lives only in Messages now (owner's rule, 2026-08-29:
+          "ask hearth can just be on the messages tab to limit potential
+          usage") - this page no longer renders it inline. Nothing matched is
+          exactly the moment a homeowner wants to ask instead of click, so it
+          points at Messages with the same question already typed in, using
+          the ?lead=ask-hearth&q= mechanism src/app/(app)/chats/page.tsx
+          already reads (see initialQuestion there). */}
       {q && total === 0 && (
         <section className="space-y-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Ask Hearth
           </h2>
-          <AskHearth suggestions={[q]} />
+          <Link
+            href={`/chats?lead=ask-hearth&q=${encodeURIComponent(q)}`}
+            className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 hover:bg-bark-50 max-sm:min-h-11 dark:border-white/10 dark:bg-stone-800 dark:hover:bg-stone-700"
+          >
+            <span className="text-stone-500 dark:text-stone-400">
+              <Sparkles className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium text-stone-900 dark:text-stone-100">
+                Ask Hearth in Messages
+              </span>
+              <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+                &ldquo;{q}&rdquo;
+              </span>
+            </span>
+          </Link>
         </section>
       )}
 
@@ -223,15 +240,6 @@ export default async function SearchPage(
           </ul>
         </section>
       ))}
-
-      {q && total > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-            Ask Hearth
-          </h2>
-          <AskHearth suggestions={[q]} />
-        </section>
-      )}
     </div>
   );
 }

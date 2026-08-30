@@ -85,6 +85,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// CR2#3: the pro wizard already had a "Step X of N" indicator; the homeowner
+// address -> ready flow had none. This flow only has two real steps (address
+// entry, then confirm-and-claim), so the indicator says "of 2" rather than
+// copying the pro wizard's own step count, which belongs to a different form.
+describe("OnboardingForm step indicator", () => {
+  it("shows step 1 of 2 on the address step, with the bullets above it", () => {
+    render(<OnboardingForm />);
+    expect(screen.getByText("Step 1 of 2")).toBeInTheDocument();
+    expect(
+      screen.getByText("Track every system and know what needs attention")
+    ).toBeInTheDocument();
+  });
+
+  it("advances to step 2 of 2 once the address is confirmed", async () => {
+    await toReadyStep();
+    expect(screen.getByText("Step 2 of 2")).toBeInTheDocument();
+    // The bullets were the address step's pitch; they don't repeat here.
+    expect(
+      screen.queryByText("Track every system and know what needs attention")
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("OnboardingForm ready step", () => {
   it("posts the address from an editable field, not a hidden one", async () => {
     const { container } = await toReadyStep();

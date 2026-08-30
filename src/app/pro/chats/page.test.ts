@@ -53,6 +53,60 @@ describe("pro Messages: Find clients row", () => {
   });
 });
 
+// W14: "when they apply for a job and they send a message, let the message
+// also show in their Messages box." The application a pro paid to send used to
+// live only on the homeowner's applicant list.
+describe("pro Messages: applications waiting on the homeowner", () => {
+  it("reads the pro's own applications through the user client, not admin", () => {
+    // my_applications (SECURITY DEFINER) for the lead's category and status,
+    // lead_applications for the message the pro wrote. RLS is the gate on
+    // both, so nothing here may reach for the service-role client.
+    expect(page).toContain('rpc("my_applications")');
+    expect(page).toContain('.from("lead_applications")');
+    expect(page).toContain('.select("id, message")');
+    expect(page).not.toContain("createAdminClient");
+  });
+
+  it("lists only applications that are still waiting", () => {
+    // Still 'applied' (nobody picked yet) and not refunded (the fee already
+    // came back, so there is nothing waiting on).
+    const block = page.slice(page.indexOf("const pendingApps"));
+    expect(block).toContain('a.status === "applied"');
+    expect(block).toContain("!a.refunded_at");
+  });
+
+  it("dedupes by lead id, so a picked pro sees the conversation instead", () => {
+    // The moment the homeowner picks this pro the lead is assigned and shows
+    // up in convos; the application row for it has to disappear rather than
+    // sit under its own thread.
+    expect(page).toContain("const convoLeadIds = new Set(convos.map((l) => l.id))");
+    expect(page).toContain("!convoLeadIds.has(a.lead_id)");
+  });
+
+  it("quotes the money promises from the canonical constants", () => {
+    // Ghost protection and the first-application credit are two different
+    // promises (src/lib/guaranteeCopy.ts); wording that drifts is a legal
+    // problem, so both are rendered verbatim from there.
+    expect(page).toContain("GHOST_PROTECTION_GUARANTEE");
+    expect(page).toContain("FIRST_APPLICATION_GUARANTEE");
+    expect(page).toContain("CREDIT_NOT_CASH_LINE");
+  });
+
+  it("opens one with ?application=, which also hides the list on a phone", () => {
+    expect(page).toContain("searchParams.lead || searchParams.application");
+    expect(view).toContain("/pro/chats?application=${row.id}");
+  });
+
+  it("gives the application pane no composer", () => {
+    // A pro cannot message a homeowner who has not picked them. The pane says
+    // so in words instead of showing a dead input.
+    const pane = view.slice(view.indexOf("selectedApplication ? ("));
+    expect(pane).not.toContain("<input");
+    expect(pane).not.toContain("<textarea");
+    expect(pane).toContain("You cannot message this homeowner yet.");
+  });
+});
+
 describe("pro Messages: unread pill on a phone", () => {
   // CEO pass D3: the "New" pill carries meaning (unread), so on a phone it
   // steps up to 14px instead of the old 12px. Desktop (base text-[10px]) is

@@ -28,13 +28,69 @@
 // client: the follow-up dates and the "tracked on" line read the clock and the
 // locale, so they are still resolved on the server and arrive as strings.
 
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { Bot, Clock, Star, FileText, Tag, BarChart3 } from "lucide-react";
 import SubmitButton from "@/components/SubmitButton";
 import ClientRow, { type ProClientRow } from "./ClientRow";
 import { addClientAction, trackLeadAction } from "./actions";
+import { reviewAskMessage } from "./reviewAskMessage";
 import { PRO_PLAN } from "@/lib/constants";
+import {
+  readComposeDraft,
+  saveComposeDraftDebounced,
+  clearComposeDraft,
+} from "@/lib/proComposeDraft";
+
+// CR4#4: a copy-paste "ask for a review" text, offered on every Won client
+// with a linked job. This is the MANUAL fallback every pro can use (member
+// or not) - separate from the automated in-app request Pro members already
+// get on the Won transition (see PRO_CRM_FEATURES's "Automated review
+// requests" card above, requestReviewForWonLead in src/lib/reviewRequest.ts).
+// Never auto-sent: the pro's own phone does the sending, Hearth only builds
+// the text. The link reuses the exact same /contractors?review=<leadId>
+// path the automated request notifies with, so either path lands the
+// homeowner on the same review row. Message-building itself lives in
+// ./reviewAskMessage.ts (see that file for why: this module imports
+// "./actions", which is unsafe to import outside a real server render).
+function WonReviewAsk({
+  clientName,
+  leadId,
+}: {
+  clientName: string;
+  leadId: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  // window is undefined during this client component's SSR pass - same
+  // guard ReviewButton.tsx's and InviteNeighbor.tsx's own inviteUrl() use,
+  // so the preview text and the copied text are always the same string.
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const message = reviewAskMessage(clientName, leadId, origin);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard unavailable (permissions, insecure origin): the text is
+      // already shown on screen to select by hand, so nothing else to do.
+    }
+  }
+
+  return (
+    <li className="card space-y-2 border-dashed">
+      <p className="text-xs font-medium text-stone-500 dark:text-stone-400">
+        Ask {clientName} for a review
+      </p>
+      <p className="text-sm text-stone-600 dark:text-stone-300">{message}</p>
+      <button type="button" onClick={handleCopy} className="btn-secondary text-sm">
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </li>
+  );
+}
 
 // The premium CRM upgrades a Hearth Pro membership adds on top of the free
 // pipeline. Honest framing: only things that actually work in the app today
@@ -134,6 +190,38 @@ export default function CrmView({
   /** True when a pro-side subscriptions row exists, so no trial is offered. */
   hasProSubscriptionRow: boolean;
 }) {
+  // CR5#7: the manual form starts collapsed behind an "Add someone else"
+  // button whenever there is a one-tap suggestion to try first - typing a
+  // name Hearth already knows from a job is the more effortful path, so it
+  // no longer leads. With no suggestions (the common single-client case)
+  // the form is just there, exactly as before.
+  const [showAddForm, setShowAddForm] = useState(() => suggestions.length === 0);
+
+  // CR5#4 autosave for the Add-a-client note: job sites have bad cell
+  // coverage, and this field is a plain uncontrolled textarea (see the form
+  // below, keyed on addedClientCount so a successful add blanks it) so the
+  // draft is restored imperatively via the ref rather than through React
+  // state. Restores whenever the form becomes visible with nothing already
+  // typed into it; clears once addedClientCount actually goes up, which only
+  // happens after a real, saved client - never on a Track tap for a
+  // suggestion, which posts its own hidden fields and does not touch this
+  // form's key.
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
+  const prevAddedCountRef = useRef(addedClientCount);
+  useEffect(() => {
+    if (addedClientCount > prevAddedCountRef.current) {
+      clearComposeDraft("crm_note", "add-client");
+      prevAddedCountRef.current = addedClientCount;
+      return;
+    }
+    prevAddedCountRef.current = addedClientCount;
+    if (!showAddForm) return;
+    const draft = readComposeDraft("crm_note", "add-client");
+    if (draft && noteRef.current && !noteRef.current.value) {
+      noteRef.current.value = draft;
+    }
+  }, [addedClientCount, showAddForm]);
+
   return (
     <>
       <div>
@@ -195,72 +283,8 @@ export default function CrmView({
         </section>
       )}
 
-      <section className="card space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-          Add a client
-        </h2>
-        {/* Keyed on addedClientCount, not clients.length: a successful add
-            changes that number, so React remounts the form with blank
-            uncontrolled inputs instead of leaving the just-submitted name and
-            note sitting in the fields. A validation error (see ./actions.ts's
-            addClientAction) leaves the count untouched, so the key stays put
-            and whatever the pro typed is still there to fix and resubmit.
-            Keying on the plain client count instead used to also remount (and
-            blank) this form when a Track tap on a suggested job below added a
-            client of its own - a half-typed name here would vanish on a tap
-            that had nothing to do with this form. */}
-        <form
-          key={addedClientCount}
-          action={addClientAction}
-          className="grid gap-3 sm:grid-cols-2"
-        >
-          <label className="block sm:col-span-2">
-            <span className="label">Client name</span>
-            <input
-              type="text"
-              name="client_name"
-              maxLength={80}
-              required
-              className="input"
-            />
-          </label>
-          <label className="block">
-            <span className="label">Stage</span>
-            <select name="stage" defaultValue="lead" className="select">
-              {stageOptions.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="label">Follow up on (optional)</span>
-            <input type="date" name="follow_up_on" className="input" />
-          </label>
-          <label className="block sm:col-span-2">
-            <span className="label">Note (optional)</span>
-            <textarea
-              name="note"
-              maxLength={1000}
-              rows={2}
-              className="textarea"
-            />
-          </label>
-          <div className="sm:col-span-2">
-            {/* The server action ends in a redirect back here, and Next serves
-                that redirected page inside the action's own response - so
-                loading.tsx never gets a turn and the screen just sat there,
-                unchanged and unresponsive, for as long as the insert plus the
-                re-read took. This says "Adding…" for exactly that window, and
-                blocks a second tap that would add the client twice. */}
-            <SubmitButton className="btn-primary" pendingLabel="Adding…">
-              Add client
-            </SubmitButton>
-          </div>
-        </form>
-      </section>
-
+      {/* CR5#7: suggestions from jobs Hearth already knows about come first,
+          above the manual form - one tap beats retyping a name. */}
       {suggestions.length > 0 && (
         <section className="space-y-3">
           <div>
@@ -286,22 +310,121 @@ export default function CrmView({
                     {l.metaLine}
                   </p>
                 </div>
-                <form action={trackLeadAction}>
-                  <input type="hidden" name="lead_id" value={l.id} />
-                  <input type="hidden" name="client_name" value={l.name} />
-                  <input type="hidden" name="stage" value={l.stage} />
-                  <SubmitButton
-                    className="btn-secondary shrink-0 text-sm"
-                    pendingLabel="Tracking…"
+                <div className="flex shrink-0 items-center gap-2">
+                  {/* CR5#1: the tools link from a lead/CRM row. Ownership is
+                      re-checked server side in src/app/pro/tools/page.tsx
+                      before anything is prefilled - this id is just client
+                      input off the URL. */}
+                  <Link
+                    href={`/pro/tools?lead=${l.id}`}
+                    className="btn-secondary text-sm"
                   >
-                    Track
-                  </SubmitButton>
-                </form>
+                    Estimate
+                  </Link>
+                  <form action={trackLeadAction}>
+                    <input type="hidden" name="lead_id" value={l.id} />
+                    <input type="hidden" name="client_name" value={l.name} />
+                    <input type="hidden" name="stage" value={l.stage} />
+                    <SubmitButton
+                      className="btn-secondary shrink-0 text-sm"
+                      pendingLabel="Tracking…"
+                    >
+                      Track
+                    </SubmitButton>
+                  </form>
+                </div>
               </li>
             ))}
           </ul>
         </section>
       )}
+
+      <section className="card space-y-3">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+          Add a client
+        </h2>
+        {/* Collapsed behind a button once there is a suggestion to try
+            first (CR5#7); with none, the form is just here as before. */}
+        {suggestions.length > 0 && !showAddForm ? (
+          <button
+            type="button"
+            onClick={() => setShowAddForm(true)}
+            className="btn-secondary"
+          >
+            Add someone else
+          </button>
+        ) : (
+          /* Keyed on addedClientCount, not clients.length: a successful add
+             changes that number, so React remounts the form with blank
+             uncontrolled inputs instead of leaving the just-submitted name and
+             note sitting in the fields. A validation error (see ./actions.ts's
+             addClientAction) leaves the count untouched, so the key stays put
+             and whatever the pro typed is still there to fix and resubmit.
+             Keying on the plain client count instead used to also remount (and
+             blank) this form when a Track tap on a suggested job above added a
+             client of its own - a half-typed name here would vanish on a tap
+             that had nothing to do with this form. */
+          <form
+            key={addedClientCount}
+            action={addClientAction}
+            className="grid gap-3 sm:grid-cols-2"
+          >
+            <label className="block sm:col-span-2">
+              <span className="label">Client name</span>
+              <input
+                type="text"
+                name="client_name"
+                maxLength={80}
+                required
+                className="input"
+              />
+            </label>
+            <label className="block">
+              <span className="label">Stage</span>
+              <select name="stage" defaultValue="lead" className="select">
+                {stageOptions.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="label">Follow up on (optional)</span>
+              <input type="date" name="follow_up_on" className="input" />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="label">Note (optional)</span>
+              {/* CR5#4 autosave: an uncontrolled field, so the draft is
+                  restored onto the DOM node itself (the effect above) rather
+                  than through a value prop - keeps the form's "blank on a
+                  real add, keep it on a validation error" behavior exactly
+                  as the comment above describes. */}
+              <textarea
+                ref={noteRef}
+                name="note"
+                maxLength={1000}
+                rows={2}
+                className="textarea"
+                onChange={(e) =>
+                  saveComposeDraftDebounced("crm_note", "add-client", e.target.value)
+                }
+              />
+            </label>
+            <div className="sm:col-span-2">
+              {/* The server action ends in a redirect back here, and Next serves
+                  that redirected page inside the action's own response - so
+                  loading.tsx never gets a turn and the screen just sat there,
+                  unchanged and unresponsive, for as long as the insert plus the
+                  re-read took. This says "Adding…" for exactly that window, and
+                  blocks a second tap that would add the client twice. */}
+              <SubmitButton className="btn-primary" pendingLabel="Adding…">
+                Add client
+              </SubmitButton>
+            </div>
+          </form>
+        )}
+      </section>
 
       <section className="space-y-6">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
@@ -325,12 +448,23 @@ export default function CrmView({
               </h3>
               <ul className="space-y-2">
                 {g.items.map((c) => (
-                  <ClientRow
-                    key={c.client.id}
-                    client={c.client}
-                    todayStr={todayStr}
-                    latestNote={c.latestNote}
-                  />
+                  <Fragment key={c.client.id}>
+                    <ClientRow
+                      client={c.client}
+                      todayStr={todayStr}
+                      latestNote={c.latestNote}
+                    />
+                    {/* Won-stage review template (CR4#4): only when the
+                        client is a real, linked job - a manually added
+                        client with no lead_id has no review row to point
+                        the link at. */}
+                    {g.value === "won" && c.client.lead_id && (
+                      <WonReviewAsk
+                        clientName={c.client.client_name}
+                        leadId={c.client.lead_id}
+                      />
+                    )}
+                  </Fragment>
                 ))}
               </ul>
             </div>

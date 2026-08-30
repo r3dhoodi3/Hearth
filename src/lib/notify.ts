@@ -9,7 +9,11 @@ import { signUnsubscribeToken } from "@/lib/unsubscribeToken";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import {
   isPlusGatedKind,
+  isTransactionalKind,
+  marketingBudgetAllows,
+  MARKETING_BUDGET_WINDOW_MS,
   shouldSendOutboundChannels,
+  TRANSACTIONAL_NOTIFICATION_KINDS,
 } from "@/lib/notifyGating";
 import {
   allowOutboundSend,
@@ -32,12 +36,26 @@ import { sendPush } from "@/lib/push";
 // insert - so the Plus gate, the email opt-out, and the TCPA/quiet-hours rules
 // still live here and here only. Anything added to sendNotification after the
 // insert must go inside sendOutboundChannels, or the fan-out will not get it.
+// The marketing budget check below is the one exception that is safe to leave
+// out of sendOutboundChannels: the fan-out only ever sends "new_lead", which
+// is on the TRANSACTIONAL_NOTIFICATION_KINDS allowlist and would pass the
+// check unconditionally anyway. A future fan-out kind that is NOT
+// transactional would need the check added to sendOutboundChannels too.
 //
 // Hearth Plus gate: for the proactive homeowner alert/reminder kinds listed in
 // src/lib/notifyGating.ts, the email and SMS channels are a paid perk. The
 // in-app row is still written for everyone, and so is the web push (free to
 // send, so nothing to gate); only email and SMS are withheld. See
 // sendNotification below - the check lives there so no cron can skip it.
+//
+// Marketing frequency cap: BEFORE any of that, and before the in-app row is
+// even written, sendNotification checks withinMarketingBudget for every kind
+// not on the TRANSACTIONAL_NOTIFICATION_KINDS allowlist in
+// src/lib/notifyGating.ts. At most MARKETING_BUDGET_MAX_PER_WINDOW
+// non-transactional notifications reach one person per rolling
+// MARKETING_BUDGET_WINDOW_DAYS, counted across every campaign kind together.
+// See docs/NOTIFICATIONS.md for the full kind list and how to add a
+// campaign.
 //
 // To activate push: generate a VAPID key pair and set
 //   NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
@@ -78,6 +96,19 @@ export async function sendNotification(
   supabase: SupabaseClient<Database>,
   input: NotificationInput
 ): Promise<boolean> {
+  // The marketing/campaign frequency cap, checked FIRST: a person already at
+  // budget for the week gets neither the bell row nor the outbound channels
+  // for a non-transactional kind. Transactional kinds (see
+  // TRANSACTIONAL_NOTIFICATION_KINDS in src/lib/notifyGating.ts) return
+  // immediately with no database read, so the ordinary path - a reply, a
+  // quote, a job status change - pays nothing extra here.
+  if (!(await withinMarketingBudget(input.userId, input.kind))) {
+    console.warn(
+      `sendNotification: marketing budget exceeded for user ${input.userId}, kind ${input.kind} - skipped`
+    );
+    return false;
+  }
+
   const { error } = await supabase.from("notifications").insert({
     user_id: input.userId,
     kind: input.kind,
@@ -94,6 +125,58 @@ export async function sendNotification(
 
   await sendOutboundChannels(input);
   return true;
+}
+
+// Is this person still within their non-transactional notification budget for
+// the week? See TRANSACTIONAL_NOTIFICATION_KINDS in src/lib/notifyGating.ts
+// for the exemption list and the reasoning, and marketingBudgetAllows there
+// for the pure window math this wraps.
+//
+// FAILS CLOSED on a broken count, the opposite direction from the email
+// opt-out check further down in this file. That check protects against
+// spamming someone, so the safest failure is still to deliver a message with
+// an unsubscribe link in it; this one exists to protect against exactly that
+// kind of over-messaging, so a broken count must not let a runaway campaign
+// send unmetered for as long as the outage lasts. Nothing is lost either way:
+// a withheld marketing notification is, by definition, one nobody was
+// waiting on.
+export async function withinMarketingBudget(
+  userId: string,
+  kind: string
+): Promise<boolean> {
+  // Transactional kinds are exempt outright and never reach the database -
+  // this also means a bug that calls withinMarketingBudget for a kind it was
+  // never meant to gate (a future rename, a copy-paste) fails OPEN rather
+  // than blocking a message someone is waiting on.
+  if (isTransactionalKind(kind)) return true;
+
+  try {
+    const admin = createAdminClient();
+    const since = new Date(Date.now() - MARKETING_BUDGET_WINDOW_MS).toISOString();
+    // Every kind NOT on the transactional allowlist shares one budget, so the
+    // count spans every campaign kind at once rather than giving each its own
+    // ceiling. Same unquoted parenthesized-list style the renewal-reminders
+    // cron uses for its own .not(..., "in", ...) filter; every value here is
+    // one of our own snake_case kind literals, never user input.
+    const excluded = Array.from(TRANSACTIONAL_NOTIFICATION_KINDS).join(",");
+    const { count, error } = await admin
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("created_at", since)
+      .not("kind", "in", `(${excluded})`);
+    if (error || typeof count !== "number") {
+      console.error(
+        "withinMarketingBudget: count read failed, failing closed:",
+        error?.message ?? error
+      );
+      return false;
+    }
+    return marketingBudgetAllows(count);
+  } catch (e) {
+    console.error("withinMarketingBudget: threw, failing closed:", e);
+    return false;
+  }
 }
 
 // Overrides for callers that already hold the recipient data sendOutboundChannels

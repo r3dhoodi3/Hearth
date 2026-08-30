@@ -38,7 +38,8 @@ function sliceBetween(text: string, from: string, to: string): string {
 
 const openJobCard = sliceBetween(
   board,
-  "{openJobs.map((j) => {",
+  // sortedOpenJobs since 2026-08-30: same rows, ordered on the client.
+  "{sortedOpenJobs.map((j) => {",
   "{/* ---- Active jobs"
 );
 
@@ -101,15 +102,25 @@ describe("pro lead card phone density (0128)", () => {
     expect(applyIdx).toBeGreaterThan(openDetailsClose);
 
     // The applicant-count line and the full/conflict states also stay
-    // outside the fold, exactly as before.
-    expect(openJobCard.indexOf("spots taken")).toBeGreaterThan(openDetailsClose);
+    // outside the fold, exactly as before. Copy changed (CR5 remove #3: "X
+    // of N spots taken" -> "X pros have applied"), so this anchors on the
+    // line's own comment rather than the wording.
+    expect(openJobCard.indexOf("Applicant count:")).toBeGreaterThan(openDetailsClose);
   });
 
   it("does not touch fee math, sorting, or wallet-balance checks", () => {
-    expect(page).toContain("agingLeadFee(");
+    // bestLeadDiscount (migration 0149) replaced the direct agingLeadFee
+    // call: it prices the SAME aging markdown, plus the Pro member discount,
+    // taking whichever is bigger. See src/lib/leadPricing.ts.
+    expect(page).toContain("bestLeadDiscount(");
     expect(page).toContain("walletQueryPlan(");
-    expect(page).toContain('sort === "fee"');
-    expect(page).toContain('sort === "deal"');
+    // The sort itself moved into the board on 2026-08-30 (a tap re-sorts the
+    // rows the browser already has instead of navigating), but the page still
+    // reads which order the URL asked for and both sides share one comparator
+    // module. See src/lib/leadSort.ts and its test.
+    expect(page).toContain("normalizeLeadSort(searchParams?.sort)");
+    expect(board).toContain('from "@/lib/leadSort"');
+    expect(board).toContain("sortLeads(openJobs, activeSort)");
     // Still the same comparison, resolved on the server and handed to the
     // Apply button as a boolean.
     expect(page).toContain("canAfford: balance >= fee");
@@ -122,9 +133,12 @@ describe("pro lead card phone density (0128)", () => {
     }
     // Severity, ownership-verified, and the aging-deal/intro-fee chips are
     // still there for the desktop row - only reorganized under the sm:flex
-    // wrapper, never deleted.
+    // wrapper, never deleted. The aging chip's own wording changed with
+    // migration 0149 (it now reads "15% off, posted 3 days ago" instead of
+    // "15% off, aging deal", so it reads the same whichever of the two
+    // discounts actually won) - agingDealPhrase is that chip.
     expect(openJobCard).toContain("Ownership verified");
-    expect(openJobCard).toContain("aging deal");
+    expect(openJobCard).toContain("agingDealPhrase(j.postedAgoLabel)");
     expect(directRequestCard).toContain("First big-ticket lead");
   });
 
@@ -165,25 +179,47 @@ describe("pro leads: heading row", () => {
     );
   });
 
-  it("routes the sort links through PRO_LEADS_HREF, never a literal /pro", () => {
-    // The board lives at /pro/leads now, so a hard-coded "/pro" on a sort tap
-    // would bounce the pro onto the Home screen.
+  it("writes the sort into the URL through PRO_LEADS_HREF, with no navigation", () => {
+    // The board lives at /pro/leads now, so a hard-coded "/pro" in the URL it
+    // writes would leave a pro one reload away from the Home screen.
     expect(board).toContain("PRO_LEADS_HREF");
-    expect(board).toContain("? PRO_LEADS_HREF");
-    expect(board).toContain("`${PRO_LEADS_HREF}?sort=${o.value}`");
-    // All three options, in the same order, still rendered from one list.
-    expect(board).toContain('{ value: "new", label: "Newest" }');
-    expect(board).toContain('{ value: "fee", label: "Cheapest fee" }');
-    expect(board).toContain('{ value: "deal", label: "Biggest deal" }');
+    expect(board).toContain(
+      'next === "new" ? PRO_LEADS_HREF : `${PRO_LEADS_HREF}?sort=${next}`'
+    );
+    // replaceState, not a <Link>: the tap must not cost a server render.
+    expect(board).toContain("window.history.replaceState(window.history.state");
+    expect(board).not.toContain("?sort=${o.value}");
+    // All three options, in the same order, still rendered from one list -
+    // now the shared one the server reads too.
+    const sortLib = src("../../../lib/leadSort.ts");
+    expect(sortLib).toContain('{ value: "new", label: "Newest" }');
+    expect(sortLib).toContain('{ value: "fee", label: "Cheapest fee" }');
+    expect(sortLib).toContain('{ value: "deal", label: "Biggest deal" }');
+    expect(board).toContain("{LEAD_SORT_OPTIONS.map((o) => (");
+  });
+
+  it("keeps the sort buttons at a 44px phone target, with a pressed state", () => {
+    // Owner report: the sort taps felt slow and unreliable on a phone. The
+    // target size and the aria/active state are half of that fix; the other
+    // half is that the tap no longer navigates.
+    expect(board).toContain("min-h-[44px] touch-manipulation");
+    expect(board).toContain("active:bg-stone-100");
+    expect(board).toContain("aria-pressed={activeSort === o.value}");
   });
 
   it("tracks lead_viewed with a count, after the closed-job sweep and before the sort", () => {
     // docs/ANALYTICS.md: count only, never a job id or any lead detail. Fires
     // on the final `open` array (after closedIds is applied), never the raw
     // openJobs the RPC returned - the pro never sees the closed ones.
+    //
+    // Wrapped in after() since 2026-08-30, not awaited: the insert is a whole
+    // Supabase round trip and it used to sit between this page's last query
+    // and its first byte. Still exactly one event per render, still the same
+    // count, just written once the response is out.
     expect(page).toContain(
-      'await trackServerEvent(contractor.user_id, "lead_viewed", {\n    count: open.length,\n  });'
+      'after(() =>\n    trackServerEvent(contractor.user_id, "lead_viewed", {\n      count: open.length,\n    })\n  );'
     );
+    expect(page).toContain('import { after } from "next/server";');
     const closedSweep = page.indexOf("open = open.filter((j) => !closedIds.has(j.id));");
     const tracked = page.indexOf('"lead_viewed"');
     const sort = page.indexOf("const sort =");
@@ -319,10 +355,11 @@ describe("pro leads stays one client component with plain-data props", () => {
   });
 
   it("resolves everything clock- or locale-dependent on the server", () => {
-    // agingLeadFee, introFeeFor and postedAgo all read Date.now(). Recomputing
-    // them during hydration could disagree with what SSR printed, which is the
-    // mismatch class this whole change exists to remove.
-    for (const helper of ["agingLeadFee(", "introFeeFor(", "postedAgo("]) {
+    // bestLeadDiscount, introFeeFor and postedAgo all read Date.now().
+    // Recomputing them during hydration could disagree with what SSR
+    // printed, which is the mismatch class this whole change exists to
+    // remove.
+    for (const helper of ["bestLeadDiscount(", "introFeeFor(", "postedAgo("]) {
       expect(page).toContain(helper);
       expect(board).not.toContain(helper);
     }

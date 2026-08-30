@@ -391,17 +391,38 @@ export const isEstablishedPro = cache(
     // Cheapest first, and the one most pros will have: a paid membership.
     if (await hasProPlan()) return true;
 
-    // Admin client on purpose: migration 0069 revoked table SELECT on
-    // contractors and re-granted a column allowlist that does NOT include
-    // license_verified_status, so the RLS client returns null here and a
-    // CSLB-verified pro would never unlock (found by the 2026-08-30 review).
+    // The three remaining signals are independent alternatives, so they go
+    // out together. Measured on 2026-08-30 (speed wave P2): this helper ran as
+    // four stacked round trips inside the pro shell and was the whole pro-side
+    // server tail (about 400 ms on /pro/business, 360 ms on /pro/leads). One
+    // wave costs a little more database work for a fresh signup and saves
+    // hundreds of milliseconds for everyone else; the answers and the
+    // fail-closed rules below are unchanged.
+    //
+    // Admin client on purpose for the license read: migration 0069 revoked
+    // table SELECT on contractors and re-granted a column allowlist that does
+    // NOT include license_verified_status, so the RLS client returns null here
+    // and a CSLB-verified pro would never unlock (found by the 2026-08-30
+    // review). Wallet reads stay on the RLS client: those columns are in the
+    // allowlist.
     const admin = createAdminClient();
+    const supabase = await createClient();
 
-    const { data: row, error: licenseError } = await admin
-      .from("contractors")
-      .select("license_verified_status")
-      .eq("id", contractorId)
-      .maybeSingle();
+    const [licenseRes, paidLeads, walletRes] = await Promise.all([
+      admin
+        .from("contractors")
+        .select("license_verified_status")
+        .eq("id", contractorId)
+        .maybeSingle(),
+      countPaidLeadApplications(contractorId),
+      supabase
+        .from("wallets")
+        .select("id")
+        .eq("contractor_id", contractorId)
+        .maybeSingle(),
+    ]);
+
+    const { data: row, error: licenseError } = licenseRes;
     if (licenseError) {
       console.error(
         "isEstablishedPro license read failed:",
@@ -411,23 +432,15 @@ export const isEstablishedPro = cache(
       return true;
     }
 
-    const paidLeads = await countPaidLeadApplications(contractorId);
     // null is "could not read", which is not "has paid".
     if ((paidLeads ?? 0) > 0) return true;
-
-    // Wallet reads stay on the RLS client: those columns are in the allowlist.
-    const supabase = await createClient();
 
     // A settled deposit. wallet_transactions has no status column: the row is
     // only written by apply_deposit (migration 0010), which the Stripe webhook
     // calls after the money has actually landed, so the row's existence IS the
     // settlement. Positive cash only, so a lead charge or a refund can never
     // read as a deposit.
-    const { data: wallet, error: walletError } = await supabase
-      .from("wallets")
-      .select("id")
-      .eq("contractor_id", contractorId)
-      .maybeSingle();
+    const { data: wallet, error: walletError } = walletRes;
     if (walletError) {
       console.error(
         "isEstablishedPro wallet read failed:",

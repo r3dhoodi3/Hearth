@@ -57,11 +57,11 @@ export default function FeedbackForm({
     return (
       <div className="card space-y-3">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-          Thanks. That helps.
+          Thank you. This helps us build the right things.
         </h2>
         <p className="text-sm text-stone-600 dark:text-stone-300">
           {done.granted
-            ? `${feedbackCreditDollars()} in lead credit was added to your wallet. It is credit, not cash: it pays lead fees.`
+            ? `${feedbackCreditDollars()} in lead credit has been added to your wallet. It is credit rather than cash, so it goes toward your lead fees.`
             : FEEDBACK_LOCKED_NOTE}
         </p>
         <div className="flex flex-wrap gap-2">

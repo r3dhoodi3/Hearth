@@ -104,8 +104,8 @@ export async function isProTrialEligible(): Promise<boolean> {
 }
 
 // The homeowner-side twin of isProTrialEligible: may the current user start a
-// first-time Hearth Plus free trial (the 3 free days the weekly cadence
-// carries)? Same rule, same failure posture, for the same reason - the Plus row
+// first-time Hearth Plus free trial (the 3 free days every cadence carries)?
+// Same rule, same failure posture, for the same reason - the Plus row
 // also survives a cancellation, so any homeowner-side row at all means the
 // trial has already been used.
 //
@@ -243,7 +243,7 @@ const activeHomeOwnerHasPlus = cache(async (): Promise<boolean> => {
 // (the chat's daily questions, the AI tool budget) ask for it.
 //
 // Today "trialing" resolves to the SAME ceilings as "paid" (see ASK_DAILY_TRIAL
-// in src/lib/aiUsage.ts: the trial rides on the weekly plan and the three paid
+// in src/lib/aiUsage.ts: the trial can run on any cadence and the three paid
 // cadences include exactly the same things). The three-way distinction is kept
 // anyway, because it is also what the copy reads (a trialer must not be pitched
 // the plan they are on) and because a trial is free to start and free to start

@@ -60,6 +60,11 @@ the redactor is expected to catch it.
 | `push_enabled` | `src/components/PushSettingsCard.tsx`, when `Notification.requestPermission()` (via `enablePush`) resolves `"granted"`. Shared by both sides of the app; `props: { side: "homeowner" \| "pro" }` tells them apart | Client |
 | `feedback_sent` | `src/app/(app)/feedback/actions.ts`, `submitFeedbackAction`, after a successful insert. `props: { side: "homeowner" }`, never the message text | Server |
 | `contact_sent` | `src/app/contact/actions.ts`, `sendContactMessageAction`, after a successful insert (not on the honeypot's fake-success path). `user_id` is always `null`: the account match this route computes is an unverified triage hint, not a confirmed identity, so it is never used to attribute an analytics event | Server |
+| `forecast_action_added` | `src/app/(app)/forecast/actions.ts`, `addForecastStepAction`, only when the insert actually adds a reminder (a step already on the list fires nothing). `props: { system }` - a `SYSTEM_TYPES` value, never the task title | Server |
+| `forecast_reserve_saved` | `src/app/(app)/forecast/actions.ts`, `saveRepairReserveAction`, after the write lands. `props: { cleared: boolean }` and nothing else: the amount is the homeowner's savings balance, so it never enters analytics | Server |
+| `forecast_quote_started` | `src/app/(app)/forecast/QuoteEarlyLink.tsx`, on tapping "Line up quotes" on one of the two highest-risk systems, before the navigation into the prefilled post-a-job form. `props: { system }` - a `SYSTEM_TYPES` value | Client |
+| `forecast_incentive_viewed` | `src/app/(app)/forecast/IncentiveViewTracker.tsx`, once per page load when at least one rebate line rendered. `props: { count }` - how many lines, never a program name or a dollar figure. Once per load rather than once per line, so a six-system home sends one beacon, not six | Client |
+| `aha_home_score` | `src/components/AhaEventReporter.tsx`, mounted from `src/app/(app)/dashboard/page.tsx`. Fires the first time this account's dashboard renders a real score with at least one system on file (`eligible={sys.length > 0}`). Reported at most once per account via a localStorage flag (`src/lib/trackAhaEvents.ts`'s `ahaReportedKey`); no server-side dedupe yet, see the note there | Client |
 
 ### Pro side
 
@@ -81,12 +86,34 @@ same as `src/app/(app)/contractors/actions.ts`.
 | `pro_checkout_abandoned` | `src/app/api/stripe/webhook/route.ts`, on `checkout.session.expired` for `metadata.type === "pro_subscription"`, mirroring `checkout_abandoned`. `props: { plan }` | Server (webhook) |
 | `feedback_credit_claimed` | `src/lib/proFeedbackServer.ts`, `grantFeedbackCredit`, only when this call is the one that actually moved the $5 (never a retry that found the claim already spent) | Server |
 | `free_draft_used` | `src/app/api/pro-tools/route.ts`, right after `claimProDraft` reports `claimed: true` - fires whether or not the model goes on to produce a document, since the taste is spent (and refundable) the moment the claim lands, not at delivery. `props: { tool }` (`estimate`, `invoice`, `followup`, `review_response`, or `overdue`) | Server |
+| `aha_first_lead` | `src/components/AhaEventReporter.tsx`, meant to be mounted from `src/app/pro/leads/LeadsBoard.tsx` right where `openJobs.length` is already read (`eligible={openJobs.length > 0}`). Fires the first time this account's leads board renders with at least one open job. **Not wired into LeadsBoard.tsx yet** - that file belongs to a different part of this wave; `src/lib/trackAhaEvents.ts` and the client allowlist are ready for whoever adds the one `<AhaEventReporter>` line. Same once-per-account localStorage flag as `aha_home_score` | Client |
 
 ### Already live, unaffected by this pass
 
 `post_job_from_chat`, `hero_demo_play` (client, `CLIENT_ALLOWED_EVENTS`);
 `job_won`, `pro_apply`, `direct_request` (server, pro/homeowner-crossing
 events already wired).
+
+### Performance
+
+| Event | Fires | Side |
+|---|---|---|
+| `web_vitals` | `src/components/WebVitals.tsx`, mounted from `NewMessageNotifier.tsx` on both shells, sampled at 10% of page views (`WEB_VITALS_SAMPLE_RATE` in `src/lib/webVitals.ts`). One row per Core Web Vital reported (LCP, INP, CLS, TTFB) via the "web-vitals" library. `props: { metric, value, rating, path, sample_rate }` - `path` is a normalized route PATTERN (e.g. `/pro/crm/:id`), never a full URL or a raw id | Client |
+
+**6. Web Vitals by route, last 7 days (p75, the metric Google's CrUX scoring uses)**
+
+```sql
+select
+  props ->> 'path' as path,
+  props ->> 'metric' as metric,
+  percentile_cont(0.75) within group (order by (props ->> 'value')::numeric) as p75,
+  count(*) as samples
+from public.app_events
+where event = 'web_vitals'
+  and created_at >= now() - interval '7 days'
+group by 1, 2
+order by 1, 2;
+```
 
 ## Querying the funnel
 

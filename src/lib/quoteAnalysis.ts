@@ -601,8 +601,12 @@ export async function runTranscribe(input: {
       schema: TRANSCRIBE_SCHEMA,
       // A long itemized quote transcribed verbatim, with eight checks on top:
       // a tight output budget here truncates the object and loses the read.
-      maxTokens: 16000,
-      thinking: true,
+      // Model, ceiling and reasoning live in ROUTES in src/lib/claude.ts.
+      // Both stages stay on the strong model: stage 1 reads dollar amounts off
+      // a photo and stage 2's verdict is built entirely on them, so a misread
+      // number here becomes a confident wrong answer about a contractor's
+      // price with nothing downstream to catch it.
+      route: "quote-transcribe",
       timeoutMs: 120_000,
       label: "quote-transcribe",
     });
@@ -640,8 +644,10 @@ export async function runDiagnose(
       // the photo or the raw pasted text again.
       prompt: JSON.stringify(transcript),
       schema: DIAGNOSE_SCHEMA,
-      maxTokens: 16000,
-      thinking: true,
+      // Model, ceiling and reasoning come from ROUTES in src/lib/claude.ts.
+      // Stays on the strong model: this stage decides whether a contractor's
+      // price is fair, which is the whole point of the feature.
+      route: "quote-diagnose",
       timeoutMs: 120_000,
       label: "quote-diagnose",
     });

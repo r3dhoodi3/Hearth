@@ -75,6 +75,7 @@ export default async function ProBusinessPage() {
     { data: reviewRows },
     isPro,
     proSub,
+    medianApplyMinutes,
   ] = await Promise.all([
     (supabase as any).rpc("my_applications"),
     supabase
@@ -111,6 +112,19 @@ export default async function ProBusinessPage() {
     // cancellation, so a pro who churned and came back must never be offered
     // one. Free to ask for: hasProPlan() reads the same request-cached rows.
     getProSubscription(),
+    // Time to apply: median minutes from job-posted to this pro's application,
+    // over their last up to 20 applications. Needs the admin client because
+    // most of a pro's application history is against jobs that stayed open or
+    // went to another pro, and "leads contractor select" RLS only covers leads
+    // currently assigned to them - a user-scoped client can't read those
+    // leads' posted-at timestamps. Only timestamps/ids are read here, nothing
+    // homeowner-facing.
+    //
+    // In this wave rather than after it: contractor.id is all it needs, and
+    // it was two more stacked round trips (it does an applications read then a
+    // leads read) sitting between this page's data and its first byte. Now it
+    // runs alongside the reads above instead of behind them.
+    computeResponseTimeMinutes(createAdminClient(), contractor.id),
   ]);
 
   // Only a pro who has never held a membership will actually get the trial.
@@ -120,16 +134,6 @@ export default async function ProBusinessPage() {
   const won = (wonData ?? []) as any[];
   const shareableReviews = reviewRows ?? [];
 
-  // Time to apply: median minutes from job-posted to this pro's application,
-  // over their last up to 20 applications. Needs the admin client because most
-  // of a pro's application history is against jobs that stayed open or went to
-  // another pro, and "leads contractor select" RLS only covers leads currently
-  // assigned to them - a user-scoped client can't read those leads' posted-at
-  // timestamps. Only timestamps/ids are read here, nothing homeowner-facing.
-  const medianApplyMinutes = await computeResponseTimeMinutes(
-    createAdminClient(),
-    contractor.id
-  );
   const timeToApplyStat = timeToApplyText(medianApplyMinutes);
   // A slow median (or one too slow for timeToApplyText to say anything
   // about, per its "show nothing slow" rule) is exactly when the nudge below

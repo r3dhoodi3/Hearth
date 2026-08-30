@@ -87,26 +87,26 @@ const FREE_BULLETS = [
 // underneath (and, on a phone, rewrites the panel below), so there is exactly
 // one primary action on the page instead of a button per column.
 //
-// WEEKLY is preselected whenever the trial is on offer, so the picker agrees
-// with the top "Start N free days" button above it instead of contradicting
-// it - the two used to disagree (that button always means weekly, but the
-// picker defaulted to Monthly), so tapping the top button and then glancing
-// at the picker looked like two different plans. With no trial to offer,
-// Monthly goes back to being the default: $4.99 is the anchor the whole page
-// is priced around, with weekly above it per month and annual below it.
+// MONTHLY is preselected in every state: $4.99 is the anchor the whole page is
+// priced around, with weekly above it per month and annual below it, and
 // startPlusCheckoutAction falls back to the same cadence, so the hidden field
-// and the server can never disagree.
+// and the server can never disagree. It used to preselect Weekly whenever the
+// trial was on offer, because the free days were weekly's and a separate
+// "Start N free days" button at the top of this file posted weekly. Both are
+// gone: the free days now come with whichever card is selected, so preselecting
+// the cheapest cadence would just be steering.
 //
 // PHONE DISCLOSURE: TWO COPIES OF AutoRenewalTerms, ONE PER BREAKPOINT.
-// Each checkout form below renders the block twice - once inside a `sm:hidden`
+// The checkout form below renders the block twice - once inside a `sm:hidden`
 // <details> that starts CLOSED, once inside a `max-sm:hidden` div that renders
 // exactly as it always did. On a 390px screen the full block ran about a third
 // of a screen and pushed the button it belongs to below the fold, which is the
 // scrolling the owner asked us to stop.
 //
 // What is collapsed is the ITEMIZED version, never the material terms. The
-// one-line summary ("3 days free, then $1.99/week. Cancel anytime before the
-// trial ends" at the top, panelBilling[plan] at the picker) stays on screen
+// one-line summary (panelBilling[plan]: "3 days free, then $39.99/year. Cancel
+// anytime before the trial ends." for an eligible buyer on annual) stays on
+// screen
 // unconditionally, directly beside the button, which is what ROSCA
 // 15 U.S.C. 8403(1) and Cal. Bus. & Prof. Code 17602(a)(1) are about: material
 // terms disclosed before billing information is collected, in visual proximity
@@ -123,25 +123,31 @@ const FREE_BULLETS = [
 // component rendered. AutoRenewalTerms reads that same module, so the screen
 // and the record cannot disagree no matter which copy is on screen.
 //
-// THE 3 FREE DAYS ARE PART OF WEEKLY, not a plan of their own and not an offer
-// on monthly or annual: those two bill at signup. `trialEligible` mirrors the
-// "no existing homeowner subscription row" signal startPlusCheckoutAction
-// checks; billingTerms() applies the weekly-only rule on top of it, in one
-// place, so the disclosure, the consent record, and the Stripe trial cannot
-// disagree.
+// THE 3 FREE DAYS COME WITH EVERY CADENCE, not with weekly alone. They are one
+// per ACCOUNT (the promo_claims reservation in startPlusCheckoutAction is what
+// enforces that), so an eligible buyer who wants the annual plan starts the
+// same 3 free days and then renews annually, instead of having to buy weekly
+// first and switch afterwards. This mirrors the Pro side, which has always
+// trialed on both of its cadences. `trialEligible` mirrors the "no existing
+// homeowner subscription row" signal startPlusCheckoutAction checks;
+// billingTerms() is the one place the rule is applied, so the disclosure, the
+// consent record, and the Stripe trial cannot disagree.
+//
+// THE PICKER IS THE WHOLE DECISION. There is one checkout form, one button, and
+// one line of material terms, all following the selected card. A separate
+// weekly-only "Start 3 free days" form used to sit above the cards; it made the
+// free days look like a fourth plan and quietly meant weekly, which is the
+// default nobody chose.
 export default function PlanToggle({
   trialEligible = true,
 }: {
   trialEligible?: boolean;
 }) {
-  const [choice, setChoice] = useState<Choice>(
-    trialEligible ? "weekly" : "monthly"
-  );
+  const [choice, setChoice] = useState<Choice>("monthly");
   // The cadence the form posts. Free is not a cadence, so it falls back to the
   // anchor plan; the button is disabled in that state, so nothing can actually
   // be submitted while it is showing.
   const plan: Plan = choice === "free" ? "monthly" : choice;
-  const weeklyTrial = trialEligible;
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   // Roving tabindex: one stop for the whole group, arrows move the selection
@@ -188,6 +194,19 @@ export default function PlanToggle({
     className: card(key),
   });
 
+  // The free days, stated on every paid card while they are on offer, in the
+  // same spot on all three: the row has to read as one offer with three prices,
+  // not as one plan that trials and two that bill on day one, which is what the
+  // single "3 days free" badge on the weekly card used to say. It sits under
+  // the price rather than in the badge line above the plan name, because that
+  // line already carries the two facts only one card each can claim ("Most
+  // popular", "Save $19.89").
+  const trialLine = trialEligible ? (
+    <span className="block text-sm font-medium leading-snug text-bark-700 dark:text-bark-500">
+      {PLUS_PLAN.trialDays} days free
+    </span>
+  ) : null;
+
   // Spans, not a <ul>: these sit inside a <button>, whose content model is
   // phrasing content only, so a real list here would be invalid markup. The
   // card carries an aria-label with the plan and price, and the bullets are
@@ -214,19 +233,20 @@ export default function PlanToggle({
     </span>
   );
 
-  // One label per card. Weekly is the only one that can say "free", and only
-  // while the trial is real: a returning subscriber is charged on day one, so
-  // its button says what it does instead.
+  // ONE label for the one button, and it turns on the trial rather than on the
+  // cadence: every card starts the same free days now, so "Start 3 free days"
+  // is true whichever one is selected, and the line of terms directly above the
+  // button says which price it steps up to. A returning subscriber is charged
+  // on day one, so their button says what it does instead. The labels used to
+  // name the cadence ("Get Annual", "Start weekly"), which repeated the card
+  // the reader had just tapped and left the free days unmentioned on two of the
+  // three.
   const buttonLabel =
     choice === "free"
       ? "Keep Free"
-      : choice === "yearly"
-        ? "Get Annual"
-        : choice === "monthly"
-          ? "Get Monthly"
-          : weeklyTrial
-            ? `Start ${PLUS_PLAN.trialDays} days free`
-            : "Start weekly";
+      : trialEligible
+        ? `Start ${PLUS_PLAN.trialDays} free days`
+        : "Start Hearth Plus";
 
   // The phone-only description panel below the row of cards. It reads `plan`,
   // not `choice`: `plan` is already the safe fallback to a real cadence (see
@@ -245,60 +265,30 @@ export default function PlanToggle({
     yearly: `${YEARLY_PRICE} a year`,
   };
   // One plain sentence per cadence, every number read from PLUS_PLAN /
-  // formatUsd / yearlySavings above rather than typed. Weekly is the only one
-  // that changes shape with the trial, for the same reason the button and the
-  // AutoRenewalTerms summary do: the free days are a fact about weekly, not
-  // about the picker in general.
-  const panelBilling: Record<Plan, string> = {
-    weekly: weeklyTrial
-      ? `${PLUS_PLAN.trialDays} days free, then ${WEEKLY_PRICE} a week. Cancel before the trial ends and you pay nothing.`
-      : `${WEEKLY_PRICE} a week, cancel anytime.`,
-    monthly: `${MONTHLY_PRICE} a month, cancel anytime.`,
-    yearly: `One payment of ${YEARLY_PRICE} a year, that is ${YEARLY_SAVING} less than paying monthly.`,
-  };
+  // formatUsd / yearlySavings above rather than typed. All three change shape
+  // with the trial now, for the same reason the button does: the free days are
+  // a fact about the account, not about weekly, so each card has to say what it
+  // steps up to when they end. This is the material-terms line the law wants
+  // beside the button (price, cadence, how to stop it), so it stays one
+  // sentence and never folds away.
+  const panelBilling: Record<Plan, string> = trialEligible
+    ? {
+        weekly: `${PLUS_PLAN.trialDays} days free, then ${WEEKLY_PRICE}/week. Cancel anytime before the trial ends.`,
+        monthly: `${PLUS_PLAN.trialDays} days free, then ${MONTHLY_PRICE}/month. Cancel anytime before the trial ends.`,
+        yearly: `${PLUS_PLAN.trialDays} days free, then ${YEARLY_PRICE}/year. Cancel anytime before the trial ends.`,
+      }
+    : {
+        weekly: `${WEEKLY_PRICE} a week, cancel anytime.`,
+        monthly: `${MONTHLY_PRICE} a month, cancel anytime.`,
+        yearly: `One payment of ${YEARLY_PRICE} a year, that is ${YEARLY_SAVING} less than paying monthly.`,
+      };
 
   return (
     <div id="pricing" className="space-y-4">
-      {/* The trial, offered once, at the top, as its own one-tap checkout. It
-          posts plan=weekly because the free days belong to weekly and nothing
-          else (see billingTerms.trialApplies), so the terms directly under the
-          button are the terms of the plan the tap actually buys. Only rendered
-          when the trial is real: a returning subscriber sees the cards below
-          and nothing that promises free days they will not get. */}
-      {trialEligible && (
-        <form action={startPlusCheckoutAction} className="card-hero space-y-2">
-          <input type="hidden" name="plan" value="weekly" />
-          <SubmitButton
-            className="btn-primary w-full py-3 text-base"
-            pendingLabel="Starting…"
-          >
-            Start {PLUS_PLAN.trialDays} free days
-          </SubmitButton>
-          <p className="text-center text-sm text-stone-600 dark:text-stone-300">
-            {PLUS_PLAN.trialDays} days free, then {WEEKLY_PRICE}/week. Cancel
-            anytime before the trial ends.
-          </p>
-          {/* Weekly's terms, hard-coded because the hidden field above is.
-              Phone copy collapsed, desktop copy open: see PHONE DISCLOSURE at
-              the top of this file. */}
-          <details className="group sm:hidden">
-            <summary className="focus-ring flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-stone-700 [&::-webkit-details-marker]:hidden dark:text-stone-300">
-              <ChevronRight
-                className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
-                aria-hidden="true"
-              />
-              Billing terms
-            </summary>
-            <div className="mt-2">
-              <AutoRenewalTerms plan="weekly" introEligible={trialEligible} />
-            </div>
-          </details>
-          <div className="max-sm:hidden">
-            <AutoRenewalTerms plan="weekly" introEligible={trialEligible} />
-          </div>
-        </form>
-      )}
-
+      {/* One checkout form for the whole page: the cards pick the cadence, the
+          single button below starts it, and the one line of terms above that
+          button follows the same selection. The weekly-only trial form that
+          used to sit here is gone with the weekly-only trial. */}
       <form action={startPlusCheckoutAction} className="space-y-3">
         {/* The hidden field carries the selected cadence; startPlusCheckoutAction
             falls back to monthly, the same plan preselected below. */}
@@ -314,15 +304,22 @@ export default function PlanToggle({
           onKeyDown={onGroupKeyDown}
           className="grid grid-cols-3 items-stretch gap-1.5 sm:grid-cols-4 sm:gap-3"
         >
-          {/* --- Weekly: the one cadence that carries the free days --- */}
+          {/* --- Weekly: the smallest commitment --- */}
           <button {...cardProps("weekly", 0, `Weekly, ${WEEKLY_PRICE} a week`)}>
-            <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 max-sm:text-xs dark:text-bark-500">
-              {weeklyTrial ? `${PLUS_PLAN.trialDays} days free` : ""}
-            </span>
+            {/* Spacer only, matching the badge line on Monthly and Annual so
+                all three plan names sit on one line. It used to hold the
+                weekly-only "3 days free" badge; the free days are on every
+                card now, stated under each price. */}
+            <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 max-sm:text-xs dark:text-bark-500" />
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
               Weekly
             </span>
-            <span className="mt-0.5 block min-h-10 sm:mt-1 sm:min-h-11">
+            {/* No max-sm:min-h floor here (CR3#9): the old min-h-10 reserved
+                room to match the bullet list below, which is hidden on the
+                phone (bulletList's className is sm:block, sm and up only).
+                A phone card no longer carries dead space for content it
+                never shows - the whole picker fits with less scroll. */}
+            <span className="mt-0.5 block sm:mt-1 sm:min-h-11">
               {/* text-sm on the phone, not text-base: at grid-cols-3 a card is
                   about 110px wide at 390px, and text-base pushed "$1.99/wk"
                   close enough to the edge to risk wrapping. sm:text-2xl is
@@ -337,9 +334,14 @@ export default function PlanToggle({
                   <span className="hidden sm:inline">/week</span>
                 </span>
               </span>
+              {/* "Try it, then decide" moved off this card with the
+                  weekly-only trial: trying it first is what every card does
+                  now, so weekly's own line states the thing only weekly can
+                  claim. */}
               <span className="block text-sm font-medium leading-snug text-bark-700 dark:text-stone-300">
-                {weeklyTrial ? "Try it, then decide" : "Pay as you go"}
+                Pay as you go
               </span>
+              {trialLine}
             </span>
             {bulletList(
               PLUS_BULLETS,
@@ -360,7 +362,9 @@ export default function PlanToggle({
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
               Monthly
             </span>
-            <span className="mt-0.5 block min-h-10 sm:mt-1 sm:min-h-11">
+            {/* CR3#9: no phone min-h floor - see the note on the Weekly card
+                above. */}
+            <span className="mt-0.5 block sm:mt-1 sm:min-h-11">
               <span className="block text-sm font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
                 {MONTHLY_PRICE}
                 <span className="text-sm font-normal text-stone-500 dark:text-stone-400">
@@ -375,6 +379,7 @@ export default function PlanToggle({
               <span className="block text-sm font-medium leading-snug text-bark-700 dark:text-stone-300">
                 Cheaper than 4 weeks
               </span>
+              {trialLine}
             </span>
             {bulletList(
               PLUS_BULLETS,
@@ -397,7 +402,9 @@ export default function PlanToggle({
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
               Annual
             </span>
-            <span className="mt-0.5 block min-h-10 sm:mt-1 sm:min-h-11">
+            {/* CR3#9: no phone min-h floor - see the note on the Weekly card
+                above. */}
+            <span className="mt-0.5 block sm:mt-1 sm:min-h-11">
               <span className="block text-sm font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
                 {YEARLY_PRICE}
                 <span className="text-sm font-normal text-stone-500 dark:text-stone-400">
@@ -412,6 +419,7 @@ export default function PlanToggle({
               <span className="block text-sm font-medium leading-snug text-bark-700 dark:text-stone-300">
                 About {YEARLY_AS_MONTHLY} a month
               </span>
+              {trialLine}
             </span>
             {bulletList(
               PLUS_BULLETS,
@@ -426,9 +434,9 @@ export default function PlanToggle({
               selectable from sm up, and still in CHOICES for the keyboard
               group below, which only matters on a desktop-width pointer/
               keyboard combination anyway. The initial `choice` state is
-              always "weekly" or "monthly" (see useState above), never
-              "free", so a phone reader can never load this screen with Free
-              already selected. --- */}
+              always "monthly" (see useState above), never "free", so a phone
+              reader can never load this screen with Free already
+              selected. --- */}
           <button
             {...cardProps("free", 3, "Free, the plan you have now")}
             className={`${card("free")} max-sm:hidden`}
@@ -489,7 +497,8 @@ export default function PlanToggle({
             reads src/lib/billingTerms.ts - the same source as the consent
             record stashed in Stripe metadata and the acknowledgment sent
             afterwards - so the sentences here are word for word what gets
-            stored and emailed, including the weekly-only trial.
+            stored and emailed, including the free days and the price they
+            step up to on whichever cadence is selected.
 
             Free is the one card with no terms block, because selecting it
             charges nothing and the button below is disabled. */}
@@ -529,18 +538,30 @@ export default function PlanToggle({
           </>
         )}
 
-        {choice === "free" ? (
-          <button type="button" disabled className="btn-secondary w-full py-3">
-            {buttonLabel}
-          </button>
-        ) : (
-          <SubmitButton
-            className="btn-primary w-full py-3"
-            pendingLabel="Starting…"
-          >
-            {buttonLabel}
-          </SubmitButton>
-        )}
+        {/* CR3#4: on a phone, the one thing every card selection is building
+            toward stays a thumb's reach away instead of sliding further down
+            the screen every time the billing-terms disclosure above opens.
+            `choice` always starts on a real plan ("monthly"; see the useState
+            above), so a plan is selected the instant this renders - there is
+            no "nothing chosen yet" state where the bar would need to stay
+            off. Positioned above the fixed bottom tab bar (Nav.tsx, <=48px
+            plus its own safe-area padding), not doubled with the safe-area
+            padding it already reserves. Desktop (sm and up) is unaffected:
+            every max-sm: class here is a no-op there. */}
+        <div className="max-sm:sticky max-sm:bottom-[calc(3rem+env(safe-area-inset-bottom))] max-sm:z-10 max-sm:rounded-xl max-sm:border max-sm:border-stone-200 max-sm:bg-white max-sm:p-3 max-sm:shadow-menu dark:max-sm:border-white/10 dark:max-sm:bg-stone-900">
+          {choice === "free" ? (
+            <button type="button" disabled className="btn-secondary w-full py-3">
+              {buttonLabel}
+            </button>
+          ) : (
+            <SubmitButton
+              className="btn-primary w-full py-3"
+              pendingLabel="Starting…"
+            >
+              {buttonLabel}
+            </SubmitButton>
+          )}
+        </div>
       </form>
     </div>
   );

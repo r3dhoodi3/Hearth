@@ -84,10 +84,11 @@ function baseSubItem(sub: Stripe.Subscription): Stripe.SubscriptionItem {
 export async function startPlusCheckoutAction(formData: FormData) {
   // Monthly is the fallback cadence (see checkoutCadence): it is what the
   // pricing card preselects, so a form arriving without a readable "plan"
-  // field lands on the plan the buyer was looking at - and never on weekly,
-  // the only cadence that carries free days. The line item, the consent
-  // record, and the idempotency key below all derive from this one value, so
-  // they can never quote different plans.
+  // field lands on the plan the buyer was looking at. Every cadence now
+  // carries the same free days for an eligible account, so this choice decides
+  // the PRICE only. The line item, the consent record, and the idempotency key
+  // below all derive from this one value, so they can never quote different
+  // plans.
   const plan = checkoutCadence(formData.get("plan"), "monthly");
 
   // Deliberately NOT src/lib/auth.ts's getUser(): that helper trusts
@@ -252,11 +253,14 @@ export async function startPlusCheckoutAction(formData: FormData) {
     redirect("/plus");
   }
 
-  // The free trial (PLUS_PLAN.trialDays) belongs to the WEEKLY plan only:
-  // monthly and annual are billed at signup, which is what the /plus cards and
-  // the disclosure both say. trialApplies() is the one predicate all of that reads,
-  // so the Stripe trial below, the disclosure the buyer saw, and the consent
-  // record stored two blocks down cannot disagree.
+  // The free trial (PLUS_PLAN.trialDays) rides on WHICHEVER cadence was picked:
+  // weekly, monthly, or annual all start with the same free days for an
+  // eligible account and then renew at their own price, which is what the /plus
+  // cards and the disclosure both say. trialApplies() is the one predicate all
+  // of that reads, so the Stripe trial below, the disclosure the buyer saw, and
+  // the consent record stored two blocks down cannot disagree. It used to be
+  // weekly-only, which forced anyone who wanted to try the annual plan to buy
+  // weekly first and switch afterwards.
   //
   // isPlusTrialEligible(), not `!existing`: both mean "no homeowner-side row",
   // but `existing` is getSubscription()'s null, which also means "the read
@@ -656,7 +660,10 @@ export async function setExtraHomesAction(formData: FormData) {
 // Switch a monthly subscriber to yearly, effective immediately. Stripe swaps
 // the subscription item to the yearly price and invoices right away with
 // proration, so unused monthly time comes off the yearly charge as a credit.
-// A trialing subscriber's trial ends now: yearly never carries a trial.
+// A trialing subscriber's trial ends now: the switch bills immediately, and a
+// running trial cannot survive that. New yearly signups DO trial (see
+// trialApplies); this is about an existing subscription changing cadence
+// mid-trial, which /plus asks them to confirm in exactly those words first.
 export async function upgradeToYearlyAction() {
   const user = await getUser();
   if (!user) redirect("/signin");

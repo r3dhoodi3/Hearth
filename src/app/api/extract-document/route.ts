@@ -221,8 +221,11 @@ export async function POST(req: NextRequest) {
         ? { documents: [{ data: image }] }
         : { images: [{ data: image, mime }] }),
       schema: RESPONSE_SCHEMA,
-      maxTokens: 4096,
-      thinking: true,
+      // Model, ceiling and reasoning come from ROUTES in src/lib/claude.ts.
+      // This one stays on the strong model on purpose: the fields it pulls out
+      // are written into the home record, where a wrong year or a wrong model
+      // number is invisible until it matters.
+      route: "extract-document",
       timeoutMs: 80_000,
       label: "extract-document",
     });

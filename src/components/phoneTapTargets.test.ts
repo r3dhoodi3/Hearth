@@ -137,4 +137,58 @@ describe("phone tap targets, 44px floor", () => {
       'className="text-sm font-medium hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"'
     );
   });
+
+  // 2026-08-30: "make the draft me button bigger and clearer" and "make the
+  // text chat bigger so they can read it without small text from a small
+  // box". ApplyJobButton, LeadChat's message bubbles, and ProToolsClient's
+  // draft box all had this in common: 14px text and, for the draft button, a
+  // link so small it read as an afterthought.
+  it("ApplyJobButton's phone draft button is full-width, 44px, 16px, and clearly labelled above the message box", () => {
+    const src = read("src/app/pro/ApplyJobButton.tsx");
+    const phoneBtn = src.slice(
+      src.indexOf("Phone only: a full-width, clearly-labelled button"),
+      src.indexOf("<textarea")
+    );
+    expect(phoneBtn).toContain('className="btn-secondary w-full sm:hidden max-sm:min-h-11 max-sm:text-base"');
+    expect(phoneBtn).toContain("<Sparkles");
+    expect(phoneBtn).toContain('"Drafting..." : "Draft a message for me"');
+    // Desktop keeps the original small link, hidden on phone instead of
+    // deleted, with the same clearer label.
+    const desktopBtn = src.slice(src.indexOf("<textarea"), src.indexOf("draftError &&"));
+    expect(desktopBtn).toContain('className="flex flex-wrap items-center gap-2 max-sm:hidden"');
+    expect(desktopBtn).toContain('"Drafting..." : "Draft a message for me"');
+  });
+
+  it("ApplyJobButton's message textarea grows to 6+ rows at 16px on a phone, unchanged on desktop", () => {
+    const src = read("src/app/pro/ApplyJobButton.tsx");
+    // No trailing "text-sm" override (that used to force 14px everywhere): the
+    // shared .textarea class's own text-base/sm:text-sm now applies.
+    expect(src).toContain('className="textarea w-full max-sm:min-h-40 max-sm:leading-relaxed"');
+    expect(src).not.toContain('className="textarea w-full text-sm"');
+  });
+
+  it("ApplyJobButton bolds the fee amount and the credit-back words in the confirm-step disclaimer", () => {
+    const src = read("src/app/pro/ApplyJobButton.tsx");
+    const marker = "The fee amount and the credit-back words are bolded";
+    const p = src.slice(src.indexOf(marker), src.indexOf(marker) + 800);
+    expect(p).toContain("<strong>{fee}</strong>");
+    expect(p).toContain("ghostProtectionGuaranteeRich()");
+    expect(p).toContain("firstApplicationGuaranteeRich()");
+    expect(p).toContain("creditNotCashLineRich()");
+  });
+
+  it("ProToolsClient's draft box reads at 16px on a phone, 10 rows, with a 44px Copy button", () => {
+    const src = read("src/app/pro/tools/ProToolsClient.tsx");
+    expect(src).toContain("rows={10}");
+    expect(src).toContain("text-sm max-sm:text-base max-sm:leading-relaxed");
+    const copyBtn = src.slice(src.indexOf('onClick={copyResult}'), src.indexOf('{copied ? "Copied" : "Copy"}'));
+    expect(copyBtn).toContain("max-sm:min-h-11");
+  });
+
+  it("LeadChat's message bubble text is 16px on a phone with a 1.5 line-height, text-sm untouched for desktop", () => {
+    const src = read("src/components/LeadChat.tsx");
+    expect(src).toContain(
+      "rounded-lg px-3 py-1.5 text-sm max-sm:text-base max-sm:leading-normal"
+    );
+  });
 });

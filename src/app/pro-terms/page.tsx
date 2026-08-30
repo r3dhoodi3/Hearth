@@ -41,7 +41,7 @@ export default function ProTermsPage() {
         Contractor Terms
       </h1>
       <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
-        Last updated July 2026. The plain-English basics, not legalese.
+        Updated 2026-08-30. The plain-English basics, not legalese.
       </p>
 
       <div className="mt-8 space-y-8 text-stone-700 dark:text-stone-300">
@@ -223,6 +223,61 @@ export default function ProTermsPage() {
           <p className="mt-3 leading-relaxed">
             Questions about this section? Reach us through{" "}
             <LegalContact topic="Contractor terms question" />.
+          </p>
+        </section>
+
+        {/* TODO(legal): attorney review required — lead-fee and wallet-credit
+            terms below, in particular whether the ghost-protection and
+            expiring-bonus-credit language needs to sit alongside, or be
+            reconciled with, the general Fees and refunds section in
+            src/app/terms/page.tsx (which already covers the same non-cash
+            credit rule at the account level). */}
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Lead fees, wallet credit, and membership
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            Applying to a posted job costs a flat fee set by the job&apos;s
+            category (never a percentage of the job&apos;s value), shown
+            before you apply. You pay to apply, not to win: the fee is for
+            the introduction Hearth makes, not a commission on the work. A
+            posted job accepts a limited number of applicants at a time, so
+            fees aren&apos;t spent competing against an unlimited field.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            If a homeowner never responds to your application, the fee comes
+            back to you automatically after a set number of days, as Hearth
+            wallet credit, never cash. Wallet deposits themselves are
+            non-refundable and can only be spent on lead applications, and any
+            promotional or bonus credit Hearth grants (including the
+            ghost-protection credit above) can expire.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            Hearth Pro membership is a paid perk, not a requirement or a
+            gate: every pro sees every open job and can apply to it, member or
+            not. What membership buys is extras on top of that, such as a
+            larger bonus on wallet deposits; it never buys access to leads
+            other pros don&apos;t also have.
+          </p>
+        </section>
+
+        {/* TODO(legal): attorney review required — the product feedback
+            credit terms below (amount, one-per-account limit, and the
+            explicit no-store-rating rule) haven't been reviewed by counsel. */}
+        <section>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Product feedback credit
+          </h2>
+          <p className="mt-2 leading-relaxed">
+            Hearth may offer a one-time bonus wallet credit for sending us
+            private feedback about the product through the in-app feedback
+            form. It is non-cash lead-application credit, exactly like the
+            wallet credit described above, capped at one claim per contractor
+            account ever, and it may only be credited once your account is
+            established (a verified license, or a first paid lead
+            application). It is never tied to, and never paid for, a rating
+            or review on the App Store, Google Play, or anywhere else; it is
+            payment for a private note to us, nothing more.
           </p>
         </section>
 

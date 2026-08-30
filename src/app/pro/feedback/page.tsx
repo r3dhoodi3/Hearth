@@ -33,7 +33,7 @@ export default async function ProFeedbackPage() {
           {FEEDBACK_CARD_TITLE}
         </h1>
         <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
-          Two questions, about a minute. A real person reads every one. The{" "}
+          It takes about a minute: a score from 1 to 5 and a few words about what we should fix or build. A real person reads every message. The{" "}
           {feedbackCreditDollars()} is bonus credit: it pays lead fees, it is
           not cash and it does not pay for a membership.
         </p>
@@ -45,10 +45,10 @@ export default async function ProFeedbackPage() {
         // meet a refusal at the end.
         <div className="card space-y-3">
           <p className="text-sm text-stone-700 dark:text-stone-300">
-            You have already sent us feedback. Thank you.
+            You have already sent us your feedback. Thank you.
             {state.claimed
-              ? ` Your ${feedbackCreditDollars()} of lead credit is in your wallet.`
-              : ` Your ${feedbackCreditDollars()} unlocks once your license is confirmed or you place your first lead.`}
+              ? ` Your ${feedbackCreditDollars()} in lead credit is in your wallet.`
+              : ` Your ${feedbackCreditDollars()} in lead credit will be added once your license is confirmed or you place your first lead.`}
           </p>
           <div className="flex flex-wrap gap-2">
             <Link href="/pro" className="btn-secondary">

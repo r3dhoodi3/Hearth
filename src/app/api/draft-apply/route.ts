@@ -207,8 +207,10 @@ export async function POST(req: NextRequest) {
         `The job posting:\n${jobLines.join("\n")}\n\n` +
         `The company applying:\n${companyLines.join("\n")}\n\n` +
         "Draft the apply message.",
-      maxTokens: 1024,
-      effort: "low",
+      // Model, ceiling and effort come from ROUTES in src/lib/claude.ts. This
+      // one is on the cheap model: the pro reads and rewrites the draft in the
+      // apply box before any homeowner sees it.
+      route: "draft-apply",
       // A pro clicking "draft" is waiting on this with the apply modal open.
       // An explicit ceiling, like the other model routes, so a hung call
       // fails on our clock rather than the platform's.

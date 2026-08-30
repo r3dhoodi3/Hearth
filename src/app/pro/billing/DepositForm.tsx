@@ -95,11 +95,15 @@ export default function DepositForm({
     <form action={depositAction} className="card space-y-4">
       <input type="hidden" name="amount" value={num} />
 
-      {/* The terms come BEFORE any amount is picked: a pro should know
-          deposits don't come back before choosing how much to put in.
-          12px is under the readable floor on a phone; max-sm:text-sm
-          matches the minimum-deposit line below it. */}
-      <p className="text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
+      {/* The terms come BEFORE any amount is picked on desktop: a pro should
+          know deposits don't come back before choosing how much to put in.
+          12px is under the readable floor on a phone; max-sm:text-sm matches
+          the minimum-deposit line below it. On a phone this paragraph used
+          to sit ahead of the preset buttons and push "Deposit $X" off the
+          first screen, so it is max-sm:hidden here; the same sentence, plus
+          the full text, moves to the short line and Details block under the
+          button instead (below), and desktop is untouched. */}
+      <p className="text-xs text-stone-500 max-sm:text-sm max-sm:hidden dark:text-stone-400">
         Deposits are non-refundable and can only be spent on leads. Bonus credit
         is promotional, has no cash value, and expires 60 days after it&apos;s
         added. Lead prices vary by service.
@@ -164,8 +168,10 @@ export default function DepositForm({
         </div>
         {/* 11px is under the readable floor on a phone, and this line
             states the deposit minimum and the bonus rule. 14px below sm, the
-            original size from sm up. */}
-        <p className="mt-1 text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
+            original size from sm up. max-sm:hidden for the same reason as
+            the disclaimer above: it moves into the phone Details block so
+            the buttons above it are the first thing a phone shows. */}
+        <p className="mt-1 text-[11px] text-stone-500 max-sm:text-sm max-sm:hidden dark:text-stone-400">
           Any amount from $5.{" "}
           {boostPts > 0
             ? `Every deposit earns +${boostPts}% as a Pro member, tiers stack on top`
@@ -177,9 +183,10 @@ export default function DepositForm({
       {/* A real, current-amount loss: this deposit, at this size, earns
           exactly this much less than it would with a membership. It moves
           live with the presets, so it is never a number about some other
-          deposit. */}
+          deposit. max-sm:hidden: it is part of the same phone Details block
+          below rather than sitting ahead of the buttons. */}
       {forgoneBonus > 0 && (
-        <p className="text-xs text-stone-500 dark:text-stone-400">
+        <p className="text-xs text-stone-500 max-sm:hidden dark:text-stone-400">
           Depositing ${num} without Pro leaves $
           {(forgoneBonus / 100).toFixed(2).replace(/\.00$/, "")} of bonus
           credit on the table this deposit.
@@ -201,6 +208,46 @@ export default function DepositForm({
       </label>
 
       <DepositButton disabled={!agreed || num < 5} num={num} />
+
+      {/* Phone only: replaces the three max-sm:hidden paragraphs above with
+          one always-visible sentence plus the full text one tap away in
+          Details, so nothing a pro agreed to is actually gone, just moved
+          past the button instead of ahead of the preset buttons. Desktop
+          never renders this block (hidden, only max-sm:block turns it on),
+          so the expanded text up top is still the whole story there. The
+          exact per-lead fee stays off this page; it lives on the apply
+          button and the help page, same as everywhere else on /pro/billing. */}
+      <div className="hidden max-sm:block">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Deposits are non-refundable and spendable on leads only.
+        </p>
+        <details className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+          <summary className="cursor-pointer font-medium text-stone-600 underline dark:text-stone-300">
+            Details
+          </summary>
+          <div className="mt-2 space-y-2">
+            <p>
+              Deposits are non-refundable and can only be spent on leads.
+              Bonus credit is promotional, has no cash value, and expires 60
+              days after it&apos;s added. Lead prices vary by service.
+            </p>
+            <p>
+              Any amount from $5.{" "}
+              {boostPts > 0
+                ? `Every deposit earns +${boostPts}% as a Pro member, tiers stack on top`
+                : "$200+ earns bonus credit"}
+              {bonus > 0 ? ` · $${totalCredit.toFixed(2)} total credit` : ""}.
+            </p>
+            {forgoneBonus > 0 && (
+              <p>
+                Depositing ${num} without Pro leaves $
+                {(forgoneBonus / 100).toFixed(2).replace(/\.00$/, "")} of
+                bonus credit on the table this deposit.
+              </p>
+            )}
+          </div>
+        </details>
+      </div>
     </form>
   );
 }

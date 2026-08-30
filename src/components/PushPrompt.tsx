@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/lazySupabase";
 import InlineSpinner from "@/components/InlineSpinner";
 import { needsHomeScreenInstallForPush } from "@/lib/installState";
 import {
@@ -35,7 +35,6 @@ import {
 // Mounted from src/components/NewMessageNotifier.tsx, which both shells already
 // render, so this reaches homeowners and pros without touching either layout.
 export default function PushPrompt({ side }: { side: PushSide }) {
-  const supabase = createClient();
   const [userId, setUserId] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,7 +49,9 @@ export default function PushPrompt({ side }: { side: PushSide }) {
     mounted.current = true;
     (async () => {
       try {
-        const { data } = await supabase.auth.getUser();
+        // Lazily loaded so supabase-js stays out of First Load JS on every
+        // route this prompt mounts on (src/lib/lazySupabase.ts).
+        const { data } = await (await getSupabase()).auth.getUser();
         if (mounted.current) setUserId(data.user?.id ?? null);
       } catch {
         // Signed out or offline: no id, no prompt.

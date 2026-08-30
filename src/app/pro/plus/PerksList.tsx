@@ -24,13 +24,18 @@
 // the two class strings below are the two the page used to pre-render, picked by the
 // same `variant` that already decided the layout.
 
-import { Gift, DollarSign, Bot, Globe, BarChart3, Zap } from "lucide-react";
-import { PRO_DEPOSIT_BOOST_PTS, COLD_START_FREE_ALERTS } from "@/lib/constants";
+import { Percent, Gift, DollarSign, Bot, Globe, BarChart3, Zap } from "lucide-react";
+import {
+  PRO_LEAD_DISCOUNT_PCT,
+  PRO_DEPOSIT_BOOST_PTS,
+  COLD_START_FREE_ALERTS,
+} from "@/lib/constants";
 
 // The icons the perk lineup uses, by name. A bare component reference cannot cross the
 // server/client boundary as a prop, and a pre-rendered element re-introduces the very
 // deferral this file exists to remove, so the name is the only thing that travels.
 const ICONS = {
+  percent: Percent,
   gift: Gift,
   dollar: DollarSign,
   bot: Bot,
@@ -45,8 +50,9 @@ export type Perk = { title: string; body: string; icon?: PerkIcon };
 
 // The perk lineup, used by every branch of /pro/plus. Membership is perks
 // only: it never changes which jobs a pro can see or apply to. Ordered
-// exclusive economics first (credit, deposit boost, AI back office); alerts sit
-// last while COLD_START_FREE_ALERTS makes them free for everyone.
+// exclusive economics first (the lead discount, credit, deposit boost, AI
+// back office); alerts sit last while COLD_START_FREE_ALERTS makes them free
+// for everyone.
 //
 // It lives in this client module rather than in the page for the same
 // streaming reason as everything else in this file: the strings are what cross
@@ -54,6 +60,17 @@ export type Perk = { title: string; body: string; icon?: PerkIcon };
 // single element landing in the page's Flight row. Nothing here reads the
 // clock, a request, or the locale.
 export const PERKS: Perk[] = [
+  {
+    icon: "percent",
+    title: `${PRO_LEAD_DISCOUNT_PCT}% off every lead fee`,
+    // Owner's words: "it does NOT stack with the 15-30%. More incentive to
+    // buy." Stated here exactly that plainly, first in the list: it is the
+    // most direct incentive to subscribe, priced against the same fee a
+    // non-member pays on the leads board. Mirrors apply_to_lead's
+    // pro_lead_fee_cents (migration 0149) and bestLeadDiscount in
+    // src/lib/leadPricing.ts.
+    body: `Every lead's apply fee drops ${PRO_LEAD_DISCOUNT_PCT}% while you're a member. It never stacks with a listing's own aging markdown (15-30% off unclaimed jobs) - you always get whichever discount is bigger, never both added together.`,
+  },
   {
     icon: "gift",
     title: "$10 lead credit every month",

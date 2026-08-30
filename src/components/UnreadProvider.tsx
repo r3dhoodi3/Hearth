@@ -8,7 +8,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/lazySupabase";
+
+// The browser client's type, taken from the lazy loader rather than imported
+// from supabase-js, so this module keeps no runtime dependency on it.
+type Browser = Awaited<ReturnType<typeof getSupabase>>;
 
 // Loads the unread-message count on the client (after render) so it never
 // blocks page navigation. A realtime subscription bumps the count the instant
@@ -73,7 +77,6 @@ export type UnreadRole = "homeowner" | "contractor";
 const REALTIME_LEAD_CAP = 60;
 
 export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
-  const supabase = createClient();
   const [count, setCount] = useState(0);
   // The lead ids the poll last saw, newest first, as a comma-joined string.
   // Kept as a string rather than an array so the subscription effect below
@@ -101,7 +104,10 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
     // side. Those lead ids never get a "seen" cookie entry from the other
     // side's /chats page, so they counted as unread permanently: a real,
     // reported fake-notification bug for any account with both sides.
-    async function myLeadIds(): Promise<string[]> {
+    // Takes the client rather than closing over one: supabase-js is fetched on
+    // demand now (src/lib/lazySupabase.ts), so the caller awaits it once per
+    // poll and hands it down.
+    async function myLeadIds(supabase: Browser): Promise<string[]> {
       if (role === "homeowner") {
         // RLS-scoped to household membership (see chats/page.tsx's identical
         // note), so this is already exactly the user's own-home universe.
@@ -144,7 +150,8 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
     async function poll() {
       if (typeof document !== "undefined" && document.hidden) return;
       const cookieName = SEEN_COOKIE[role];
-      const leadIds = await myLeadIds();
+      const supabase = await getSupabase();
+      const leadIds = await myLeadIds(supabase);
       // Hand the current lead set to the subscription effect. A lead created
       // after mount lands here on the next poll (or focus, or chat-seen) and
       // the channel re-subscribes with it included, so a brand new
@@ -221,32 +228,42 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
     // any layout that renders this hook's consumer twice with no shared
     // provider (e.g. ProNav's desktop + mobile nav) - so a random suffix
     // isolates every instance instead of sharing one topic.
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    try {
-      const topic = "unread-" + role + "-" + Math.random().toString(36).slice(2);
-      channel = supabase
-        .channel(topic)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "messages",
-            filter: `lead_id=in.(${leadKey})`,
-          },
-          () => pollRef.current()
-        )
-        .subscribe();
-    } catch {
-      // Realtime is strictly best-effort: the poll/focus/interval paths in the
-      // effect above keep the count working on their own, so a subscribe
-      // failure here must never crash the signed-in shell.
-      console.warn("useUnreadPoll: realtime subscription failed, falling back to polling");
-    }
+    // Subscribing now waits on the lazily-loaded client, so the effect body
+    // is a promise callback and the cleanup has to cope with running before
+    // the client ever arrives (`cancelled`).
+    let channel: ReturnType<Browser["channel"]> | null = null;
+    let client: Browser | null = null;
+    let cancelled = false;
+    getSupabase().then((supabase) => {
+      if (cancelled) return;
+      client = supabase;
+      try {
+        const topic = "unread-" + role + "-" + Math.random().toString(36).slice(2);
+        channel = supabase
+          .channel(topic)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "messages",
+              filter: `lead_id=in.(${leadKey})`,
+            },
+            () => pollRef.current()
+          )
+          .subscribe();
+      } catch {
+        // Realtime is strictly best-effort: the poll/focus/interval paths in the
+        // effect above keep the count working on their own, so a subscribe
+        // failure here must never crash the signed-in shell.
+        console.warn("useUnreadPoll: realtime subscription failed, falling back to polling");
+      }
+    });
     return () => {
-      if (channel) {
+      cancelled = true;
+      if (client && channel) {
         try {
-          supabase.removeChannel(channel);
+          client.removeChannel(channel);
         } catch {
           // Best-effort cleanup: nothing to do if this fails, the channel is
           // going away along with the component either way.

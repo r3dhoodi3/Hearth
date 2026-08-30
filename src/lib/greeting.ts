@@ -44,7 +44,11 @@ export const getProactiveGreeting = cache(
             .select("title, due_date")
             .eq("property_id", property.id)
             .eq("status", "open")
-            .order("due_date", { ascending: true }),
+            .order("due_date", { ascending: true })
+            // Only the soonest task is ever read out of this (see `rem`
+            // below), so asking for the whole open list was pulling a home's
+            // entire reminder history over the wire to use one row of it.
+            .limit(1),
         ]);
 
       // An open issue is the most pressing thing, urgent ones first.

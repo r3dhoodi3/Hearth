@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { logSafe } from "@/lib/logSafe";
 import type { Json } from "@/lib/database.types";
+import { sanitizeTrackProps } from "@/lib/trackProps";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,16 @@ const CLIENT_ALLOWED_EVENTS = new Set([
   "signup_homeowner", // homeowner-signup/page.tsx
   "push_enabled", // PushSettingsCard.tsx, both sides (props.side tells them apart)
   "message_replied", // LeadChat.tsx, pro side only (props.side is always "pro")
+  "web_vitals", // WebVitals.tsx, sampled 10% of page views (src/lib/webVitals.ts)
+  // Forecast page. Both carry a SYSTEM_TYPES value or a count, never a dollar
+  // figure: the owner's reserve balance and the rebate amounts stay out of
+  // analytics on purpose (see the payload rule in docs/ANALYTICS.md).
+  "forecast_quote_started", // forecast/QuoteEarlyLink.tsx
+  "forecast_incentive_viewed", // forecast/IncentiveViewTracker.tsx
+  // The two aha-moment events (PLAN A1#6 / CR2#8), fired at most once per
+  // account by src/components/AhaEventReporter.tsx. See src/lib/trackAhaEvents.ts.
+  "aha_home_score", // dashboard/page.tsx
+  "aha_first_lead", // pro/leads/LeadsBoard.tsx
 ]);
 
 // Sink for src/lib/analytics.ts's track(). Inserts into app_events with the
@@ -85,13 +96,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // Shape-checked, not just size-checked: docs/ANALYTICS.md allows ids,
+    // enums and numbers only, and the sanitizer is what makes a script obey
+    // that rule too (red team H3, 2026-08-30). Oversized props are still
+    // dropped whole rather than truncated mid-JSON.
     let propsJson: Json | null = null;
     if (props && typeof props === "object") {
       const serialized = JSON.stringify(props);
       propsJson =
         serialized.length <= MAX_PROPS_CHARS
-          ? (JSON.parse(serialized) as Json)
-          : null; // oversized props are dropped, not truncated mid-JSON
+          ? (sanitizeTrackProps(props) as Json | null)
+          : null;
     }
 
     // Best-effort user id: sendBeacon carries same-origin cookies, but a

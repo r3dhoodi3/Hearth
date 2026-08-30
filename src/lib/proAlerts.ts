@@ -3,6 +3,8 @@ import { sendNotification, sendOutboundChannels } from "@/lib/notify";
 import {
   buildAlertOutbound,
   buildAlertNotificationRows,
+  planAlertFanout,
+  ALERT_COLLAPSE_WINDOW_MS,
   type AlertRecipientRow,
 } from "@/lib/proAlertBatch";
 import { isMissingSchemaError } from "@/lib/dbErrors";
@@ -290,19 +292,18 @@ export async function alertProsForNewLead(
     const description = redactContact((lead.issue_description ?? "").trim());
     const snippet =
       description.length > 120 ? `${description.slice(0, 117)}...` : description;
-    // Honest urgency: homeowners overwhelmingly go with the first pro to
-    // respond, and this instant alert is the whole point of racing them there,
-    // so the body says so plainly instead of staying silent about why speed
-    // matters. (No hard percentage: we don't have a sourced figure.)
-    const urgencyLine = "Heads up: the first pro to reply usually wins the job.";
+    // CR5 remove #1: every alert used to end with "Heads up: the first pro to
+    // reply usually wins the job." True, but stamping it on every single ping
+    // manufactures exactly the response-speed anxiety pros repeatedly cite as
+    // burning them out on Thumbtack/Angi (research-convenience-CR5.md). Worth
+    // saying once, during onboarding - not here, on every job that posts.
     const body =
-      ([
+      [
         timingLabel ? `Timing: ${timingLabel}.` : null,
         snippet ? `"${snippet}"` : null,
       ]
         .filter(Boolean)
-        .join(" ") || "A homeowner just posted a job that matches your services.") +
-      ` ${urgencyLine}`;
+        .join(" ") || "A homeowner just posted a job that matches your services.";
 
     // ---- BATCHED FAN-OUT ----------------------------------------------------
     //
@@ -327,74 +328,137 @@ export async function alertProsForNewLead(
       url: PRO_LEADS_HREF,
     };
 
-    // One insert for every in-app row. Postgres applies a multi-row INSERT
-    // atomically, so this is all-or-nothing: on failure nobody has a row yet,
-    // which is why the fallback below can safely re-send one at a time. That
-    // fallback matters for the realistic failure - a single bad user_id (a pro
-    // deleted between the two queries) failing the whole statement - where
-    // per-row writes still deliver to everyone else, exactly as before.
-    const { error: insertError } = await admin
+    // CR5#6: split the targets into a fresh-insert group and a
+    // collapsed-update group before writing anything. Anchored to each pro's
+    // most recent "new_lead" row's own created_at (a fixed window from the
+    // FIRST alert, not a sliding one), so a slow trickle of postings across a
+    // whole day still gets its own notification each time - only alerts
+    // landing within ALERT_COLLAPSE_WINDOW_MS of each other collapse. The
+    // decision itself (planAlertFanout) is pure and unit-tested in
+    // proAlertBatch.test.ts; only the query and the writes live here.
+    const collapseCutoff = new Date(
+      Date.now() - ALERT_COLLAPSE_WINDOW_MS
+    ).toISOString();
+    const { data: recentRows } = await admin
       .from("notifications")
-      .insert(buildAlertNotificationRows(targetIds, payload));
-
-    if (insertError) {
-      console.error(
-        "pro new-lead alerts: bulk insert failed, falling back to per-recipient:",
-        insertError.message ?? insertError
-      );
-      for (let i = 0; i < targetIds.length; i += ALERT_BATCH_SIZE) {
-        const batch = targetIds.slice(i, i + ALERT_BATCH_SIZE);
-        await Promise.all(
-          batch.map(async (userId) => {
-            const contact = rowByUser.get(userId);
-            const sent = await sendNotification(admin, {
-              ...payload,
-              userId,
-              // Withholding email/phone (rather than skipping the call) is what
-              // keeps the in-app row firing even when externalChannels is
-              // false - sendNotification always writes it, and only reaches
-              // for email/SMS when it actually has contact details to use.
-              email: externalChannels ? contact?.email ?? null : null,
-              phone: externalChannels
-                ? contactPhoneByUser.get(userId) ?? contact?.phone ?? null
-                : null,
-              smsConsent: externalChannels && contact?.sms_consent === true,
-            });
-            if (sent) alerted.add(userId);
-          })
-        );
+      .select("id, user_id, title, created_at")
+      .eq("kind", "new_lead")
+      .in("user_id", targetIds)
+      .gte("created_at", collapseCutoff)
+      .order("created_at", { ascending: false });
+    // Newest row per user only: a pro can only be mid-window for one
+    // collapsed notification at a time.
+    const recentRowIdByUser = new Map<string, string>();
+    const recentTitleByUser = new Map<string, string>();
+    for (const row of (recentRows ?? []) as {
+      id: string;
+      user_id: string;
+      title: string;
+    }[]) {
+      if (!recentTitleByUser.has(row.user_id)) {
+        recentTitleByUser.set(row.user_id, row.title);
+        recentRowIdByUser.set(row.user_id, row.id);
       }
-      return alerted;
+    }
+    const { freshTargets, collapsedUpdates } = planAlertFanout(
+      targetIds,
+      recentTitleByUser
+    );
+
+    // One insert for every FRESH in-app row. Postgres applies a multi-row
+    // INSERT atomically, so this is all-or-nothing: on failure nobody has a
+    // row yet, which is why the fallback below can safely re-send one at a
+    // time. That fallback matters for the realistic failure - a single bad
+    // user_id (a pro deleted between the two queries) failing the whole
+    // statement - where per-row writes still deliver to everyone else,
+    // exactly as before.
+    if (freshTargets.length > 0) {
+      const { error: insertError } = await admin
+        .from("notifications")
+        .insert(buildAlertNotificationRows(freshTargets, payload));
+
+      if (insertError) {
+        console.error(
+          "pro new-lead alerts: bulk insert failed, falling back to per-recipient:",
+          insertError.message ?? insertError
+        );
+        for (let i = 0; i < freshTargets.length; i += ALERT_BATCH_SIZE) {
+          const batch = freshTargets.slice(i, i + ALERT_BATCH_SIZE);
+          await Promise.all(
+            batch.map(async (userId) => {
+              const contact = rowByUser.get(userId);
+              const sent = await sendNotification(admin, {
+                ...payload,
+                userId,
+                // Withholding email/phone (rather than skipping the call) is
+                // what keeps the in-app row firing even when
+                // externalChannels is false - sendNotification always writes
+                // it, and only reaches for email/SMS when it actually has
+                // contact details to use.
+                email: externalChannels ? contact?.email ?? null : null,
+                phone: externalChannels
+                  ? contactPhoneByUser.get(userId) ?? contact?.phone ?? null
+                  : null,
+                smsConsent: externalChannels && contact?.sms_consent === true,
+              });
+              if (sent) alerted.add(userId);
+            })
+          );
+        }
+      } else {
+        for (const userId of freshTargets) alerted.add(userId);
+
+        // Email and SMS stay per-recipient (each is its own provider HTTP
+        // call), but they now run off the contact details and opt-out flags
+        // already read in the batch above instead of a query per recipient.
+        // Both channels are dormant until RESEND_API_KEY / TWILIO_* are set,
+        // so today this loop is a handful of no-op returns. Still paced in
+        // waves of ALERT_BATCH_SIZE so a configured provider isn't hit with
+        // 200 concurrent requests.
+        const outbound = buildAlertOutbound(freshTargets, {
+          externalChannels,
+          rowByUser,
+          contactPhoneByUser,
+        });
+        for (let i = 0; i < outbound.length; i += ALERT_BATCH_SIZE) {
+          const wave = outbound.slice(i, i + ALERT_BATCH_SIZE);
+          await Promise.all(
+            wave.map((r) =>
+              sendOutboundChannels(
+                {
+                  ...payload,
+                  userId: r.userId,
+                  email: r.email,
+                  phone: r.phone,
+                  smsConsent: r.smsConsent,
+                },
+                { emailOptOut: r.emailOptOut }
+              )
+            )
+          );
+        }
+      }
     }
 
-    for (const userId of targetIds) alerted.add(userId);
-
-    // Email and SMS stay per-recipient (each is its own provider HTTP call),
-    // but they now run off the contact details and opt-out flags already read
-    // in the batch above instead of a query per recipient. Both channels are
-    // dormant until RESEND_API_KEY / TWILIO_* are set, so today this loop is a
-    // handful of no-op returns. Still paced in waves of ALERT_BATCH_SIZE so a
-    // configured provider isn't hit with 200 concurrent requests.
-    const outbound = buildAlertOutbound(targetIds, {
-      externalChannels,
-      rowByUser,
-      contactPhoneByUser,
-    });
-    for (let i = 0; i < outbound.length; i += ALERT_BATCH_SIZE) {
-      const wave = outbound.slice(i, i + ALERT_BATCH_SIZE);
+    // Collapsed targets: update their existing row in place instead of
+    // adding a second one, and mark it unread again (read_at: null) so "3
+    // new jobs" actually surfaces even if the pro had already read the
+    // first one. No outbound channel here on purpose: they were already
+    // pinged by email/SMS inside this same window for an earlier job in
+    // their trades - the etiquette this collapses toward is one ping per
+    // window, not a second text a few minutes later for the update.
+    for (let i = 0; i < collapsedUpdates.length; i += ALERT_BATCH_SIZE) {
+      const wave = collapsedUpdates.slice(i, i + ALERT_BATCH_SIZE);
       await Promise.all(
-        wave.map((r) =>
-          sendOutboundChannels(
-            {
-              ...payload,
-              userId: r.userId,
-              email: r.email,
-              phone: r.phone,
-              smsConsent: r.smsConsent,
-            },
-            { emailOptOut: r.emailOptOut }
-          )
-        )
+        wave.map(async (u) => {
+          const rowId = recentRowIdByUser.get(u.userId);
+          if (!rowId) return;
+          const { error } = await admin
+            .from("notifications")
+            .update({ title: u.title, body: u.body, read_at: null })
+            .eq("id", rowId);
+          if (!error) alerted.add(u.userId);
+        })
       );
     }
   } catch (err) {

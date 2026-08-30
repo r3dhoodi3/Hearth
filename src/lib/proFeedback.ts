@@ -46,7 +46,7 @@ export const FEEDBACK_CARD_TITLE = `Tell us what you think, get ${feedbackCredit
 // otherwise a fresh throwaway account is a $5 vending machine. Their words
 // still get through either way.
 export const FEEDBACK_LOCKED_NOTE =
-  "Send it either way, we read every one. The credit unlocks once your license is confirmed or you place your first lead.";
+  "You can send your feedback now, and we read every message. The $5 credit is added to your wallet once your license is confirmed or you place your first lead.";
 
 export type FeedbackFormError =
   | "score"
@@ -58,11 +58,11 @@ export type FeedbackFormError =
 // One sentence per refusal, shared by the action and the form so the screen
 // never shows a message the server would not have sent.
 export const FEEDBACK_ERROR_COPY: Record<FeedbackFormError, string> = {
-  score: "Pick a number from 1 to 5 first.",
-  message_short: `Tell us a bit more: at least ${FEEDBACK_MIN_MESSAGE} characters.`,
-  message_long: "That is longer than we can store. Trim it a little.",
-  already: "You have already sent us feedback. Thank you.",
-  failed: "That did not save. Give it another try in a moment.",
+  score: "Please pick a score from 1 to 5 first.",
+  message_short: `Please tell us a little more. Your message needs at least ${FEEDBACK_MIN_MESSAGE} characters.`,
+  message_long: "That message is longer than we can store. Please shorten it a little.",
+  already: "You have already sent us your feedback. Thank you.",
+  failed: "We could not save your feedback. Please try again in a moment.",
 };
 
 // Validate what the form posted. Pure, so both the client-side hint and the

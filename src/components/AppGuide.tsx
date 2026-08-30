@@ -155,6 +155,40 @@ function writeSeen(side: GuideSide): void {
   }
 }
 
+// CR2#6: the guide used to full-screen the instant the dashboard or /pro
+// first rendered, covering the new homeowner's real Home Health Score or the
+// new pro's first real lead before they had seen it. It now waits for that
+// content to be on screen AND for a minimum beat to pass, whichever finishes
+// last - see the auto-open effect below.
+//
+// Minimum wait before the guide can take over, even if the target below is
+// already on screen the instant this mounts (a fast render, or a replay).
+export const GUIDE_OPEN_DELAY_MS = 1500;
+// Upper bound on how long the wait for the target below runs before giving
+// up and opening on the timer alone. A page that never grows the target (a
+// future redesign, or the guide mounting somewhere unexpected) must still
+// open the guide rather than never opening it at all.
+export const GUIDE_TARGET_TIMEOUT_MS = 4000;
+
+// "The real content has rendered", per side. Neither dashboard/page.tsx nor
+// pro/HomeView.tsx is a file this change may edit (the dashboard is
+// tile-order-only this wave, and the pro Home shell is explicitly somebody
+// else's), so both read structure that already exists on those pages rather
+// than a purpose-built id:
+//  - homeowner: "#this-month" is the This Month section that sits right
+//    below the Home Health Score card on /dashboard, so it cannot be true
+//    before the score has already painted.
+//  - pro: the "Open jobs" tile in the Home tiles grid (HomeView.tsx) carries
+//    no id of its own, so it's matched by its label text instead.
+function guideTargetPresent(side: GuideSide): boolean {
+  if (side === "pro") {
+    return Array.from(document.querySelectorAll(".stat-label")).some(
+      (el) => el.textContent?.trim() === "Open jobs"
+    );
+  }
+  return !!document.getElementById("this-month");
+}
+
 function readSnoozed(side: GuideSide): boolean {
   try {
     return window.sessionStorage.getItem(appGuideSnoozeKey(side)) === "1";
@@ -229,10 +263,53 @@ export default function AppGuide({
       seenInThisBrowser: readSeen(side),
       snoozedInThisSession: readSnoozed(side),
     });
-    if (eligible) {
+    if (!eligible) return;
+
+    // Eligible, but not yet: opening the instant this mounts would cover the
+    // health score / first lead before anyone has seen it (CR2#6). Wait for
+    // guideTargetPresent(side) AND GUIDE_OPEN_DELAY_MS, whichever finishes
+    // last, capped at GUIDE_TARGET_TIMEOUT_MS so a page that never grows the
+    // target still opens on the timer alone.
+    let settled = false;
+    const startedAt = Date.now();
+    let delayTimer: ReturnType<typeof setTimeout> | null = null;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let observer: MutationObserver | null = null;
+
+    function openNow() {
+      if (settled) return;
+      settled = true;
+      observer?.disconnect();
+      if (delayTimer) clearTimeout(delayTimer);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
       openedAtRef.current = pathname;
       setOpen(true);
     }
+
+    function armMinimumDelay() {
+      if (settled || delayTimer) return;
+      const elapsed = Date.now() - startedAt;
+      delayTimer = setTimeout(openNow, Math.max(0, GUIDE_OPEN_DELAY_MS - elapsed));
+    }
+
+    if (guideTargetPresent(side)) {
+      armMinimumDelay();
+    } else {
+      observer = new MutationObserver(() => {
+        if (guideTargetPresent(side)) armMinimumDelay();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      // Fall back to the timer alone: the target never showing up must not
+      // mean the guide never opens.
+      fallbackTimer = setTimeout(openNow, GUIDE_TARGET_TIMEOUT_MS);
+    }
+
+    return () => {
+      settled = true;
+      observer?.disconnect();
+      if (delayTimer) clearTimeout(delayTimer);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
     // `open` is deliberately absent from the deps: this must not re-fire the
     // moment the sheet opens, only on a route change or a new mount. It is
     // still READ above, to tell "the route changed under an open sheet" from

@@ -83,6 +83,28 @@ describe("pro help keeps the content it always had", () => {
   });
 });
 
+// 2026-08-30 research wave: the same three trust facts /pros states, added
+// to the pricing card here so a pro who never visits the marketing page
+// still sees them before they pay for a lead. Canonical constants only, so
+// this page and /pros can never say the same fact two different ways.
+describe("pro help states ghost protection, no bidding wars, and no contract", () => {
+  it("imports the canonical lines instead of retyping them", () => {
+    expect(view).toContain('from "@/lib/guaranteeCopy"');
+    expect(view).toContain("GHOST_PROTECTION_GUARANTEE");
+    expect(view).toContain("NO_BIDDING_WARS_LINE");
+    expect(view).toContain("NO_CONTRACT_LINE");
+  });
+
+  it("renders all three inside the lead-pricing card", () => {
+    const cardStart = view.indexOf('id="lead-pricing"');
+    const cardEnd = view.indexOf("</div>", view.lastIndexOf("</table>"));
+    const card = view.slice(cardStart, cardEnd);
+    expect(card).toContain("{GHOST_PROTECTION_GUARANTEE}");
+    expect(card).toContain("{NO_BIDDING_WARS_LINE}");
+    expect(card).toContain("{NO_CONTRACT_LINE}");
+  });
+});
+
 // The same check against a real streamed response. It needs a running server
 // and a signed-in pro cookie, so it is opt-in:
 //

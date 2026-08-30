@@ -7,7 +7,16 @@ import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { isUnreadSince } from "@/lib/unread";
 import { plainPreview } from "@/lib/previewText";
 import MarkChatSeen from "@/components/MarkChatSeen";
-import ChatsView, { type ChatRow } from "./ChatsView";
+import {
+  GHOST_PROTECTION_GUARANTEE,
+  FIRST_APPLICATION_GUARANTEE,
+  CREDIT_NOT_CASH_LINE,
+} from "@/lib/guaranteeCopy";
+import ChatsView, {
+  type ChatRow,
+  type ApplicationRow,
+  type SelectedApplication,
+} from "./ChatsView";
 import {
   sendQuoteAction,
   withdrawQuoteAction,
@@ -43,7 +52,7 @@ async function markChatSeenAction(leadId: string) {
 }
 
 export default async function ProChatsPage(props: {
-  searchParams: Promise<{ lead?: string }>;
+  searchParams: Promise<{ lead?: string; application?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const contractor = await getCurrentContractor();
@@ -73,6 +82,28 @@ export default async function ProChatsPage(props: {
     // its entire lead history into one render (and, below, one messages
     // query keyed on every id it returned).
     .limit(500);
+
+  // The pro's own applications, for the "Waiting on the homeowner" section.
+  // Two reads because neither one alone has what a row needs, and both go out
+  // together so this costs one round trip:
+  //   my_applications (SECURITY DEFINER, migration 0031) is the only way a pro
+  //     can see the category and current status of a lead that is NOT assigned
+  //     to them - RLS "leads contractor select" (0005) covers assigned leads
+  //     only - but it does not return the application message.
+  //   lead_applications carries the message, and the pro reads their own rows
+  //     under the "applications contractor read" policy (0012).
+  // Both on the user client, so RLS is the gate; no admin client here.
+  const [{ data: myApps }, { data: appMessages }] = await Promise.all([
+    (supabase as any).rpc("my_applications"),
+    supabase
+      .from("lead_applications")
+      .select("id, message")
+      .eq("contractor_id", contractor.id)
+      // Bounded like the inbox read above: a long-running pro has applied to
+      // far more jobs than anyone scrolls, and only pending ones are listed.
+      .order("created_at", { ascending: false })
+      .limit(200),
+  ]);
 
   const seen = await readSeenMap();
 
@@ -129,7 +160,11 @@ export default async function ProChatsPage(props: {
   // render the thread below the list where it looked like nothing happened.
   // Instead we show one pane at a time: the list on the bare route, the thread
   // once ?lead= is in the URL. Desktop (md+) always shows both.
-  const threadOpenOnMobile = Boolean(searchParams.lead);
+  // ?application= opens a pane the same way ?lead= does, so it hides the list
+  // on phones too.
+  const threadOpenOnMobile = Boolean(
+    searchParams.lead || searchParams.application
+  );
 
   // Everything the list row shows, resolved here so ChatsView takes plain data
   // and the page's Flight row has no elements left to defer. See the long
@@ -158,6 +193,90 @@ export default async function ProChatsPage(props: {
     };
   });
 
+  // ---- Applications still waiting on the homeowner -------------------------
+  // A pro who applies pays a fee and writes a message, and until today that
+  // message only existed on the homeowner's applicant list: their own Messages
+  // tab showed nothing until they were picked. These rows put it back where
+  // they look for it.
+  //
+  // Dedupe by lead id: the moment the homeowner picks this pro, the lead is
+  // assigned and shows up in `convos` as a real conversation, so the
+  // application row for it must disappear rather than sit under its own thread.
+  // Refunded applications are left out too - the fee already came back and
+  // there is nothing left waiting on.
+  //
+  // Built with a loop, not a typed `new Map` literal: the source test for this
+  // page scans this stretch of the file for anything that looks like an
+  // element, and a generic type argument reads as one.
+  const messageByApplicationId = new Map();
+  for (const a of (appMessages ?? []) as any[]) {
+    messageByApplicationId.set(a.id, a.message ?? null);
+  }
+  const convoLeadIds = new Set(convos.map((l) => l.id));
+  const pendingApps = ((myApps ?? []) as any[]).filter(
+    (a) =>
+      a.status === "applied" &&
+      !a.refunded_at &&
+      !convoLeadIds.has(a.lead_id)
+  );
+
+  // Dates are formatted here, not in ChatsView: toLocaleDateString reads the
+  // runtime's locale and timezone, so a client that reformatted it during
+  // hydration could disagree with what the server printed. Same rule as
+  // /pro/crm and /pro/business.
+  const sentDate = (iso: string | null | undefined) =>
+    iso
+      ? new Date(iso).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        })
+      : "";
+
+  const selectedApp = searchParams.application
+    ? (pendingApps.find((a) => a.application_id === searchParams.application) ??
+      null)
+    : null;
+
+  const applicationRows: ApplicationRow[] = pendingApps.map((a) => {
+    const message = messageByApplicationId.get(a.application_id) ?? null;
+    return {
+      id: a.application_id,
+      title: labelFor(JOB_CATEGORIES, a.category),
+      dateLabel: sentDate(a.applied_at),
+      // Same plainPreview treatment the conversation rows get, so a pro who
+      // pasted a formatted pitch gets one clean line here.
+      preview: message
+        ? `You: ${plainPreview(message) || "applied to this job"}`
+        : "You applied to this job",
+      active: selectedApp?.application_id === a.application_id,
+    };
+  });
+
+  // The open application, if the URL names one this pro actually has pending.
+  // A lead whose status has moved off "new" was assigned to somebody, and
+  // since this pro is not that somebody (they would be in convos), it went to
+  // another pro. The money sentences are the canonical ones from
+  // src/lib/guaranteeCopy.ts: ghost protection and the first-application
+  // credit are two different promises and must never blur into one.
+  const selectedApplication: SelectedApplication | null = selectedApp
+    ? {
+        id: selectedApp.application_id,
+        title: labelFor(JOB_CATEGORIES, selectedApp.category),
+        subtitle: `Applied ${sentDate(selectedApp.applied_at)}`,
+        message:
+          messageByApplicationId.get(selectedApp.application_id) ||
+          "You applied to this job.",
+        statusLine:
+          selectedApp.lead_status && selectedApp.lead_status !== "new"
+            ? `Sent ${sentDate(selectedApp.applied_at)}. This job went to another pro.`
+            : `Sent ${sentDate(selectedApp.applied_at)}. The homeowner has not replied yet. If they pick you, this becomes a conversation.`,
+        noteLine:
+          selectedApp.lead_status && selectedApp.lead_status !== "new"
+            ? `${FIRST_APPLICATION_GUARANTEE} ${CREDIT_NOT_CASH_LINE}`
+            : GHOST_PROTECTION_GUARANTEE,
+      }
+    : null;
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Messages</h1>
@@ -179,6 +298,8 @@ export default async function ProChatsPage(props: {
           ChatsView.tsx. */}
       <ChatsView
         rows={rows}
+        applicationRows={applicationRows}
+        selectedApplication={selectedApplication}
         askUserId={contractor.user_id ?? null}
         threadOpenOnMobile={threadOpenOnMobile}
         selected={

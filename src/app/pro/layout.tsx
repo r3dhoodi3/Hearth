@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { getCurrentContractor, getSides } from "@/lib/contractor";
+import { getCurrentContractor, getSides, isEstablishedPro } from "@/lib/contractor";
+import { hasProPlan } from "@/lib/subscription";
+import { proDraftsLeft } from "@/lib/freeAiTasteServer";
 import { getUserProfile } from "@/lib/user";
 import Logo from "@/components/Logo";
 import ProNav from "@/components/ProNav";
@@ -75,9 +77,35 @@ export default async function ProLayout({
     );
   }
 
+  // Where the header's "Back office" button sends a tap. Mirrors the exact
+  // rule the owner asked for: a member always gets in, and so does an
+  // established non-member who still has free drafts on the meter
+  // (mirrors /pro/tools' own paywall condition, see that page's comments);
+  // everyone else goes straight to the pitch instead of tapping into
+  // /pro/tools only to hit a locked reply there. draftsLeft === null covers
+  // both "member" (no meter) and "counter unreadable" - the latter fails
+  // open here the same way isEstablishedPro does, so an outage never looks
+  // like a sale.
+  //
+  // The two reads after the membership check do not depend on each other
+  // (proDraftsLeft is a plain counter read with no side effects), so they run
+  // as one wave: the shell used to stack them serially on every pro route
+  // (speed wave P2, 2026-08-30). A non-established pro's draftsLeft is read
+  // and then ignored, exactly as before, because `established` still gates it.
+  const member = await hasProPlan();
+  const [establishedRead, draftsRead] = await Promise.all([
+    member ? Promise.resolve(true) : isEstablishedPro(contractor.id),
+    proDraftsLeft(contractor.id, member),
+  ]);
+  const established = member || establishedRead;
+  const draftsLeft = established ? draftsRead : null;
+  const canUseBackOffice =
+    member || (established && (draftsLeft === null || draftsLeft > 0));
+  const backOfficeHref = canUseBackOffice ? "/pro/tools" : "/pro/plus?reason=tools";
+
   return (
     <div className="min-h-screen">
-      <ProNav company={contractor.name} hasHome={sides.hasHome} />
+      <ProNav company={contractor.name} hasHome={sides.hasHome} backOfficeHref={backOfficeHref} />
       {/* Extra bottom padding below lg keeps content clear of the fixed bottom
           tab bar. It was sm:pb-8; the bar now runs to lg (ProNav.tsx), so the
           padding follows it. Desktop at lg and up keeps today's pb-8. */}

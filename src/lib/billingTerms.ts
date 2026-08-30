@@ -74,20 +74,26 @@ function money(amount: number): string {
 
 // Does THIS checkout actually carry the free trial?
 //
-// On Hearth Plus the 3 free days are part of the WEEKLY plan and nothing
-// else: monthly is billed at signup ($4.99 today) and annual too ($39.99
-// today), so neither quotes trial copy and startPlusCheckoutAction never sends
-// trial_period_days for them. Pro is untouched - both Pro cadences still
-// trial.
+// The answer is now the eligibility signal alone, on BOTH memberships and on
+// every cadence. The 3 free days used to ride on the Plus weekly plan and
+// nothing else, which made the picker lie by omission: somebody who wanted the
+// annual plan and wanted to try it first had to buy weekly to get the free
+// days, then switch. Free days are a property of the ACCOUNT (one per account,
+// enforced by the promo_claims reservation in startPlusCheckoutAction), not of
+// a cadence, so an eligible buyer gets them on whichever plan they picked and
+// Stripe renews at that plan's price when they end. Pro already worked this
+// way; this is the homeowner side catching up.
 //
 // It lives here, next to the disclosure it governs, because four surfaces have
 // to agree on the answer: the copy on /plus, the Stripe trial itself, the
 // consent record written into session metadata, and the acknowledgment sent
 // afterwards. One exported predicate is the only way they cannot drift.
+//
+// `plan` is kept in the signature deliberately: every caller already has it,
+// and a cadence-specific rule (a longer trial on annual, say) has to land here
+// rather than in one of the four surfaces.
 export function trialApplies(plan: PaidPlan, introEligible: boolean): boolean {
-  if (!introEligible) return false;
-  if (plan === "pro_monthly" || plan === "pro_yearly") return true;
-  return plan === "weekly";
+  return introEligible;
 }
 
 // Terms for a specific plan. `introEligible` must mirror the exact signal the
@@ -148,9 +154,10 @@ export function billingTerms(
     };
   }
 
-  // Hearth Plus: weekly, monthly, or yearly. The free trial is part of the
-  // WEEKLY plan only (see trialApplies above): monthly and annual are billed at
-  // signup, so they always take the "charged today" branch below.
+  // Hearth Plus: weekly, monthly, or yearly. Every one of the three carries the
+  // same 3 free days for an eligible account (see trialApplies above), and
+  // Stripe then renews at the cadence the buyer picked, so the step-up sentence
+  // below is built per cadence rather than hard-coded to weekly.
   // `introEligible` mirrors the exact "no existing Plus subscription" signal
   // startPlusCheckoutAction uses, so a returning subscriber never sees trial
   // copy for a trial they will not get either.

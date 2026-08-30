@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "perf:budget": "node scripts/checkBundleBudget.mjs",
     "db:push": "supabase db push",
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local > src/lib/database.types.ts"
@@ -27,7 +28,8 @@
     "react": "^19.1.9",
     "react-dom": "^19.1.9",
     "stripe": "^22.2.2",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "web-vitals": "^6.2.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",

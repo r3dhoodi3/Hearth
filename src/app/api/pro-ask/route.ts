@@ -4,15 +4,23 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import {
+  addAskOutputTokens,
   allowAbortRefund,
+  allowRefusalRefund,
   countAskUsage,
   countAiUsageWindow,
   overAiGlobalHourlyLimit,
+  overAskOutputBudget,
   refundAskUsage,
+  trackAiAbuse,
 } from "@/lib/aiUsage";
 import { readJsonBounded } from "@/lib/boundedBody";
 import { TOPIC_GUARD_PRO, newTurnHasImage } from "@/lib/aiGuard";
-import { hasAskableContent, pickImageIndexes } from "@/lib/askRequest";
+import {
+  hasAskableContent,
+  pickImageIndexes,
+  trimHistoryToBudget,
+} from "@/lib/askRequest";
 import {
   streamText,
   hasClaudeKey,
@@ -31,6 +39,7 @@ import { wrapUntrusted } from "@/lib/promptSafe";
 import {
   LEAD_TIER_FEES,
   MAJOR_INTRO_FEE,
+  PRO_LEAD_DISCOUNT_PCT,
   PRO_PLAN,
   PRO_DEPOSIT_BOOST_PTS,
   GHOST_PROTECTION_DAYS,
@@ -116,6 +125,8 @@ export async function POST(req: NextRequest) {
   // only this pro's own burst counter moves.
   const { overLimit: overBurst } = await countAiUsageWindow(authUser.id);
   if (overBurst) {
+    // The kind only, never the question: see trackAiAbuse in aiUsage.ts.
+    void trackAiAbuse(authUser.id, "burst", "pro");
     return NextResponse.json(
       { answer: "Slow down a little. Try again in a minute." },
       { status: 429 }
@@ -124,6 +135,7 @@ export async function POST(req: NextRequest) {
 
   const parsedBody = await readJsonBounded(req, MAX_BODY_BYTES);
   if (!parsedBody.ok) {
+    if (parsedBody.status === 413) void trackAiAbuse(authUser.id, "oversize", "pro");
     return parsedBody.status === 413
       ? NextResponse.json(
           { answer: "That message is too large to send." },
@@ -133,9 +145,12 @@ export async function POST(req: NextRequest) {
   }
   const body = parsedBody.data;
   // Only keep the most recent turns so a caller can't send an unbounded
-  // history and blow up the paid request.
+  // history and blow up the paid request, AND only as much conversation text
+  // as fits a total budget. Forty turns of eight thousand characters each is
+  // eighty thousand input tokens, re-sent on every turn of the conversation.
+  // Same cap and same helper as the homeowner route.
   const history = Array.isArray(body.messages)
-    ? body.messages.slice(-MAX_HISTORY_MESSAGES)
+    ? trimHistoryToBudget(body.messages.slice(-MAX_HISTORY_MESSAGES))
     : null;
   const question =
     typeof body.question === "string"
@@ -150,6 +165,7 @@ export async function POST(req: NextRequest) {
   // already been spent on it. Caught here, before anything is counted.
   const askable = history ? hasAskableContent(history) : Boolean(question.trim());
   if (!askable) {
+    void trackAiAbuse(authUser.id, "empty", "pro");
     return NextResponse.json(
       { answer: "Type a question first." },
       { status: 400 }
@@ -255,12 +271,33 @@ export async function POST(req: NextRequest) {
   // windowStart is the 24 hour window this call actually CHARGED, threaded
   // into every refund below so a request that starts at 23:59:59 and fails at
   // 00:00:01 hands the question back to the row it was charged in.
+  // THE DAY'S WORTH OF WORDS, checked before the day's worth of questions, on
+  // the pro copilot's own bucket. Counting questions bounds how often a pro
+  // asks, not how much text comes back, and output tokens are the expensive
+  // half. This read counts nothing, so an over-budget caller is refused
+  // without also spending a question on the refusal, and it fails OPEN: the
+  // question cap below is the authoritative gate. See overAskOutputBudget.
+  const askTier = isProMember ? "paid" : "free";
+  if (await overAskOutputBudget(authUser.id, askTier, "pro")) {
+    void trackAiAbuse(authUser.id, "output_budget", "pro");
+    return NextResponse.json({
+      // Same words as the daily question cap: from the pro's side it is the
+      // same fact, today's allowance is spent.
+      answer: "You have reached today's Ask Hearth limit. It resets tomorrow.",
+    });
+  }
+
   const { overLimit, reason, windowStart } = await countAskUsage(
     authUser.id,
-    isProMember ? "paid" : "free",
+    askTier,
     "pro"
   );
   if (overLimit) {
+    void trackAiAbuse(
+      authUser.id,
+      reason === "user_daily" ? "daily" : "global",
+      "pro"
+    );
     // Only "user_daily" is this pro's own allowance. A tripped owner-wide
     // breaker or an unreadable counter is Hearth's problem, and telling a pro
     // who has barely used the copilot that they are out for the day (and
@@ -447,24 +484,23 @@ export async function POST(req: NextRequest) {
     // Shared word for word with the homeowner route via src/lib/aiGuard.ts.
     TOPIC_GUARD_PRO +
     "\n\n" +
-    (companyName
-      ? `Their company is ${companyName}; greet and address them by it naturally, without overusing it. `
-      : "") +
-    "Lead with one direct sentence that answers their question. Then, if there is more to say, add a few short bullets or two to three sentence steps, with a line break between chunks and a small header before a list when it helps, like 'Line items:' or 'Next steps:'. Never write a long wall of text. Each chunk should be short enough to read in a few seconds. " +
-    // LENGTH, same rule the homeowner chat carries: the reply is generated in
-    // one shot with no streaming, so every extra sentence is another second
-    // the pro spends watching a spinner between jobs.
-    "Answer in under 150 words unless the pro asks for detail; lead with the answer, then at most 3 short bullets. " +
+    // LENGTH AND SHAPE, in ONE place, word for word with the homeowner chat.
+    // This was two instructions arguing with each other ("a few short bullets
+    // or two to three sentence steps" against "under 150 words"), and a model
+    // splits the difference on a contradiction rather than picking a side.
+    "Answer in the fewest words that fully answer the question, usually three to five short lines. Lead with the answer itself: no preamble, no restating the question. Use bullets only when you are genuinely listing things, at most three, with a short header in front when it helps, like 'Line items:' or 'Next steps:'. Put a line break between chunks so it is easy to skim. Go longer only when the pro asks for detail or the answer truly needs it. " +
+    // AMBIGUITY: one question beats a long answer hedged three ways. A pro
+    // reading this on a job site wants the question, not the hedge.
+    "When the request is ambiguous, ask ONE short clarifying question and wait for the answer instead of guessing or covering every case. Never list several questions at once. " +
     "Write in plain, complete sentences. Do NOT use dashes as connectors: no em dashes, and never a hyphen used as a dash. Use a comma, a colon, or a new sentence instead. " +
     "Always capitalize the first letter of every sentence, bullet point, and button label. " +
     "ALWAYS reply in the language the pro writes in. If they write in Spanish, answer entirely in Spanish; same for any other language. Match their language even if the company details below are in English. " +
     "Ground your answer in their specific company details below: their trades, service area, license and background status, membership, wallet, and open leads, rather than generic advice. " +
     "STAY IN THEIR TRADES: only ever talk about the trades listed under 'Trades they work in' below. Never bring up or give an example in a trade they do not work in (for instance, never mention roofing to a plumber). When they ask what jobs are available or what they can apply to, use ONLY the specific open leads listed in their company details below (those are already matched to their trades); never invent a job or name one in another trade. " +
     "Talk like a real person having a genuine back-and-forth: warm, direct, never stiff or corporate. Be proactively useful, do not just state a fact and stop. Always move things forward with a concrete next step. " +
-    `Today's date is ${today}. ` +
     "You help this contractor grow their business, and ONLY with pro topics. Those are:\n" +
     "Winning work: read a posted lead and draft a persuasive, specific apply message; draft or sharpen a quote or estimate with sensible line items priced to compete locally across Orange County, California, where Hearth operates; and give speed-to-lead and follow-up advice, since replying fast wins jobs.\n" +
-    `The marketplace money model: the per-lead fee to apply is tiered by job value, light work is $${LEAD_TIER_FEES.light}, skilled trades are $${LEAD_TIER_FEES.skilled}, and big-ticket work is $${LEAD_TIER_FEES.major} per lead. The $${MAJOR_INTRO_FEE} intro price applies ONLY to a pro's FIRST big-ticket lead ever; every big-ticket lead after that is the normal $${LEAD_TIER_FEES.major}. You cannot see whether this pro has already used that intro, so never promise them the $${MAJOR_INTRO_FEE} price: if they are unsure whether they have used it, tell them to check their billing page for a past big-ticket charge. The wallet holds cash plus bonus credit, and larger deposits earn a deposit bonus. These are two SEPARATE credits, never blend them into one rule: ghost protection automatically returns a lead fee to the pro's wallet as credit after ${GHOST_PROTECTION_DAYS} days of homeowner silence, every time, with no limit. The first-application guarantee is different and much narrower: if the homeowner responds but picks someone else, the fee comes back as credit too, but ONLY on that pro's very first paid application ever; after that, losing a bid is a lost fee with no credit back. It also requires a license number on file whose CSLB check has not failed; the company details below state this pro's license state, and if they have no license on file, never promise them this credit; tell them adding a license unlocks it. Every fee-back rule pays wallet credit toward future leads, never cash and never a card refund, so never tell a pro they get money back. A posted job fills at ${MAX_APPLICANTS_PER_JOB} applicants, so applying early matters. Do the simple ROI math when it helps, framed around THEIR own trade and a realistic job value for it: a lead fee is usually a small fraction of the job it can win. Never illustrate with a trade that is not one of theirs.\n` +
+    `The marketplace money model: the per-lead fee to apply is tiered by job value, light work is $${LEAD_TIER_FEES.light}, skilled trades are $${LEAD_TIER_FEES.skilled}, and big-ticket work is $${LEAD_TIER_FEES.major} per lead - those are the BASE numbers before any discount. Hearth Pro members get ${PRO_LEAD_DISCOUNT_PCT}% off every one of those fees, but it NEVER stacks with the aging markdown a listing can also carry (15% off at 3 days unclaimed, 30% off at 7): a lead is always priced at the bigger of the two discounts, never both added together, so a member on a week-old listing still only gets 30% off, not 40%. The 'Pro membership' line below tells you whether this pro is an active member (not merely trialing or eligible), so if they are, you may confidently say a specific job's lead now costs ${PRO_LEAD_DISCOUNT_PCT}% less than the base tier price UNLESS that job is old enough for the bigger aging markdown to apply instead - when you are not sure how old a specific open lead is, say the discount applies without naming a dollar figure rather than guessing one. Never tell a NON-member their per-lead price is anything but the plain base tier number. The $${MAJOR_INTRO_FEE} intro price applies ONLY to a pro's FIRST big-ticket lead ever, is a FIXED price, and is never discounted further by membership or the aging markdown; every big-ticket lead after that is the normal $${LEAD_TIER_FEES.major} (or ${PRO_LEAD_DISCOUNT_PCT}% off that for a member, subject to the same never-stacks rule). You cannot see whether this pro has already used that intro, so never promise them the $${MAJOR_INTRO_FEE} price: if they are unsure whether they have used it, tell them to check their billing page for a past big-ticket charge. The wallet holds cash plus bonus credit, and larger deposits earn a deposit bonus. These are two SEPARATE credits, never blend them into one rule: ghost protection automatically returns a lead fee to the pro's wallet as credit after ${GHOST_PROTECTION_DAYS} days of homeowner silence, every time, with no limit. The first-application guarantee is different and much narrower: if the homeowner responds but picks someone else, the fee comes back as credit too, but ONLY on that pro's very first paid application ever; after that, losing a bid is a lost fee with no credit back. It also requires a license number on file whose CSLB check has not failed; the company details below state this pro's license state, and if they have no license on file, never promise them this credit; tell them adding a license unlocks it. Every fee-back rule pays wallet credit toward future leads, never cash and never a card refund, so never tell a pro they get money back. A posted job fills at ${MAX_APPLICANTS_PER_JOB} applicants, so applying early matters. Do the simple ROI math when it helps, framed around THEIR own trade and a realistic job value for it: a lead fee is usually a small fraction of the job it can win. Never illustrate with a trade that is not one of theirs.\n` +
     `Pro membership: Hearth Pro is $${PRO_PLAN.monthly} per month or $${PRO_PLAN.yearly} per year, and its main perk is an extra ${PRO_DEPOSIT_BOOST_PTS} percentage points of deposit bonus on every wallet deposit. New members start with a ${PRO_PLAN.trialDays}-day free trial: the card is entered at signup, nothing is charged for the first ${PRO_PLAN.trialDays} days, it then renews automatically at the price above until cancelled, and cancelling before the trial ends means no charge. Only brand-new members get the trial. The company details below state this pro's free trial eligibility explicitly: if they are NOT eligible, never offer or promise them a trial, and talk about Hearth Pro at its regular price instead. Two perks wait for the first payment: the deposit boost and the monthly $10 lead credit both start when the trial converts, NOT while it runs. So if the details below say this pro is on their free trial, never tell them their next deposit will be matched or that credit is coming this week: deposits during the trial earn only the normal tier bonus, and the match starts the day the trial converts. Membership is perks only, it never changes which leads they can see or apply to. Weigh it against their volume: if they deposit and apply often, the deposit boost can pay for itself.\n` +
     "Trust and compliance: how to earn the CSLB verified badge and what each license status means (verified, failed, pending, or unverified); background checks through Checkr and what homeowners see; and insurance and bonding basics as general guidance, not legal advice. Also how to improve their public profile at /p/<their id> with photos, reviews, and a complete listing to win more homeowners.\n" +
     "Growing locally: gathering reviews, seasonal demand, and using the app well, setting their categories and service area, managing notifications and applications, and marking jobs won.\n\n" +
@@ -485,7 +521,19 @@ export async function POST(req: NextRequest) {
   // Inside `system` that rewrote the cache every turn and never read one
   // back, which costs more than not caching. As systemSuffix it renders in
   // exactly the same place, with the cache breakpoint in front of it.
-  const systemCompanyDetails = context;
+  //
+  // THE COMPANY NAME AND THE DATE MOVED DOWN HERE TOO. Both used to sit in
+  // the cached block: the name made the cached prefix per-contractor, so every
+  // pro wrote their own copy of the same long money-model prompt and read
+  // nobody else's, and the date threw every copy away at midnight. Below the
+  // breakpoint, one entry serves every pro on the app. The model sees exactly
+  // the same text in the same order either way.
+  const systemCompanyDetails =
+    (companyName
+      ? `Their company is ${companyName}; greet and address them by it naturally, without overusing it.\n`
+      : "") +
+    `Today's date is ${today}.\n` +
+    context;
 
   // Map the client's replayed history onto Claude turns. Images ride along in
   // the same turn as their text.
@@ -571,9 +619,10 @@ export async function POST(req: NextRequest) {
       system,
       systemSuffix: systemCompanyDetails,
       messages: turns,
-      thinking: false,
-      effort: "low",
-      maxTokens: 2048,
+      // Model, output ceiling, thinking and effort all live in ROUTES in
+      // src/lib/claude.ts now, alongside every other model call. The copilot
+      // keeps the strong model: the answer IS the product here.
+      route: "pro-ask",
       timeoutMs: 90_000,
       // Same disconnect policy as /api/ask: a client that hangs up stops the
       // model call rather than leaving it to finish on Anthropic's meter, and
@@ -596,20 +645,39 @@ export async function POST(req: NextRequest) {
       // only "the deltas already delivered are the answer" if there WERE
       // deltas. See the catch below.
       let sentAny = false;
+      // Characters actually delivered, so a disconnect can still be charged.
+      // See the abort branch below (red team H2, 2026-08-30).
+      let deliveredChars = 0;
       try {
         for await (const delta of stream.textDeltas) {
           emit(encodeDelta(delta));
           sentAny = true;
+          deliveredChars += delta.length;
         }
-        const { text, stopReason } = await stream.final;
+        const { text, stopReason, usage } = await stream.final;
+        // Bank what this answer cost in output tokens against the day's word
+        // budget. Best effort, never awaited before the reply goes out.
+        void addAskOutputTokens(authUser.id, "pro", usage.outputTokens);
         // AN EMPTY REPLY IS NOT AN ANSWER, so it is refunded like any other
         // failure. The call did not throw, so nothing above catches it: the
         // stream just ended with no text (a refusal, a stop before the first
         // token, a model hiccup). The pro read "Sorry, I couldn't generate an
         // answer" and still spent one of their daily allowance on it. Same rule
         // and same fix as /api/ask.
+        //
+        // METERED, the same fix as /api/ask for red-team finding RT3-3: an
+        // unconditional refund means anyone who can reliably force a refusal
+        // never depletes their allowance while still opening a paid call each
+        // time. The first few an hour are handed back, the rest stay spent.
         if (!text) {
-          await refundOnce();
+          const refundable = await allowRefusalRefund(authUser.id);
+          if (refundable) await refundOnce();
+          void trackAiAbuse(
+            authUser.id,
+            stopReason === "refusal" ? "refusal" : "empty",
+            "pro"
+          );
+          if (!refundable) void trackAiAbuse(authUser.id, "refund_denied", "pro");
           emit(
             encodeDone({
               answer:
@@ -648,6 +716,21 @@ export async function POST(req: NextRequest) {
         if (req.signal.aborted) {
           if (!sentAny && (await allowAbortRefund(authUser.id))) {
             await refundOnce();
+          }
+          // THE WORD BUDGET IS CHARGED ON THIS PATH TOO. The real token count
+          // only arrives with stream.final, which a hang-up never reaches, so
+          // a script that read the answer and dropped the socket a beat before
+          // the end was spending the day's question allowance while never
+          // paying into the output-token ceiling (red team H2, 2026-08-30).
+          // What was delivered is what gets banked, estimated at 3.5
+          // characters a token, which is on the generous side for English so
+          // the estimate never under-charges by much.
+          if (deliveredChars > 0) {
+            void addAskOutputTokens(
+              authUser.id,
+              "pro",
+              Math.ceil(deliveredChars / 3.5)
+            );
           }
           return;
         }

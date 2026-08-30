@@ -17,6 +17,8 @@ import ValueForm from "./ValueForm";
 import ValueAutoFetch from "./ValueAutoFetch";
 import RefreshValue from "./RefreshValue";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import InviteNeighbor from "@/app/(app)/account/InviteNeighbor";
+import { getOrCreateReferralCode } from "@/lib/referralCode";
 
 // Same honest mask the /forecast page uses for its per-system amounts: real
 // rows, real years, a masked amount. Never blurred fake numbers, and never a
@@ -132,6 +134,12 @@ export default async function ValuePage() {
   const currentYear = new Date().getFullYear();
   const hasPurchaseData = purchasePrice != null && purchaseYear != null;
   const region = stateName(property.state);
+
+  // The referral code is only needed for the one-time "your home is worth more
+  // than you paid" moment below (research wave RB, 2026-08-30). Read it here,
+  // beside the other awaits, so it never adds a round trip: it is null for an
+  // account that has none yet, which just means no card renders.
+  const referralCode = await getOrCreateReferralCode();
 
   // One shared chooser (src/lib/homeValue.ts) picks the headline: the stored
   // RentCast AVM when we have one (real comparable sales for this address),
@@ -467,6 +475,17 @@ export default async function ValuePage() {
               : "This is an estimate based on statewide average price trends, not an appraisal. Your home's real value depends on its condition, upgrades, and what is actually selling nearby right now. For a number you can rely on to sell, refinance, or dispute taxes, talk to a local real estate agent or licensed appraiser."}
           </p>
         </>
+      )}
+
+      {/* A genuinely good moment: the home is estimated to be worth more than
+          it was bought for. Offer the neighbour invite once, ever (the card
+          gates itself on a localStorage flag, marked only when acted on), and
+          never when we cannot show a real gain. No reward, same honest invite
+          as the /account card. */}
+      {referralCode && appreciationGained != null && appreciationGained > 0 && (
+        <div className="mt-6">
+          <InviteNeighbor code={referralCode} moment="value" />
+        </div>
       )}
     </div>
   );

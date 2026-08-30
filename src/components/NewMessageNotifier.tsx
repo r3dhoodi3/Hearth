@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/lazySupabase";
 import { plainPreview } from "@/lib/previewText";
 import { leadContractorEmbed } from "@/lib/leadJoin";
 import PushRegistrar from "@/components/PushRegistrar";
 import PushPrompt from "@/components/PushPrompt";
+import WebVitals from "@/components/WebVitals";
 import { markPushMoment } from "@/lib/pushPrompt";
 
 type Toast = { id: string; name: string; body: string; href: string };
@@ -15,9 +16,10 @@ type Toast = { id: string; name: string; body: string; href: string };
 // across all your conversations and shows a bottom-right popup, anywhere in the
 // app. Only notifies about messages that arrive after the page loads.
 //
-// It also carries the two Web Push mounts (PushRegistrar, PushPrompt), because
-// it is the one component both shells already render for both roles - so push
-// reaches homeowners and pros without a second mount point in either layout.
+// It also carries the two Web Push mounts (PushRegistrar, PushPrompt) and the
+// Web Vitals reporter (WebVitals), because it is the one component both
+// shells already render for both roles - so push and perf reporting reach
+// homeowners and pros without a second mount point in either root layout.
 // This poller is ALSO the honest moment to ask about push: a toast for a
 // message that arrived while the app was open is exactly the thing the person
 // would have missed with the app closed.
@@ -26,7 +28,6 @@ export default function NewMessageNotifier({
 }: {
   role: "homeowner" | "contractor";
 }) {
-  const supabase = createClient();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const sinceRef = useRef<string>(new Date().toISOString());
   const seenIds = useRef<Set<string>>(new Set());
@@ -42,6 +43,9 @@ export default function NewMessageNotifier({
       if (typeof document !== "undefined" && document.hidden) return;
       // RLS limits this to messages on the user's own conversations. Kept simple
       // (no joins) so a relationship hiccup can't silently break notifications.
+      // supabase-js is fetched here, not at import time, so it stays out of
+      // this route's First Load JS (see src/lib/lazySupabase.ts).
+      const supabase = await getSupabase();
       const { data } = await supabase
         .from("messages")
         .select("id, lead_id, sender_role, body, created_at")
@@ -132,6 +136,7 @@ export default function NewMessageNotifier({
 
   return (
     <>
+      <WebVitals />
       <PushRegistrar side={pushSide} />
       <PushPrompt side={pushSide} />
       {toasts.length > 0 && (

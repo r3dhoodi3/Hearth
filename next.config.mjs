@@ -136,6 +136,21 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Marketing photos and icons under public/ are served with
+        // max-age=0 by default, so every repeat visit re-validates 13 images.
+        // They are not content-hashed (a replaced photo keeps its name), so
+        // this is a day of caching plus a week of stale-while-revalidate
+        // rather than the immutable year Next gives its hashed chunks.
+        // Speed wave P3, 2026-08-30.
+        source: "/photos/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
+      {
         source: "/:path*",
         headers: [
           {

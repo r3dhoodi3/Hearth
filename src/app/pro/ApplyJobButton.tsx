@@ -2,15 +2,22 @@
 
 import Link from "next/link";
 import { markPushMoment } from "@/lib/pushPrompt";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { Sparkles } from "lucide-react";
 import InlineSpinner from "@/components/InlineSpinner";
 import { applyToJobAction } from "./actions";
-import { LEAD_TIER_FEES } from "@/lib/constants";
 import {
-  GHOST_PROTECTION_GUARANTEE,
-  FIRST_APPLICATION_GUARANTEE,
-  CREDIT_NOT_CASH_LINE,
+  readComposeDraft,
+  saveComposeDraftDebounced,
+  clearComposeDraft,
+} from "@/lib/proComposeDraft";
+import { LEAD_TIER_FEES } from "@/lib/constants";
+import type { LeadDiscountKind } from "@/lib/leadPricing";
+import {
+  ghostProtectionGuaranteeRich,
+  firstApplicationGuaranteeRich,
+  creditNotCashLineRich,
 } from "@/lib/guaranteeCopy";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 
@@ -79,6 +86,9 @@ export default function ApplyJobButton({
   canAfford,
   category,
   introPrice = false,
+  baseFee = null,
+  discountKind = null,
+  memberQuoteStr = null,
   billingHref = "/pro/billing",
 }: {
   leadId: string;
@@ -98,6 +108,20 @@ export default function ApplyJobButton({
   // personalize the quick-apply templates. Optional so nothing breaks if a
   // caller doesn't have it handy; the templates just fall back to "this".
   category?: string;
+  // Pre-markdown fee, already money()-formatted, shown struck through above
+  // the confirm price when a member or aging discount (or the intro price)
+  // applies. Null when the card is charging the plain base fee.
+  baseFee?: string | null;
+  // Which single discount priced this card (migration 0149) - never two at
+  // once. Drives the "Pro" chip and the " with Pro" suffix on the confirm
+  // price; null renders neither.
+  discountKind?: LeadDiscountKind;
+  // "Pro members pay $X", already money()-formatted, for a NON-member on a
+  // lead where membership would actually beat the price shown. Null hides
+  // the quiet line entirely - see memberQuoteStr in
+  // src/app/pro/leads/page.tsx for why it is sometimes null even for a
+  // non-member (membership would not have helped THIS lead).
+  memberQuoteStr?: string | null;
   // Billing link carrying job context (?need=&category=) so the deposit page
   // can say what the funds are for and preselect an amount that covers it.
   billingHref?: string;
@@ -107,6 +131,15 @@ export default function ApplyJobButton({
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Autosave (CR5#4): a dropped signal or a backgrounded app on a job site
+  // must not lose a note a pro already typed. Restored once on mount, saved
+  // debounced as the textarea below changes, cleared once the form actually
+  // submits (near the confirm form's onSubmit).
+  useEffect(() => {
+    const draft = readComposeDraft("apply", leadId);
+    if (draft) setMessage((current) => (current ? current : draft));
+  }, [leadId]);
 
   // Prefill from a quick-apply template, then move the cursor to the end so
   // the pro can keep typing right where the template left off (never
@@ -210,6 +243,8 @@ export default function ApplyJobButton({
   return (
     <form
       action={applyToJobAction}
+      // The draft's job is done the moment this submits (CR5#4 autosave).
+      onSubmit={() => clearComposeDraft("apply", leadId)}
       className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-900"
     >
       <input type="hidden" name="id" value={leadId} />
@@ -230,24 +265,46 @@ export default function ApplyJobButton({
           </button>
         ))}
       </div>
+      {/* Phone only: a full-width, clearly-labelled button above the message
+          box replaces the old small text link below it - a pro skimming the
+          confirm card on a phone kept missing that AI drafting existed at
+          all. Desktop keeps the original small link in its original spot
+          (rendered again below the textarea), unchanged apart from the
+          clearer label. */}
+      <button
+        type="button"
+        onClick={draftForMe}
+        disabled={drafting}
+        className="btn-secondary w-full sm:hidden max-sm:min-h-11 max-sm:text-base"
+      >
+        <Sparkles className="h-4 w-4" aria-hidden="true" />
+        {drafting ? "Drafting..." : "Draft a message for me"}
+      </button>
       <textarea
         ref={textareaRef}
         name="message"
         rows={3}
-        className="textarea w-full text-sm"
+        // Phone only: grows past the old cramped 3-row/14px box to at least
+        // 6 rows at 16px with roomier line spacing so a drafted message can
+        // be read without zooming. No text-sm override here (unlike before)
+        // lets .textarea's own text-base apply below sm; sm:text-sm in that
+        // same class keeps the desktop box byte-identical.
+        className="textarea w-full max-sm:min-h-40 max-sm:leading-relaxed"
         placeholder="Add a note to the homeowner (optional)"
         value={message}
-        onChange={(e) => setMessage(e.target.value)}
+        onChange={(e) => {
+          setMessage(e.target.value);
+          saveComposeDraftDebounced("apply", leadId, e.target.value);
+        }}
       />
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 max-sm:hidden">
         <button
           type="button"
           onClick={draftForMe}
           disabled={drafting}
-          // Phone only: 16px tall before.
           className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm"
         >
-          {drafting ? "Drafting..." : "Draft it for me"}
+          {drafting ? "Drafting..." : "Draft a message for me"}
         </button>
       </div>
       {/* Matches the app's toast styling (see ToastProvider.tsx) so this reads
@@ -272,10 +329,51 @@ export default function ApplyJobButton({
           </button>
         </div>
       )}
+      {/* Price line at the moment of confirm, same discount rule the board's
+          card already showed (never two discounts at once, migration 0149):
+          the struck-through base, a "Pro" chip and " with Pro" when the
+          member discount is what is being charged, or the quiet
+          "Pro members pay $X" line for a non-member on a lead where
+          membership would actually beat this price. This is the same
+          feeCents the RPC will charge - see the "Applying charges" line
+          right below, which prints the identical `fee` string. */}
+      {baseFee && (
+        <p className="text-xs text-stone-600 dark:text-stone-300">
+          <span className="text-stone-400 line-through dark:text-stone-500">
+            {baseFee}
+          </span>{" "}
+          <strong>
+            {fee}
+            {discountKind === "member" && " with Pro"}
+          </strong>
+          {discountKind === "member" && (
+            <span className="chip ml-1 border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+              Pro
+            </span>
+          )}
+        </p>
+      )}
+      {memberQuoteStr && (
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          <Link
+            href="/pro/plus?reason=leads"
+            className="underline hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:hover:text-stone-300"
+          >
+            Pro members pay {memberQuoteStr}
+          </Link>
+        </p>
+      )}
+      {/* The fee amount and the credit-back words are bolded on request: a pro
+          skimming this card should not be able to miss that a lost bid comes
+          back as wallet credit, never a cash refund. The *Rich helpers bold
+          exact substrings of the same canonical sentences ActivityList.tsx
+          and LeadsBoard.tsx render plain, so the wording itself never drifts
+          (see src/lib/guaranteeCopy.ts). */}
       <p className="text-xs text-stone-500 dark:text-stone-400">
-        Applying charges the {fee} lead fee from your wallet.{" "}
-        {GHOST_PROTECTION_GUARANTEE} {FIRST_APPLICATION_GUARANTEE}{" "}
-        {CREDIT_NOT_CASH_LINE}
+        Applying charges the <strong>{fee}</strong> lead fee from your
+        wallet.{" "}
+        {ghostProtectionGuaranteeRich()} {firstApplicationGuaranteeRich()}{" "}
+        {creditNotCashLineRich()}
       </p>
       {/* Said at the moment of the charge, not after it: the price on this
           card is a one-time thing, and a pro deciding whether to spend it

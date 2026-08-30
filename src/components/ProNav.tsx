@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClipboardList } from "lucide-react";
 import Logo from "@/components/Logo";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
@@ -10,12 +11,19 @@ import { setPreferredSideAction } from "@/lib/sideActions";
 export default function ProNav({
   company,
   hasHome,
+  backOfficeHref,
 }: {
   company: string | null;
   // Does this account also have a homeowner side (a home of their own, or one
   // shared with them)? Decides whether the profile menu offers a switch or an
   // invitation to add one.
   hasHome: boolean;
+  // Where the header's "Back office" button sends a tap: /pro/tools when the
+  // pro can actually use it (member, or an established non-member with free
+  // drafts left), otherwise /pro/plus?reason=tools. Computed server-side in
+  // pro/layout.tsx, which already loads the contractor for this request -
+  // ProNav stays dumb about the gating rules so only one place decides them.
+  backOfficeHref: string;
 }) {
   // Five destinations a pro checks daily. Playbook, Tools, and Membership stay
   // in the profile menu's "Grow" group below: useful, but not a daily-use tab.
@@ -66,10 +74,15 @@ export default function ProNav({
   // now, as a pinned conversation at the top of /pro/chats that opens the
   // full-screen /pro/ask view (see AskHearthRow), with NavLinks treating
   // /pro/ask as a child of Messages so the tab stays lit while you're in there.
+  // Home first (2026-08-30). It sat in the centre for one night; the owner
+  // asked for the best placement and the answer from Apple's HIG, Material and
+  // the field (Airbnb, Angi, Thumbtack, App Store) is the same: the primary
+  // destination goes in reading position, leftmost, and the centre slot is
+  // for a primary ACTION (post, create), which Hearth's bar does not have.
   const BOTTOM_LINKS = [
+    LINKS[0], // Home
     LINKS[1], // Leads
     LINKS[2], // Messages
-    LINKS[0], // Home
     LINKS[3], // Clients
     LINKS[4], // Business
   ];
@@ -123,6 +136,21 @@ export default function ProNav({
           <nav className="-mx-1 hidden items-center gap-1 overflow-x-auto px-1 lg:flex">
             <NavLinks links={LINKS} accent="hearth" />
           </nav>
+          {/* AI back office, same row as the bell so it reads as a daily
+              control rather than something buried in the profile menu. Icon
+              only on the phone (44px hit area, matching the bell and
+              ProfileMenu triggers beside it); a visible label joins it from
+              sm up, where the header has the width to spare. The href is
+              precomputed in pro/layout.tsx - this link never decides where it
+              points, it just goes there. */}
+          <Link
+            href={backOfficeHref}
+            aria-label="AI back office"
+            className="group flex items-center gap-1.5 rounded-full px-2 text-stone-500 hover:bg-bark-50 hover:text-bark-700 active:scale-95 max-sm:min-h-11 max-sm:min-w-11 max-sm:justify-center max-sm:px-0 sm:h-9 sm:px-2.5 sm:text-sm sm:font-medium dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+          >
+            <ClipboardList className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span className="hidden sm:inline">Back office</span>
+          </Link>
           <NotificationBell />
           <ProfileMenu
             name={company}

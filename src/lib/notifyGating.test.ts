@@ -3,9 +3,13 @@ import {
   isPlusGatedKind,
   isPushHeldForQuietHours,
   isPushKind,
+  isTransactionalKind,
+  marketingBudgetAllows,
   shouldSendOutboundChannels,
+  MARKETING_BUDGET_MAX_PER_WINDOW,
   PLUS_GATED_NOTIFICATION_KINDS,
   PUSH_NOTIFICATION_KINDS,
+  TRANSACTIONAL_NOTIFICATION_KINDS,
 } from "./notifyGating";
 
 // The proactive homeowner alerts and reminders - the ones Hearth generates on
@@ -134,8 +138,18 @@ describe("isPushKind", () => {
     }
   );
 
-  // Digests, reminders, billing notices and internal bookkeeping. None of them
-  // is worth waking a phone for.
+  // A card just failed to move money during a live retry window: worth a
+  // buzz, unlike the pre-charge renewal/annual notices below which have not
+  // charged anything yet. Its 72-hour follow-up earns the same buzz.
+  it.each(["payment_failed", "payment_failed_followup"])(
+    "buzzes the phone for the dunning kind %s",
+    (kind) => {
+      expect(isPushKind(kind)).toBe(true);
+    }
+  );
+
+  // Digests, pre-charge renewal notices and internal bookkeeping. None of
+  // them is worth waking a phone for.
   it.each([
     "home_digest",
     "weekly_digest",
@@ -204,5 +218,103 @@ describe("isPushHeldForQuietHours", () => {
 
   it("holds rather than guesses when the hour is unreadable", () => {
     expect(isPushHeldForQuietHours("freeze", Number.NaN)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Marketing / campaign frequency cap
+// ---------------------------------------------------------------------------
+
+describe("isTransactionalKind", () => {
+  // Someone waiting on a reply, a job status change, money moving, security,
+  // or a legally-required billing notice: all exempt from the weekly budget.
+  it.each([
+    "message",
+    "direct_request",
+    "direct_accepted",
+    "direct_declined",
+    "quote",
+    "quote_sent",
+    "invoice",
+    "invoice_sent",
+    "invoice_signed",
+    "job_closed",
+    "new_lead",
+    "new_review",
+    "applicant_waiting",
+    "quote_analysis",
+    "apply_receipt",
+    "apply_credit_back",
+    "ghost_refund",
+    "first_apply_guarantee",
+    "referral_reward",
+    "payment_failed",
+    "payment_failed_followup",
+    "renewal_reminder",
+    "annual_notice",
+    "renewal_acknowledgment",
+    "background_check_clear",
+    "compliance",
+    "license",
+    "insurance",
+    "trial_abuse",
+    "freeze",
+    "heat",
+    "high_wind",
+    "heavy_rain",
+    "recall",
+    "support_digest",
+  ])("exempts %s from the marketing cap", (kind) => {
+    expect(isTransactionalKind(kind)).toBe(true);
+  });
+
+  // The proactive, Hearth-initiated nudges the cap exists for: seasonal
+  // upsells, digests, win-back credits, review asks, aging-deal reminders.
+  it.each([
+    "maintenance_upcoming",
+    "maintenance_overdue",
+    "filter_reminder",
+    "seasonal_check",
+    "insurance_renewal",
+    "home_digest",
+    "weekly_digest",
+    "aging_deal",
+    "winback_credit",
+    "review_request",
+  ])("counts %s against the marketing cap", (kind) => {
+    expect(isTransactionalKind(kind)).toBe(false);
+  });
+
+  it("counts an unrecognized kind against the cap, the opposite default from isPlusGatedKind", () => {
+    // This allowlist is deliberately the mirror image of the Plus gate above:
+    // a kind nobody has classified yet must be metered, not shipped free -
+    // the whole point of a cap "a future campaign cannot bypass".
+    expect(isTransactionalKind("some_future_campaign_kind")).toBe(false);
+    expect(isPlusGatedKind("some_future_campaign_kind")).toBe(false);
+  });
+
+  it("never exempts a billing or auto-renewal notice from the OTHER gate either", () => {
+    // Sanity check that the two allowlists (Plus gate vs. marketing cap)
+    // agree on the one thing both promise never to touch: a legally-required
+    // billing disclosure always ships.
+    for (const kind of ["renewal_reminder", "annual_notice", "renewal_acknowledgment"]) {
+      expect(TRANSACTIONAL_NOTIFICATION_KINDS.has(kind)).toBe(true);
+      expect(PLUS_GATED_NOTIFICATION_KINDS.has(kind)).toBe(false);
+    }
+  });
+});
+
+describe("marketingBudgetAllows", () => {
+  it("allows a send below the ceiling", () => {
+    expect(marketingBudgetAllows(0)).toBe(true);
+    expect(marketingBudgetAllows(MARKETING_BUDGET_MAX_PER_WINDOW - 1)).toBe(true);
+  });
+
+  it("blocks a send once the ceiling is reached", () => {
+    expect(marketingBudgetAllows(MARKETING_BUDGET_MAX_PER_WINDOW)).toBe(false);
+  });
+
+  it("blocks a send that is already well over the ceiling", () => {
+    expect(marketingBudgetAllows(MARKETING_BUDGET_MAX_PER_WINDOW + 5)).toBe(false);
   });
 });

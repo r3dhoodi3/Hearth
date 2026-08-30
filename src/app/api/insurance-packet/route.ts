@@ -244,8 +244,10 @@ export async function POST(req: NextRequest) {
       prompt:
         "Build the requote packet from these facts about my home:\n\n" +
         facts.map((f) => `- ${f}`).join("\n"),
-      maxTokens: 8000,
-      thinking: true,
+      // Model, ceiling and reasoning come from ROUTES in src/lib/claude.ts.
+      // Stays on the strong model: this packet goes to an insurer, and a soft
+      // or wrong argument in it costs the homeowner money.
+      route: "insurance-packet",
       // Reasoning plus a long structured document: this is a slow call the
       // owner is watching a progress bar for. An explicit ceiling, like the
       // other document routes, so a hung request fails on our clock rather

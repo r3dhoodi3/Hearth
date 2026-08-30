@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/lazySupabase";
 import InlineSpinner from "@/components/InlineSpinner";
 
 // Below this width the panel is a bottom sheet instead of a dropdown. Matches
@@ -39,7 +39,11 @@ function timeAgo(iso: string): string {
 // without hammering the DB. Marking read happens the moment the panel opens,
 // so the badge clears as soon as the homeowner has seen the list.
 export default function NotificationBell() {
-  const supabase = createClient();
+  // No client at render time: supabase-js loads on demand (see
+  // src/lib/lazySupabase.ts). The bell sits in BOTH shell layouts, so a static
+  // import here kept the 50 kB chunk in every signed-in route's First Load JS
+  // even after the other components went lazy. Every use below is a poll, a
+  // click or a subscription, all after hydration, so each awaits the loader.
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -66,10 +70,17 @@ export default function NotificationBell() {
   const wasOpen = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  // The phone sheet is portalled to document.body (see the render below), so
+  // it sits outside `ref`'s own DOM subtree. A second ref on the sheet's
+  // dialog box is what lets the outside-click check below recognize a tap
+  // inside the sheet as "inside", even though it is not a DOM descendant of
+  // `ref`. Unused on desktop, where the dropdown lives inside `ref` already.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   async function loadCount() {
     if (typeof document !== "undefined" && document.hidden) return;
     try {
+      const supabase = await getSupabase();
       const { count } = await supabase
         .from("notifications")
         .select("id", { count: "exact", head: true })
@@ -82,6 +93,7 @@ export default function NotificationBell() {
 
   async function loadList(lim: number) {
     try {
+      const supabase = await getSupabase();
       const { data } = await supabase
         .from("notifications")
         .select("id, kind, title, body, url, read_at, created_at")
@@ -141,6 +153,7 @@ export default function NotificationBell() {
     setUnread(0);
     setMarkingRead(true);
     try {
+      const supabase = await getSupabase();
       await supabase
         .from("notifications")
         .update({ read_at: new Date().toISOString() })
@@ -174,11 +187,14 @@ export default function NotificationBell() {
     // column (0026_notifications.sql), the same one the RLS policy keys off.
     // Until getUser() resolves the poll below is the only path, which is
     // exactly what it is for.
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    type Client = Awaited<ReturnType<typeof getSupabase>>;
+    let client: Client | null = null;
+    let channel: ReturnType<Client["channel"]> | null = null;
     let cancelled = false;
-    supabase.auth
-      .getUser()
-      .then(({ data }) => {
+    getSupabase()
+      .then(async (supabase) => {
+        client = supabase;
+        const { data } = await supabase.auth.getUser();
         const uid = data?.user?.id;
         if (cancelled || !uid) return;
         try {
@@ -213,9 +229,9 @@ export default function NotificationBell() {
     return () => {
       active = false;
       cancelled = true;
-      if (channel) {
+      if (channel && client) {
         try {
-          supabase.removeChannel(channel);
+          client.removeChannel(channel);
         } catch {
           // Best-effort cleanup: nothing to do if this fails, the channel is
           // going away along with the component either way.
@@ -260,22 +276,26 @@ export default function NotificationBell() {
   // focus back to the trigger so keyboard users aren't dropped at the top of
   // the page.
   //
-  // DESKTOP ONLY, and that is the fix for the reported bug. On a phone this
-  // listener was what closed the panel the moment somebody scrolled: a touch
-  // scroll that starts outside the panel dispatches a synthesized mousedown at
-  // the touch point, so "I flicked the page" and "I tapped outside" arrive as
-  // the same event. On the phone the sheet now closes only on its X, on
-  // opening a notification, or on navigating away - a scroll, a tap on the
-  // dimmed backdrop, and a tap anywhere else all leave it open, which is what
-  // the owner asked for.
+  // BOTH layouts: a click or tap on the backdrop, or anywhere else outside the
+  // panel, closes it - on the phone sheet exactly like the desktop dropdown.
+  // The backdrop below has no handler of its own; it closes because it is
+  // outside both refs checked here, same as the rest of the page.
   //
-  // Nothing here has ever listened for `scroll`, on either layout, and nothing
-  // should: a dropdown that closes when the page moves under it is the other
-  // half of the same complaint.
+  // Only mousedown ever reaches this handler - never scroll, wheel, or
+  // touchmove, and it never will. That is deliberate: this used to also
+  // listen on scroll, and a touch flick that starts outside the panel
+  // dispatches a synthesized mousedown at the touch point, so "I flicked the
+  // page" and "I tapped outside" looked identical and closed the sheet out
+  // from under a page that was merely moving. Listening only for the pointer
+  // event itself, and nothing scroll-shaped, is what keeps a scroll from
+  // closing the panel while still closing it on a real tap.
   useEffect(() => {
     if (!open) return;
     function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      const insideTrigger = ref.current?.contains(target);
+      const insidePanel = panelRef.current?.contains(target);
+      if (!insideTrigger && !insidePanel) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -283,13 +303,13 @@ export default function NotificationBell() {
         btnRef.current?.focus();
       }
     }
-    if (!isPhone) document.addEventListener("mousedown", onClick);
+    document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, isPhone]);
+  }, [open]);
 
   // Hold the page still behind the phone sheet. Without this the backdrop dims
   // a page that still scrolls under the finger, which reads as broken. Restores
@@ -354,11 +374,12 @@ export default function NotificationBell() {
             Mark all read
           </button>
         )}
-        {/* Phone only, and the sheet's ONLY close control besides opening a
-            notification: outside taps and scrolls deliberately leave it open,
-            so without this there would be no way out. `sm:hidden` removes it
-            from the flex row entirely on desktop (display:none is not a flex
-            item), so the dropdown's header is laid out exactly as before. */}
+        {/* Phone only. An outside tap already closes the sheet (see the
+            outside-click effect above), but this stays as the obvious,
+            reachable-with-a-thumb close control right where the sheet is.
+            `sm:hidden` removes it from the flex row entirely on desktop
+            (display:none is not a flex item), so the dropdown's header is
+            laid out exactly as before. */}
         <button
           type="button"
           onClick={() => {
@@ -514,9 +535,9 @@ export default function NotificationBell() {
         </div>
       )}
 
-      {/* PHONE: a bottom sheet instead of a dropdown, and it stays put. The
-          complaint was that tapping the bell, then scrolling or touching
-          anywhere, dropped the list and meant tapping the bell again.
+      {/* PHONE: a bottom sheet instead of a dropdown. Closes the same way the
+          desktop dropdown does: a tap on the dimmed backdrop, a tap anywhere
+          else outside it, Escape, the X, or opening a notification.
           Portalled to document.body rather than rendered here: this sits
           inside the sticky header (z-40 homeowner, z-30 pro) and the fixed
           bottom tab bar is also z-30, so a sheet left inside the header's
@@ -525,10 +546,11 @@ export default function NotificationBell() {
       {shouldRender && isPhone && portalReady &&
         createPortal(
           <div data-testid="notification-sheet" className="sm:hidden">
-            {/* Backdrop. Dims the page and swallows taps, but does NOT close:
-                the owner asked for a panel that stays open until the X, so a
-                mis-tap beside the sheet costs nothing. aria-hidden because it
-                is decoration with no action behind it. */}
+            {/* Backdrop. Dims the page and, like the rest of the page outside
+                the panel, closes it on tap - it has no handler of its own,
+                that comes from the outside-click effect above finding it
+                outside both refs. aria-hidden because it is decoration with
+                no action of its own. */}
             <div
               aria-hidden="true"
               className={`fixed inset-0 z-[55] bg-stone-900/40 ${
@@ -536,6 +558,7 @@ export default function NotificationBell() {
               }`}
             />
             <div
+              ref={panelRef}
               role="dialog"
               aria-label="Notifications"
               // Anchored to the bottom of the screen and capped at 85% of the

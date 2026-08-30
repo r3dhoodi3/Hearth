@@ -181,8 +181,10 @@ export async function POST(req: NextRequest) {
         ? { documents: [{ data: image }] }
         : { images: [{ data: image, mime }] }),
       schema: RESPONSE_SCHEMA,
-      maxTokens: 16000,
-      thinking: true,
+      // Model, ceiling and reasoning come from ROUTES in src/lib/claude.ts.
+      // Cheap model: the pro reviews every extracted past job on screen before
+      // it lands on their profile.
+      route: "pro-past-jobs",
       timeoutMs: 120_000,
       label: "pro-past-jobs",
     });

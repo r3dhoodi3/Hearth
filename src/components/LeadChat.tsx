@@ -8,7 +8,12 @@ import { FilePreviewThumb } from "@/components/FilePreview";
 import Lightbox from "@/components/Lightbox";
 import InlineSpinner from "@/components/InlineSpinner";
 import BlockMenu from "@/components/BlockMenu";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/lazySupabase";
+
+// The browser client and channel types, taken from the lazy loader rather than
+// imported from supabase-js, so this module keeps no runtime dependency on it.
+type Browser = Awaited<ReturnType<typeof getSupabase>>;
+type RealtimeChannel = ReturnType<Browser["channel"]>;
 import { track } from "@/lib/analytics";
 import { censor } from "@/lib/censor";
 import { extractQuote, formatUSD, dollarsToCents, formatUSDCents } from "@/lib/quotes";
@@ -63,6 +68,22 @@ const isQuoteCompanionBody = (body: string) => body.startsWith("Sent a quote:");
 // Same idea as isQuoteCompanionBody, for the companion message a sent
 // invoice posts alongside itself (see createInvoiceAction).
 const isInvoiceCompanionBody = (body: string) => body.startsWith("Sent an invoice:");
+
+// One-tap status texts for a pro mid-job (CR5#2): the most common thing a
+// contractor types into an active job thread, ready to send with one more
+// tap on Send. Plain strings, no AI and no cost, same "remove the blank-page
+// problem" idea as ApplyJobButton's quick-apply templates.
+const QUICK_STATUS_TEXTS: { label: string; text: string }[] = [
+  { label: "On my way", text: "On my way!" },
+  {
+    label: "Running about 15 minutes late",
+    text: "Running about 15 minutes late.",
+  },
+  {
+    label: "Job's done, sending the invoice now",
+    text: "Job's done, sending the invoice now.",
+  },
+];
 
 // What a chat photo may actually be, mirroring PhotoUpload.tsx and the
 // home-photos bucket's own allowed_mime_types (migration 0079). Both lists
@@ -155,7 +176,6 @@ export default function LeadChat({
   voidInvoiceAction?: (formData: FormData) => Promise<void>;
   signInvoiceAction?: (formData: FormData) => Promise<void>;
 }) {
-  const supabase = createClient();
   const router = useRouter();
   const [open, setOpen] = useState(embedded);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -243,6 +263,9 @@ export default function LeadChat({
   useEffect(() => () => window.clearTimeout(focusScrollRef.current), []);
 
   async function load() {
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     // If the fetch itself failed (network blip, Supabase down), keep whatever
     // is on screen instead of wiping the thread to empty; the realtime
     // subscription and the poll below both re-run load(), so the thread
@@ -310,8 +333,12 @@ export default function LeadChat({
 
   useEffect(() => {
     if (!open) return;
-    supabase.auth
-      .getUser()
+    // The client itself is fetched on demand now (src/lib/lazySupabase.ts),
+    // so both the uid lookup and the subscription below hang off that promise
+    // instead of a client that existed at render time. load() awaits it on its
+    // own, so it can still be called straight away.
+    getSupabase()
+      .then((supabase) => supabase.auth.getUser())
       .then(({ data }) => (uidRef.current = data.user?.id ?? null));
     load();
 
@@ -325,48 +352,56 @@ export default function LeadChat({
     // is reachable via React dev StrictMode's mount-cleanup-remount (the
     // cleanup's removeChannel is async, so the remount can win the race), so
     // a random suffix isolates every instance instead of sharing one topic.
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    try {
-      const topic = `lead-${leadId}-` + Math.random().toString(36).slice(2);
-      channel = supabase
-        .channel(topic)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "messages",
-            filter: `lead_id=eq.${leadId}`,
-          },
-          () => load()
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "lead_quotes",
-            filter: `lead_id=eq.${leadId}`,
-          },
-          () => load()
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "invoices",
-            filter: `lead_id=eq.${leadId}`,
-          },
-          () => load()
-        )
-        .subscribe();
-    } catch {
-      // Realtime is strictly best-effort: the poll/visibilitychange paths
-      // below keep the thread working on their own, so a subscribe failure
-      // here must never crash the chat.
-      console.warn("LeadChat: realtime subscription failed, falling back to polling");
-    }
+    // Nulls until the lazy client resolves; the cleanup below copes with a
+    // teardown that beats it (`cancelled`).
+    let channel: RealtimeChannel | null = null;
+    let client: Browser | null = null;
+    let cancelled = false;
+    getSupabase().then((supabase) => {
+      if (cancelled) return;
+      client = supabase;
+      try {
+        const topic = `lead-${leadId}-` + Math.random().toString(36).slice(2);
+        channel = supabase
+          .channel(topic)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "messages",
+              filter: `lead_id=eq.${leadId}`,
+            },
+            () => load()
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "lead_quotes",
+              filter: `lead_id=eq.${leadId}`,
+            },
+            () => load()
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "invoices",
+              filter: `lead_id=eq.${leadId}`,
+            },
+            () => load()
+          )
+          .subscribe();
+      } catch {
+        // Realtime is strictly best-effort: the poll/visibilitychange paths
+        // below keep the thread working on their own, so a subscribe failure
+        // here must never crash the chat.
+        console.warn("LeadChat: realtime subscription failed, falling back to polling");
+      }
+    });
 
     const t = setInterval(load, 45000);
     // Coming back to the tab marks the thread read right away (load() skips
@@ -376,9 +411,10 @@ export default function LeadChat({
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      if (channel) {
+      cancelled = true;
+      if (client && channel) {
         try {
-          supabase.removeChannel(channel);
+          client.removeChannel(channel);
         } catch {
           // Best-effort cleanup: nothing to do if this fails, the channel is
           // going away along with the component either way.
@@ -496,6 +532,9 @@ export default function LeadChat({
   }, [quotes, messages]);
 
   async function ensureUid() {
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     if (!uidRef.current) {
       const { data } = await supabase.auth.getUser();
       uidRef.current = data.user?.id ?? null;
@@ -504,9 +543,15 @@ export default function LeadChat({
   }
 
   async function send(e: React.FormEvent) {
+    // preventDefault FIRST, before any await: after an await the browser has
+    // already run the form's default submit, so the lazy client load below
+    // must never come before it.
     e.preventDefault();
     const text = body.trim();
     if (!text || closed) return;
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     // Mask profanity before the message is stored; slurs also auto-report.
     const { clean, flagged, slur } = censor(text);
     setFiltered(flagged);
@@ -605,6 +650,9 @@ export default function LeadChat({
 
   // Retry sending a message that failed.
   async function retryFailed(tempId: string, failedBody: string) {
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     const uid = await ensureUid();
     setBusy(true);
     try {
@@ -632,6 +680,9 @@ export default function LeadChat({
 
   // Upload an image to the home-photos bucket, then post it as a photo message.
   async function sendImage(file: File) {
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     // Same checks as PhotoUpload.tsx, and for the same reason: a
     // `type.startsWith("image/")` test on its own lets image/svg+xml through,
     // which can carry a <script> and would then be served back off Hearth's
@@ -699,6 +750,9 @@ export default function LeadChat({
   // leave that state showing (or busy stuck true) for something that never
   // happened.
   async function postSystem(text: string): Promise<boolean> {
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     setBusy(true);
     try {
       const { error } = await supabase.from("messages").insert({
@@ -720,6 +774,9 @@ export default function LeadChat({
   // Unsend (delete) one of your own messages. The DB policy only allows this
   // for your own messages within the last hour; we mirror that in the UI.
   async function unsend(id: string) {
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     setConfirmUnsendId(null);
     setBusy(true);
     // Optimistic: hide the bubble immediately, restore it if the delete is
@@ -757,6 +814,9 @@ export default function LeadChat({
   // Toggle an emoji reaction on a message. Updates the UI immediately, then
   // persists to the DB (and syncs on the next load).
   async function react(messageId: string, emoji: string) {
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     const uid = await ensureUid();
     if (!uid) return;
     const mineAlready = (reactions[messageId] ?? []).some(
@@ -806,6 +866,9 @@ export default function LeadChat({
 
   // Report a single (other person's) message for review.
   async function reportMessage(m: Msg) {
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     setBusy(true);
     const { error } = await supabase.from("reports").insert({
       lead_id: leadId,
@@ -855,6 +918,9 @@ export default function LeadChat({
 
   // Flag this conversation for the Hearth team to review.
   async function submitReport() {
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     setBusy(true);
     await supabase.from("reports").insert({
       lead_id: leadId,
@@ -913,6 +979,9 @@ export default function LeadChat({
     table: "lead_quotes" | "invoices",
     knownIds: Set<string>
   ): Promise<boolean> {
+    // supabase-js is fetched on demand here (src/lib/lazySupabase.ts): it
+    // is no longer part of this route's First Load JS.
+    const supabase = await getSupabase();
     for (let attempt = 0; attempt < 2; attempt++) {
       const { data, error } = await supabase
         .from(table)
@@ -1350,7 +1419,14 @@ export default function LeadChat({
                       bubble (wrapping if it needs to) rather than beside it. */}
                   <div
                     data-msg-actions
-                    className={`absolute top-full z-20 min-w-[15rem] pt-1 md:top-1/2 md:min-w-0 md:-translate-y-1/2 md:px-2 md:py-3 ${
+                    // CR3#8: min-w-[15rem] (240px) had no cap, so on a
+                    // narrow phone with the bubble near the screen edge the
+                    // popover could run past the viewport. max-sm caps it to
+                    // the viewport width minus the page's own side margins,
+                    // and the inner pill's flex-wrap (unconditional, not
+                    // just on phone) already lets the buttons wrap onto a
+                    // second line when it does.
+                    className={`absolute top-full z-20 min-w-[15rem] pt-1 max-sm:max-w-[calc(100vw-2rem)] md:top-1/2 md:min-w-0 md:-translate-y-1/2 md:px-2 md:py-3 ${
                       menuFor === m.id ? "block" : "hidden"
                     } md:hidden md:group-hover:block ${
                       mine ? "right-0 md:right-full" : "left-0 md:left-full"
@@ -1465,7 +1541,11 @@ export default function LeadChat({
                     </button>
                   ) : (
                     <span
-                      className={`block whitespace-pre-wrap break-words rounded-lg px-3 py-1.5 text-sm ${
+                      // Phone only: 14px in a chat thread was the small-text
+                      // complaint; max-sm:text-base reads at 16px with a
+                      // 1.5 line-height (leading-normal), desktop stays
+                      // text-sm untouched.
+                      className={`block whitespace-pre-wrap break-words rounded-lg px-3 py-1.5 text-sm max-sm:text-base max-sm:leading-normal ${
                         mine
                           ? "bg-bark-600 text-white"
                           : "border border-stone-200 bg-white text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-200"
@@ -1761,6 +1841,33 @@ export default function LeadChat({
             <div className="flex items-center gap-2">
               <FilePreviewThumb file={pendingPhoto} size="h-10 w-10" />
               <span className="text-xs text-stone-500 dark:text-stone-400">Sending photo…</span>
+            </div>
+          )}
+          {/* CR5#2: one-tap status texts for a pro mid-job. This thread only
+              ever renders for a lead the homeowner already picked - the
+              other pro-side entry points (ChatsView's real conversations vs.
+              its separate "waiting on the homeowner" application rows,
+              ChatDrawer/ChatDock, which only open on an assigned lead's
+              OpenChatButton) - so any open, un-closed contractor thread here
+              is an assigned/active job. Tapping fills the composer, never
+              sends: same rule as ApplyJobButton's quick-apply chips. Row
+              scrolls horizontally on phone rather than wrapping; on desktop
+              the three chips fit on one line so it reads the same. */}
+          {role === "contractor" && (
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1">
+              {QUICK_STATUS_TEXTS.map((t) => (
+                <button
+                  key={t.label}
+                  type="button"
+                  onClick={() => {
+                    setBody(t.text);
+                    focusComposer();
+                  }}
+                  className="chip shrink-0 whitespace-nowrap border border-stone-200 bg-white text-stone-600 hover:border-hearth-300 hover:text-hearth-700 max-sm:min-h-11 max-sm:px-3 max-sm:text-sm dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-400 dark:hover:text-hearth-300"
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
           )}
           <form onSubmit={send} className="flex gap-2">

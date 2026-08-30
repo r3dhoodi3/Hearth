@@ -15,6 +15,8 @@ import {
   GHOST_PROTECTION_GUARANTEE,
   FIRST_APPLICATION_GUARANTEE,
   CREDIT_NOT_CASH_LINE,
+  NO_CONTRACT_LINE,
+  NO_BIDDING_WARS_LINE,
 } from "@/lib/guaranteeCopy";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
@@ -166,7 +168,7 @@ export default async function ProsLanding(props: {
     {
       icon: <Tag className="h-5 w-5" />,
       title: "The price is on the job card",
-      body: "Every open job shows its fee before you pay a cent. No blind bidding, no mystery invoices.",
+      body: `Every open job shows its fee before you pay a cent. No blind bidding, no mystery invoices. ${NO_BIDDING_WARS_LINE}`,
     },
     {
       icon: <MousePointerClick className="h-5 w-5" />,
@@ -201,7 +203,7 @@ export default async function ProsLanding(props: {
     {
       icon: <Ban className="h-5 w-5" />,
       title: "No subscription required",
-      body: "Load your wallet with deposits from $5 and pay per application. An optional Pro membership adds perks like bonus credit and an AI back office, but it never changes which jobs you can see or apply to.",
+      body: `Load your wallet with deposits from $5 and pay per application. An optional Pro membership adds perks like bonus credit and an AI back office, but it never changes which jobs you can see or apply to. ${NO_CONTRACT_LINE}`,
     },
   ];
 

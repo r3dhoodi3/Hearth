@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/lazySupabase";
 
 // The session-aware CTA for the PUBLIC marketing pages, resolved in the
 // browser instead of on the server.
@@ -42,8 +42,10 @@ export function useSignedIn(): boolean {
 
   useEffect(() => {
     let alive = true;
-    createClient()
-      .auth.getSession()
+    // Lazily loaded: this hook only ever runs after hydration, so supabase-js
+    // does not belong in the first payload (src/lib/lazySupabase.ts).
+    getSupabase()
+      .then((supabase) => supabase.auth.getSession())
       .then(({ data }) => {
         if (alive) setSignedIn(data.session != null);
       })

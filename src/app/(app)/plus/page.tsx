@@ -22,6 +22,7 @@ import {
 import PlanToggle from "./PlanToggle";
 import ExtraHomes from "./ExtraHomes";
 import PlusWelcome from "./PlusWelcome";
+import PaywallReasonBanner from "@/components/PaywallReasonBanner";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import SubmitButton from "@/components/SubmitButton";
 import {
@@ -498,127 +499,138 @@ export default async function PlusPage(
     // the viewport is narrower than either measure, so the columns sit shoulder
     // to shoulder there either way.
     <div className="mx-auto max-w-md space-y-4 sm:max-w-2xl sm:space-y-6">
-      {/* COLD START: the posting cap is off while COLD_START_FREE_POSTING is
-          on, so this banner must not show even if the URL is hit directly.
-          Keep it for when the flag flips back. */}
-      {!COLD_START_FREE_POSTING && searchParams.reason === "job_limit" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            You&apos;ve used all 3 of your free job posts. Hearth Plus lets you
-            post unlimited jobs and keeps the quotes rolling.
-          </p>
-        </div>
-      )}
+      {/* Wrapped in the client PaywallReasonBanner so it can (1) remember this
+          reason in the hearth_last_reason cookie the dashboard reads to lead
+          with the matching tool tile, and (2) count distinct reasons seen
+          this session and stand down from the 4th one on - the paywall
+          itself (job posting blocked, tool locked) still holds either way,
+          only this sales line does. See src/components/PaywallReasonBanner.tsx
+          and src/lib/paywallBannerSession.ts (PLAN A1#2, A1#3 / R1#5, R1#10). */}
+      {searchParams.reason && PAYWALL_REASONS.has(searchParams.reason) && (
+        <PaywallReasonBanner reason={searchParams.reason}>
+          {/* COLD START: the posting cap is off while COLD_START_FREE_POSTING is
+              on, so this banner must not show even if the URL is hit directly.
+              Keep it for when the flag flips back. */}
+          {!COLD_START_FREE_POSTING && searchParams.reason === "job_limit" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                You&apos;ve used all 3 of your free job posts. Hearth Plus lets you
+                post unlimited jobs and keeps the quotes rolling.
+              </p>
+            </div>
+          )}
 
-      {searchParams.reason === "home_limit" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            You&apos;ve added your free home. Hearth Plus lets you manage up
-            to 5 homes in one place.
-          </p>
-        </div>
-      )}
+          {searchParams.reason === "home_limit" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                You&apos;ve added your free home. Hearth Plus lets you manage up
+                to 5 homes in one place.
+              </p>
+            </div>
+          )}
 
-      {searchParams.reason === "plan" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            Hearth Plus builds a maintenance plan tuned to your home&apos;s
-            systems, a few tasks at a time, so it never piles up.
-          </p>
-        </div>
-      )}
+          {searchParams.reason === "plan" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                Hearth Plus builds a maintenance plan tuned to your home&apos;s
+                systems, a few tasks at a time, so it never piles up.
+              </p>
+            </div>
+          )}
 
-      {searchParams.reason === "forecast" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            Hearth Plus forecasts what your home will need over the next 10
-            years, and how much to set aside each month. A big repair
-            becomes a plan, not a panic.
-          </p>
-        </div>
-      )}
+          {searchParams.reason === "forecast" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                Hearth Plus forecasts what your home will need over the next 10
+                years, and how much to set aside each month. A big repair
+                becomes a plan, not a panic.
+              </p>
+            </div>
+          )}
 
-      {searchParams.reason === "quote" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            {quoteCreditSpent
-              ? "You've used your free quote check. Plus reads every quote you get, flags padding, and writes the negotiation message, unlimited."
-              : "Hearth Plus reads every quote you get, flags anything padded, vague, or duplicated, and writes the message you send back to negotiate."}
-          </p>
-        </div>
-      )}
+          {searchParams.reason === "quote" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                {quoteCreditSpent
+                  ? "You've used your free quote check. Plus reads every quote you get, flags padding, and writes the negotiation message, unlimited."
+                  : "Hearth Plus reads every quote you get, flags anything padded, vague, or duplicated, and writes the message you send back to negotiate."}
+              </p>
+            </div>
+          )}
 
-      {searchParams.reason === "ask" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            Ask Hearth photo answers and more questions come with Plus.
-          </p>
-        </div>
-      )}
+          {searchParams.reason === "ask" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                Ask Hearth photo answers and more questions come with Plus.
+              </p>
+            </div>
+          )}
 
-      {searchParams.reason === "report" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            Plus builds your requote packet: your home&apos;s facts, upkeep
-            record, and the questions to ask. Hand it to agents and let them
-            compete for you.
-          </p>
-        </div>
-      )}
+          {searchParams.reason === "report" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                Plus builds your requote packet: your home&apos;s facts, upkeep
+                record, and the questions to ask. Hand it to agents and let them
+                compete for you.
+              </p>
+            </div>
+          )}
 
-      {searchParams.reason === "tax" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            Your assessment looks high. Plus drafts the appeal letter for
-            you, ready to file with your county.
-          </p>
-        </div>
-      )}
+          {searchParams.reason === "tax" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                Your assessment looks high. Plus drafts the appeal letter for
+                you, ready to file with your county.
+              </p>
+            </div>
+          )}
 
-      {/* Same voice as the rest: name the specific thing gained, no urgency.
-          Your first estimate is free and stays free, so this banner never
-          claims to give back something that was taken away. */}
-      {searchParams.reason === "value" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            Your first home value estimate is free. Plus refreshes it monthly
-            with new sales near you, and opens the year-by-year trend and how
-            your equity has built up.
-          </p>
-        </div>
-      )}
+          {/* Same voice as the rest: name the specific thing gained, no urgency.
+              Your first estimate is free and stays free, so this banner never
+              claims to give back something that was taken away. */}
+          {searchParams.reason === "value" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                Your first home value estimate is free. Plus refreshes it monthly
+                with new sales near you, and opens the year-by-year trend and how
+                your equity has built up.
+              </p>
+            </div>
+          )}
 
-      {searchParams.reason === "insurance" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            Plus builds your requote packet: your home&apos;s facts, upkeep
-            record, and the questions to ask, ready to hand to insurance
-            agents so they compete for you.
-          </p>
-        </div>
-      )}
+          {searchParams.reason === "insurance" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                Plus builds your requote packet: your home&apos;s facts, upkeep
+                record, and the questions to ask, ready to hand to insurance
+                agents so they compete for you.
+              </p>
+            </div>
+          )}
 
-      {/* The two AI reads that now carry a free taste. The wording is the SAME
-          sentence /api/extract-document and /api/ingest-inspection send, and
-          the same one the upload cards show before the tap, so a homeowner who
-          lands here has already read it: see FREE_TASTE_PAYWALL in
-          src/lib/freeAiTaste.ts. Uploading and storing documents is not gated
-          at all - only the AI read is - and the copy says so. */}
-      {searchParams.reason === "documents" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            {FREE_TASTE_PAYWALL.document.message} Adding and storing documents
-            stays free.
-          </p>
-        </div>
-      )}
+          {/* The two AI reads that now carry a free taste. The wording is the SAME
+              sentence /api/extract-document and /api/ingest-inspection send, and
+              the same one the upload cards show before the tap, so a homeowner who
+              lands here has already read it: see FREE_TASTE_PAYWALL in
+              src/lib/freeAiTaste.ts. Uploading and storing documents is not gated
+              at all - only the AI read is - and the copy says so. */}
+          {searchParams.reason === "documents" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                {FREE_TASTE_PAYWALL.document.message} Adding and storing documents
+                stays free.
+              </p>
+            </div>
+          )}
 
-      {searchParams.reason === "inspection" && (
-        <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-          <p className="text-sm text-bark-700 dark:text-stone-300">
-            {FREE_TASTE_PAYWALL.inspection.message}
-          </p>
-        </div>
+          {searchParams.reason === "inspection" && (
+            <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
+              <p className="text-sm text-bark-700 dark:text-stone-300">
+                {FREE_TASTE_PAYWALL.inspection.message}
+              </p>
+            </div>
+          )}
+        </PaywallReasonBanner>
       )}
 
       <div className="text-center">
@@ -628,13 +640,14 @@ export default async function PlusPage(
         <h1 className="text-xl font-semibold text-stone-900 sm:text-3xl dark:text-stone-100">
           Know what&apos;s coming before it costs you
         </h1>
-        {/* The trial line that used to sit here is gone: the trial button at
-            the top of PlanToggle now states the same three facts (free days,
-            price after, cancel before it ends) in the one place a reader is
-            about to act on them. Repeating billing mechanics above it was the
-            clutter the page was carrying. */}
+        {/* The trial line that used to sit here is gone: the one line of terms
+            above PlanToggle's single checkout button states the same three
+            facts (free days, price after, cancel before it ends) for the
+            cadence actually selected, in the one place a reader is about to act
+            on them. Repeating billing mechanics above it was the clutter the
+            page was carrying. */}
         {/* Desktop only: on a phone this paragraph is the thing standing
-            between the reader and the trial button, and the cards say the
+            between the reader and the plan cards, and the cards say the
             same thing in fewer words. */}
         <p className="mt-2 hidden text-sm text-stone-500 sm:block dark:text-stone-400">
           {COLD_START_FREE_POSTING

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/lazySupabase";
 import { logIssueFromChat, setReminderFromChat } from "@/lib/ask-actions";
 import VoiceButton from "@/components/VoiceButton";
 import Markdown from "@/components/Markdown";
@@ -804,8 +804,10 @@ export default function AskHearth({
   // device can't see it).
   useEffect(() => {
     let cancelled = false;
-    createClient()
-      .auth.getUser()
+    // supabase-js arrives on demand here rather than in this route's First
+    // Load JS (src/lib/lazySupabase.ts); nothing above needs it to paint.
+    getSupabase()
+      .then((supabase) => supabase.auth.getUser())
       .then(({ data: { user } }) => {
         if (cancelled) return;
         if (user) {
@@ -1853,6 +1855,25 @@ export default function AskHearth({
             // Phone only: padding grows an inline link to a 44px touch area
             // without changing the line box, so the sentence does not reflow.
             className="font-medium text-bark-700 underline max-sm:py-3 dark:text-stone-300"
+          >
+            {plusLink.label}
+          </Link>
+        </p>
+      )}
+      {/* One quiet line above the field on the LAST free question, so the
+          limit is seen coming instead of arriving as a locked bar with no
+          warning. knownPlan === "free" keeps a trialer out of this (they are
+          not the free user this line is for), and freeLeft === 1 means
+          atFreeLimit is false below, so the two blocks never show at once.
+          freeLeft/freeLimit come from the same server reply that drives
+          atFreeLimit (see applyAllowance above), so the two can never
+          disagree on where the count stands. */}
+      {knownPlan === "free" && freeLeft === 1 && (
+        <p className="mb-2 text-xs text-stone-600 max-sm:text-sm dark:text-stone-300">
+          1 free question left today.{" "}
+          <Link
+            href={plusLink.href}
+            className="font-medium text-bark-700 underline dark:text-stone-300"
           >
             {plusLink.label}
           </Link>

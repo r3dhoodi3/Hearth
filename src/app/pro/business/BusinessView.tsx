@@ -40,6 +40,8 @@ import AccountPanel from "@/components/pro/AccountPanel";
 import PushSettingsCard from "@/components/PushSettingsCard";
 import WinShareButton from "@/components/pro/WinShareButton";
 import ReviewShareRow from "@/components/pro/ReviewShareRow";
+import PrintQrButton from "./PrintQrButton";
+import WonReferralNudge from "./WonReferralNudge";
 import {
   labelFor,
   JOB_CATEGORIES,
@@ -237,6 +239,12 @@ export default function BusinessView({
           feature most of its point. Renders nothing at all when the deployment
           has no VAPID keys or the browser cannot do push. */}
       <PushSettingsCard side="pro" />
+
+      {/* MR3#12, pro side: one-time nudge toward the referral card after the
+          first Won lead - see WonReferralNudge.tsx for the once-per-account
+          rule and why #account (below) is enough to both scroll to and open
+          the collapsed panel it links into. */}
+      <WonReferralNudge wonCount={wonCount} />
 
       {/* Account: referral code and the license/insurance compliance
           calendar, folded into one collapsed-by-default panel. The code is
@@ -542,9 +550,12 @@ export default function BusinessView({
             Pending applications{" "}
             <span className="text-stone-500 dark:text-stone-400">({pendingApps.length})</span>
           </h2>
+          {/* "Lead credit (not cash)" bolded on request: this line used to say
+              "wallet credit" alone, which a pro skimming past could still
+              read as money back to a card. */}
           <p className="text-xs text-stone-500 dark:text-stone-400">
             Ghost protection: if the homeowner never responds, your fee comes
-            back automatically as wallet credit.
+            back automatically as <strong>lead credit (not cash)</strong>.
           </p>
         </div>
         {pendingApps.length === 0 ? (
@@ -654,6 +665,11 @@ export default function BusinessView({
             </ul>
           </div>
         )}
+
+        {/* CR4#3: a printable QR + link + business name PNG, offline
+            distribution with zero ad spend - every scan is already a warm,
+            local lead. */}
+        <PrintQrButton url={profileUrl} businessName={businessName} />
       </section>
     </div>
   );

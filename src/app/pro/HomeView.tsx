@@ -404,10 +404,10 @@ export default function HomeView({
           {feedbackClaimed ? (
             <>
               <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                Thanks
+                Thank you for your feedback
               </h2>
               <p className="text-sm text-stone-600 dark:text-stone-300">
-                {feedbackCreditDollars()} in lead credit was added to your
+                {feedbackCreditDollars()} in lead credit has been added to your
                 wallet.
               </p>
               <Link
@@ -426,8 +426,8 @@ export default function HomeView({
                   leaving a promise hanging. The grant runs on its own the next
                   time this page loads after they qualify. */}
               <p className="text-sm text-stone-600 dark:text-stone-300">
-                Your {feedbackCreditDollars()} unlocks once your license is
-                confirmed or you place your first lead.
+                Your {feedbackCreditDollars()} in lead credit will be added once
+                your license is confirmed or you place your first lead.
               </p>
             </>
           ) : (
@@ -436,7 +436,7 @@ export default function HomeView({
                 {FEEDBACK_CARD_TITLE}
               </h2>
               <p className="text-sm text-stone-600 dark:text-stone-300">
-                Two questions, about a minute. We read every one.
+                It takes about a minute: a score from 1 to 5 and a few words. We read every message.
               </p>
               {!established && (
                 <p className="text-sm text-stone-500 dark:text-stone-400">

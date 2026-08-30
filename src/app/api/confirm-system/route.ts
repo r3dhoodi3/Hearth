@@ -184,8 +184,11 @@ export async function POST(req: NextRequest) {
       prompt: "Read the fields off this data plate.",
       images: [{ data: image, mime }],
       schema: RESPONSE_SCHEMA,
-      maxTokens: 1024,
-      effort: "low",
+      // Model, ceiling and effort come from ROUTES in src/lib/claude.ts, so
+      // the cost of every AI feature is one table to read. A data plate is
+      // read back to the homeowner on screen before it is saved, which is why
+      // this one runs on the cheap model.
+      route: "confirm-system",
       label: "confirm-system",
     });
     if (!parsed) {

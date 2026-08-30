@@ -74,3 +74,36 @@ describe("pro shell layout", () => {
     expect(homeLayoutCode).not.toMatch(/<Suspense[\s\S]{0,120}AppGuideMount/);
   });
 });
+
+// The header's "Back office" button (ProNav.tsx) needs one precomputed href:
+// /pro/tools when the pro can use it, /pro/plus?reason=tools otherwise. The
+// gating rule (member, or established with drafts left) belongs to the shell,
+// which already loads the contractor for this request - not to ProNav, which
+// stays a dumb prop-in prop-out component. Source-level, like the tests
+// above: rendering the async layout needs a Supabase-backed contractor.
+describe("pro shell back-office href", () => {
+  it("computes backOfficeHref from the same helpers /pro/tools itself gates on", () => {
+    expect(layoutCode).toContain(
+      'import { getCurrentContractor, getSides, isEstablishedPro } from "@/lib/contractor"'
+    );
+    expect(layoutCode).toContain('import { hasProPlan } from "@/lib/subscription"');
+    expect(layoutCode).toContain('import { proDraftsLeft } from "@/lib/freeAiTasteServer"');
+    expect(layoutCode).toContain("const member = await hasProPlan();");
+    // The two reads after the membership check run as one wave (speed wave
+    // P2, 2026-08-30); the gate itself is unchanged: established still
+    // decides whether the drafts counter counts.
+    expect(layoutCode).toContain(
+      "member ? Promise.resolve(true) : isEstablishedPro(contractor.id),"
+    );
+    expect(layoutCode).toContain("proDraftsLeft(contractor.id, member),");
+    expect(layoutCode).toContain("const established = member || establishedRead;");
+    expect(layoutCode).toContain("const draftsLeft = established ? draftsRead : null;");
+  });
+
+  it("picks /pro/tools when usable and the buy page otherwise, and passes it to ProNav", () => {
+    expect(layoutCode).toContain(
+      'const backOfficeHref = canUseBackOffice ? "/pro/tools" : "/pro/plus?reason=tools";'
+    );
+    expect(layoutCode).toContain("backOfficeHref={backOfficeHref}");
+  });
+});

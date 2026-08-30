@@ -24,13 +24,36 @@ afterEach(() => {
 
 describe("ProNav side pill", () => {
   it("shows a 'Business' pill when the account also has a homeowner side", () => {
-    render(<ProNav company="Jamie's Roofing" hasHome />);
+    render(<ProNav company="Jamie's Roofing" hasHome backOfficeHref="/pro/tools" />);
     // Two copies render (desktop inline + phone twin); either counts.
     expect(screen.getAllByText("Business").length).toBeGreaterThan(0);
   });
 
   it("renders no pill for a pro-only account", () => {
-    render(<ProNav company="Jamie's Roofing" hasHome={false} />);
+    render(<ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/tools" />);
     expect(screen.queryByText("Business")).toBeNull();
+  });
+});
+
+describe("ProNav back office button", () => {
+  // The button sits on the same header row as the bell, left of it, and its
+  // destination is whatever pro/layout.tsx computed - ProNav itself never
+  // decides between /pro/tools and the buy page.
+  it("links to /pro/tools when the pro can use the back office", () => {
+    render(<ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/tools" />);
+    const link = screen.getByRole("link", { name: "AI back office" });
+    expect(link).toHaveAttribute("href", "/pro/tools");
+    // Always-on aria-label plus a text label that only shows from sm up
+    // (max-sm:justify-center px-0 hides it visually on the phone, but jsdom
+    // renders it regardless of viewport, so this checks it exists in markup).
+    expect(link).toHaveTextContent("Back office");
+  });
+
+  it("links to the buy page when the pro cannot use it yet", () => {
+    render(
+      <ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/plus?reason=tools" />
+    );
+    const link = screen.getByRole("link", { name: "AI back office" });
+    expect(link).toHaveAttribute("href", "/pro/plus?reason=tools");
   });
 });

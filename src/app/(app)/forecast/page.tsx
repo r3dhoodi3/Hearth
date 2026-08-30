@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
-import { buildForecast, stateName } from "@/lib/forecast";
+import { buildForecast, stateName, type ForecastItem } from "@/lib/forecast";
 import {
   estimateSeasonalEnergyCost,
   estimateUpgradeSavings,
@@ -14,7 +14,35 @@ import {
   categoryForSystem,
   seasonForMonth,
 } from "@/lib/constants";
+import {
+  forecastActionFor,
+  topRiskItems,
+  lifeUsedFraction,
+  HIGH_CONSEQUENCE_SYSTEMS,
+  EMERGENCY_PREMIUM_COPY,
+  ACTIONS_AS_OF,
+  type ForecastAction,
+} from "@/lib/forecastActions";
+import {
+  incentivesForSystem,
+  bestIncentiveAmount,
+  hasLiveProgram,
+  INCENTIVE_CAVEAT,
+  INCENTIVES_AS_OF,
+  type ForecastIncentive,
+} from "@/lib/forecastIncentives";
+import {
+  reservePlan,
+  reserveStatusCopy,
+  dollarsFromCents,
+  RESERVE_HORIZON_YEARS,
+} from "@/lib/forecastReserve";
+import { isMissingSchemaError } from "@/lib/dbErrors";
 import AskHearthPlanButton from "./AskHearthPlanButton";
+import QuoteEarlyLink from "./QuoteEarlyLink";
+import IncentiveViewTracker from "./IncentiveViewTracker";
+import { addForecastStepAction, saveRepairReserveAction } from "./actions";
+import SubmitButton from "@/components/SubmitButton";
 import { Lock } from "lucide-react";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -35,6 +63,107 @@ function moneyShort(n: number): string {
     return `$${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
   }
   return `$${Math.round(n)}`;
+}
+
+// The "push it out" sentence, in the owner's own numbers: what the step costs,
+// what it delays, and by how long. Always a RANGE and always the word
+// "typically", because this is national ballpark data, not a quote, and a
+// single number here would be exactly the fake precision the rest of this page
+// is careful to avoid.
+function pushItOutLine(action: ForecastAction, item: ForecastItem): string {
+  const label = labelFor(SYSTEM_TYPES, item.system_type).toLowerCase();
+  return `Typically ${money(action.costLow)} to ${money(
+    action.costHigh
+  )}, and it usually pushes a ${money(
+    item.costMid
+  )} ${label} replacement out ${action.yearsGainedLow}-${action.yearsGainedHigh} years.`;
+}
+
+// Why this system is one of the two the page tells you to go get quotes for.
+// One plain sentence, because a ranking nobody can explain reads as a guess.
+function riskReason(item: ForecastItem): string {
+  const label = labelFor(SYSTEM_TYPES, item.system_type).toLowerCase();
+  const consequence = HIGH_CONSEQUENCE_SYSTEMS.has(item.system_type);
+  const used = Math.round(lifeUsedFraction(item) * 100);
+  const age =
+    item.age != null
+      ? `Your ${label} is about ${item.age} years old against a typical ${item.lifespan} year life`
+      : `Your ${label} is about ${used}% of the way through a typical ${item.lifespan} year life`;
+  return consequence
+    ? `${age}, and when this one goes it does damage while you wait.`
+    : `${age}, so it is the one most likely to surprise you first.`;
+}
+
+// The post-a-job flow, prefilled. /contractors already reads category, desc and
+// timing off the query string (see its searchParams block), so this needs no
+// new plumbing: it just arrives at the form with the boxes filled in.
+// "flexible" timing on purpose, because the whole point of this card is that
+// nothing is broken yet.
+function quoteHref(item: ForecastItem): string {
+  const label = labelFor(SYSTEM_TYPES, item.system_type).toLowerCase();
+  const when =
+    item.timingEstimated || item.yearsLeft <= 0
+      ? "is at the end of its typical life"
+      : `looks likely to need replacing around ${item.replacementYear}`;
+  const desc =
+    `Planning ahead, nothing is broken. My ${label} ${when}, and I would rather ` +
+    `get quotes now than at 2am when it fails. Happy to schedule this whenever suits you.`;
+  return `/contractors?category=${categoryForSystem(
+    item.system_type
+  )}&timing=flexible&desc=${encodeURIComponent(desc)}`;
+}
+
+// One system's rebate lines. Rendered as a disclosure so a phone card is not
+// four links tall by default, and so the caveat and the "as of" date travel
+// with the amounts rather than sitting somewhere the reader will not scroll to.
+function IncentiveLines({ incentives }: { incentives: ForecastIncentive[] }) {
+  return (
+    <>
+      {incentives.map((inc) => {
+        const amount = bestIncentiveAmount(inc);
+        const live = hasLiveProgram(inc);
+        const headline =
+          amount != null
+            ? `Up to ${money(amount)} back: ${inc.label}`
+            : live
+              ? `Rebates may apply: ${inc.label}`
+              : `${inc.label}: the federal credit has ended`;
+        return (
+          <details key={inc.key} className="mt-2">
+            <summary className="cursor-pointer text-xs font-medium text-bark-700 dark:text-stone-300 max-sm:flex max-sm:min-h-11 max-sm:items-center">
+              {headline}
+            </summary>
+            <ul className="mt-1 space-y-1.5">
+              {inc.programs.map((p) => (
+                <li
+                  key={p.name}
+                  className="text-xs leading-relaxed text-stone-500 dark:text-stone-400"
+                >
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-bark-700 underline dark:text-stone-300"
+                  >
+                    {p.name}
+                  </a>
+                  {p.status === "ended"
+                    ? " (ended). "
+                    : p.maxAmount != null
+                      ? ` up to ${money(p.maxAmount)}. `
+                      : ". "}
+                  {p.note}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-stone-500 dark:text-stone-400">
+              {INCENTIVE_CAVEAT} Table last checked {INCENTIVES_AS_OF}.
+            </p>
+          </details>
+        );
+      })}
+    </>
+  );
 }
 
 export default async function ForecastPage() {
@@ -77,6 +206,29 @@ export default async function ForecastPage() {
       .order("created_at", { ascending: false }),
   ]);
 
+  // The repair reserve (migration 0147), read in its OWN small query rather
+  // than through getActiveProperty's shared column list. Naming a column the
+  // live database has not migrated yet makes Postgres reject the whole select
+  // with 42703, and that shared list is used by every page in the app, so a
+  // pending migration would put all of them on the retry path. Here the cost of
+  // a missing column is one null and a read-only reserve card.
+  let reserveCents: number | null = null;
+  if (plus) {
+    const { data: reserveRow, error: reserveError } = await (
+      supabase.from("properties") as any
+    )
+      .select("repair_reserve_cents")
+      .eq("id", property.id)
+      .maybeSingle();
+    if (!reserveError && reserveRow) {
+      reserveCents = reserveRow.repair_reserve_cents ?? null;
+    } else if (reserveError && !isMissingSchemaError(reserveError)) {
+      // A real failure (not a pending migration) still must not break the
+      // page: the forecast is useful without the reserve card's saved figure.
+      console.error("forecast: reserve read failed:", reserveError.message);
+    }
+  }
+
   const sys = systems ?? [];
   const openIssues = issues ?? [];
   const nowDate = new Date(Date.now());
@@ -86,6 +238,28 @@ export default async function ForecastPage() {
       ? buildForecast(sys, currentYear, property.state, 10, openIssues)
       : null;
   const region = stateName(property.state);
+
+  // The four "make the timeline actionable" pieces, all derived from the
+  // forecast that is already built. Computed once here rather than inline in
+  // the markup so the free and Plus branches below can both reach them.
+  const riskItems = forecast ? topRiskItems(forecast.timeline) : [];
+  const reserve = forecast
+    ? reservePlan(forecast.timeline, currentYear, dollarsFromCents(reserveCents))
+    : null;
+  // How many rebate lines actually render, for the one analytics beacon.
+  const incentiveCount = forecast
+    ? forecast.timeline.reduce(
+        (n, item) => n + incentivesForSystem(item.system_type).length,
+        0
+      )
+    : 0;
+  // The single worked example a free reader gets: their soonest system that has
+  // a curated step. Real data about their own home, not a demo house.
+  const freeExample = forecast
+    ? (forecast.timeline
+        .map((item) => ({ item, action: forecastActionFor(item.system_type) }))
+        .find((x) => x.action != null) ?? null)
+    : null;
 
   // Running-costs section: the season the owner is heading into (fall points
   // at winter, spring at summer), estimated from data already on this page.
@@ -141,8 +315,9 @@ export default async function ForecastPage() {
       <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
         Most homeowners get surprised by a big repair sooner or later, and a
         five-figure one hurts. Here is what your home&apos;s systems are likely to
-        need over the next {forecast?.horizonYears ?? 10} years, and how much
-        to set aside so it never catches you off guard.
+        need over the next {forecast?.horizonYears ?? 10} years, how much
+        to set aside so it never catches you off guard, and what you can do now
+        to push each bill further out.
       </p>
 
       {!forecast && (
@@ -206,6 +381,99 @@ export default async function ForecastPage() {
             <AskHearthPlanButton question={planQuestion} />
           </div>
 
+          {/* Reserve plan. Sits right under the headline set-aside because it
+              answers the very next question that number provokes: am I
+              actually going to have it. The five-year window is deliberate,
+              see the comment at the top of src/lib/forecastReserve.ts. */}
+          {reserve && (
+            <div className="card mt-6 space-y-3">
+              <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
+                Your repair reserve
+              </h2>
+              <p className="text-sm text-stone-500 dark:text-stone-400">
+                {reserve.nextBig
+                  ? `Over the next ${RESERVE_HORIZON_YEARS} years your list adds up to about ${money(
+                      reserve.nextFiveYearTotal
+                    )}. That is ${money(
+                      reserve.monthlySetAside
+                    )} a month, and the biggest single item is your ${labelFor(
+                      SYSTEM_TYPES,
+                      reserve.nextBig.system_type
+                    ).toLowerCase()} at about ${money(
+                      reserve.nextBig.futureCost
+                    )} in ${reserve.nextBig.replacementYear}.`
+                  : `Nothing big lands in the next ${RESERVE_HORIZON_YEARS} years, so anything you put away now is a head start on the years after that.`}
+              </p>
+
+              {reserve.nextBig && (
+                <div className="space-y-1">
+                  <div
+                    className="h-2 w-full overflow-hidden rounded-full bg-stone-100 dark:bg-stone-700"
+                    role="progressbar"
+                    aria-valuenow={reserve.progressPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="Progress toward your next big repair"
+                  >
+                    <div
+                      className="h-full rounded-full bg-bark-500 dark:bg-bark-600"
+                      style={{ width: `${reserve.progressPct}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    {reserve.savedDollars != null
+                      ? `${money(reserve.savedDollars)} of ${money(
+                          reserve.nextBig.futureCost
+                        )} set aside.`
+                      : "Nothing entered yet."}
+                  </p>
+                </div>
+              )}
+
+              <p className="text-sm text-stone-600 dark:text-stone-300">
+                {reserveStatusCopy(reserve)}
+              </p>
+
+              {/* Plain uncontrolled form: the value round-trips through the
+                  server action and comes back on the next render, so there is
+                  no client state to keep in sync. SubmitButton gives it the
+                  pending state every action in this app has. */}
+              <form
+                action={saveRepairReserveAction}
+                className="flex flex-wrap items-end gap-2"
+              >
+                <div className="min-w-[9rem] flex-1">
+                  <label className="label" htmlFor="reserve">
+                    What you have saved so far
+                  </label>
+                  <input
+                    id="reserve"
+                    name="reserve"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    placeholder="4500"
+                    defaultValue={
+                      reserve.savedDollars != null
+                        ? String(reserve.savedDollars)
+                        : ""
+                    }
+                    className="input"
+                  />
+                </div>
+                <SubmitButton
+                  className="btn-secondary max-sm:min-h-11"
+                  pendingLabel="Saving…"
+                >
+                  Save
+                </SubmitButton>
+              </form>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Only you and your household see this. Leave it blank to clear it.
+              </p>
+            </div>
+          )}
+
           {forecast.startHere.length > 0 && (
             <div className="card mt-6 space-y-3">
               <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
@@ -235,6 +503,44 @@ export default async function ForecastPage() {
                     >
                       Get quotes
                     </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* "Quote it now, not at 2am". Two systems only: the point is a
+              decision the owner can act on this week, and a list of six is a
+              list nobody works through. */}
+          {riskItems.length > 0 && (
+            <div className="card mt-6 space-y-3" data-testid="quote-early-card">
+              <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
+                Line up quotes early
+              </h2>
+              <p className="text-sm text-stone-500 dark:text-stone-400">
+                {EMERGENCY_PREMIUM_COPY} Getting two or three numbers now, while
+                nothing is broken, is the cheapest hour you will spend on this
+                house.
+              </p>
+              <div className="space-y-2">
+                {riskItems.map((item) => (
+                  <div
+                    key={item.system.id}
+                    className="rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-700"
+                  >
+                    <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                      {labelFor(SYSTEM_TYPES, item.system_type)}
+                    </p>
+                    <p className="text-xs text-stone-500 dark:text-stone-400">
+                      {riskReason(item)}
+                    </p>
+                    <QuoteEarlyLink
+                      href={quoteHref(item)}
+                      systemType={item.system_type}
+                      className="btn-secondary mt-2 inline-flex px-3 py-1.5 text-xs max-sm:min-h-11 max-sm:items-center"
+                    >
+                      Line up quotes
+                    </QuoteEarlyLink>
                   </div>
                 ))}
               </div>
@@ -337,12 +643,20 @@ export default async function ForecastPage() {
             <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
               {forecast.horizonYears}-year timeline
             </h2>
-            <div className="divide-y divide-stone-100 dark:divide-white/10">
-              {forecast.timeline.map((item) => (
+            {/* Desktop keeps the divided list it has always had. On a phone the
+                divider is dropped and each system becomes its own card, because
+                a row that now carries a step, a rebate line and two buttons is
+                no longer a row. */}
+            <div className="divide-y divide-stone-100 dark:divide-white/10 max-sm:space-y-3 max-sm:divide-y-0">
+              {forecast.timeline.map((item) => {
+                const action = forecastActionFor(item.system_type);
+                const incentives = incentivesForSystem(item.system_type);
+                return (
                 <div
                   key={item.system.id}
-                  className="flex items-center justify-between gap-3 py-3"
+                  className="py-3 max-sm:rounded-xl max-sm:border max-sm:border-stone-200 max-sm:bg-white max-sm:p-3 dark:max-sm:border-white/10 dark:max-sm:bg-stone-800"
                 >
+                  <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div>
                       <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
@@ -381,10 +695,60 @@ export default async function ForecastPage() {
                         </p>
                       )}
                   </div>
+                  </div>
+
+                  {/* Push it out: the one step that buys this system more time,
+                      with what it costs and what it delays. */}
+                  {action && (
+                    <div className="mt-2 rounded-lg bg-stone-50 p-3 dark:bg-stone-700/40">
+                      <p className="text-xs font-medium text-stone-900 dark:text-stone-100">
+                        {action.step}
+                      </p>
+                      <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">
+                        {pushItOutLine(action, item)}
+                      </p>
+                      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                        {action.why}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-3">
+                        <form action={addForecastStepAction}>
+                          <input
+                            type="hidden"
+                            name="system_type"
+                            value={item.system_type}
+                          />
+                          <SubmitButton
+                            className="btn-secondary px-3 py-1.5 text-xs max-sm:min-h-11"
+                            pendingLabel="Adding…"
+                          >
+                            Add to my plan
+                          </SubmitButton>
+                        </form>
+                        <Link
+                          href={`/contractors?category=${categoryForSystem(item.system_type)}`}
+                          className="text-xs font-medium text-bark-700 hover:underline dark:text-stone-300 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+                        >
+                          Find a pro
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+
+                  {incentives.length > 0 && (
+                    <IncentiveLines incentives={incentives} />
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
+            <p className="text-xs text-stone-500 dark:text-stone-400">
+              Maintenance steps and the years they buy are typical figures,
+              last reviewed {ACTIONS_AS_OF}. Your house, your climate and your
+              installer all move them.
+            </p>
           </div>
+
+          {incentiveCount > 0 && <IncentiveViewTracker count={incentiveCount} />}
 
           <div className="card mt-6 space-y-2">
             <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
@@ -401,6 +765,41 @@ export default async function ForecastPage() {
           )}
 
           {!plus && (
+            <>
+            {/* The shape of the paid feature, on ONE real system of theirs: the
+                step, what it costs, what it delays. Same principle as the
+                two-system timeline peek below - a real taste, never a demo
+                house and never a blurred fake number. */}
+            {freeExample?.action && (
+              <div className="card mt-6 space-y-2" data-testid="free-push-example">
+                <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
+                  Push it out
+                </h2>
+                <p className="text-sm text-stone-500 dark:text-stone-400">
+                  Most of these bills can be delayed for a fraction of what they
+                  cost. Here is the one for your{" "}
+                  {labelFor(SYSTEM_TYPES, freeExample.item.system_type).toLowerCase()}.
+                </p>
+                <div className="rounded-lg bg-stone-50 p-3 dark:bg-stone-700/40">
+                  <p className="text-xs font-medium text-stone-900 dark:text-stone-100">
+                    {freeExample.action.step}
+                  </p>
+                  <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">
+                    {pushItOutLine(freeExample.action, freeExample.item)}
+                  </p>
+                  <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                    {freeExample.action.why}
+                  </p>
+                </div>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  Typical figures, last reviewed {ACTIONS_AS_OF}. Plus adds one
+                  of these for every system on your list, the rebates and
+                  credits worth checking before each replacement, and a reserve
+                  plan that tracks what you have actually saved.
+                </p>
+              </div>
+            )}
+
             <div className="card mt-6 space-y-3">
               <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
                 {forecast.horizonYears}-year timeline
@@ -468,14 +867,15 @@ export default async function ForecastPage() {
                 <p className="text-sm text-bark-700 dark:text-stone-300">
                   That total up top is your real 10-year number.
                   {forecast.timeline.length > 2
-                    ? " Hearth Plus opens up every system's timing and cost, the year-by-year chart of when the money is needed, and which projects to tackle first."
-                    : " Hearth Plus adds the year-by-year chart of when the money is needed and which projects to tackle first."}
+                    ? " Hearth Plus opens up every system's timing and cost, the step that pushes each one further out, the rebates worth checking, and a reserve plan that tracks what you have saved."
+                    : " Hearth Plus adds the step that pushes each system further out, the rebates worth checking, a reserve plan that tracks what you have saved, and the year-by-year chart of when the money is needed."}
                 </p>
                 <Link href="/plus?reason=forecast" className="btn-primary mt-3 inline-block">
                   See what Plus shows
                 </Link>
               </div>
             </div>
+            </>
           )}
         </>
       )}

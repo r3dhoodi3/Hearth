@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { act, render, screen, fireEvent, cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // The component reads the current route to skip pages the guide must never
@@ -17,7 +17,10 @@ vi.mock("@/lib/appGuideActions", () => ({
   markGuideSeenAction: (side: string) => markGuideSeenAction(side),
 }));
 
-import AppGuide from "./AppGuide";
+import AppGuide, {
+  GUIDE_OPEN_DELAY_MS,
+  GUIDE_TARGET_TIMEOUT_MS,
+} from "./AppGuide";
 import { APP_GUIDE_EVENT } from "@/lib/appGuide";
 
 const HOMEOWNER_TITLES = [
@@ -38,20 +41,66 @@ function next() {
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
 }
 
+// CR2#6: the guide now waits for the real content behind it (the health
+// score / first lead) to be on screen AND for GUIDE_OPEN_DELAY_MS to pass
+// before it opens. These helpers put that target in the DOM up front (the
+// "already there" fast path - see guideTargetPresent in AppGuide.tsx) and
+// advance past the delay, so every test below that expects an immediate open
+// still gets one, exactly as it did before that change.
+function renderHomeownerGuide(props: Partial<{ startOpen: boolean }> = {}) {
+  const result = render(
+    <>
+      <div id="this-month" />
+      <AppGuide side="homeowner" startOpen {...props} />
+    </>
+  );
+  act(() => {
+    vi.advanceTimersByTime(GUIDE_OPEN_DELAY_MS);
+  });
+  return result;
+}
+
+function rerenderHomeownerGuide(
+  rerender: ReturnType<typeof render>["rerender"],
+  props: Partial<{ startOpen: boolean }> = {}
+) {
+  rerender(
+    <>
+      <div id="this-month" />
+      <AppGuide side="homeowner" startOpen {...props} />
+    </>
+  );
+}
+
+function renderProGuide(props: Partial<{ startOpen: boolean }> = {}) {
+  const result = render(
+    <>
+      <p className="stat-label">Open jobs</p>
+      <AppGuide side="pro" startOpen {...props} />
+    </>
+  );
+  act(() => {
+    vi.advanceTimersByTime(GUIDE_OPEN_DELAY_MS);
+  });
+  return result;
+}
+
 beforeEach(() => {
   mockPathname = "/dashboard";
   markGuideSeenAction.mockClear();
   window.localStorage.clear();
   window.sessionStorage.clear();
+  vi.useFakeTimers();
 });
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe("AppGuide - homeowner", () => {
   it("opens on a first sign-in and walks four slides, ending on Got it", () => {
-    render(<AppGuide side="homeowner" startOpen />);
+    renderHomeownerGuide();
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText(HOMEOWNER_TITLES[0])).toBeInTheDocument();
@@ -76,7 +125,7 @@ describe("AppGuide - homeowner", () => {
   });
 
   it("says all of Orange County, not one city", () => {
-    render(<AppGuide side="homeowner" startOpen />);
+    renderHomeownerGuide();
     next();
     next();
     expect(
@@ -89,7 +138,7 @@ describe("AppGuide - homeowner", () => {
   // reads once, in their first minute, and a promise made here is the one
   // they remember.
   it("does not promise a human on our team", () => {
-    render(<AppGuide side="homeowner" startOpen />);
+    renderHomeownerGuide();
     next();
     next();
     // Hearth does not staff human answers. The people in this product are the
@@ -101,7 +150,7 @@ describe("AppGuide - homeowner", () => {
   });
 
   it("states the real review rule: hired through Hearth, one per job", () => {
-    render(<AppGuide side="homeowner" startOpen />);
+    renderHomeownerGuide();
     next();
     next();
     next();
@@ -117,7 +166,7 @@ describe("AppGuide - homeowner", () => {
   });
 
   it("closes on Skip, stamps the account, and remembers in this browser", () => {
-    render(<AppGuide side="homeowner" startOpen />);
+    renderHomeownerGuide();
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -127,26 +176,50 @@ describe("AppGuide - homeowner", () => {
   });
 
   it("closes on Escape", () => {
-    render(<AppGuide side="homeowner" startOpen />);
+    renderHomeownerGuide();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(markGuideSeenAction).toHaveBeenCalledWith("homeowner");
   });
 
   it("stays shut for an account that has already been through it", () => {
-    render(<AppGuide side="homeowner" startOpen={false} />);
+    render(
+      <>
+        <div id="this-month" />
+        <AppGuide side="homeowner" startOpen={false} />
+      </>
+    );
+    act(() => {
+      vi.advanceTimersByTime(GUIDE_TARGET_TIMEOUT_MS);
+    });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("stays shut when this browser already saw it, even if the stamp has not landed", () => {
     window.localStorage.setItem("hearth_app_guide_seen", "1");
-    render(<AppGuide side="homeowner" startOpen />);
+    render(
+      <>
+        <div id="this-month" />
+        <AppGuide side="homeowner" startOpen />
+      </>
+    );
+    act(() => {
+      vi.advanceTimersByTime(GUIDE_TARGET_TIMEOUT_MS);
+    });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("never takes over onboarding or a payment screen", () => {
     mockPathname = "/plus";
-    render(<AppGuide side="homeowner" startOpen />);
+    render(
+      <>
+        <div id="this-month" />
+        <AppGuide side="homeowner" startOpen />
+      </>
+    );
+    act(() => {
+      vi.advanceTimersByTime(GUIDE_TARGET_TIMEOUT_MS);
+    });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
@@ -155,12 +228,12 @@ describe("AppGuide - homeowner", () => {
   // who tried to use the app instead of reading it. Navigating past it is a
   // "not now" - closed for this tab, and deliberately NOT stamped as seen.
   it("snoozes for the session when they navigate past it, without stamping it seen", () => {
-    const { rerender } = render(<AppGuide side="homeowner" startOpen />);
+    const { rerender } = renderHomeownerGuide();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     // They ignore the sheet and tap into the app.
     mockPathname = "/contractors";
-    rerender(<AppGuide side="homeowner" startOpen />);
+    rerenderHomeownerGuide(rerender);
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(markGuideSeenAction).not.toHaveBeenCalled();
@@ -169,19 +242,29 @@ describe("AppGuide - homeowner", () => {
 
     // And it does not come back on the next page either.
     mockPathname = "/walkthrough";
-    rerender(<AppGuide side="homeowner" startOpen />);
+    rerenderHomeownerGuide(rerender);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("stays shut for the rest of a session that already snoozed it", () => {
     window.sessionStorage.setItem("hearth_app_guide_snoozed", "1");
-    render(<AppGuide side="homeowner" startOpen />);
+    render(
+      <>
+        <div id="this-month" />
+        <AppGuide side="homeowner" startOpen />
+      </>
+    );
+    act(() => {
+      vi.advanceTimersByTime(GUIDE_TARGET_TIMEOUT_MS);
+    });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("still replays from the help page after a snooze", () => {
     // The snooze is not "seen": the help link is exactly how somebody who
-    // waved it away gets it back.
+    // waved it away gets it back. The replay path bypasses the delay
+    // entirely (see the onShow effect in AppGuide.tsx), so no target/timer
+    // wait is needed here.
     window.sessionStorage.setItem("hearth_app_guide_snoozed", "1");
     render(<AppGuide side="homeowner" startOpen />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -191,9 +274,9 @@ describe("AppGuide - homeowner", () => {
   });
 
   it("keeps the snooze on the side it happened on", () => {
-    const { rerender } = render(<AppGuide side="homeowner" startOpen />);
+    const { rerender } = renderHomeownerGuide();
     mockPathname = "/contractors";
-    rerender(<AppGuide side="homeowner" startOpen />);
+    rerenderHomeownerGuide(rerender);
     expect(window.sessionStorage.getItem("hearth_app_guide_snoozed")).toBe("1");
     // One account can hold both sides; waving away the homeowner guide must
     // not eat the pro one.
@@ -203,6 +286,7 @@ describe("AppGuide - homeowner", () => {
   });
 
   it("reopens on demand from the help page, even after it was seen", () => {
+    // Also bypasses the delay - see the note above.
     render(<AppGuide side="homeowner" startOpen={false} />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
@@ -212,7 +296,7 @@ describe("AppGuide - homeowner", () => {
   });
 
   it("swipes forward and back between slides", () => {
-    render(<AppGuide side="homeowner" startOpen />);
+    renderHomeownerGuide();
     const dialog = screen.getByRole("dialog");
 
     fireEvent.pointerDown(dialog, { clientX: 240, clientY: 300 });
@@ -230,7 +314,7 @@ describe("AppGuide - homeowner", () => {
   });
 
   it("does not close by swiping off the end of the last slide", () => {
-    render(<AppGuide side="homeowner" startOpen />);
+    renderHomeownerGuide();
     next();
     next();
     next();
@@ -247,7 +331,7 @@ describe("AppGuide - homeowner", () => {
 describe("AppGuide - contractor", () => {
   it("shows the pro slides, not the homeowner ones", () => {
     mockPathname = "/pro";
-    render(<AppGuide side="pro" startOpen />);
+    renderProGuide();
 
     expect(screen.getByText(PRO_TITLES[0])).toBeInTheDocument();
     expect(screen.queryByText(HOMEOWNER_TITLES[0])).not.toBeInTheDocument();
@@ -281,7 +365,70 @@ describe("AppGuide - contractor", () => {
 
   it("stays out of the pro setup flow", () => {
     mockPathname = "/pro/onboarding";
-    render(<AppGuide side="pro" startOpen />);
+    render(
+      <>
+        <p className="stat-label">Open jobs</p>
+        <AppGuide side="pro" startOpen />
+      </>
+    );
+    act(() => {
+      vi.advanceTimersByTime(GUIDE_TARGET_TIMEOUT_MS);
+    });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+// CR2#6: the delay itself, isolated from every other behavior above.
+describe("AppGuide - delayed first open", () => {
+  it("waits out the minimum delay even with the target already on screen", () => {
+    render(
+      <>
+        <div id="this-month" />
+        <AppGuide side="homeowner" startOpen />
+      </>
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(GUIDE_OPEN_DELAY_MS - 1);
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("falls back to opening on the timer alone when the target never renders", () => {
+    // No #this-month anywhere in the DOM - a page the target selector does
+    // not describe, or a future redesign that dropped it.
+    render(<AppGuide side="homeowner" startOpen />);
+
+    act(() => {
+      vi.advanceTimersByTime(GUIDE_TARGET_TIMEOUT_MS - 1);
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("still opens for a pro once the Open jobs tile is on screen", () => {
+    mockPathname = "/pro";
+    render(
+      <>
+        <p className="stat-label">Open jobs</p>
+        <AppGuide side="pro" startOpen />
+      </>
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(GUIDE_OPEN_DELAY_MS);
+    });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
