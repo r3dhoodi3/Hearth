@@ -147,8 +147,10 @@ export default function AddToHomeScreenNudge() {
   if (!visible) return null;
 
   return (
-    // Phone-only: this sits ABOVE the fixed bottom tab bar (see Nav.tsx),
-    // which itself only exists below sm. The bar is 48px of content
+    // Phone-only (sm:hidden), which is narrower than the fixed bottom tab bar
+    // this sits ABOVE: the bar runs to lg since 2026-08-30 (see Nav.tsx), but
+    // this card is hidden from sm up, so it can never reach the widths where
+    // the two would disagree. The bar is 48px of content
     // (NavLinks' min-h-[48px]) plus its own env(safe-area-inset-bottom)
     // padding on a notched phone, so the offset here is 3.5rem + that same
     // inset - the number globals.css already uses to lift the floating docks

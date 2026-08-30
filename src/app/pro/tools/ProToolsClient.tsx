@@ -211,6 +211,9 @@ export default function ProToolsClient({
       const data = await resp.json().catch(() => ({}));
       if (data?.job) {
         setPastJobs((jobs) => [data.job, ...jobs]);
+      } else if (data?.reason === "locked") {
+        // The business is not verified yet; copy comes from the server.
+        setPjError(data?.error || "Drafting opens once your business is verified.");
       } else if (data?.reason === "rate_limited") {
         setPjError("You've hit today's drafting limit. It resets at midnight.");
       } else if (data?.reason === "no_key") {
@@ -357,6 +360,9 @@ export default function ProToolsClient({
         // One draft delivered, one off the meter. Only on a real document: a
         // failed call is refunded server-side, so the counter must not move.
         setDraftsLeft((n) => (n === null ? null : Math.max(0, n - 1)));
+      } else if (data?.reason === "locked") {
+        // The business is not verified yet; copy comes from the server.
+        setError(data?.error || "Drafting opens once your business is verified.");
       } else if (data?.reason === "rate_limited") {
         setError("You've hit today's drafting limit. It resets at midnight.");
       } else if (data?.reason === "no_key") {

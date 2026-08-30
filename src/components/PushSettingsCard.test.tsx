@@ -217,10 +217,15 @@ describe("PushSettingsCard", () => {
     expect(screen.queryByRole("button", { name: "Turn on notifications" })).toBeNull();
   });
 
-  it("renders nothing when the deployment has no VAPID key", async () => {
+  it("says notifications are not switched on yet when the deployment has no VAPID key", async () => {
+    // Changed 2026-08-30 after live checks L2/L3: the card used to vanish on
+    // hydration, which read as a broken page; now it states the situation and
+    // offers no button (nothing to tap could succeed).
     delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     await mount();
-    expect(screen.queryByTestId("push-settings-card")).toBeNull();
+    expect(screen.getByTestId("push-settings-card")).toBeTruthy();
+    expect(screen.getByText(/not switched on yet/i)).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
   it("renders nothing on a browser that cannot do push at all", async () => {

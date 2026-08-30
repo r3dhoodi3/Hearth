@@ -63,17 +63,18 @@ export default async function ProLayout({
   return (
     <div className="min-h-screen">
       <ProNav company={contractor.name} hasHome={sides.hasHome} />
-      {/* Extra bottom padding on phones keeps content clear of the fixed
-          bottom tab bar. */}
-      <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 sm:pb-8">
+      {/* Extra bottom padding below lg keeps content clear of the fixed bottom
+          tab bar. It was sm:pb-8; the bar now runs to lg (ProNav.tsx), so the
+          padding follows it. Desktop at lg and up keeps today's pb-8. */}
+      <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 lg:pb-8">
         {children}
       </main>
       {/* The footer sits outside <main>, so main's pb-24 does not cover it and
-          on phones "Need a hand? Help" landed under the fixed bottom tab bar
-          (3.5rem of content plus the safe-area inset, see ProNav's nav
-          classes). Clear the bar plus a 1rem gap, phones only: the bar is
-          sm:hidden, so sm and up keep exactly today's pb-8. */}
-      <footer className="mx-auto max-w-5xl px-6 pb-8 text-center text-xs text-stone-500 max-sm:pb-[calc(3.5rem_+_env(safe-area-inset-bottom)_+_1rem)] dark:text-stone-400">
+          "Need a hand? Help" landed under the fixed bottom tab bar (3.5rem of
+          content plus the safe-area inset, see ProNav's nav classes). Clear
+          the bar plus a 1rem gap wherever the bar exists: it is lg:hidden now,
+          not sm:hidden, so this is max-lg and lg+ keeps today's pb-8. */}
+      <footer className="mx-auto max-w-5xl px-6 pb-8 text-center text-xs text-stone-500 max-lg:pb-[calc(3.5rem_+_env(safe-area-inset-bottom)_+_1rem)] dark:text-stone-400">
         Need a hand?{" "}
         <Link
           href="/pro/help"

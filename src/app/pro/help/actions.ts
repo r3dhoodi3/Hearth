@@ -6,7 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
-import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
+import {
+  cappedField,
+  cappedFieldOrNull,
+  honeypotTripped,
+  FIELD_MAX,
+} from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
 
 // Save a pro's support message so the team can read and reply. Contact details
@@ -15,6 +20,17 @@ import { setFlash } from "@/lib/flash";
 // are flagged priority so the team answers them first. The flag is computed
 // server-side; it is never taken from the form.
 export async function sendProSupportMessageAction(formData: FormData) {
+  // Honeypot, matching the public contact form and the homeowner help form:
+  // ProSupportForm.tsx renders an off-screen "company_website" input no person
+  // can see or tab to, so anything in it came from a script. Pretend the send
+  // worked - the exact flash and redirect the success path below uses - and
+  // store nothing. First statement in the action: no session lookup, no
+  // rate-limit slot burned, nothing touched.
+  if (honeypotTripped(formData)) {
+    await setFlash("Thanks. We got your message and will get back to you.", "success");
+    redirect("/pro/help?sent=1");
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

@@ -49,13 +49,22 @@ export default function Nav({
     },
   ];
 
-  // Phone bottom bar: the same four destinations as the top strip. Ask Hearth
-  // briefly had a tab of its own here, which made five tabs on a 390px screen
-  // and gave the assistant a top-level home it doesn't need. It lives inside
-  // Messages instead - a pinned conversation at the top of /chats that opens
-  // the full-screen /ask view (see AskHearthRow), with NavLinks treating /ask
-  // as a child of Messages so the tab stays lit while you're in there. There
-  // is no floating pill any more, at any width: Messages is the only door.
+  // Phone AND TABLET bottom bar: the same four destinations as the top strip.
+  // Ask Hearth briefly had a tab of its own here, which made five tabs on a
+  // 390px screen and gave the assistant a top-level home it doesn't need. It
+  // lives inside Messages instead - a pinned conversation at the top of /chats
+  // that opens the full-screen /ask view (see AskHearthRow), with NavLinks
+  // treating /ask as a child of Messages so the tab stays lit while you're in
+  // there. There is no floating pill any more, at any width: Messages is the
+  // only door.
+  //
+  // THE SHELL BREAKPOINT IS `lg`, NOT `sm` (changed 2026-08-30). The top strip
+  // used to switch on at sm (640px) but only had room for itself from about
+  // 1024px up, so between those two widths the nav pills painted straight over
+  // the "Hearth" wordmark and the home address. Everything that used to say
+  // "below sm the tab bar exists" now says "below lg". Desktop at 1024px and
+  // up is unchanged; tablets get the phone-style bottom bar instead of a
+  // colliding top strip.
   const BOTTOM_LINKS = LINKS;
 
   return (
@@ -122,10 +131,12 @@ export default function Nav({
             underneath the nav pills - "Hearth · 3831 [Home]ve[Browse Pros]".
             If either half is ever made unshrinkable again, that returns. */}
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-          {/* Primary destinations. Desktop/tablet (sm and up) keep this exact
-              top strip, unchanged. Below sm it is hidden and the same links
-              render as the fixed bottom tab bar further down. */}
-          <div className="relative hidden min-w-0 sm:block">
+          {/* Primary destinations. Desktop (lg and up) keeps this exact top
+              strip, unchanged. Below lg it is hidden and the same links render
+              as the fixed bottom tab bar further down. It was `sm:block`: at
+              640-1023px the strip and the brand/address block both wanted the
+              full row and the pills ended up drawn on top of the wordmark. */}
+          <div className="relative hidden min-w-0 lg:block">
             <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1">
               <NavLinks links={LINKS} />
             </nav>
@@ -209,16 +220,17 @@ export default function Nav({
       )}
     </header>
     <AddToHomeScreenNudge />
-    {/* Phone-only bottom tab bar: the same primary destinations as the top
-        strip above, laid out like a native app so nothing needs horizontal
-        scrolling on a narrow viewport. Hidden from sm up, where the top
-        strip already handles this. Kept to <=48px tall so it fits inside
-        the pb-24 bottom padding AppLayout's <main> already reserves below
-        sm for the floating Ask Hearth dock; globals.css also nudges that
-        dock and the toast notifier above this bar on the same breakpoint. */}
+    {/* Phone and tablet bottom tab bar: the same primary destinations as the
+        top strip above, laid out like a native app so nothing needs horizontal
+        scrolling on a narrow viewport. Hidden from lg up, where the top strip
+        has the room to handle this. Kept to <=48px tall so it fits inside the
+        pb-24 bottom padding AppLayout's <main> reserves below lg; globals.css
+        and the floating nudges (ReviewPrompt, ProTrialNudge, ToastProvider,
+        NewMessageNotifier, ChatDock) lift themselves over this bar on the same
+        lg breakpoint. */}
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-bark-50 pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-white/10 dark:bg-stone-900"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-bark-50 pb-[env(safe-area-inset-bottom)] lg:hidden dark:border-white/10 dark:bg-stone-900"
     >
       <NavLinks links={BOTTOM_LINKS} variant="bottom" />
     </nav>

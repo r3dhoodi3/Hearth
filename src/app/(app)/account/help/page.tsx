@@ -172,7 +172,7 @@ export default async function HelpPage(props: {
       </div>
 
       <p className="text-sm text-stone-500 dark:text-stone-400">
-        You can also ask Hearth directly from the assistant on any page.
+        You can also ask Hearth from the Ask Hearth row at the top of Messages.
       </p>
     </div>
   );

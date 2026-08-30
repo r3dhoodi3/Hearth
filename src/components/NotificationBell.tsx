@@ -295,14 +295,32 @@ export default function NotificationBell() {
   // a page that still scrolls under the finger, which reads as broken. Restores
   // whatever inline value was there before rather than assuming "" - another
   // component may own it while a chat keyboard is open.
+  //
+  // <html> AND <body>, not body alone: body's overflow only reaches the
+  // viewport by the propagation rule, and only while the root's own overflow is
+  // visible. A live check still saw the dashboard scrolling behind this sheet,
+  // so the root is locked directly rather than relying on that. overscroll
+  // -behavior on the root is the belt to that braces: anything that does manage
+  // to reach the page stops there instead of dragging it.
+  //
+  // Keyed on shouldRender, not open, so the lock outlasts the 120ms exit
+  // animation - releasing it while the sheet is still painted let the page jump
+  // underneath a visible sheet.
   useEffect(() => {
-    if (!isPhone || !open) return;
-    const previous = document.body.style.overflow;
+    if (!isPhone || !shouldRender) return;
+    const root = document.documentElement;
+    const previousBody = document.body.style.overflow;
+    const previousRoot = root.style.overflow;
+    const previousBounce = root.style.overscrollBehavior;
     document.body.style.overflow = "hidden";
+    root.style.overflow = "hidden";
+    root.style.overscrollBehavior = "contain";
     return () => {
-      document.body.style.overflow = previous;
+      document.body.style.overflow = previousBody;
+      root.style.overflow = previousRoot;
+      root.style.overscrollBehavior = previousBounce;
     };
-  }, [isPhone, open]);
+  }, [isPhone, shouldRender]);
 
   function togglePanel() {
     const next = !open;
@@ -524,7 +542,11 @@ export default function NotificationBell() {
               // viewport, so the page behind stays visible enough to keep
               // your place. flex-col + the list's flex-1 make the list the
               // part that scrolls, never the sheet.
-              className={`fixed inset-x-0 bottom-0 z-[60] flex max-h-[85dvh] flex-col overflow-hidden rounded-t-2xl border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-menu dark:border-white/10 dark:bg-stone-700 ${
+              // overscroll-contain here as well as on the list: the list
+              // already refuses to hand a flick to the page, but a flick that
+              // starts on the sheet's header (not a scroll container) used to
+              // chain straight out of this box.
+              className={`fixed inset-x-0 bottom-0 z-[60] flex max-h-[85dvh] flex-col overflow-hidden overscroll-contain rounded-t-2xl border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-menu dark:border-white/10 dark:bg-stone-700 ${
                 open
                   ? "motion-safe:animate-fade-slide-up"
                   : "motion-safe:animate-fade-slide-down"

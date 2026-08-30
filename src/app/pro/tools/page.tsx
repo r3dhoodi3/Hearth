@@ -169,6 +169,15 @@ export default async function ProToolsPage() {
           look it over and send it.
         </p>
       </div>
+      {/* Migration 0145 not on this database yet: proDraftsLeft is null for a
+          non-member, and the route will answer 503 "being switched on". Say it
+          here so nobody types a whole job description first (live check L3). */}
+      {!member && draftsLeft === null && (
+        <p className="rounded-lg bg-stone-50 p-3 text-sm text-stone-700 dark:bg-stone-800 dark:text-stone-300">
+          Drafting is being switched on for your account. Check back later today.
+        </p>
+      )}
+
       <ProToolsClient
         initialPastJobs={pastJobRows ?? []}
         categories={contractor.categories ?? []}

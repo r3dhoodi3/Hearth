@@ -222,7 +222,7 @@ export async function proDraftsLeft(
 export async function claimProDraft(
   contractorId: string,
   isMember: boolean
-): Promise<{ allowed: boolean; claimed: boolean }> {
+): Promise<{ allowed: boolean; claimed: boolean; notReady?: boolean }> {
   // Members never touch the counter.
   if (isMember) return { allowed: true, claimed: false };
 
@@ -249,7 +249,9 @@ export async function claimProDraft(
       // only ever costs a free pro their two drafts until the paste lands,
       // which is exactly the pre-0145 behaviour (members-only back office).
       warnMissingProMigrationOnce(err);
-      return { allowed: false, claimed: false };
+      // notReady lets the route say "being switched on" instead of the false
+      // "you've used your 2 free drafts" a brand-new pro saw on live (L3).
+      return { allowed: false, claimed: false, notReady: true };
     }
     console.error("claim_pro_free_taste failed - failing CLOSED:", err);
     return { allowed: false, claimed: false };

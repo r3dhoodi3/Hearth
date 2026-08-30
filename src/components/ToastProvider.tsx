@@ -291,11 +291,13 @@ export default function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      {/* Bottom-center. Below sm, raise the whole stack above the fixed mobile
+      {/* Bottom-center. Below lg, raise the whole stack above the fixed bottom
           tab bar (3.5rem) - do NOT reuse .fixed.bottom-4.right-4, that offset
-          belongs to the corner widgets. Wrapper ignores pointer events so the
-          empty gutters never block the page; each toast re-enables them. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 max-sm:bottom-[calc(3.5rem_+_env(safe-area-inset-bottom)_+_0.5rem)]">
+          belongs to the corner widgets. This was max-sm; the tab bar runs to
+          lg since 2026-08-30, so the lift follows it or a tablet toast lands
+          on the bar. Wrapper ignores pointer events so the empty gutters never
+          block the page; each toast re-enables them. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 max-lg:bottom-[calc(3.5rem_+_env(safe-area-inset-bottom)_+_0.5rem)]">
         <div className="flex w-full max-w-sm flex-col gap-2">
           {/* Two sibling live regions so screen readers announce reliably:
               polite for success/info/warning, assertive for errors. Both stay

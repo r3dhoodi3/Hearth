@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentContractor } from "@/lib/contractor";
+import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
 import { claimProDraft, refundProDraft } from "@/lib/freeAiTasteServer";
 import { PRO_TOOLS_PAYWALL } from "@/lib/freeAiTaste";
@@ -223,6 +223,16 @@ export async function POST(req: NextRequest) {
   const contractor = await getCurrentContractor();
   if (!contractor) {
     return NextResponse.json({ error: "Not a contractor" }, { status: 403 });
+  }
+  // Same "real business" lock as /api/pro-ask (red team RT3-2, 2026-08-30):
+  // the two free drafts are premium model calls, so a fake company must not
+  // get them either. Members pass (isEstablishedPro checks membership first).
+  if (!(await isEstablishedPro(contractor.id))) {
+    return NextResponse.json({
+      result: null,
+      reason: "locked",
+      error: "Drafting opens once your business is verified: add a California license number we can confirm, or place your first lead. Hearth Pro members get it right away.",
+    });
   }
   const isMember = await hasProPlan();
 
@@ -538,6 +548,20 @@ export async function POST(req: NextRequest) {
   // above, exactly as before. Refunded below if the model never produces a
   // document. See src/lib/freeAiTasteServer.ts.
   const taste = await claimProDraft(contractor.id, isMember);
+  if (!taste.allowed && taste.notReady) {
+    // Migration 0145 is not on this database yet. Say that, not "you've
+    // used your free drafts" (live check L3, 2026-08-30). 503 so the client
+    // shows the sentence as a plain error, not the paywall.
+    return NextResponse.json(
+      {
+        result: null,
+        reason: "not_ready",
+        error:
+          "Drafting is being switched on for your account. Try again later today.",
+      },
+      { status: 503 }
+    );
+  }
   if (!taste.allowed) {
     // The same 402 and the same sentence the component already renders before
     // the tap, so nobody meets a message the server would not have sent.

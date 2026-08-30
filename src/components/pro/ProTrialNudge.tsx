@@ -68,15 +68,17 @@ export default function ProTrialNudge({
   if (!eligible || !open) return null;
 
   return (
-    // Above the phone tab bar (3.5rem of content plus the safe-area inset, the
-    // same offset globals.css uses to lift the floating docks) with a further
-    // 1rem of clear air, so the bar stays tappable underneath. z-[35] sits
-    // above the bar (z-30) and below the header stacking context (z-40), the
-    // same slot AddToHomeScreenNudge uses. Centered and max-w-sm on desktop
-    // too: this is not a phone-only offer.
+    // Above the bottom tab bar (3.5rem of content plus the safe-area inset,
+    // the same offset globals.css uses to lift the floating docks) with a
+    // further 1rem of clear air, so the bar stays tappable underneath. z-[35]
+    // sits above the bar (z-30) and below the header stacking context (z-40),
+    // the same slot AddToHomeScreenNudge uses. Centered and max-w-sm on
+    // desktop too: this is not a phone-only offer. The flat bottom-6 is lg:,
+    // not sm:, because the tab bar runs to lg since 2026-08-30 - at sm this
+    // card would have sat on the bar on every tablet.
     <div
       data-testid="pro-trial-nudge"
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] z-[35] flex justify-center px-3 sm:bottom-6"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] z-[35] flex justify-center px-3 lg:bottom-6"
     >
       <div
         role="status"

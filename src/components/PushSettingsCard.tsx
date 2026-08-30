@@ -140,11 +140,29 @@ export default function PushSettingsCard({ side }: { side: PushSide }) {
     else setNote("Could not turn notifications off. Please try again.");
   }
 
+  const copy = COPY[side];
+
+  // Before the VAPID keys are on the server, the button could only end in a
+  // 503. Say so up front instead of promising notifications and failing on
+  // the tap (live check L3, 2026-08-30). NEXT_PUBLIC_* is inlined at build
+  // time, so this is a plain constant in the bundle.
+  if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+    return (
+      <div className="card p-6" data-testid="push-settings-card">
+        <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+          {copy.title}
+        </p>
+        <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
+          Notifications are not switched on yet. Check back soon.
+        </p>
+      </div>
+    );
+  }
+
   // Nothing useful to say on a browser that cannot do this at all, and an
   // explanation nobody can act on is worse than silence.
   if (state === "unsupported") return null;
 
-  const copy = COPY[side];
 
   return (
     <div className="card p-6" data-testid="push-settings-card">

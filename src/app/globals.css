@@ -17,7 +17,7 @@ body {
   @apply bg-hearth-50 text-stone-800 antialiased leading-[1.55] dark:bg-stone-900 dark:text-stone-200;
 }
 
-/* Below sm, both the homeowner and pro shells (Nav.tsx / ProNav.tsx, mirrored)
+/* Below lg, both the homeowner and pro shells (Nav.tsx / ProNav.tsx, mirrored)
    add a fixed bottom tab bar for primary navigation. A few floating
    bottom-right widgets - the new message toast (NewMessageNotifier.tsx) and
    the lead chat dock (ChatDock.tsx); the Ask Hearth dock was removed on
@@ -26,8 +26,13 @@ body {
    the exact Tailwind class combination each widget's outer wrapper uses
    (fixed + bottom-4 + right-4 + z-40/z-50), which no other fixed element in
    the app shares, so this can't be more surgical without editing those
-   component files directly. */
-@media (max-width: 639px) {
+   component files directly.
+
+   This was 639px, matching the old sm-gated tab bar. The bar moved to lg on
+   2026-08-30 (the top strip painted over the wordmark between 640 and 1023px),
+   so this breakpoint moved with it or tablets would have had the toast landing
+   on the bar. */
+@media (max-width: 1023.98px) {
   .fixed.bottom-4.right-4.z-40,
   .fixed.bottom-4.right-4.z-50 {
     /* Tab bar content is 3rem tall (min-h-[48px]) plus its own
@@ -55,7 +60,16 @@ body {
 
    Selectors are `body .hearth-chat-frame` so they outrank the Tailwind
    utilities on the same element (rounded-xl, border, p-3, h-[...]) without
-   editing the four pages' desktop classes, which stay exactly as they were. */
+   editing the four pages' desktop classes, which stay exactly as they were.
+
+   THIS BLOCK STAYS AT 639.98px even though the tab bar moved to lg on
+   2026-08-30. It is not a tab-bar offset: it is the iOS software-keyboard
+   workaround, and it is bound to PHONE_MEDIA_QUERY in useVisualViewport.ts
+   (same 639.98px), which also decides whether the composer is a textarea or an
+   input. Both halves have to name the same set of screens. Tablets keep the
+   ordinary in-flow chat box and clear the tab bar through the pb-24 the two
+   layouts' <main> now reserves all the way to lg. The --hearth-chat-bottom
+   term below is still the measured tab bar, which does exist on a phone. */
 @media (max-width: 639.98px) {
   body .hearth-chat-frame {
     position: fixed;

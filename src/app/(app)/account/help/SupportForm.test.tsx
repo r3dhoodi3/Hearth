@@ -43,3 +43,21 @@ describe("SupportForm sent state", () => {
     expect(secondary).toHaveAttribute("href", "/account/help");
   });
 });
+
+describe("SupportForm honeypot", () => {
+  // The public /contact form has shipped an off-screen "company_website" field
+  // for a while; this one, behind auth, had none. Same table, same readers, so
+  // it gets the same defense (see src/components/Honeypot.tsx).
+  it("renders an empty, untabbable company_website field", () => {
+    const { container } = render(
+      <SupportForm name="Alex" email="alex@example.com" phone="555" />
+    );
+    const pot = container.querySelector<HTMLInputElement>(
+      'input[name="company_website"]'
+    );
+    expect(pot).toBeInTheDocument();
+    // A prefill must never put a value in it, or every real send trips it.
+    expect(pot).toHaveValue("");
+    expect(pot).toHaveAttribute("tabindex", "-1");
+  });
+});

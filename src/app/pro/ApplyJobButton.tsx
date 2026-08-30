@@ -154,6 +154,11 @@ export default function ApplyJobButton({
       const data = await resp.json().catch(() => ({}));
       if (data?.message) {
         setMessage(data.message as string);
+      } else if (data?.reason === "locked") {
+        // The business is not verified yet; copy comes from the server.
+        setDraftError(
+          data?.error || "Drafting opens once your business is verified."
+        );
       } else if (data?.reason === "rate_limited") {
         setDraftError(
           "You've hit today's drafting limit. It resets at midnight."

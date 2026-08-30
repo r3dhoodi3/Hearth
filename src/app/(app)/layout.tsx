@@ -89,9 +89,12 @@ export default async function AppLayout({
         hasPlus={plus}
         hasPro={contractor !== null}
       />
-      {/* Extra bottom padding on phones keeps content clear of the fixed
-          bottom tab bar. */}
-      <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 sm:pb-8">
+      {/* Extra bottom padding below lg keeps content clear of the fixed bottom
+          tab bar. It was sm:pb-8; the tab bar now runs to lg (Nav.tsx: the top
+          strip collided with the wordmark between 640 and 1023px), so the
+          padding has to reach the same width or tablets get content under the
+          bar. Desktop at lg and up keeps exactly today's pb-8. */}
+      <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 lg:pb-8">
         {children}
       </main>
       {/* The floating Ask Hearth dock used to mount here, on every signed-in

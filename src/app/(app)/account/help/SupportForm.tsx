@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
+import Honeypot from "@/components/Honeypot";
 import { saveSupportMessageAction } from "./actions";
 
 // The in-app contact form. Name, email, and phone are prefilled from the
@@ -53,6 +54,14 @@ export default function SupportForm({
       <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
         Send us a message and we will get back to you.
       </p>
+
+      {/* The same honeypot the public /contact form has had. This form is
+          behind a session, so auth and the per-user rate limit are the real
+          defense - but it writes to the same support_messages table that the
+          same people read, and a scripted POST from a signed-in session hits
+          exactly this endpoint. One form in the app defended differently from
+          another is how the difference gets forgotten. */}
+      <Honeypot />
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SubmitButton from "@/components/SubmitButton";
+import Honeypot from "@/components/Honeypot";
 import { sendContactMessageAction } from "./actions";
 
 // Public contact form: no login required, so it needs its own spam defenses
@@ -57,30 +58,11 @@ export default function ContactForm({
         </>
       )}
 
-      {/* Honeypot. A real visitor never sees or reaches this field: it sits
-          off-screen (not display:none - some bots specifically skip
-          display:none fields to evade that trick) and is skipped by keyboard
-          tabbing. A script that fills every input in the form fills this one
-          too. See ./actions.ts for what happens when it's non-empty. */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          left: "-9999px",
-          width: 1,
-          height: 1,
-          overflow: "hidden",
-        }}
-      >
-        <label htmlFor="company_website">Leave this field blank</label>
-        <input
-          type="text"
-          id="company_website"
-          name="company_website"
-          tabIndex={-1}
-          autoComplete="off"
-        />
-      </div>
+      {/* Honeypot. Lifted into src/components/Honeypot.tsx when the two in-app
+          help forms got the same field, so the name and the markup cannot
+          drift between the three forms that write to support_messages. See
+          ./actions.ts for what happens when it comes back non-empty. */}
+      <Honeypot />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>

@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cappedField, FIELD_MAX } from "@/lib/formFields";
+import { cappedField, honeypotTripped, FIELD_MAX } from "@/lib/formFields";
 import { err, type ActionResult } from "@/lib/actionResult";
 import { trackServerEvent } from "@/lib/trackServer";
 
@@ -29,12 +29,19 @@ const THANKS_PATH = "/contact/thanks";
 export async function sendContactMessageAction(
   formData: FormData
 ): Promise<ActionResult> {
-  // Honeypot: see ContactForm.tsx for how "company_website" is hidden from a
-  // real visitor. A bot that fills every field in the form fills this one
-  // too. Pretend success and store nothing - same redirect as the real
-  // success path below - so it gets no signal to adapt on.
-  const honeypot = ((formData.get("company_website") as string) || "").trim();
-  if (honeypot) {
+  // A hand-crafted POST to the action endpoint arrives without a FormData
+  // body; reading it threw a TypeError and a 500 (live log, 2026-08-30).
+  // Refuse it quietly instead: nothing to store, nothing to learn from.
+  if (!(formData instanceof FormData)) {
+    return { ok: false, error: "Bad request." } as ActionResult;
+  }
+  // Honeypot: see src/components/Honeypot.tsx for how "company_website" is
+  // hidden from a real visitor. A bot that fills every field in the form fills
+  // this one too. Pretend success and store nothing - same redirect as the real
+  // success path below - so it gets no signal to adapt on. The read moved to
+  // the shared helper when the two in-app help forms got the same field, so
+  // all three actions test the same name the same way.
+  if (honeypotTripped(formData)) {
     redirect(THANKS_PATH);
   }
 

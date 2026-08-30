@@ -5,6 +5,8 @@ import {
   cappedField,
   cappedFieldOrNull,
   FIELD_MAX,
+  HONEYPOT_FIELD,
+  honeypotTripped,
   isAllowedValue,
 } from "@/lib/formFields";
 import {
@@ -162,5 +164,33 @@ describe("isAllowedValue", () => {
 describe("FIELD_MAX", () => {
   it("keeps email at the longest address the standard allows", () => {
     expect(FIELD_MAX.email).toBe(254);
+  });
+});
+
+describe("honeypotTripped", () => {
+  function pot(value?: string): FormData {
+    const f = new FormData();
+    if (value !== undefined) f.set(HONEYPOT_FIELD, value);
+    return f;
+  }
+
+  it("is quiet for a real sender: missing, empty, or whitespace-only", () => {
+    // A browser submits the field as "" on every genuine send, and some
+    // password managers drop a space in. Neither may be treated as a bot, or
+    // every real message is silently binned.
+    expect(honeypotTripped(pot())).toBe(false);
+    expect(honeypotTripped(pot(""))).toBe(false);
+    expect(honeypotTripped(pot("   "))).toBe(false);
+  });
+
+  it("trips on anything a script actually typed", () => {
+    expect(honeypotTripped(pot("https://spam.example"))).toBe(true);
+    expect(honeypotTripped(pot(" x "))).toBe(true);
+  });
+
+  it("names the same field the three forms render", () => {
+    // src/components/Honeypot.tsx renders this name; /contact,
+    // /account/help and /pro/help all read it through this helper.
+    expect(HONEYPOT_FIELD).toBe("company_website");
   });
 });

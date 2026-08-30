@@ -47,10 +47,15 @@ export default function ProNav({
     },
   ];
 
-  // Phone bottom bar: the same five destinations, re-ordered so HOME SITS IN
-  // THE CENTRE, which is where a thumb rests and where every phone app people
-  // already use puts it. Leads and Messages (the two working screens) flank it
-  // on the left, Clients and Business on the right.
+  // Phone AND TABLET bottom bar: the same five destinations, re-ordered so
+  // HOME SITS IN THE CENTRE, which is where a thumb rests and where every
+  // phone app people already use puts it. Leads and Messages (the two working
+  // screens) flank it on the left, Clients and Business on the right.
+  //
+  // THE SHELL BREAKPOINT IS `lg`, NOT `sm` (changed 2026-08-30), mirroring
+  // Nav.tsx: the top strip switched on at 640px but only fitted from about
+  // 1024px, so between those widths the pills painted over the wordmark.
+  // Desktop at 1024px and up is unchanged; tablets get this bar.
   //
   // Five tabs at 390px: NavLinks gives each a flex-1 column, so about 78px
   // each, with 12px labels. The longest label here is "Messages" at 8
@@ -93,7 +98,10 @@ export default function ProNav({
                   Clients / My Business" plus the Business pill already fill
                   the row, so "for Pros" was getting squeezed by its shrinkable
                   flex parent and wrapping under "Hearth" (measured two lines,
-                  reading as overlapping letters). Only lg+ has the slack. */}
+                  reading as overlapping letters). The strip itself is lg-only
+                  now, so the room is there below lg - but lg is also exactly
+                  where this suffix started fitting, so it stays put and both
+                  halves of the header switch on the same line. */}
               <span className="hidden font-normal text-stone-500 lg:inline dark:text-stone-400">
                 for Pros
               </span>
@@ -107,10 +115,12 @@ export default function ProNav({
           {hasHome && <SidePill label="Business" accent="hearth" className="hidden sm:inline-block" />}
         </div>
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-          {/* Primary destinations. Desktop/tablet (sm and up) keep this exact
-              top strip, unchanged. Below sm it is hidden and the same links
-              render as the fixed bottom tab bar further down. */}
-          <nav className="-mx-1 hidden items-center gap-1 overflow-x-auto px-1 sm:flex">
+          {/* Primary destinations. Desktop (lg and up) keeps this exact top
+              strip, unchanged. Below lg it is hidden and the same links render
+              as the fixed bottom tab bar further down. It was `sm:flex`: at
+              640-1023px five pills plus the wordmark did not fit one row and
+              the strip was painted over the brand. */}
+          <nav className="-mx-1 hidden items-center gap-1 overflow-x-auto px-1 lg:flex">
             <NavLinks links={LINKS} accent="hearth" />
           </nav>
           <NotificationBell />
@@ -160,14 +170,14 @@ export default function ProNav({
         </div>
       )}
     </header>
-    {/* Phone-only bottom tab bar, mirroring the homeowner Nav (see
+    {/* Phone and tablet bottom tab bar, mirroring the homeowner Nav (see
         Nav.tsx for the full rationale). Kept to <=48px tall so it fits
-        inside the pb-24 bottom padding pro/layout.tsx's <main> already
-        reserves below sm; globals.css nudges the toast notifier above this
-        bar on the same breakpoint. */}
+        inside the pb-24 bottom padding pro/layout.tsx's <main> reserves
+        below lg; globals.css nudges the toast notifier and the floating
+        docks above this bar on the same lg breakpoint. */}
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-hearth-50 pb-[env(safe-area-inset-bottom)] sm:hidden dark:border-white/10 dark:bg-stone-900"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-hearth-50 pb-[env(safe-area-inset-bottom)] lg:hidden dark:border-white/10 dark:bg-stone-900"
     >
       <NavLinks links={BOTTOM_LINKS} variant="bottom" accent="hearth" />
     </nav>

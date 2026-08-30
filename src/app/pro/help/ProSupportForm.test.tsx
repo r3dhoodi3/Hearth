@@ -42,3 +42,19 @@ describe("ProSupportForm sent state", () => {
     expect(secondary).toHaveAttribute("href", "/pro/help");
   });
 });
+
+describe("ProSupportForm honeypot", () => {
+  // Mirrors the homeowner help form and the public contact form: one hidden
+  // field name across every form that writes to support_messages.
+  it("renders an empty, untabbable company_website field", () => {
+    const { container } = render(
+      <ProSupportForm member name="Sam" email="sam@example.com" phone="555" />
+    );
+    const pot = container.querySelector<HTMLInputElement>(
+      'input[name="company_website"]'
+    );
+    expect(pot).toBeInTheDocument();
+    expect(pot).toHaveValue("");
+    expect(pot).toHaveAttribute("tabindex", "-1");
+  });
+});

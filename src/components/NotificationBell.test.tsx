@@ -97,6 +97,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   document.body.style.overflow = "";
+  document.documentElement.style.overflow = "";
+  document.documentElement.style.overscrollBehavior = "";
 });
 
 describe("NotificationBell realtime", () => {
@@ -225,6 +227,48 @@ describe("NotificationBell on a phone", () => {
     });
     await settleClose();
     expect(document.body.style.overflow).toBe("");
+  });
+
+  // A live check still found the dashboard scrolling behind the open sheet.
+  // body alone only reaches the viewport through the overflow-propagation rule,
+  // so the root element is locked directly too, with overscroll-behavior as the
+  // backstop for anything that still reaches the page.
+  it("locks the root element, not just the body, and restores both", async () => {
+    document.documentElement.style.overflow = "auto";
+    await openPanel();
+    expect(document.documentElement.style.overflow).toBe("hidden");
+    expect(document.documentElement.style.overscrollBehavior).toBe("contain");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Close notifications" }));
+    });
+    await settleClose();
+    // Restored to whatever was there before, never blanked: something else may
+    // own it (the chat keyboard panel sets its own).
+    expect(document.documentElement.style.overflow).toBe("auto");
+    expect(document.documentElement.style.overscrollBehavior).toBe("");
+  });
+
+  it("keeps the lock through the sheet's exit animation", async () => {
+    await openPanel();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Close notifications" }));
+    });
+    // Still painted (the exit animation has not finished), so the page must
+    // still be held: releasing here let it jump under a visible sheet.
+    expect(screen.getByTestId("notification-sheet")).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe("hidden");
+    await settleClose();
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  it("stops a flick on the sheet itself from reaching the page", async () => {
+    await openPanel();
+    const sheet = screen.getByTestId("notification-sheet");
+    // The list has had overscroll-contain for a while; the sheet box around it
+    // (the header lives there, and it is not a scroll container) did not.
+    expect(sheet.querySelector('[role="dialog"]')?.className).toContain(
+      "overscroll-contain"
+    );
   });
 
   // Tap targets the eyesight pass flagged: the X, the rows, and "Mark all

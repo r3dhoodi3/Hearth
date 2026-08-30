@@ -484,10 +484,12 @@ export default function ReviewPrompt() {
         : "Did you get a chance to rate Hearth?";
 
   return (
-    // Sits above the mobile bottom tab bar (Nav.tsx: 3rem tall, plus the
-    // notch inset) by 12px; on sm+ there is no tab bar, so it drops to a flat
-    // bottom-4.
-    <div className="fixed inset-x-4 bottom-[calc(3rem+12px+env(safe-area-inset-bottom))] z-40 sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-96 print:hidden">
+    // Sits above the bottom tab bar (Nav.tsx: 3rem tall, plus the notch inset)
+    // by 12px. The bar exists below lg, not below sm, since 2026-08-30, so the
+    // flat bottom-4 is lg:, not sm: - at sm it would have dropped the card
+    // straight onto the tab bar on a tablet. The card's shape (right-aligned,
+    // w-96) still changes at sm, which is only about width and is unaffected.
+    <div className="fixed inset-x-4 bottom-[calc(3rem+12px+env(safe-area-inset-bottom))] z-40 sm:inset-x-auto sm:right-4 sm:w-96 lg:bottom-4 print:hidden">
       <div className="card w-full p-4 shadow-pop">
         <div className="flex items-start justify-between gap-3">
           <p className="text-base font-semibold text-stone-900 dark:text-stone-100">

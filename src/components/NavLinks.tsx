@@ -56,9 +56,10 @@ type NavLink = {
 };
 
 // Highlights whichever link matches the current route. Two renderings share
-// the same active-route logic and data: "top" is the existing horizontal
-// strip used in the header on tablet/desktop; "bottom" is a native-app-style
-// tab (icon over short label) for the mobile fixed tab bar.
+// the same active-route logic and data: "top" is the horizontal strip in the
+// header on DESKTOP ONLY (lg and up - below that it collided with the
+// wordmark, see Nav.tsx); "bottom" is a native-app-style tab (icon over short
+// label) for the fixed tab bar phones and tablets get instead.
 export default function NavLinks({
   links,
   variant = "top",

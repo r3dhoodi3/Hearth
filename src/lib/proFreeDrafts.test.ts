@@ -88,6 +88,7 @@ describe("claimProDraft", () => {
     expect(await claimProDraft("c1", false)).toEqual({
       allowed: false,
       claimed: false,
+      notReady: true,
     });
   });
 

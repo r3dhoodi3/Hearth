@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentContractor } from "@/lib/contractor";
+import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
 import { hasPlus, hasProPlan } from "@/lib/subscription";
 import { countAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
@@ -48,6 +48,17 @@ export async function POST(req: NextRequest) {
   const contractor = await getCurrentContractor();
   if (!contractor) {
     return NextResponse.json({ error: "Not a contractor" }, { status: 403 });
+  }
+  // Same "real business" lock as /api/pro-ask (red team RT3-1, 2026-08-30):
+  // this route also spends a paid model call, and without the lock a fake
+  // company reached the model here while the copilot refused it. No model
+  // call, nothing counted, for a locked request.
+  if (!(await isEstablishedPro(contractor.id))) {
+    return NextResponse.json({
+      message: null,
+      reason: "locked",
+      error: "Drafting opens once your business is verified: add a California license number we can confirm, or place your first lead. Hearth Pro members get it right away.",
+    });
   }
 
   // BURST PRE-CHECK, in front of the body read. The authoritative burst check

@@ -74,6 +74,8 @@ export type EnvGuardProblem = {
 
 // The whole rule, as a pure function over an environment. Exported so the tests
 // can hand it an object instead of mutating process.env.
+let warnedTestStripe = false;
+
 export function findEnvSeparationProblems(
   env: NodeJS.ProcessEnv
 ): EnvGuardProblem[] {
@@ -102,7 +104,16 @@ export function findEnvSeparationProblems(
   // finding becomes fatal. The staging-database check above always throws.
   const stripeKey = env.STRIPE_SECRET_KEY?.trim();
   const requireLiveStripe = env.REQUIRE_LIVE_STRIPE === "1";
-  if (stripeKey && stripeKey.startsWith("sk_test_") && !requireLiveStripe) {
+  if (
+    stripeKey &&
+    stripeKey.startsWith("sk_test_") &&
+    !requireLiveStripe &&
+    !warnedTestStripe
+  ) {
+    // Once per process: this ran on every request on live (the pure function
+    // is re-evaluated by callers that do not go through the memo), and a
+    // line per request buries the real errors in the Vercel log.
+    warnedTestStripe = true;
     console.error(
       "[ALERT] env separation: production is running Stripe in TEST mode " +
         "(sk_test_...). Payments are not real. Set the live key, then " +

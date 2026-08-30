@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
+import Honeypot from "@/components/Honeypot";
 import { sendProSupportMessageAction } from "./actions";
 
 // The in-app contact form for pros. Name, email and phone are prefilled from
@@ -63,6 +64,11 @@ export default function ProSupportForm({
         prefilled from your company profile, change them if you would rather we
         replied somewhere else.
       </p>
+
+      {/* Same honeypot as the public /contact form and the homeowner help
+          form: this writes to the same support_messages table, so it gets the
+          same defense rather than being the one form that skips it. */}
+      <Honeypot />
 
       {member && (
         <p className="mt-3 inline-block rounded-full border border-hearth-200 bg-hearth-50 px-3 py-1 text-xs font-medium text-hearth-800 dark:border-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200">

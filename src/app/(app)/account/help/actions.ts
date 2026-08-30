@@ -3,7 +3,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
+import {
+  cappedField,
+  cappedFieldOrNull,
+  honeypotTripped,
+  FIELD_MAX,
+} from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
 
 const HELP_PATH = "/account/help";
@@ -18,6 +23,18 @@ const HELP_PATH = "/account/help";
 // redirect is how the rest of the account actions surface their result, so
 // this matches them.
 export async function saveSupportMessageAction(formData: FormData) {
+  // Honeypot, matching the public contact form (src/app/contact/actions.ts):
+  // SupportForm.tsx renders an off-screen "company_website" input no person can
+  // see or tab to, so anything in it came from a script that filled every
+  // field. Pretend the send worked - the exact flash and redirect the success
+  // path below uses - and store nothing, so the script gets no signal to adapt
+  // on. First statement in the action: no session lookup, no rate-limit slot
+  // burned, nothing touched.
+  if (honeypotTripped(formData)) {
+    setFlash("Thanks. We got your message and will get back to you.", "success");
+    redirect(`${HELP_PATH}?sent=1`);
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

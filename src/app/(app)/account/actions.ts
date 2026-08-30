@@ -328,6 +328,17 @@ export async function updatePasswordAction(formData: FormData) {
     redirect("/account/security");
   }
 
+  // A new password ends every OTHER session (red team RT1-1, 2026-08-30):
+  // someone holding a borrowed or stolen live session must not survive the
+  // owner changing their password. Scope "others" keeps this device signed
+  // in. Best effort: the password is already changed if this call fails.
+  try {
+    await supabase.auth.signOut({ scope: "others" });
+  } catch {
+    // Nothing to do; the next refresh on those devices will still work only
+    // until the owner uses "Sign out other devices", which stays available.
+  }
+
   setFlash("Password updated.");
   redirect("/account/security");
 }

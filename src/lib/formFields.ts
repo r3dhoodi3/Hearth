@@ -21,6 +21,20 @@ export const FIELD_MAX = {
   message: 5000,
 } as const;
 
+// The honeypot field name, shared by the three forms that write to
+// support_messages and the three actions behind them. It lives here, not in
+// the component, so a server action can read it without importing JSX; see
+// src/components/Honeypot.tsx for the markup and why it is not display:none.
+export const HONEYPOT_FIELD = "company_website";
+
+// True when a bot filled the invisible field. The caller's job is then to
+// PRETEND THE SEND WORKED - same redirect, same flash, nothing stored - so the
+// script gets no signal that it was caught.
+export function honeypotTripped(formData: FormData): boolean {
+  const v = formData.get(HONEYPOT_FIELD);
+  return typeof v === "string" && v.trim().length > 0;
+}
+
 // Trim, then slice. Quietly truncates rather than erroring: a paste-happy
 // person should never lose the rest of their form over one long field. Always
 // returns a string, so a missing field reads as "" the way `(get() as string)

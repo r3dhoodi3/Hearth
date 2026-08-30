@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getUserProfile } from "@/lib/user";
 import { getPasswordStatus, getVerifiedUser, providerLabel } from "@/lib/auth";
 import AccountSecurityPanel from "@/components/AccountSecurityPanel";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import AccountTabs from "../AccountTabs";
 import {
   updateEmailAction,
@@ -40,6 +41,18 @@ export default async function AccountSecurityPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      {/* This was the one account page with no trail: every sibling
+          (/account, /account/help, /account/privacy, /account/household,
+          /account/blocks, /account/notifications) renders one, and this page
+          jumped straight to the tab strip. Same shape and placement as
+          /account/notifications - above the tabs, current page unlinked. */}
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/dashboard" },
+          { label: "Account", href: "/account" },
+          { label: "Account security" },
+        ]}
+      />
       <AccountTabs active="security" />
       <AccountSecurityPanel
         email={email}
