@@ -1,3 +1,21 @@
+"use client";
+
+// STREAMING FIX, not a behaviour change - same treatment as
+// src/app/pro/chats/ChatsView.tsx and src/app/pro/leads/LeadsBoard.tsx, and
+// for the same reason (scratchpad/debug-DBG3.md): React Flight defers any
+// element it meets once the row it is serializing has passed a 3200-byte
+// budget, and each deferral becomes an out-of-order SSR segment - a
+// <template id="P:n"> hole plus a late $RS(...) script - which is the shape
+// that accompanies the React #418 hydration failure on the pro pages. As one
+// client module this card is a single client reference with plain-data props
+// wherever it is rendered: the Leads board (inside LeadsBoard) and the two-card
+// preview on the pro Home tab.
+//
+// Nothing here became newly interactive. The only thing that had to move out
+// is the posted-ago line: it reads the clock, so recomputing it during
+// hydration could disagree with what SSR printed. Both call sites resolve it
+// on the server and pass it in.
+
 import {
   labelFor,
   JOB_CATEGORIES,
@@ -10,7 +28,6 @@ import {
   SEVERITY_STYLE,
   money,
   feeGlanceLabel,
-  postedAgo,
   qualityChips,
   scopeChips,
   introFeeFor,
@@ -27,6 +44,7 @@ export default function DirectRequestCard({
   d,
   balance,
   hasPaidMajor,
+  postedAgoLabel,
 }: {
   // The row my_direct_requests hands back: masked, contact-free fields plus a
   // live-priced fee. Untyped for the same reason the board is - the RPC's
@@ -37,6 +55,9 @@ export default function DirectRequestCard({
   // Has this pro ever paid for a big-ticket lead? Decides whether the one-time
   // intro price applies. Computed once per page from my_applications.
   hasPaidMajor: boolean;
+  // postedAgo(d.created_at), resolved on the server. Null when there is no
+  // usable created_at, exactly as the helper returns.
+  postedAgoLabel: string | null;
 }) {
   const normalFee = Number(d.fee_cents ?? 0) / 100;
   const introFee = introFeeFor(d.category, normalFee, hasPaidMajor);
@@ -107,11 +128,11 @@ export default function DirectRequestCard({
           )}
         </div>
       )}
-      {(postedAgo(d.created_at) || d.timing) && (
+      {(postedAgoLabel || d.timing) && (
         <div className="flex flex-wrap gap-4 text-xs text-stone-500 dark:text-stone-400">
-          {postedAgo(d.created_at) && (
+          {postedAgoLabel && (
             <span className="text-xs text-stone-500 dark:text-stone-400">
-              {postedAgo(d.created_at)}
+              {postedAgoLabel}
             </span>
           )}
           {d.timing && <span>Timing: {labelFor(TIMING_OPTIONS, d.timing)}</span>}

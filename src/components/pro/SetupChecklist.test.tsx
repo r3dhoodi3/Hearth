@@ -5,6 +5,8 @@ import "@testing-library/jest-dom/vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { nestedStreamHoles } from "@/lib/streamHoles";
+
 import SetupChecklist, { type SetupItem } from "./SetupChecklist";
 
 afterEach(() => {
@@ -110,49 +112,12 @@ describe("SetupChecklist stays a client component", () => {
   });
 });
 
-// The shape check DBG2 asked for, as a reusable function so it can be proved
-// to discriminate (below) and then pointed at a real server (below that).
-//
-// React streams out-of-order content as a hidden `<div id="S:n">` payload plus
-// a `<template id="P:n">` hole to drop it into, and a `<script>$RS(...)</script>`
-// that does the move. A healthy page has exactly one hole and it sits as a
-// DIRECT child of that hidden div. A hole nested deeper - inside a <ul>, a
-// <span>, a <section> - means Flight chopped the middle of the page into extra
-// rows, which is the shape /pro and /pro/leads had and the clean pro pages did
-// not.
-export function nestedStreamHoles(html: string): string[] {
-  const VOID = new Set(
-    "area base br col embed hr img input link meta param source track wbr".split(" ")
-  );
-  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g;
-  const stack: { tag: string; attrs: string }[] = [];
-  const nested: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = tagRe.exec(html))) {
-    const closing = m[1] === "/";
-    const tag = m[2].toLowerCase();
-    const attrs = m[3];
-    const selfClosing = m[4] === "/";
-    if (!closing && tag === "template") {
-      const id = (attrs.match(/id="([^"]*)"/) ?? [])[1] ?? "";
-      const parent = stack[stack.length - 1];
-      if (id.startsWith("P:") && !(parent && /id="S:[0-9a-f]+"/.test(parent.attrs))) {
-        nested.push(id);
-      }
-    }
-    if (closing) {
-      for (let i = stack.length - 1; i >= 0; i--) {
-        if (stack[i].tag === tag) {
-          stack.length = i;
-          break;
-        }
-      }
-    } else if (!selfClosing && !VOID.has(tag)) {
-      stack.push({ tag, attrs });
-    }
-  }
-  return nested;
-}
+// The shape check DBG2 asked for. The implementation moved to
+// src/lib/streamHoles.ts so /pro/chats' own regression test can reuse it
+// without importing this file (which would re-run every suite above); it is
+// re-exported here because that is where it was first published and where the
+// two fixtures below prove it discriminates.
+export { nestedStreamHoles } from "@/lib/streamHoles";
 
 describe("nestedStreamHoles", () => {
   it("accepts the healthy shape: one hole, direct child of the hidden payload", () => {

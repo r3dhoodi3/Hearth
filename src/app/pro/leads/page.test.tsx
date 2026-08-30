@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 
+import { nestedStreamHoles, deferredRowRefs } from "@/lib/streamHoles";
+
 // page.tsx pulls in the service-role Supabase client at module scope (via
 // getCurrentContractor -> createAdminClient), which imports "server-only"
 // and throws the moment it's imported outside a real server component
@@ -12,6 +14,10 @@ function src(rel: string): string {
 }
 
 const page = src("./page.tsx");
+// Every card list moved into this client component on 2026-08-30 for streaming
+// reasons (see the last describe in this file), so the markup assertions read
+// it now. page.tsx still owns the data, the fee maths and the sort.
+const board = src("./LeadsBoard.tsx");
 
 // The "Asked for you" card moved OUT of this page on 2026-08-29: the Home tab
 // shows a two-item preview of the same thing, so the card became a component
@@ -19,21 +25,27 @@ const page = src("./page.tsx");
 // read that file whole; nothing about the markup changed.
 const directRequestCard = src("../DirectRequestCard.tsx");
 
-// Slices out the open-job card's per-item block (from its first new local
-// const down through its returned <li>) so an assertion can be scoped to just
-// that card instead of matching anywhere in this 1200+ line file.
-function sliceFrom(marker: string, length: number): string {
-  const start = page.indexOf(marker);
+// Slices out the open-job card's per-item block (the whole map callback) so an
+// assertion can be scoped to just that card rather than matching anywhere in
+// the file.
+function sliceBetween(text: string, from: string, to: string): string {
+  const start = text.indexOf(from);
   expect(start).toBeGreaterThan(-1);
-  return page.slice(start, start + length);
+  const end = text.indexOf(to, start);
+  expect(end).toBeGreaterThan(start);
+  return text.slice(start, end);
 }
 
-const openJobCard = sliceFrom(
-  "const feeGlance = feeGlanceLabel(fee, feeStr);\n" +
-    "              const glanceLine2 = [\n" +
-    "                j.timing",
-  12500
+const openJobCard = sliceBetween(
+  board,
+  "{openJobs.map((j) => {",
+  "{/* ---- Active jobs"
 );
+
+// The page module's own top-level JSX return, used to bound the view-model
+// slice below. Anchored on the newline and the two-space indent so a nested
+// `return (data ?? [])` inside one of the query closures cannot match it.
+const RETURN_MARKER = ["", "  return (", ""].join("\n");
 
 describe("pro lead card phone density (0128)", () => {
   it("folds the direct-request card's detail behind a collapsed-by-default <details>", () => {
@@ -66,11 +78,14 @@ describe("pro lead card phone density (0128)", () => {
       expect(varStart).toBeGreaterThan(-1);
       expect(varEnd).toBeGreaterThan(varStart);
       const detailsVar = card.slice(varStart, varEnd);
-      expect(detailsVar).toContain("issue_description");
+      // The open-job card reads a resolved view model now, so the field names
+      // differ in case; both still render the same four things plus the
+      // posted-ago line, which is computed on the server and passed in.
+      expect(detailsVar).toMatch(/issue_description|j\.description/);
       expect(detailsVar).toContain("JobPhotoStrip");
-      expect(detailsVar).toContain("chips.map");
-      expect(detailsVar).toContain("scope.map");
-      expect(detailsVar).toContain("postedAgo(");
+      expect(detailsVar).toMatch(/chips\.map|j\.chips\.map/);
+      expect(detailsVar).toMatch(/scope\.map|j\.scope\.map/);
+      expect(detailsVar).toContain("postedAgoLabel");
     }
   });
 
@@ -95,7 +110,10 @@ describe("pro lead card phone density (0128)", () => {
     expect(page).toContain("walletQueryPlan(");
     expect(page).toContain('sort === "fee"');
     expect(page).toContain('sort === "deal"');
-    expect(page).toContain("canAfford={balance >= fee}");
+    // Still the same comparison, resolved on the server and handed to the
+    // Apply button as a boolean.
+    expect(page).toContain("canAfford: balance >= fee");
+    expect(openJobCard).toContain("canAfford={j.canAfford}");
   });
 
   it("keeps the desktop header (sm and up) rendering the original category/severity/fee row unchanged", () => {
@@ -121,9 +139,11 @@ describe("pro lead card phone density (0128)", () => {
     expect(helpers).toContain('return "New lead";');
     for (const card of [directRequestCard, openJobCard]) {
       expect(card).toContain('<div className="sm:hidden">');
-      expect(card).toContain("{feeGlance}");
+      expect(card).toMatch(/\{feeGlance\}|\{j\.feeGlance\}/);
       expect(card).toContain("glanceLine2");
     }
+    // The glance line itself is still built the same way, now on the server.
+    expect(page).toContain("feeGlance: feeGlanceLabel(fee, feeStr),");
   });
 });
 
@@ -132,9 +152,9 @@ describe("pro lead card phone density (0128)", () => {
 // finding work is the Home tab's primary quick action now (asserted in
 // src/app/pro/page.test.tsx).
 describe("pro leads: heading row", () => {
-  it("keeps the h1 as 'Your leads' with the open-jobs anchor on this page", () => {
+  it("keeps the h1 as 'Your leads' with the open-jobs anchor on this route", () => {
     expect(page).toContain(">Your leads</h1>");
-    expect(page).toContain('<section id="open-jobs"');
+    expect(board).toContain('<section id="open-jobs"');
   });
 
   it("no longer offers a 'See open jobs' button that links to itself", () => {
@@ -148,9 +168,13 @@ describe("pro leads: heading row", () => {
   it("routes the sort links through PRO_LEADS_HREF, never a literal /pro", () => {
     // The board lives at /pro/leads now, so a hard-coded "/pro" on a sort tap
     // would bounce the pro onto the Home screen.
-    expect(page).toContain("PRO_LEADS_HREF");
-    expect(page).toContain("? PRO_LEADS_HREF");
-    expect(page).toContain("`${PRO_LEADS_HREF}?sort=${o.value}`");
+    expect(board).toContain("PRO_LEADS_HREF");
+    expect(board).toContain("? PRO_LEADS_HREF");
+    expect(board).toContain("`${PRO_LEADS_HREF}?sort=${o.value}`");
+    // All three options, in the same order, still rendered from one list.
+    expect(board).toContain('{ value: "new", label: "Newest" }');
+    expect(board).toContain('{ value: "fee", label: "Cheapest fee" }');
+    expect(board).toContain('{ value: "deal", label: "Biggest deal" }');
   });
 
   it("tracks lead_viewed with a count, after the closed-job sweep and before the sort", () => {
@@ -177,6 +201,9 @@ describe("pro leads: heading row", () => {
 describe("pro leads: board only, chrome removed", () => {
   it("drops the setup checklist and its builder call", () => {
     expect(page).not.toContain("SetupChecklist");
+    // The board's header comment names the component as a fellow streaming
+    // fix, so this asserts on the element, not the word.
+    expect(board).not.toContain("<SetupChecklist");
     expect(page).not.toContain("buildSetupItems(");
   });
 
@@ -184,37 +211,42 @@ describe("pro leads: board only, chrome removed", () => {
     // The phrase itself still appears in this page's own comments, recording
     // where the card used to live and why - what must be gone is the actual
     // stat-label markup and the counts it displayed.
-    expect(page).not.toContain('<p className="stat-label">Your results</p>');
+    expect(board).not.toContain('<p className="stat-label">Your results</p>');
     expect(page).not.toContain("appliedCount");
     expect(page).not.toContain("wonCount");
     expect(page).not.toContain("totalSpentCents");
   });
 
   it("drops the Active jobs / Wallet balance stat cards", () => {
-    expect(page).not.toContain(">Active jobs</p>");
-    expect(page).not.toContain(">Wallet balance</p>");
+    for (const file of [page, board]) {
+      expect(file).not.toContain(">Active jobs</p>");
+      expect(file).not.toContain(">Wallet balance</p>");
+    }
   });
 
   it("drops the Clients button from beside the heading", () => {
-    expect(page).not.toContain('<Link href="/pro/crm"');
-    expect(page).not.toContain(">Clients</Link>");
+    for (const file of [page, board]) {
+      expect(file).not.toContain('<Link href="/pro/crm"');
+      expect(file).not.toContain(">Clients</Link>");
+    }
   });
 
   it("shrinks the low-funds banner to one compact line instead of a card with a button", () => {
-    expect(page).not.toContain("earn bonus credit");
-    expect(page).not.toContain("<Link href=\"/pro/billing\" className=\"btn-primary shrink-0\">");
-    expect(page).toContain("Low on funds.");
-    expect(page).toContain("to keep applying.");
+    expect(board).not.toContain("earn bonus credit");
+    expect(board).not.toContain("<Link href=\"/pro/billing\" className=\"btn-primary shrink-0\">");
+    expect(board).toContain("Low on funds.");
+    expect(board).toContain("to keep applying.");
   });
 
   it("keeps every section the board itself needs", () => {
     expect(page).toContain("<LeadsRealtime contractorId={contractor.id} />");
-    expect(page).toContain('<section id="open-jobs"');
-    expect(page).toContain("Asked for you");
-    expect(page).toContain("Your jobs <span");
-    expect(page).toContain("Pending applications");
-    expect(page).toContain("Not selected");
-    expect(page).toContain("<ApplyJobButton");
+    expect(board).toContain('<section id="open-jobs"');
+    expect(board).toContain("Asked for you");
+    expect(board).toContain("Your jobs <span");
+    expect(board).toContain("Pending applications");
+    expect(board).toContain("Not selected");
+    expect(board).toContain("<ApplyJobButton");
+    expect(board).toContain("<DirectRequestCard");
   });
 
   it("no longer fetches the applications/transactions rows the results card needed", () => {
@@ -223,5 +255,113 @@ describe("pro leads: board only, chrome removed", () => {
     // The grants read (spendable-bonus cap) is still needed for the Apply
     // button's canAfford math, so walletQueryPlan itself stays.
     expect(page).toContain("walletQueryPlan(");
+  });
+});
+
+// The regression this half of the file exists for. See the long comment at the
+// top of LeadsBoard.tsx: as server markup the four card lists sat past the
+// point where React Flight starts deferring elements into rows of their own,
+// and on a pro with a real board (6 open jobs, a direct request, 8 assigned
+// jobs, 5 applications) this page's own Flight row carried 19 deferrals, which
+// the served document turned into 11 nested `<template id="P:n">` holes and 12
+// `$RS(...)` fill scripts - the shape that accompanies the React #418
+// hydration failure on the pro pages.
+//
+// A unit test cannot see a stream, so these assert the properties that keep
+// the stream shape: the whole body is one client module, and the page hands it
+// plain data rather than rendering the cards itself.
+describe("pro leads stays one client component with plain-data props", () => {
+  it("LeadsBoard carries the \"use client\" directive", () => {
+    // Comments may precede a directive prologue; statements may not.
+    const firstStatement = board
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("//"))[0];
+    expect(firstStatement).toBe('"use client";');
+  });
+
+  it("so does the direct-request card it renders", () => {
+    const firstStatement = directRequestCard
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("//"))[0];
+    expect(firstStatement).toBe('"use client";');
+  });
+
+  it("leaves no card markup in the server page", () => {
+    // The tail of the page's Flight row is what gets chopped, so the page must
+    // end at the single <LeadsBoard> element. A <ul>/<li>/<section> back in
+    // here would put elements after LeadsBoard's props, past the budget, and
+    // the deferrals would return.
+    expect(page).toContain("<LeadsBoard");
+    for (const tag of ["<ul", "<li", "<section", "<ApplyJobButton", "<DirectRequestCard", "<details"]) {
+      expect(page).not.toContain(tag);
+    }
+  });
+
+  it("passes every card as resolved strings, numbers and booleans", () => {
+    // A ReactNode or a bare closure in a view model would be an element to
+    // defer (or an unserializable prop) all over again.
+    for (const marker of [
+      "const openJobVms: OpenJobVM[] = open.map((j) => {",
+      "const assignedJobs: AssignedJobVM[] = assigned.map((l) => ({",
+    ]) {
+      expect(page).toContain(marker);
+    }
+    const vmBlock = page.slice(
+      page.indexOf("const directItems: DirectRequestItem[]"),
+      page.indexOf(RETURN_MARKER)
+    );
+    expect(vmBlock.length).toBeGreaterThan(0);
+    expect(vmBlock).not.toMatch(/<[A-Za-z]/);
+  });
+
+  it("resolves everything clock- or locale-dependent on the server", () => {
+    // agingLeadFee, introFeeFor and postedAgo all read Date.now(). Recomputing
+    // them during hydration could disagree with what SSR printed, which is the
+    // mismatch class this whole change exists to remove.
+    for (const helper of ["agingLeadFee(", "introFeeFor(", "postedAgo("]) {
+      expect(page).toContain(helper);
+      expect(board).not.toContain(helper);
+    }
+  });
+});
+
+// The same check against a real streamed response. It needs a running server
+// and a signed-in pro cookie, so it is opt-in. Point it at a pro whose board
+// has open jobs, assigned jobs and ideally a direct request:
+//
+//   HEARTH_LEADS_STREAM_URL=http://localhost:3105 \
+//   HEARTH_LEADS_STREAM_COOKIE='sb-...' npx vitest run src/app/pro/leads/page.test.tsx
+const streamBase = process.env.HEARTH_LEADS_STREAM_URL;
+
+describe.skipIf(!streamBase)("served /pro/leads has no deferred rows or nested holes", () => {
+  async function get(path: string) {
+    const res = await fetch(streamBase + path, {
+      headers: { cookie: process.env.HEARTH_LEADS_STREAM_COOKIE ?? "" },
+    });
+    const html = await res.text();
+    return { res, html };
+  }
+
+  // Row "6" is the page's own Flight row under the pro layout; rows 0/3 and
+  // the low hex ids belong to the Next.js shell and defer on every route,
+  // fixed or not, so this asserts on the page row rather than the total.
+  const PAGE_ROW = "6";
+
+  it("default sort: page row is emitted whole", async () => {
+    const { res, html } = await get("/pro/leads");
+    expect(res.status).toBe(200);
+    expect(nestedStreamHoles(html)).toEqual([]);
+    expect(deferredRowRefs(html)[PAGE_ROW] ?? 0).toBe(0);
+  });
+
+  it("cheapest-fee sort: page row is emitted whole", async () => {
+    const { res, html } = await get("/pro/leads?sort=fee");
+    expect(res.status).toBe(200);
+    expect(nestedStreamHoles(html)).toEqual([]);
+    expect(deferredRowRefs(html)[PAGE_ROW] ?? 0).toBe(0);
   });
 });

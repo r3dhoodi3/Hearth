@@ -9,25 +9,26 @@ import {
   BUDGET_RANGES,
   MAX_APPLICANTS_PER_JOB,
   COLD_START_FREE_ALERTS,
-  LEAD_TIER_FEES,
   isMajorCategory,
-  PRO_LEADS_HREF,
 } from "@/lib/constants";
-import { Check } from "lucide-react";
-import Link from "next/link";
-import OpenChatButton from "@/components/OpenChatButton";
 import ChatDrawer from "@/components/ChatDrawer";
 import LeadsRealtime from "../LeadsRealtime";
-import ApplyJobButton from "../ApplyJobButton";
-import DirectRequestCard from "../DirectRequestCard";
-import JobStatusSelect from "../JobStatusSelect";
-import JobPhotoStrip from "../JobPhotoStrip";
 import ClearOnboardingDraft from "../ClearOnboardingDraft";
+// The board itself is one client component. That is a streaming fix, not a
+// behaviour change: as server markup the four card lists sat past the point
+// where React Flight starts deferring elements into rows of their own, and
+// this page's Flight row carried 31 deferrals on a pro with real leads. See
+// the long comment at the top of LeadsBoard.tsx.
+import LeadsBoard, {
+  type DirectRequestItem,
+  type OpenJobVM,
+  type AssignedJobVM,
+  type ApplicationVM,
+} from "./LeadsBoard";
 // The pure card helpers now live in one shared module: the "Asked for you"
 // card renders on the Home tab too (a two-item preview), so it and its helpers
 // had to stop being inline JSX in this file. See src/lib/proLeadCard.ts.
 import {
-  SEVERITY_STYLE,
   money,
   feeGlanceLabel,
   postedAgo,
@@ -37,13 +38,7 @@ import {
 } from "@/lib/proLeadCard";
 import { agingLeadFee } from "@/lib/leadPricing";
 import { trackServerEvent } from "@/lib/trackServer";
-import {
-  GHOST_PROTECTION_GUARANTEE,
-  FIRST_APPLICATION_GUARANTEE,
-  CREDIT_NOT_CASH_LINE,
-} from "@/lib/guaranteeCopy";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
-import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 import { findActiveJobConflicts } from "@/lib/activeJobConflicts";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { getOpenJobsForMe } from "@/lib/greeting";
@@ -53,30 +48,6 @@ import {
   bonusAvailableCents,
   photoUrlsByLead,
 } from "@/lib/proDashboard";
-
-const STATUS_STYLE: Record<string, string> = {
-  new: "border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300",
-  accepted: "border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300",
-  // Done-and-dusted reads muted so it can't be confused with the active green.
-  closed: "border-stone-200 bg-stone-100 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300",
-  lost: "border-stone-200 bg-stone-100 text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400",
-};
-
-// Friendly labels for the pipeline statuses a pro sets on their own jobs.
-const STATUS_LABEL: Record<string, string> = {
-  new: "New lead",
-  accepted: "Active",
-  closed: "Won",
-  lost: "Lost",
-};
-
-// Leads-board sort options. Newest is the default (and the order the RPC
-// already returns); the others are cheap client-side re-sorts.
-const SORT_OPTIONS = [
-  { value: "new", label: "Newest" },
-  { value: "fee", label: "Cheapest fee" },
-  { value: "deal", label: "Biggest deal" },
-] as const;
 
 export default async function ProDashboard(
   props: {
@@ -304,6 +275,104 @@ export default async function ProDashboard(
       ? !(await getProSubscription())
       : false;
 
+  // ---- View models -------------------------------------------------------
+  // Everything the board renders, resolved HERE rather than in the markup, so
+  // LeadsBoard takes plain data and this page's Flight row has no elements
+  // left to defer. See the long comment at the top of LeadsBoard.tsx.
+  //
+  // This is also the only correct place for it: the aging fee, the intro
+  // price and the posted-ago line all read the clock, and a client component
+  // that recomputed them during hydration could disagree with what SSR
+  // printed. They are finished strings by the time they cross the boundary.
+
+  // Asked for you. The card still takes the RPC row itself (plain JSON), plus
+  // the one clock-dependent label lifted out of it.
+  const directItems: DirectRequestItem[] = directRequests.map((d) => ({
+    id: d.id,
+    row: d,
+    postedAgoLabel: postedAgo(d.created_at),
+  }));
+
+  const openJobVms: OpenJobVM[] = open.map((j) => {
+    const aged = agingLeadFee(Number(j.payout_amount ?? 0), j.created_at);
+    // First big-ticket lead: the intro price replaces the normal (possibly
+    // aging-discounted) fee when it's lower, matching what apply_to_lead will
+    // actually charge (migration 0113).
+    const introFee = introFeeFor(j.category, aged.fee, hasPaidMajor);
+    const fee = introFee ?? aged.fee;
+    const feeStr = money(fee);
+    const spots = Number(j.application_count ?? 0);
+    const conflict = relationshipConflicts.get(j.id);
+    // Homeowner's rough budget band (0047): a pricing signal, not a quote.
+    // "not-sure" carries no signal, so no chip for it.
+    const budgetLabel =
+      j.budget_range && j.budget_range !== "not-sure"
+        ? labelFor(BUDGET_RANGES, j.budget_range)
+        : null;
+    const timingLabel = j.timing ? labelFor(TIMING_OPTIONS, j.timing) : null;
+    return {
+      id: j.id,
+      categoryLabel: labelFor(JOB_CATEGORIES, j.category),
+      city: j.city ?? null,
+      severity: j.issue_severity ?? null,
+      ownershipVerified: Boolean(j.ownership_verified),
+      feeGlance: feeGlanceLabel(fee, feeStr),
+      glanceLine2: [timingLabel, j.city ? `in ${j.city}` : null]
+        .filter(Boolean)
+        .join(" · "),
+      feeStr,
+      baseStr: money(introFee !== null ? aged.fee : j.payout_amount),
+      off: aged.off,
+      introPrice: introFee !== null,
+      description: j.issue_description ?? null,
+      photoUrls: Array.isArray(j.photo_urls) ? (j.photo_urls as string[]) : [],
+      budgetLabel,
+      chips: qualityChips(j),
+      scope: scopeChips(j),
+      hasPlansPermits: j.has_plans_permits === true,
+      postedAgoLabel: postedAgo(j.created_at),
+      timingLabel,
+      spots,
+      full: spots >= MAX_APPLICANTS_PER_JOB,
+      conflict: conflict
+        ? {
+            categoryLabel: labelFor(JOB_CATEGORIES, conflict.category),
+            activeLeadId: conflict.activeLeadId,
+            homeownerName: conflict.homeownerName || "Homeowner",
+          }
+        : null,
+      feeCents: Math.round(fee * 100),
+      canAfford: balance >= fee,
+      billingHref: `/pro/billing?need=${Math.max(0, fee - balance).toFixed(
+        2
+      )}&category=${encodeURIComponent(j.category ?? "")}`,
+    };
+  });
+
+  const assignedJobs: AssignedJobVM[] = assigned.map((l) => ({
+    id: l.id,
+    categoryLabel: labelFor(JOB_CATEGORIES, l.category),
+    severity: l.issue_severity ?? null,
+    status: l.status,
+    description: l.issue_description ?? null,
+    scope: scopeChips(l),
+    hasPlansPermits: l.has_plans_permits === true,
+    photoUrls: assignedPhotos.get(l.id) ?? [],
+    homeownerName: l.homeowner_name || "-",
+    chatName: l.homeowner_name || "Homeowner",
+    propertyAddress: l.property_address || "-",
+    contactLine: `${l.homeowner_email || "-"}${
+      l.homeowner_phone ? ` · ${l.homeowner_phone}` : ""
+    }`,
+  }));
+
+  const appVm = (a: any): ApplicationVM => ({
+    applicationId: a.application_id,
+    categoryLabel: labelFor(JOB_CATEGORIES, a.category),
+    description: a.issue_description ?? null,
+    refunded: Boolean(a.refunded_at),
+  });
+
   return (
     <div className="space-y-8">
       <LeadsRealtime contractorId={contractor.id} />
@@ -331,635 +400,24 @@ export default async function ProDashboard(
           now, the Messages tab: the pinned row at the top of /pro/chats, same
           rule as the homeowner side. */}
 
-      {/* One compact line, not a card: the only banner this page still carries
-          on its own, so it stays a single sentence rather than the old
-          card-plus-button block. */}
-      {lowBalance && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
-          Low on funds.{" "}
-          <Link href="/pro/billing" className="font-medium underline">
-            Add funds
-          </Link>{" "}
-          to keep applying.
-        </p>
-      )}
-
-      {/* ---- Asked for you: a homeowner reached out to this pro directly ----
-          Sits above the open board because it is exclusive: only this pro can
-          see or unlock it. Card anatomy mirrors an open-job card (same classes,
-          same photo preview), minus the applicant count and aging deal - a
-          direct request has no competition and no markdown. */}
-      {directRequests.length > 0 && (
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-              Asked for you{" "}
-              <span className="text-stone-500 dark:text-stone-400">
-                ({directRequests.length})
-              </span>
-            </h2>
-            <p className="text-sm text-stone-500 dark:text-stone-400">
-              A homeowner reached out to you directly. Unlock to accept, see their
-              contact, and open the chat. Only you can see these.
-            </p>
-          </div>
-          <ul className="space-y-3">
-            {directRequests.map((d) => (
-              // The card itself lives in src/app/pro/DirectRequestCard.tsx so
-              // the Home tab can show the same two-item preview without a
-              // second copy of it drifting away from this one.
-              <DirectRequestCard
-                key={d.id}
-                d={d}
-                balance={balance}
-                hasPaidMajor={hasPaidMajor}
-              />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* ---- Open jobs: posted by homeowners, pay the fee to apply ---- */}
-      <section id="open-jobs" className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-              Open jobs <span className="text-stone-500 dark:text-stone-400">({open.length})</span>
-            </h2>
-            <p className="text-sm text-stone-500 dark:text-stone-400">
-              Jobs homeowners posted in your categories. Apply to one and the
-              homeowner reviews you. If they pick you, you get their contact.
-            </p>
-            {/* The price of applying belonged on the board itself, not only on
-                Billing: a pro should never have to leave the inbox to find out
-                what a tap costs. Both numbers come from LEAD_TIER_FEES, the
-                one place the tiers live, so this line cannot drift from the
-                per-card fee shown below. */}
-            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              Applying costs ${LEAD_TIER_FEES.light} to ${LEAD_TIER_FEES.major}{" "}
-              per lead depending on the trade. {GHOST_PROTECTION_GUARANTEE}{" "}
-              {FIRST_APPLICATION_GUARANTEE} {CREDIT_NOT_CASH_LINE}{" "}
-              <Link
-                href="/pro/billing"
-                className="underline hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:hover:text-stone-300"
-              >
-                Details on Billing
-              </Link>
-              .
-            </p>
-          </div>
-          {open.length > 1 && (
-            <div className="flex gap-2">
-              {SORT_OPTIONS.map((o) => (
-                <Link
-                  key={o.value}
-                  // Through PRO_LEADS_HREF, never a literal "/pro": the board
-                  // lives on its own tab now and "/pro" is the Home screen.
-                  href={
-                    o.value === "new"
-                      ? PRO_LEADS_HREF
-                      : `${PRO_LEADS_HREF}?sort=${o.value}`
-                  }
-                  className={`inline-flex min-h-[44px] items-center rounded-full border px-3 py-1.5 text-xs sm:inline-block sm:min-h-0 ${
-                    sort === o.value
-                      ? "border-hearth-300 bg-hearth-50 font-medium text-hearth-700 dark:border-hearth-500/40 dark:bg-hearth-500/15 dark:text-hearth-300"
-                      : "border-stone-200 text-stone-500 hover:border-stone-300 dark:border-white/10 dark:text-stone-400 dark:hover:border-stone-600"
-                  }`}
-                >
-                  {o.label}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {open.length === 0 ? (
-          // Honest empty state: no fake urgency, no invented stats. Just the
-          // truth about a young marketplace and three useful things to do
-          // while waiting (each conditional line only shows when it applies).
-          <div className="rounded-xl border border-dashed border-stone-300 p-6 text-center dark:border-stone-700">
-            <p className="font-medium text-stone-900 dark:text-stone-100">
-              No open jobs in your trades right now.
-            </p>
-            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-              Hearth is growing; new jobs land here the moment homeowners post
-              them.
-            </p>
-            <ul className="mx-auto mt-4 max-w-md space-y-2 text-left text-sm">
-              <li className="flex items-start gap-2 text-stone-600 dark:text-stone-400">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
-                <span>
-                  Make your page worth picking:{" "}
-                  <Link
-                    href="/pro/profile"
-                    className="font-medium text-hearth-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
-                  >
-                    complete your public page
-                  </Link>{" "}
-                  (categories, license, logo) so you stand out when jobs
-                  arrive.
-                </span>
-              </li>
-              {apps.length === 0 && (
-                <li className="flex items-start gap-2 text-stone-600 dark:text-stone-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
-                  <span>
-                    Not chosen on your first application? The fee comes back
-                    on its own as wallet credit, spendable on any lead, and it
-                    expires after 60 days.{" "}
-                    <Link
-                      href="/pro/billing"
-                      className="font-medium text-hearth-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
-                    >
-                      Fund your wallet
-                    </Link>{" "}
-                    so you can apply the moment something posts.
-                  </span>
-                </li>
-              )}
-              {/* COLD START: while COLD_START_FREE_ALERTS is on, every pro
-                  gets instant alerts, so the honest line is a plain statement.
-                  The membership upsell version returns when the flag flips. */}
-              {COLD_START_FREE_ALERTS ? (
-                <li className="flex items-start gap-2 text-stone-600 dark:text-stone-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
-                  <span>
-                    You&apos;ll be alerted the moment a job posts in your
-                    trades, so you never check an empty board.
-                  </span>
-                </li>
-              ) : (
-                !isProMember && (
-                  <li className="flex items-start gap-2 text-stone-600 dark:text-stone-400">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
-                    <span>
-                      <Link
-                        href="/pro/plus"
-                        className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
-                      >
-                        {proTrialEligible
-                          ? proCtaLabel(true)
-                          : "Get alerts the moment a job posts"}
-                      </Link>{" "}
-                      {proTrialEligible
-                        ? `and get alerts the moment a job posts, so you never check an empty board. ${proTrialSubline()}`
-                        : "with a Pro membership, so you never check an empty board."}
-                    </span>
-                  </li>
-                )
-              )}
-            </ul>
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            {open.map((j) => {
-              const aged = agingLeadFee(
-                Number(j.payout_amount ?? 0),
-                j.created_at
-              );
-              const off = aged.off;
-              // First big-ticket lead: the intro price replaces the normal
-              // (possibly aging-discounted) fee when it's lower, matching
-              // what apply_to_lead will actually charge (migration 0113).
-              const introFee = introFeeFor(j.category, aged.fee, hasPaidMajor);
-              const fee = introFee ?? aged.fee;
-              const feeStr = money(fee);
-              const baseStr = money(introFee !== null ? aged.fee : j.payout_amount);
-              const spots = Number(j.application_count ?? 0);
-              const full = spots >= MAX_APPLICANTS_PER_JOB;
-              const conflict = relationshipConflicts.get(j.id);
-              const chips = qualityChips(j);
-              const scope = scopeChips(j);
-              // Homeowner's rough budget band (0047): a pricing signal, not a
-              // quote. "not-sure" carries no signal, so no chip for it.
-              const budgetLabel =
-                j.budget_range && j.budget_range !== "not-sure"
-                  ? labelFor(BUDGET_RANGES, j.budget_range)
-                  : null;
-              const feeGlance = feeGlanceLabel(fee, feeStr);
-              const glanceLine2 = [
-                j.timing ? labelFor(TIMING_OPTIONS, j.timing) : null,
-                j.city ? `in ${j.city}` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ");
-              // Folded detail (0128 phone density pass): description, photos,
-              // budget/quality/scope chips, posted-ago/timing. Rendered once
-              // here and reused below in both the phone <details> and the
-              // desktop always-visible div, so the two variants can never
-              // drift out of sync.
-              const detailsContent = (
-                <>
-                  {j.issue_description ? (
-                    <p className="text-sm text-stone-600 dark:text-stone-400">
-                      {j.issue_description}
-                    </p>
-                  ) : (
-                    <p className="text-sm italic text-stone-500 dark:text-stone-400">
-                      No details provided yet
-                    </p>
-                  )}
-                  {Array.isArray(j.photo_urls) && j.photo_urls.length > 0 && (
-                    <JobPhotoStrip leadId={j.id} urls={j.photo_urls} />
-                  )}
-                  {(chips.length > 0 || budgetLabel) && (
-                    <div className="flex flex-wrap gap-1">
-                      {budgetLabel && (
-                        <span className="chip bg-stone-100 text-stone-600 dark:bg-stone-700 dark:text-stone-400">
-                          Budget: {budgetLabel}
-                        </span>
-                      )}
-                      {chips.map((c) => (
-                        <span
-                          key={c}
-                          className="chip bg-stone-100 text-stone-600 dark:bg-stone-700 dark:text-stone-400"
-                        >
-                          {c}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {/* Major-tier project scope (0114): sq ft / materials as the
-                      same muted chip, plans/permits as a positive chip-ok. */}
-                  {(scope.length > 0 || j.has_plans_permits === true) && (
-                    <div className="flex flex-wrap gap-1">
-                      {scope.map((c) => (
-                        <span
-                          key={c}
-                          className="chip bg-stone-100 text-stone-600 dark:bg-stone-700 dark:text-stone-400"
-                        >
-                          {c}
-                        </span>
-                      ))}
-                      {j.has_plans_permits === true && (
-                        <span className="chip-ok">Plans/permits in hand</span>
-                      )}
-                    </div>
-                  )}
-                  {(postedAgo(j.created_at) || j.timing) && (
-                    <div className="flex flex-wrap gap-4 text-xs text-stone-500 dark:text-stone-400">
-                      {postedAgo(j.created_at) && (
-                        <span className="text-xs text-stone-500 dark:text-stone-400">
-                          {postedAgo(j.created_at)}
-                        </span>
-                      )}
-                      {j.timing && (
-                        <span>
-                          Timing: {labelFor(TIMING_OPTIONS, j.timing)}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </>
-              );
-              return (
-                <li key={j.id} className="card space-y-3">
-                  {/* Header: one glanceable line below sm (category + fee,
-                      then timing/city), the full desktop row at sm+. Both
-                      variants share one wrapper div so this list item's
-                      space-y-3 sees a single child here rather than two -
-                      Tailwind's space-y margin selector only excludes
-                      children carrying the HTML "hidden" attribute, not ones
-                      merely styled display:none, so two breakpoint-gated
-                      siblings would each still count and add a phantom gap.
-                      Same reasoning applies to the folded-detail wrapper
-                      below. */}
-                  <div>
-                    <div className="sm:hidden">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="min-w-0 flex-1 font-medium text-stone-900 dark:text-stone-100">
-                          {labelFor(JOB_CATEGORIES, j.category)}
-                        </span>
-                        <span className="shrink-0 text-sm font-semibold text-stone-700 [font-variant-numeric:tabular-nums] dark:text-stone-300">
-                          {feeGlance}
-                        </span>
-                      </div>
-                      {glanceLine2 && (
-                        <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
-                          {glanceLine2}
-                        </p>
-                      )}
-                    </div>
-                    <div className="hidden flex-wrap items-center gap-2 sm:flex">
-                      <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                        {labelFor(JOB_CATEGORIES, j.category)}
-                        {/* Locality: open_jobs_for_me (0074) returns the
-                            property city. Pros price a lead by where it is. */}
-                        {j.city ? (
-                          <span className="font-normal text-stone-500 dark:text-stone-400">
-                            in {j.city}
-                          </span>
-                        ) : null}
-                      </span>
-                      {j.issue_severity && (
-                        <span
-                          className={`chip border ${SEVERITY_STYLE[j.issue_severity] ?? ""}`}
-                        >
-                          {j.issue_severity}
-                        </span>
-                      )}
-                      {j.ownership_verified && (
-                        <span
-                          className="chip-ok"
-                          title="The name on this account matches the county's public owner record for this address."
-                        >
-                          Ownership verified
-                        </span>
-                      )}
-                      <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
-                        {introFee !== null && (
-                          <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
-                            First big-ticket lead
-                          </span>
-                        )}
-                        {off > 0 && introFee === null && (
-                          <span className="chip border border-amber-200 bg-amber-100 font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
-                            {off}% off, aging deal
-                          </span>
-                        )}
-                        <span className="[font-variant-numeric:tabular-nums]">
-                          Apply fee{" "}
-                          {(off > 0 || introFee !== null) && (
-                            <span className="text-stone-500 line-through dark:text-stone-400">
-                              {baseStr}
-                            </span>
-                          )}{" "}
-                          {feeStr}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Folded detail: description, photos, budget/quality/scope
-                      chips, and posted-ago/timing - collapsed by default on
-                      phone via a real <details> disclosure, always visible
-                      above sm. */}
-                  <div>
-                    <details className="group sm:hidden">
-                      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-medium text-hearth-700 [&::-webkit-details-marker]:hidden dark:text-hearth-300">
-                        Details
-                        <svg
-                          viewBox="0 0 20 20"
-                          className="h-4 w-4 transition-transform group-open:rotate-180"
-                          fill="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </summary>
-                      <div className="mt-2 space-y-3">{detailsContent}</div>
-                    </details>
-                    <div className="hidden space-y-3 sm:block">{detailsContent}</div>
-                  </div>
-
-                  {/* Applicant count: shown on every card so a pro can judge
-                      competition before paying the apply fee, not just once
-                      the cap is already hit. */}
-                  <p
-                    className={`text-xs font-semibold ${
-                      full ? "text-red-600 dark:text-red-400" : "text-stone-500 dark:text-stone-400"
-                    }`}
-                  >
-                    {spots} of {MAX_APPLICANTS_PER_JOB} spots taken
-                  </p>
-
-                  {conflict ? (
-                    // No apply button: the pro already has this homeowner in
-                    // Messages for this trade, so buying a second lead would
-                    // just double-charge them for the same relationship. The
-                    // card reopens for applying once that job wraps up.
-                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-hearth-200 bg-hearth-50 px-3 py-2 text-sm text-hearth-800 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
-                      <span>
-                        You already have an active{" "}
-                        {labelFor(JOB_CATEGORIES, conflict.category)} job with
-                        this homeowner.
-                      </span>
-                      <OpenChatButton
-                        leadId={conflict.activeLeadId}
-                        name={conflict.homeownerName || "Homeowner"}
-                        label="Message them instead"
-                      />
-                    </div>
-                  ) : full ? (
-                    <p className="rounded-lg border border-stone-200 bg-stone-100 px-3 py-2 text-center text-sm font-medium text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
-                      Job full
-                    </p>
-                  ) : (
-                    <ApplyJobButton
-                      leadId={j.id}
-                      fee={feeStr}
-                      feeCents={Math.round(fee * 100)}
-                      category={labelFor(JOB_CATEGORIES, j.category)}
-                      introPrice={introFee !== null}
-                      canAfford={balance >= fee}
-                      billingHref={`/pro/billing?need=${Math.max(
-                        0,
-                        fee - balance
-                      ).toFixed(2)}&category=${encodeURIComponent(
-                        j.category ?? ""
-                      )}`}
-                    />
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      {/* ---- Active jobs: ones the homeowner picked you for ---- */}
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-            Your jobs <span className="text-stone-500 dark:text-stone-400">({assigned.length})</span>
-          </h2>
-          <p className="text-sm text-stone-500 dark:text-stone-400">
-            Jobs a homeowner chose you for. Their contact is unlocked and you can
-            message them.
-          </p>
-        </div>
-
-        {assigned.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
-            No jobs yet. Apply to an open job above and a homeowner can pick you.
-          </p>
-        ) : (
-          <ul className="space-y-3">
-            {assigned.map((l) => (
-              <AssignedJobCard
-                key={l.id}
-                l={l}
-                photoUrls={assignedPhotos.get(l.id) ?? []}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* ---- Applications still waiting on a homeowner's decision ---- */}
-      {pendingApps.length > 0 && (
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-              Pending applications{" "}
-              <span className="text-stone-500 dark:text-stone-400">({pendingApps.length})</span>
-            </h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              Ghost protection: if the homeowner never responds and no one is
-              picked, your fee comes back as wallet credit after 7 days. One
-              reply from them ends it.
-            </p>
-          </div>
-          <ul className="space-y-2">
-            {pendingApps.map((a) => (
-              <li
-                key={a.application_id}
-                className="card flex items-center justify-between gap-3"
-              >
-                <div>
-                  <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                    {labelFor(JOB_CATEGORIES, a.category)}
-                  </span>
-                  {a.issue_description && (
-                    <p className="text-sm text-stone-500 dark:text-stone-400">
-                      {a.issue_description}
-                    </p>
-                  )}
-                </div>
-                {a.refunded_at ? (
-                  <span className="chip shrink-0 border border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300">
-                    Fee back as credit
-                  </span>
-                ) : (
-                  <span className="chip shrink-0 border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
-                    Waiting for homeowner
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {declinedApps.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Not selected{" "}
-            <span className="text-stone-500 dark:text-stone-400">({declinedApps.length})</span>
-          </h2>
-          {/* The 0044 credit-back promise, stated where the loss lands. It is
-              the narrow one-time guarantee, not a blanket "not chosen" refund,
-              so it is rendered from the canonical sentence. */}
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            {FIRST_APPLICATION_GUARANTEE} {CREDIT_NOT_CASH_LINE} The credit
-            lands on its own and is good for 60 days. Check your billing page
-            for it.
-          </p>
-          <ul className="space-y-2">
-            {declinedApps.map((a) => (
-              <li
-                key={a.application_id}
-                className="card flex items-center justify-between gap-3 opacity-70"
-              >
-                <span className="flex items-center gap-2 font-medium text-stone-700 dark:text-stone-300">
-                  {labelFor(JOB_CATEGORIES, a.category)}
-                </span>
-                <span className="chip shrink-0 border border-stone-200 bg-stone-100 text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
-                  Homeowner chose another pro
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {/* Every section of the board lives in LeadsBoard, a client component,
+          purely so this page's Flight row ends with one client reference
+          carrying plain data instead of a long tail of card elements. Nothing
+          below this point is newly interactive. See LeadsBoard.tsx. */}
+      <LeadsBoard
+        lowBalance={lowBalance}
+        directRequests={directItems}
+        balance={balance}
+        hasPaidMajor={hasPaidMajor}
+        openJobs={openJobVms}
+        sort={sort}
+        hasApplied={apps.length > 0}
+        isProMember={isProMember}
+        proTrialEligible={proTrialEligible}
+        assigned={assignedJobs}
+        pendingApps={pendingApps.map(appVm)}
+        declinedApps={declinedApps.map(appVm)}
+      />
     </div>
-  );
-}
-
-// A job the homeowner picked this pro for: contact revealed + chat + pipeline.
-function AssignedJobCard({
-  l,
-  photoUrls,
-}: {
-  l: any;
-  photoUrls: string[];
-}) {
-  const scope = scopeChips(l);
-  return (
-    <li className="card space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-          {labelFor(JOB_CATEGORIES, l.category)}
-        </span>
-        {l.issue_severity && (
-          <span
-            className={`chip border ${SEVERITY_STYLE[l.issue_severity] ?? ""}`}
-          >
-            {l.issue_severity}
-          </span>
-        )}
-        <span className={`chip border ${STATUS_STYLE[l.status] ?? ""}`}>
-          {STATUS_LABEL[l.status] ?? l.status}
-        </span>
-      </div>
-
-      {l.issue_description ? (
-        <p className="text-sm text-stone-600 dark:text-stone-400">{l.issue_description}</p>
-      ) : (
-        <p className="text-sm italic text-stone-500 dark:text-stone-400">No details provided yet</p>
-      )}
-
-      {/* Major-tier project scope (0114): sq ft / materials as the same muted
-          chip, plans/permits as a positive chip-ok. Still worth showing once
-          a job is won, not just while bidding on it. */}
-      {(scope.length > 0 || l.has_plans_permits === true) && (
-        <div className="flex flex-wrap gap-1">
-          {scope.map((c) => (
-            <span
-              key={c}
-              className="chip bg-stone-100 text-stone-600 dark:bg-stone-700 dark:text-stone-400"
-            >
-              {c}
-            </span>
-          ))}
-          {l.has_plans_permits === true && (
-            <span className="chip-ok">Plans/permits in hand</span>
-          )}
-        </div>
-      )}
-
-      {photoUrls.length > 0 && (
-        <JobPhotoStrip leadId={l.id} urls={photoUrls} full />
-      )}
-
-      <div className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600 dark:bg-stone-900 dark:text-stone-400">
-        <p>
-          <span className="text-stone-500 dark:text-stone-400">Homeowner:</span>{" "}
-          {l.homeowner_name || "-"}
-        </p>
-        <p>
-          <span className="text-stone-500 dark:text-stone-400">Address:</span>{" "}
-          {l.property_address || "-"}
-        </p>
-        <p className="break-words">
-          <span className="text-stone-500 dark:text-stone-400">Contact:</span>{" "}
-          {l.homeowner_email || "-"}
-          {l.homeowner_phone ? ` · ${l.homeowner_phone}` : ""}
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <OpenChatButton
-          leadId={l.id}
-          name={l.homeowner_name || "Homeowner"}
-          label="Message"
-        />
-        <JobStatusSelect id={l.id} status={l.status} />
-      </div>
-    </li>
   );
 }

@@ -127,9 +127,12 @@ describe("pro home: the blocks below", () => {
   });
 
   it("renders the SAME direct-request card the leads board does", () => {
-    // One component, not a second copy that would drift.
+    // One component, not a second copy that would drift. On the Leads tab it
+    // is rendered from LeadsBoard, the client component the whole board moved
+    // into on 2026-08-30 (a streaming fix - see LeadsBoard.tsx), not from the
+    // page module itself.
     expect(page).toContain("<DirectRequestCard");
-    expect(src("./leads/page.tsx")).toContain("<DirectRequestCard");
+    expect(src("./leads/LeadsBoard.tsx")).toContain("<DirectRequestCard");
   });
 
   it("shows wallet, open jobs, active jobs, and win rate, each linked", () => {

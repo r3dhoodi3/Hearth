@@ -8,13 +8,9 @@ import {
   JOB_CATEGORIES,
   PRO_DEPOSIT_BOOST_PTS,
 } from "@/lib/constants";
-import {
-  GHOST_PROTECTION_GUARANTEE,
-  FIRST_APPLICATION_GUARANTEE,
-  CREDIT_NOT_CASH_LINE,
-} from "@/lib/guaranteeCopy";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 import DepositForm from "./DepositForm";
+import ActivityList from "./ActivityList";
 import FadingBanner from "@/components/FadingBanner";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
 import ProTrialNudge from "@/components/pro/ProTrialNudge";
@@ -324,53 +320,21 @@ export default async function ProBillingPage(props: {
         )}
       </section>
 
-      {/* Activity */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Activity</h2>
-        {txns.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:text-stone-400">
-            No activity yet. Add credit to get started.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {txns.map((t) => {
-              const net = Number(t.cash_delta_cents) + Number(t.bonus_delta_cents);
-              const positive = net >= 0;
-              return (
-                <li
-                  key={t.id}
-                  className="card flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <span className="font-medium text-stone-900 dark:text-stone-100">
-                      {txLabel(t.type)}
-                    </span>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">
-                      {new Date(t.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <span
-                    className={`font-semibold [font-variant-numeric:tabular-nums] ${
-                      positive ? "text-green-600 dark:text-green-400" : "text-stone-700 dark:text-stone-300"
-                    }`}
-                  >
-                    {positive ? "+" : "−"}
-                    {dollars(Math.abs(net))}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {txns.length > 0 && (
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            Ghost protection: {GHOST_PROTECTION_GUARANTEE} If they come back
-            and choose you after that, the same fee is re-charged. Separately,
-            the first-application guarantee: {FIRST_APPLICATION_GUARANTEE}{" "}
-            {CREDIT_NOT_CASH_LINE}
-          </p>
-        )}
-      </section>
+      {/* Activity, in a client component purely so this page's Flight row
+          ends with one client reference carrying plain data instead of a long
+          tail of elements. See the comment at the top of ActivityList.tsx. */}
+      <ActivityList
+        rows={txns.map((t) => {
+          const net = Number(t.cash_delta_cents) + Number(t.bonus_delta_cents);
+          return {
+            id: t.id as string,
+            label: txLabel(t.type),
+            when: new Date(t.created_at).toLocaleString(),
+            amount: dollars(Math.abs(net)),
+            positive: net >= 0,
+          };
+        })}
+      />
     </div>
   );
 }

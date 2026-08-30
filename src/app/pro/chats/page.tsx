@@ -1,17 +1,13 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { labelFor, JOB_CATEGORIES, PRO_LEADS_HREF } from "@/lib/constants";
-import { Briefcase, ChevronRight } from "lucide-react";
+import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { isUnreadSince } from "@/lib/unread";
 import { plainPreview } from "@/lib/previewText";
-import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
-import AskHearthRow from "@/components/AskHearthRow";
-import PhoneChatFrame from "@/components/PhoneChatFrame";
+import ChatsView, { type ChatRow } from "./ChatsView";
 import {
   sendQuoteAction,
   withdrawQuoteAction,
@@ -135,6 +131,33 @@ export default async function ProChatsPage(props: {
   // once ?lead= is in the URL. Desktop (md+) always shows both.
   const threadOpenOnMobile = Boolean(searchParams.lead);
 
+  // Everything the list row shows, resolved here so ChatsView takes plain data
+  // and the page's Flight row has no elements left to defer. See the long
+  // comment at the top of ChatsView.tsx.
+  const rows: ChatRow[] = convos.map((l) => {
+    const last = lastByLead.get(l.id);
+    const categoryLabel = labelFor(JOB_CATEGORIES, l.category);
+    // plainPreview (@/lib/previewText): one line, with markdown and any
+    // machine-readable [[TAG]] action block taken out. A message body that
+    // reduces to nothing falls back to the job category, same as a thread
+    // with no messages at all.
+    const preview = last
+      ? `${last.sender_role === "contractor" ? "You: " : ""}${
+          last.body.startsWith("[img]")
+            ? "Photo"
+            : plainPreview(last.body) || categoryLabel
+        }`
+      : categoryLabel;
+    return {
+      id: l.id,
+      title: l.homeowner_name || "Homeowner",
+      categoryLabel,
+      preview,
+      unread: isUnread(l.id),
+      active: selected?.id === l.id,
+    };
+  });
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Messages</h1>
@@ -148,181 +171,34 @@ export default async function ProChatsPage(props: {
           the pinned copilot row lives at the top of it, and on a phone that
           row is the only way into Ask Hearth for Pros (the bottom bar is back
           to four tabs and the floating pill is desktop-only). The old
-          "no conversations yet" card is a row inside the list now. */}
-      <div className="grid gap-4 md:grid-cols-[280px_1fr]">
-          {/* ---- Conversation list (hidden on phones while a thread is open) ---- */}
-          <ul
-            className={`${
-              threadOpenOnMobile ? "hidden md:block" : ""
-            } max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)] md:max-h-none`}
-          >
-            {/* Pinned copilot, always first. */}
-            <AskHearthRow
-              href="/pro/ask"
-              subtitle="Your business copilot"
-              storageKeyBase="hearth_pro_ask_chat"
-              retentionKeyBase="hearth_pro_ask_retention"
-              userId={contractor.user_id ?? null}
-              accent="hearth"
-            />
+          "no conversations yet" card is a row inside the list now.
 
-            {/* Pinned second: the way OUT of an empty inbox. A pro with no
-                conversations has nothing to do on this screen, and the answer
-                is always the same one - go find a job to apply to. Same row
-                shape as the copilot above it so the list stays one thing.
-                PRO_LEADS_HREF rather than a literal "/pro", so it follows the
-                open-jobs board when the pro Home / Leads tab split moves it. */}
-            <li>
-              <Link
-                href={PRO_LEADS_HREF}
-                className="flex min-h-11 items-center gap-3 border-l-4 border-transparent px-4 py-3 transition hover:bg-stone-50 dark:hover:bg-stone-700"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-hearth-100 text-hearth-700 dark:bg-hearth-900/50 dark:text-hearth-300">
-                  <Briefcase className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-stone-900 dark:text-stone-100">
-                    Find clients
-                  </span>
-                  <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
-                    Open jobs near you, ready to apply
-                  </span>
-                </span>
-                <ChevronRight
-                  className="h-4 w-4 shrink-0 text-stone-400 dark:text-stone-500"
-                  aria-hidden="true"
-                />
-              </Link>
-            </li>
-
-            {convos.length === 0 && (
-              <li className="px-4 py-6 text-sm text-stone-500 dark:text-stone-400">
-                No conversations yet. Find clients to start one: when a
-                homeowner picks you, your chat opens here.
-              </li>
-            )}
-
-            {convos.map((l) => {
-              const last = lastByLead.get(l.id);
-              const isActive = selected?.id === l.id;
-              const unread = isUnread(l.id);
-              return (
-                <li key={l.id}>
-                  <Link
-                    href={`/pro/chats?lead=${l.id}`}
-                    className={`block border-l-4 px-4 py-3 transition ${
-                      isActive
-                        ? "border-hearth-500 bg-hearth-50 dark:border-hearth-400 dark:bg-hearth-900/40"
-                        : unread
-                          ? "border-hearth-400 bg-hearth-50/60 hover:bg-hearth-50 dark:border-hearth-500 dark:bg-hearth-900/20 dark:hover:bg-hearth-900/30"
-                          : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`truncate ${
-                          unread
-                            ? "font-bold text-stone-900 dark:text-stone-100"
-                            : "font-medium text-stone-900 dark:text-stone-100"
-                        }`}
-                      >
-                        {l.homeowner_name || "Homeowner"}
-                      </span>
-                      {unread ? (
-                        // 10px reads fine at a desk but is under the readable
-                        // floor on a phone; max-sm:text-sm brings it to 14px
-                        // there, same convention as the license badges.
-                        <span className="shrink-0 rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white max-sm:text-sm">
-                          New
-                        </span>
-                      ) : (
-                        <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
-                          {labelFor(JOB_CATEGORIES, l.category)}
-                        </span>
-                      )}
-                    </div>
-                    <p
-                      className={`truncate text-xs ${
-                        unread ? "font-medium text-stone-800 dark:text-stone-200" : "text-stone-500 dark:text-stone-400"
-                      }`}
-                    >
-                      {/* plainPreview (@/lib/previewText): one line, with
-                          markdown and any machine-readable [[TAG]] action
-                          block taken out. A message body that reduces to
-                          nothing falls back to the job category, same as a
-                          thread with no messages at all. */}
-                      {last
-                        ? `${last.sender_role === "contractor" ? "You: " : ""}${
-                            last.body.startsWith("[img]")
-                              ? "Photo"
-                              : plainPreview(last.body) ||
-                                labelFor(JOB_CATEGORIES, l.category)
-                          }`
-                        : labelFor(JOB_CATEGORIES, l.category)}
-                    </p>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* ---- Open thread (the only pane on phones once one is picked) ---- */}
-          {selected ? (
-            // Below sm PhoneChatFrame pins this panel to the visual viewport so
-            // the software keyboard can't push the composer off screen; sm and
-            // up render exactly the classes below, as before.
-            <PhoneChatFrame
-              className={`${
-                threadOpenOnMobile ? "flex" : "hidden md:flex"
-              } h-[calc(100dvh-13rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)]`}
-            >
-              <Link
-                href="/pro/chats"
-                // Already md:hidden, so these sizes are phone-only: this
-                // is the pro twin of the homeowner /chats back link, 44px tall
-                // and 16px, with the negative margin keeping the text in line.
-                className="mb-2 -ml-2 inline-flex min-h-11 w-fit shrink-0 items-center gap-1 px-2 text-base font-medium text-hearth-700 hover:underline dark:text-hearth-300 md:hidden"
-              >
-                <span aria-hidden="true">←</span> All conversations
-              </Link>
-              {/* `key` forces a fresh thread when switching conversations. */}
-              <div className="min-h-0 flex-1">
-                <LeadChat
-                  key={selected.id}
-                  leadId={selected.id}
-                  role="contractor"
-                  embedded
-                  title={selected.homeowner_name || "Homeowner"}
-                  subtitle={`${labelFor(JOB_CATEGORIES, selected.category)}${
-                    selected.property_address ? ` · ${selected.property_address}` : ""
-                  }`}
-                  jobTitle={labelFor(JOB_CATEGORIES, selected.category)}
-                  contractorName={contractor.name}
-                  sendQuoteAction={sendQuoteAction}
-                  withdrawQuoteAction={withdrawQuoteAction}
-                  createInvoiceAction={createInvoiceAction}
-                  voidInvoiceAction={voidInvoiceAction}
-                />
-              </div>
-            </PhoneChatFrame>
-          ) : (
-            <div
-              className={`${
-                threadOpenOnMobile ? "flex" : "hidden md:flex"
-              } h-[60vh] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-stone-300 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400 md:h-[calc(100vh-13rem)]`}
-            >
-              Select a conversation
-              <Link
-                href="/pro/chats"
-                // Same treatment as the back link above, and as the
-                // homeowner empty-state link.
-                className="-ml-2 inline-flex min-h-11 items-center px-2 text-base font-medium text-hearth-700 hover:underline dark:text-hearth-300 md:hidden"
-              >
-                <span aria-hidden="true">←</span> All conversations
-              </Link>
-            </div>
-          )}
-      </div>
+          Both panes live in ChatsView, a client component, purely so this
+          page's Flight row ends with one client reference carrying plain data
+          instead of a long tail of elements. See the comment at the top of
+          ChatsView.tsx. */}
+      <ChatsView
+        rows={rows}
+        askUserId={contractor.user_id ?? null}
+        threadOpenOnMobile={threadOpenOnMobile}
+        selected={
+          selected
+            ? {
+                id: selected.id,
+                title: selected.homeowner_name || "Homeowner",
+                subtitle: `${labelFor(JOB_CATEGORIES, selected.category)}${
+                  selected.property_address ? ` · ${selected.property_address}` : ""
+                }`,
+                jobTitle: labelFor(JOB_CATEGORIES, selected.category),
+              }
+            : null
+        }
+        contractorName={contractor.name}
+        sendQuoteAction={sendQuoteAction}
+        withdrawQuoteAction={withdrawQuoteAction}
+        createInvoiceAction={createInvoiceAction}
+        voidInvoiceAction={voidInvoiceAction}
+      />
     </div>
   );
 }

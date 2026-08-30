@@ -44,6 +44,7 @@ import LeadsRealtime from "./LeadsRealtime";
 import ChatDrawer from "@/components/ChatDrawer";
 import ClearOnboardingDraft from "./ClearOnboardingDraft";
 import DirectRequestCard from "./DirectRequestCard";
+import { postedAgo } from "@/lib/proLeadCard";
 
 // The pro HOME tab.
 //
@@ -402,6 +403,11 @@ export default async function ProHome() {
                   d={d}
                   balance={balance}
                   hasPaidMajor={hasPaidMajor}
+                  // Resolved here, not in the card: the card is a client
+                  // component now (streaming fix, see its header comment) and
+                  // this line reads the clock, so it has to be settled on the
+                  // server or hydration could disagree with SSR.
+                  postedAgoLabel={postedAgo(d.created_at)}
                 />
               ))}
             </ul>

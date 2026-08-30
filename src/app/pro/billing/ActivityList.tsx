@@ -1,0 +1,84 @@
+"use client";
+
+// STREAMING FIX, not a behaviour change. Same treatment as
+// src/app/pro/chats/ChatsView.tsx and src/components/pro/SetupChecklist.tsx,
+// investigated in scratchpad/debug-DBG3.md.
+//
+// React Flight defers any element it meets once the row it is serializing has
+// passed a 3200-byte budget, and Fizz then streams each deferred row as an
+// out-of-order segment: a `<template id="P:n">` hole nested inside the page's
+// own markup plus a late `$RS(...)` fill script. That hole chain is the shape
+// that comes with the React #418 hydration failure on the pro pages.
+//
+// This section is the tail of /pro/billing, so it is where the budget had run
+// out: measured on a pro with eight wallet transactions, the page's Flight row
+// deferred the whole Activity block and then chopped three more elements out
+// of the middle of it, for three nested holes in the served HTML. As one
+// client module the section is a single client reference with plain-data props
+// and there is nothing left to defer.
+//
+// The trailing guarantee paragraph is in here too, deliberately: an element
+// left AFTER this component in the server page would sit past the same budget
+// and be deferred in its place.
+
+import {
+  GHOST_PROTECTION_GUARANTEE,
+  FIRST_APPLICATION_GUARANTEE,
+  CREDIT_NOT_CASH_LINE,
+} from "@/lib/guaranteeCopy";
+
+// One wallet transaction, fully resolved on the server. `when` is preformatted
+// there so the timestamp keeps rendering in the server's locale exactly as it
+// did before, rather than switching to the browser's.
+export type ActivityRow = {
+  id: string;
+  label: string;
+  when: string;
+  /** Signed net amount, already formatted as an absolute dollar string. */
+  amount: string;
+  positive: boolean;
+};
+
+export default function ActivityList({ rows }: { rows: ActivityRow[] }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Activity</h2>
+      {rows.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:text-stone-400">
+          No activity yet. Add credit to get started.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((t) => (
+            <li key={t.id} className="card flex items-center justify-between gap-3">
+              <div>
+                <span className="font-medium text-stone-900 dark:text-stone-100">
+                  {t.label}
+                </span>
+                <p className="text-xs text-stone-500 dark:text-stone-400">{t.when}</p>
+              </div>
+              <span
+                className={`font-semibold [font-variant-numeric:tabular-nums] ${
+                  t.positive
+                    ? "text-green-600 dark:text-green-400"
+                    : "text-stone-700 dark:text-stone-300"
+                }`}
+              >
+                {t.positive ? "+" : "−"}
+                {t.amount}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {rows.length > 0 && (
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Ghost protection: {GHOST_PROTECTION_GUARANTEE} If they come back and
+          choose you after that, the same fee is re-charged. Separately, the
+          first-application guarantee: {FIRST_APPLICATION_GUARANTEE}{" "}
+          {CREDIT_NOT_CASH_LINE}
+        </p>
+      )}
+    </section>
+  );
+}
