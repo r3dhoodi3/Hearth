@@ -416,6 +416,15 @@ export function isPublicPath(path: string): boolean {
     // stay gated: they 401 without a session and are downloaded by the
     // authenticated pro, never fetched by a scraper.
     path.startsWith("/api/invite-card/") ||
+    // Home Wins OG share card (src/app/api/wins-card/[code]): same public share
+    // pattern as invite-card above - an unauthenticated image fetched by social
+    // scrapers when a homeowner shares their wins link. WITHOUT this entry the
+    // middleware 307s the scraper (and any logged-out recipient) to /signin, so
+    // the card never renders. It carries only a first name + non-identifying
+    // positive win counts (no address, value, or dollar figure - privacy
+    // verified) and resolves the code with the admin client since there is no
+    // session. Remove this line if the Home Wins feature is removed.
+    path.startsWith("/api/wins-card/") ||
     // Stripe webhook authenticates via its signature, not a user session, and
     // must never be redirected: Stripe doesn't follow redirects and would treat
     // the 307 as a failed delivery, so deposits would never be credited.
