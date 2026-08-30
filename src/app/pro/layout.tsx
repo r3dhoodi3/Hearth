@@ -1,6 +1,6 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { getCurrentContractor, getSides } from "@/lib/contractor";
+import { getUserProfile } from "@/lib/user";
 import Logo from "@/components/Logo";
 import ProNav from "@/components/ProNav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
@@ -23,9 +23,24 @@ export default async function ProLayout({
   // getSides() only feeds the profile menu's "Switch to your home" vs "Add
   // your home" item; it shares getCurrentContractor()'s per-request cache, so
   // the pair costs one company query plus one home count.
+  //
+  // getUserProfile() rides along in the same Promise.all so it costs no extra
+  // wall time, and so AppGuideMount below - which reads it - is a request-cache
+  // hit rather than a fresh await. That is what lets the guide mount WITHOUT a
+  // Suspense boundary; see the comment at its mount point for why the boundary
+  // had to go.
+  //
+  // .catch here, not because the value is used (it is not - this call exists to
+  // warm the per-request cache), but because that read CAN throw on a database
+  // that has not had migration 0137 applied yet. AppGuideMount has always
+  // swallowed that itself and fallen back to the localStorage mirror; an
+  // unguarded await in the layout would have turned the same failure into a 500
+  // for the whole pro shell, which is exactly the regression the Suspense
+  // boundary used to hide.
   const [contractor, sides] = await Promise.all([
     getCurrentContractor(),
     getSides(),
+    getUserProfile().catch(() => null),
   ]);
 
   // No company yet → the user is still onboarding. Show a bare top bar with no
@@ -94,14 +109,51 @@ export default async function ProLayout({
           their business, and a tour of leads and reviews there would be a
           takeover in the middle of onboarding. Renders null once the account
           has been through it. See src/lib/appGuide.ts.
-          Behind Suspense like the dock above: its one users-row read is not on
-          the path to anything visible, so it must not hold up the shell. (The
-          homeowner layout needs no boundary - it already awaits
-          getUserProfile() at the top, so the same call there is a
-          request-cache hit.) */}
-      <Suspense fallback={null}>
-        <AppGuideMount side="pro" />
-      </Suspense>
+
+          NO <Suspense> AROUND THIS (removed 2026-08-30), and it must not come
+          back. It used to sit behind `<Suspense fallback={null}>` so its
+          users-row read could not hold up the shell. That boundary was the one
+          thing the pro shell had that the homeowner shell (which mounts the
+          same component bare) did not - and it was the cause of the
+          intermittent `Minified React error #418` plus
+          `Cannot read properties of null (reading 'parentNode') at $RS` that
+          only ever showed on /pro pages.
+
+          The mechanism: a Suspense boundary in the MIDDLE of the shell streams
+          as `<!--$?--><template id="B:n"></template><!--/$-->`, and React's
+          own reveal script rewrites those three nodes in place the moment the
+          server resolves the boundary. On a pro page the shell flushes early
+          (the layout's own reads are done) while this read is still in flight,
+          so the rewrite lands in the same few milliseconds the client spends
+          hydrating the shell around it. When it lands mid-hydration, React
+          loses its place in the child list, throws the host-element mismatch
+          (#418), client-renders the whole root, and the page-content fill
+          script that runs after that has no `<template>` left to insert
+          before - which is the `$RS` TypeError.
+
+          BE HONEST ABOUT WHAT THIS BUYS. Measured on a local production build
+          against a throwaway pro, hard-reloading the six pro routes: with the
+          boundary, 3 failures in 36 loads; without it, 1 in 69 on the same
+          build and 1 in 18 on the final one. It removes one of the two
+          streamed boundaries the shell hydrates around, so the window shrinks,
+          but it does NOT close it - the other boundary is the route segment's
+          own (from pro/loading.tsx) and Next owns that one. The residual is a
+          React 19.1.9 hydration-restart bug, captured by patching
+          throwOnHydrationMismatch in the emitted React chunk: React re-enters
+          <main> below with its module-level hydration cursor already pointing
+          at <main>'s own first child, so the element cannot be re-claimed. The
+          only app-level lever that removes the mechanism outright is to stop
+          this shell flushing ahead of the page body at all (no pro
+          loading.tsx anywhere, so there is no deferred boundary to reveal),
+          and that is a product trade - skeleton now vs. a later first paint -
+          that belongs to the owner, not to this file.
+
+          Nothing is paid for removing it: getUserProfile() is React-cached per
+          request and is already awaited in the Promise.all at the top of this
+          layout, so the read here is a cache hit and the shell waits on
+          nothing new. This is exactly how src/app/(app)/layout.tsx has always
+          mounted it. */}
+      <AppGuideMount side="pro" />
     </div>
   );
 }
