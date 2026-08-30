@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
+import { isOwnedStoragePath } from "@/lib/ownedStoragePath";
 import { setFlash } from "@/lib/flash";
 import type { PrepKey } from "./PanicCard";
 
@@ -30,10 +31,17 @@ export async function savePrepItemAction(formData: FormData) {
     throw new Error("Couldn't save that item. Refresh the page and try again.");
 
   // Cap lengths server-side so an oversized payload can't bloat the row. A
-  // note gets trimmed to a sane size; a too-long "URL" is not a URL at all,
-  // so it's quietly dropped (falling back to the existing photo).
+  // note gets trimmed to a sane size.
+  //
+  // The photo key gets the same guard every other action that persists a
+  // client-chosen storage key uses (src/lib/ownedStoragePath.ts). Length alone
+  // was the whole check here, which was the one gap left in that rule: this
+  // form hands back a hidden field, so the key is as forgeable as any other
+  // input, and PrepPhotoUpload.tsx always writes under `${propertyId}/`. A key
+  // that does not belong to this home is dropped, falling back to whatever
+  // photo the slot already had.
   const rawUrl = ((formData.get("photo_url") as string) || "").trim();
-  const photoUrl = rawUrl.length <= 1000 ? rawUrl : "";
+  const photoUrl = isOwnedStoragePath(rawUrl, property.id) ? rawUrl : "";
   const note = ((formData.get("note") as string) || "").trim().slice(0, 2000);
 
   const supabase = await createClient();

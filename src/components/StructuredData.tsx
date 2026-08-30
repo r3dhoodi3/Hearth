@@ -15,7 +15,16 @@ export default function StructuredData({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+      // "<" escaped to its unicode form, the same guard src/app/p/[id]/page.tsx
+      // uses. JSON.stringify does not escape it, so a value containing
+      // "</script>" would close this tag and everything after it would be
+      // parsed as HTML. Every caller today passes a build-time constant, which
+      // is why this was never exploitable - but this component is generic, and
+      // the next caller may not be, so the escape belongs here rather than in
+      // each caller's head.
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify(data).replace(/</g, "\\u003c"),
+      }}
     />
   );
 }

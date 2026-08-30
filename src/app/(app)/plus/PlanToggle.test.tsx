@@ -220,8 +220,14 @@ describe("PlanToggle badges", () => {
 
   it("does not repeat the same claim between the Monthly and Annual badges", () => {
     render(<PlanToggle />);
+    // Two spans, one per breakpoint: "Popular" below sm (12px uppercase would
+    // wrap in a ~92px phone column at the full length), "Most popular" from sm
+    // up. Both are in the DOM; jsdom applies no CSS, so name each exactly.
     expect(
       within(card(/^Monthly/)).getByText("Most popular")
+    ).toBeInTheDocument();
+    expect(
+      within(card(/^Monthly/)).getByText("Popular")
     ).toBeInTheDocument();
     expect(
       within(card(/^Monthly/)).queryByText(/best/i)
@@ -239,23 +245,64 @@ describe("PlanToggle badges", () => {
 });
 
 describe("PlanToggle checkout disclosure", () => {
+  // TWO copies of the disclosure are in the DOM now, one per breakpoint: the
+  // phone one lives inside a closed <details> so the checkout button is not
+  // pushed off a 390px screen, the desktop one renders open exactly as before.
+  // jsdom applies no CSS, so both are "visible" to these queries and every
+  // lookup that used to be getByText has to say which copy it means.
+  // getAllByText(...) with a length assertion is that: it also pins the count,
+  // so a future edit that quietly drops one breakpoint's copy fails here.
   it("keeps the auto-renewal terms inside the checkout form, next to the button", () => {
     // No trial, so the picker defaults to Monthly and "Get Monthly" is on
     // screen without needing to tap a card first.
     render(<PlanToggle trialEligible={false} />);
     const form = pickerForm();
-    const terms = within(form).getByText(
+    const terms = within(form).getAllByText(
       "This subscription renews automatically"
     );
+    expect(terms).toHaveLength(2);
     const button = within(form).getByRole("button", { name: "Get Monthly" });
-    expect(terms).toBeInTheDocument();
     expect(button).toBeInTheDocument();
-    // The disclosure block is the element immediately before the button, so
-    // nothing can be slipped between the terms and the act of consent.
-    const termsBlock = terms.closest("div") as HTMLElement;
-    expect(termsBlock.nextElementSibling).toBe(button);
+    // The desktop disclosure is still the element immediately before the
+    // button, so nothing can be slipped between the terms and the act of
+    // consent. terms[1] is the second copy in document order, which is the
+    // sm-and-up one; the phone copy inside the <details> comes first.
+    const desktopBlock = terms[1].closest("div")?.parentElement as HTMLElement;
+    expect(desktopBlock.nextElementSibling).toBe(button);
   });
 
+  it("collapses the phone disclosure by default but keeps the full terms in it", () => {
+    render(<PlanToggle trialEligible={false} />);
+    const form = pickerForm();
+    // One <details> per checkout form, closed on first paint. Closed and not
+    // absent: the terms are one tap away, not gone.
+    const details = form.querySelector("details") as HTMLDetailsElement;
+    expect(details).toBeTruthy();
+    expect(details.open).toBe(false);
+    expect(within(details).getByText("Billing terms")).toBeInTheDocument();
+    // The itemized block really is inside it, not a summary of it.
+    expect(
+      within(details).getByText("This subscription renews automatically")
+    ).toBeInTheDocument();
+    expect(within(details).getByText("Then:")).toBeInTheDocument();
+    expect(within(details).getByText("To cancel:")).toBeInTheDocument();
+  });
+
+  it("keeps the one-line material terms visible on a phone without opening anything", () => {
+    render(<PlanToggle trialEligible={false} />);
+    const form = pickerForm();
+    // Outside the <details>: the sentence that carries price, cadence and how
+    // to stop it is never behind a tap.
+    // The same sentence also appears in the phone description panel above the
+    // picker, so this checks every copy rather than assuming there is one.
+    const summaryLines = within(form).getAllByText(
+      `${formatUsd(PLUS_PLAN.monthly)} a month, cancel anytime.`
+    );
+    expect(summaryLines.length).toBeGreaterThan(0);
+    for (const line of summaryLines) {
+      expect(line.closest("details")).toBeNull();
+    }
+  });
   it("restates the terms for the plan actually selected", () => {
     render(<PlanToggle />);
     // The trial default is Weekly (see above); select Monthly explicitly to
@@ -263,24 +310,24 @@ describe("PlanToggle checkout disclosure", () => {
     fireEvent.click(card(/^Monthly/));
     // Monthly bills on day one: no free-days promise in the picker's terms.
     expect(
-      within(pickerForm()).getByText(
+      within(pickerForm()).getAllByText(
         new RegExp(
           `\\${formatUsd(PLUS_PLAN.monthly)} today, and it renews every month`
         )
       )
-    ).toBeInTheDocument();
+    ).toHaveLength(2);
 
     fireEvent.click(card(/^Annual/));
     expect(
-      within(pickerForm()).getByText(/renews every 12 months/)
-    ).toBeInTheDocument();
+      within(pickerForm()).getAllByText(/renews every 12 months/)
+    ).toHaveLength(2);
 
     fireEvent.click(card(/^Weekly/));
     expect(
-      within(pickerForm()).getByText(
+      within(pickerForm()).getAllByText(
         new RegExp(`Free for ${PLUS_PLAN.trialDays} days`)
       )
-    ).toBeInTheDocument();
+    ).toHaveLength(2);
   });
 
   it("carries its own weekly terms next to the top trial button", () => {
@@ -294,14 +341,18 @@ describe("PlanToggle checkout disclosure", () => {
     expect(
       form.querySelector<HTMLInputElement>('input[name="plan"]')?.value
     ).toBe("weekly");
+    // Two copies here too: phone (inside a closed <details>) and desktop.
     expect(
-      within(form).getByText("This subscription renews automatically")
-    ).toBeInTheDocument();
+      within(form).getAllByText("This subscription renews automatically")
+    ).toHaveLength(2);
     expect(
-      within(form).getByText(
+      within(form).getAllByText(
         new RegExp(`Free for ${PLUS_PLAN.trialDays} days`)
       )
-    ).toBeInTheDocument();
+    ).toHaveLength(2);
+    expect((form.querySelector("details") as HTMLDetailsElement).open).toBe(
+      false
+    );
     // The one line under the button quotes the real price, never a typed one.
     expect(
       within(form).getByText(

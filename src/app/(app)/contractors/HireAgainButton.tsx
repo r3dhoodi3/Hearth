@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { JOB_CATEGORIES } from "@/lib/constants";
+import { reportReviewMoment } from "@/lib/nativeReview";
 import type { ActionResult } from "@/lib/actionResult";
 
 const MIN_DESCRIPTION = 20;
@@ -69,8 +70,15 @@ export default function HireAgainButton({
                 setError(null);
                 try {
                   const res = await action(fd);
-                  if (res.ok) setOpen(false);
-                  else setError(res.error);
+                  if (res.ok) {
+                    // Hiring a pro is one of the two positive moments that can
+                    // earn a native store-review ask later in the session (see
+                    // src/lib/nativeReview.ts). It only records the moment; the
+                    // ask itself waits for a calm one, and does nothing at all
+                    // on the web.
+                    reportReviewMoment("job_hired");
+                    setOpen(false);
+                  } else setError(res.error);
                 } catch (err: any) {
                   // Trap: rehireProAction redirects straight to the new chat
                   // thread on success, and redirect() does that by throwing a
@@ -79,7 +87,14 @@ export default function HireAgainButton({
                   // reports a successful rehire as "something went wrong" -
                   // rethrow it so the redirect still happens, only treat
                   // everything else as a real failure.
-                  if (err?.digest?.startsWith("NEXT_REDIRECT")) throw err;
+                  if (err?.digest?.startsWith("NEXT_REDIRECT")) {
+                    // The redirect IS the success path here, so the positive
+                    // moment is recorded on this branch too. sessionStorage,
+                    // not state, precisely because the page is about to be
+                    // replaced by the new chat thread.
+                    reportReviewMoment("job_hired");
+                    throw err;
+                  }
                   setError("Something went wrong. Please try again.");
                 } finally {
                   setPending(false);

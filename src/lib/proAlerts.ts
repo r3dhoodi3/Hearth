@@ -13,6 +13,7 @@ import {
   JOB_CATEGORIES,
   TIMING_OPTIONS,
   COLD_START_FREE_ALERTS,
+  PRO_LEADS_HREF,
 } from "@/lib/constants";
 
 // Hearth Pro perk: instant new-job alerts. When a homeowner posts a job, every
@@ -323,7 +324,7 @@ export async function alertProsForNewLead(
       kind: "new_lead",
       title: `New ${categoryLabel} job just posted`,
       body,
-      url: "/pro",
+      url: PRO_LEADS_HREF,
     };
 
     // One insert for every in-app row. Postgres applies a multi-row INSERT

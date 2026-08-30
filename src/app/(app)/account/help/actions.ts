@@ -68,7 +68,17 @@ export async function saveSupportMessageAction(formData: FormData) {
     message,
   });
 
-  if (error) setFlash("Couldn't send your message. Please try again.", "error");
-  else setFlash("Thanks. We got your message and will get back to you.", "success");
-  redirect(HELP_PATH);
+  if (error) {
+    setFlash("Couldn't send your message. Please try again.", "error");
+    redirect(HELP_PATH);
+  }
+
+  // ?sent=1 is what tells the page (src/app/(app)/account/help/page.tsx) to
+  // swap SupportForm for its confirmation card instead of the plain form -
+  // the flash toast alone was easy to miss, and gave no "what now" beyond the
+  // message itself. Kept alongside the toast rather than instead of it: it is
+  // cheap and gives feedback immediately, before the redirected page finishes
+  // loading.
+  setFlash("Thanks. We got your message and will get back to you.", "success");
+  redirect(`${HELP_PATH}?sent=1`);
 }

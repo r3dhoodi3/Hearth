@@ -1,3 +1,4 @@
+import { PRO_LEADS_HREF } from "@/lib/constants";
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -179,7 +180,7 @@ async function runCron(req: NextRequest) {
         kind: "ghost_refund",
         title,
         body,
-        url: "/pro",
+        url: PRO_LEADS_HREF,
         email: contact?.email ?? null,
         phone: contact?.phone ?? null,
         smsConsent: contact?.sms_consent === true,
@@ -292,7 +293,7 @@ async function runCron(req: NextRequest) {
           body: `The homeowner never responded to a direct request, so your ${feeLabel(
             r.feeCents
           )} lead fee is back in your wallet as credit for your next lead.`,
-          url: "/pro",
+          url: PRO_LEADS_HREF,
           email: contact?.email ?? null,
           phone: contact?.phone ?? null,
           smsConsent: contact?.sms_consent === true,

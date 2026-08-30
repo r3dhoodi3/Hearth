@@ -30,7 +30,9 @@ export default function ProTermsPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <Link href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
+        {/* Same phone-only 44px tap target as the /contact back link: all
+            added classes are max-sm:, so sm and up is unchanged. */}
+        <Link href="/" className="text-stone-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
         </Link>
       </p>

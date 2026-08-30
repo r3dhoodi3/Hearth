@@ -13,6 +13,13 @@ import {
   billingTermsText,
   type PaidPlan,
 } from "@/lib/billingTerms";
+import {
+  convertedRef,
+  reservedSessionRef,
+  PLUS_RESERVATION_REF,
+  PRO_RESERVATION_REF,
+} from "@/lib/promoClaimRef";
+import { trackServerEvent } from "@/lib/trackServer";
 
 // Notification kind for the post-purchase auto-renewal acknowledgment.
 const ACK_KIND = "renewal_acknowledgment";
@@ -271,7 +278,7 @@ async function applyDepositOnce(
   cents: number,
   boostPts: number,
   eventId: string
-): Promise<{ retry: boolean }> {
+): Promise<{ retry: boolean; credited: boolean }> {
   const ladder: Record<string, unknown>[] = [
     { p_contractor: contractorId, p_deposit_cents: cents, p_bonus_boost_pts: boostPts, p_event_id: eventId },
     { p_contractor: contractorId, p_deposit_cents: cents, p_bonus_boost_pts: boostPts },
@@ -279,7 +286,7 @@ async function applyDepositOnce(
   ];
   for (let i = 0; i < ladder.length; i++) {
     const { error } = await admin.rpc("apply_deposit", ladder[i]);
-    if (!error) return { retry: false };
+    if (!error) return { retry: false, credited: true };
     if (isMissingFn(error, "apply_deposit") && i < ladder.length - 1) {
       continue; // older DB: try the next-oldest overload
     }
@@ -288,12 +295,12 @@ async function applyDepositOnce(
         "apply_deposit failed on the event-keyed call, asking Stripe to redeliver:",
         error.message ?? error
       );
-      return { retry: true };
+      return { retry: true, credited: false };
     }
     console.error("apply_deposit failed, not retrying:", error.message ?? error);
-    return { retry: false };
+    return { retry: false, credited: false };
   }
-  return { retry: false }; // unreachable: the loop always returns
+  return { retry: false, credited: false }; // unreachable: the loop always returns
 }
 
 // How many cents a wallet-deposit checkout session is worth, or null if it is
@@ -313,6 +320,16 @@ function acceptedDepositCents(session: any): number | null {
   return cents;
 }
 
+// deposit_made's amount, bucketed to the nearest $250 rather than the exact
+// cents Stripe charged (docs/ANALYTICS.md's payload rule: ids and enums only,
+// never a precise dollar figure someone typed or paid). Rounds up, so a
+// $50 deposit lands in the 250 bucket and the $2,000 cap lands in its own.
+function depositAmountBucket(cents: number): number {
+  const dollars = cents / 100;
+  const capDollars = MAX_DEPOSIT_CENTS / 100;
+  return Math.min(capDollars, Math.ceil(dollars / 250) * 250);
+}
+
 // Credit a deposit checkout session: look up the Pro boost, then apply the
 // deposit exactly once. Shared by checkout.session.completed (instant
 // methods) and checkout.session.async_payment_succeeded (delayed methods);
@@ -323,15 +340,19 @@ function acceptedDepositCents(session: any): number | null {
 async function creditDepositSession(
   session: any,
   eventId: string
-): Promise<{ retry: boolean }> {
+): Promise<{ retry: boolean; credited: boolean }> {
   const meta = session.metadata ?? {};
-  if (meta.type !== "deposit" || !meta.contractor_id) return { retry: false };
+  if (meta.type !== "deposit" || !meta.contractor_id) {
+    return { retry: false, credited: false };
+  }
 
   // Delayed-notification methods (ACH debit etc.) fire completed with
   // payment_status "unpaid" and only settle later. Never credit money that
   // hasn't arrived: the async_payment_succeeded event re-enters here with
   // payment_status "paid" once it has.
-  if (session.payment_status !== "paid") return { retry: false };
+  if (session.payment_status !== "paid") {
+    return { retry: false, credited: false };
+  }
 
   // THE AMOUNT COMES OFF THE SESSION, NEVER OFF METADATA.
   //
@@ -358,14 +379,18 @@ async function creditDepositSession(
       "amount_total",
       session.amount_total
     );
-    return { retry: false };
+    return { retry: false, credited: false };
   }
   const admin = createAdminClient();
 
   // Hearth Pro members earn extra points on the deposit bonus. The
   // lookup is best-effort: any hiccup here means "no boost", never a
-  // failed deposit.
+  // failed deposit. Also the only place this function learns the pro's
+  // OWN account id (contractors.user_id), which deposit_made below needs -
+  // metadata only carries the contractor id, not the user id analytics rows
+  // are keyed on.
   let boostPts = 0;
+  let proUserId: string | null = null;
   try {
     const { data: proRow } = await (admin as any)
       .from("contractors")
@@ -373,6 +398,7 @@ async function creditDepositSession(
       .eq("id", meta.contractor_id)
       .maybeSingle();
     if (proRow?.user_id) {
+      proUserId = proRow.user_id as string;
       // Filter to the pro row explicitly. Since migration 0036 a user can
       // hold BOTH homeowner Plus and a Pro membership, so a bare
       // .eq(user_id).maybeSingle() would throw on two rows and silently
@@ -405,13 +431,24 @@ async function creditDepositSession(
   // Credits cash, computes + grants the tier bonus, writes the ledger,
   // and (on the 0058 signature) dedups on the Stripe event id so a
   // duplicate delivery can't double-credit.
-  return applyDepositOnce(
+  const result = await applyDepositOnce(
     admin,
     meta.contractor_id,
     cents,
     Math.max(boostPts, 0),
     eventId
   );
+
+  // Funnel analytics (docs/ANALYTICS.md), only on the attempt that actually
+  // moved money - never a refused amount, an unsettled ACH session, or a
+  // failed/retryable RPC call. amount_bucket, not the exact cents charged.
+  if (result.credited) {
+    await trackServerEvent(proUserId, "deposit_made", {
+      amount_bucket: depositAmountBucket(cents),
+    });
+  }
+
+  return result;
 }
 
 // Claw back a deposit after a dispute/refund. Mirrors applyDepositOnce's
@@ -803,9 +840,19 @@ function hasIntroDiscount(subscription: any): boolean {
 // of that), so its intro_reserved is "false" and its expiry never even calls
 // this function. Best-effort throughout: a failure here just means the user
 // has to contact support to get their intro back, never a blocked checkout.
+//
+// SCOPED BY `ref`, not just by user. The ledger row now records WHICH checkout
+// session holds the reservation (see src/lib/promoClaimRef.ts), because the
+// checkout actions read that to tell an abandoned checkout apart from one that
+// is still open. A blanket delete here could therefore throw away a reservation
+// that a LATER attempt has since taken over - a redelivered expiry event for a
+// long-dead session wiping the row for the session the buyer is looking at
+// right now - and the next click would mint a second reservation alongside it.
+// So each caller passes the refs its own event is entitled to release.
 async function releaseIntroReservationIfUnused(
   admin: ReturnType<typeof createAdminClient>,
-  userId: string
+  userId: string,
+  refs: string[]
 ): Promise<void> {
   try {
     const { data: rows } = await (admin as any)
@@ -822,7 +869,29 @@ async function releaseIntroReservationIfUnused(
       .from("promo_claims")
       .delete()
       .eq("user_id", userId)
-      .eq("promo_key", "pro_intro_monthly");
+      .eq("promo_key", "pro_intro_monthly")
+      .in("ref", refs);
+    // A reservation whose checkout completed but whose conversion stamp never
+    // landed still reads "<reservation>:<session id>". Neither ref above
+    // matches it, so a subscription that never went live would strand the
+    // buyer's one offer forever (2026-08-30 pre-push review, M2). Only the
+    // unconverted, session-scoped shape can match this LIKE, so it can never
+    // touch a converted claim.
+    for (const base of refs.filter((r) => !r.startsWith("converted:"))) {
+      const { error: likeError } = await admin
+        .from("promo_claims")
+        .delete()
+        .eq("user_id", userId)
+        .eq("promo_key", "pro_intro_monthly")
+        .like("ref", `${base}:%`);
+      if (likeError) {
+        console.error(
+          "promo_claims session-scoped rollback failed for",
+          userId,
+          likeError.message ?? likeError
+        );
+      }
+    }
     if (error) {
       console.error(
         "promo_claims rollback failed for",
@@ -853,9 +922,12 @@ async function releaseIntroReservationIfUnused(
 // subscription before deleting anything, so a trial that is genuinely running
 // is never clawed back. Best effort throughout: a failure here means the buyer
 // has to ask support for their trial back, never a blocked checkout.
+// Scoped by `ref` for the same reason the Pro one is: the caller says which
+// refs its event may release.
 async function releasePlusTrialReservationIfUnused(
   admin: ReturnType<typeof createAdminClient>,
-  userId: string
+  userId: string,
+  refs: string[]
 ): Promise<void> {
   try {
     const { data: rows } = await (admin as any)
@@ -883,7 +955,29 @@ async function releasePlusTrialReservationIfUnused(
       .from("promo_claims")
       .delete()
       .eq("user_id", userId)
-      .eq("promo_key", "plus_trial");
+      .eq("promo_key", "plus_trial")
+      .in("ref", refs);
+    // A reservation whose checkout completed but whose conversion stamp never
+    // landed still reads "<reservation>:<session id>". Neither ref above
+    // matches it, so a subscription that never went live would strand the
+    // buyer's one offer forever (2026-08-30 pre-push review, M2). Only the
+    // unconverted, session-scoped shape can match this LIKE, so it can never
+    // touch a converted claim.
+    for (const base of refs.filter((r) => !r.startsWith("converted:"))) {
+      const { error: likeError } = await admin
+        .from("promo_claims")
+        .delete()
+        .eq("user_id", userId)
+        .eq("promo_key", "plus_trial")
+        .like("ref", `${base}:%`);
+      if (likeError) {
+        console.error(
+          "promo_claims session-scoped rollback failed for",
+          userId,
+          likeError.message ?? likeError
+        );
+      }
+    }
     if (error) {
       console.error(
         "promo_claims(plus_trial) rollback failed for",
@@ -893,6 +987,43 @@ async function releasePlusTrialReservationIfUnused(
     }
   } catch (err) {
     console.error("promo_claims(plus_trial) rollback threw for", userId, err);
+  }
+}
+
+// Stamp a promo claim as spent: ref becomes converted:<subscription id>.
+//
+// The claim row is one per (user, promo), and the checkout actions now read its
+// `ref` to decide whether a losing claim_promo call means "somebody already
+// bought with this" or "an abandoned checkout is still holding it, give it
+// back" (src/lib/checkoutReservation.ts). Without this stamp those two look
+// identical forever, and a converted account could reclaim its own spent offer.
+//
+// Deliberately unconditional on the current ref: a newer conversion overwriting
+// an older one is harmless, and every non-reservation value (a backfill row, a
+// legacy subscription id) means spent either way. Best effort - the checkout's
+// own eligibility checks still hold if this write fails.
+async function markPromoConverted(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  promoKey: string,
+  subscriptionId: string
+): Promise<void> {
+  try {
+    const { error } = await admin
+      .from("promo_claims")
+      .update({ ref: convertedRef(subscriptionId) })
+      .eq("user_id", userId)
+      .eq("promo_key", promoKey);
+    if (error) {
+      console.error(
+        "promo_claims conversion stamp failed for",
+        promoKey,
+        userId,
+        error.message ?? error
+      );
+    }
+  } catch (err) {
+    console.error("promo_claims conversion stamp threw for", promoKey, err);
   }
 }
 
@@ -1312,6 +1443,29 @@ export async function POST(req: NextRequest) {
           );
         }
       }
+
+      // Mark the claim SPENT. claim_promo inserts, and its "on conflict do
+      // nothing" leaves an existing row's ref exactly as the checkout action
+      // wrote it - which since the reservation fix means the ledger could still
+      // read "reserved" for a claim that has just bought a subscription, and a
+      // later retry would be entitled to take it back. Stamping the
+      // subscription id is what makes "already spent" answerable from the
+      // ledger alone, without a subscriptions row to read. Best effort: the
+      // !existing check in the checkout action still holds meanwhile.
+      await markPromoConverted(
+        admin,
+        meta.user_id,
+        "pro_intro_monthly",
+        subscription.id
+      );
+
+      // Funnel analytics (docs/ANALYTICS.md). Same reasoning as the Plus
+      // checkout_completed below: fired off the webhook, the trustworthy
+      // completion signal, not the ?welcome=1 page render, which can beat or
+      // lose the race with this event.
+      await trackServerEvent(meta.user_id, "pro_checkout_completed", {
+        plan: proPlan,
+      });
     }
 
     if (meta.type === "plus_subscription" && meta.user_id && session.subscription) {
@@ -1383,6 +1537,28 @@ export async function POST(req: NextRequest) {
         plusPlan,
         event.id
       );
+
+      // The free days are now spent. Stamp the ledger so a later checkout can
+      // never take this reservation back and hand out a second trial (see
+      // reclaimCheckoutReservation): until this existed, a converted claim and
+      // an abandoned one read identically. Unconditional, not gated on
+      // trial_reserved - a monthly buyer who had reserved the trial on an
+      // earlier weekly attempt has spent it too, and their subscriptions row
+      // already says so.
+      await markPromoConverted(
+        admin,
+        meta.user_id,
+        "plus_trial",
+        subscription.id
+      );
+
+      // Funnel analytics (docs/ANALYTICS.md). Fired here, not off the
+      // ?welcome=1 page render, because this is the trustworthy completion
+      // signal - the render can beat or lose the race with this webhook (see
+      // the extensive comments in PlusWelcome.tsx and plus/page.tsx).
+      await trackServerEvent(meta.user_id, "checkout_completed", {
+        plan: plusPlan,
+      });
     }
   }
 
@@ -1405,7 +1581,22 @@ export async function POST(req: NextRequest) {
       meta.intro_reserved === "true"
     ) {
       const admin = createAdminClient();
-      await releaseIntroReservationIfUnused(admin, meta.user_id);
+      // Only the refs THIS session could be holding: the bare marker (the
+      // checkout action failed to record the session id) or the marker naming
+      // this exact session.
+      await releaseIntroReservationIfUnused(admin, meta.user_id, [
+        PRO_RESERVATION_REF,
+        reservedSessionRef(PRO_RESERVATION_REF, String(session.id)),
+      ]);
+    }
+
+    // Funnel analytics (docs/ANALYTICS.md), mirroring checkout_abandoned
+    // below: any expired Pro checkout session counts, not only the ones
+    // holding an intro-coupon reservation above.
+    if (meta.type === "pro_subscription" && meta.user_id) {
+      await trackServerEvent(meta.user_id, "pro_checkout_abandoned", {
+        plan: meta.plan ?? null,
+      });
     }
 
     // The homeowner half of the same story: an abandoned Plus checkout whose
@@ -1419,7 +1610,20 @@ export async function POST(req: NextRequest) {
       meta.trial_reserved === "true"
     ) {
       const admin = createAdminClient();
-      await releasePlusTrialReservationIfUnused(admin, meta.user_id);
+      await releasePlusTrialReservationIfUnused(admin, meta.user_id, [
+        PLUS_RESERVATION_REF,
+        reservedSessionRef(PLUS_RESERVATION_REF, String(session.id)),
+      ]);
+    }
+
+    // Funnel analytics (docs/ANALYTICS.md). Any expired Plus checkout session
+    // counts as abandoned, not only the ones that were holding a trial
+    // reservation above - a monthly/yearly buyer who backed out never sets
+    // trial_reserved at all and would otherwise never show up here.
+    if (meta.type === "plus_subscription" && meta.user_id) {
+      await trackServerEvent(meta.user_id, "checkout_abandoned", {
+        plan: meta.plan ?? null,
+      });
     }
   }
 
@@ -1612,7 +1816,13 @@ export async function POST(req: NextRequest) {
         neverWentLive &&
         subscription.metadata?.intro_step_up === "true"
       ) {
-        await releaseIntroReservationIfUnused(admin, existing.user_id);
+        // By this point the checkout completed, so the branch above stamped
+        // the claim converted:<subscription id>. That, or a bare marker if the
+        // stamp never landed, is what this subscription is entitled to release.
+        await releaseIntroReservationIfUnused(admin, existing.user_id, [
+          PRO_RESERVATION_REF,
+          convertedRef(subscription.id),
+        ]);
       }
 
       // Same rollback on the HOMEOWNER side, for the Plus free-trial
@@ -1629,7 +1839,10 @@ export async function POST(req: NextRequest) {
         neverWentLive &&
         subscription.metadata?.intro_step_up === "true"
       ) {
-        await releasePlusTrialReservationIfUnused(admin, existing.user_id);
+        await releasePlusTrialReservationIfUnused(admin, existing.user_id, [
+          PLUS_RESERVATION_REF,
+          convertedRef(subscription.id),
+        ]);
       }
 
       // Cancelled while still inside the free trial. This is the shape of trial

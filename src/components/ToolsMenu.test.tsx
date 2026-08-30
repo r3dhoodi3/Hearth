@@ -17,7 +17,7 @@ function openMenu(hasPlus = false) {
 }
 
 describe("ToolsMenu phone sheet", () => {
-  it("leads its home group with Ask Hearth, then the same links as the desktop dropdown", () => {
+  it("lists the same links as the desktop dropdown", () => {
     openMenu();
 
     // Both the desktop dropdown and the phone sheet are mounted at once
@@ -30,7 +30,6 @@ describe("ToolsMenu phone sheet", () => {
 
     expect(hrefs).toEqual([
       "/emergency",
-      "/ask",
       "/walkthrough",
       "/home-details",
       "/documents",
@@ -44,15 +43,15 @@ describe("ToolsMenu phone sheet", () => {
     ]);
   });
 
-  // The phone sheet is the only Ask Hearth entry point that needed adding:
-  // desktop still floats the Ask Hearth pill on every screen (AskHearthDock),
-  // so its dropdown stays exactly as it was.
-  it("adds Ask Hearth to the phone sheet only, never to the desktop dropdown", () => {
+  // Ask Hearth has one entry point now, the pinned row at the top of the
+  // Messages tab. This sheet used to carry a second door to it on phones; a
+  // link back in here is the regression this test exists to catch.
+  it("offers no Ask Hearth link, in the sheet or the desktop dropdown", () => {
     openMenu();
-    const dialog = screen.getByRole("dialog", { name: "Tools" });
-    const askLinks = screen.getAllByRole("link", { name: "Ask Hearth" });
-    expect(askLinks).toHaveLength(1);
-    expect(dialog.contains(askLinks[0])).toBe(true);
+    expect(screen.queryAllByRole("link", { name: "Ask Hearth" })).toHaveLength(0);
+    expect(
+      screen.queryAllByRole("link").filter((l) => l.getAttribute("href") === "/ask")
+    ).toHaveLength(0);
   });
 
   it("shows the Plus chip on member-gated tools for a non-Plus account", () => {

@@ -17,11 +17,12 @@ import {
   stripControlChars,
   toUsE164,
 } from "@/lib/outboundGuards";
+import { sendPush } from "@/lib/push";
 
 // Single entry point for notifying a homeowner. Always writes the in-app
-// notification row (what the bell in the nav shows), then tries the email and
-// SMS channels - which stay dormant until their provider env vars exist, so
-// wiring up a provider later is just adding keys, no code changes.
+// notification row (what the bell in the nav shows), then tries the push,
+// email and SMS channels - all three stay dormant until their env vars exist,
+// so wiring one up later is just adding keys, no code changes.
 //
 // One caller does NOT come through the front door: the job-post fan-out in
 // src/lib/proAlerts.ts writes its in-app rows in a single bulk insert (one
@@ -34,9 +35,13 @@ import {
 //
 // Hearth Plus gate: for the proactive homeowner alert/reminder kinds listed in
 // src/lib/notifyGating.ts, the email and SMS channels are a paid perk. The
-// in-app row is still written for everyone; only the push is withheld. See
+// in-app row is still written for everyone, and so is the web push (free to
+// send, so nothing to gate); only email and SMS are withheld. See
 // sendNotification below - the check lives there so no cron can skip it.
 //
+// To activate push: generate a VAPID key pair and set
+//   NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
+// See src/lib/push.ts and docs/GO-LIVE-WIRING.md.
 // To activate email: create a Resend account (resend.com) and set
 //   RESEND_API_KEY - from resend.com/api-keys
 //   RESEND_FROM    - a verified sender, e.g. "Hearth <hello@yourdomain.com>"
@@ -116,20 +121,45 @@ export async function sendOutboundChannels(
   input: NotificationInput,
   overrides?: OutboundChannelOverrides
 ): Promise<void> {
-  // Nothing to gate and nothing to send when the caller passed no outbound
-  // contact at all - sendEmail/sendSms would both no-op. Returning here also
-  // spares the Plus lookup below from running once per recipient on crons
-  // that only write in-app rows.
-  if (!input.email && !input.phone) return;
-
-  // THE KILL SWITCH. OUTBOUND_DISABLED=1 stops every email and SMS here, at
-  // the one door all of them go through, without touching the in-app rows
+  // THE KILL SWITCH. OUTBOUND_DISABLED=1 stops every email, SMS and PUSH here,
+  // at the one door all of them go through, without touching the in-app rows
   // (already written by the time this runs) or any caller. See
   // docs/GO-LIVE-WIRING.md.
+  //
+  // Push is included even though it costs nothing per message: the lever exists
+  // for the 3am "a cron is looping" moment, and a looping cron buzzing every
+  // phone we have is exactly the blast radius it is meant to contain.
   if (outboundDisabled()) {
     console.warn(
-      `sendOutboundChannels: OUTBOUND_DISABLED is set, skipping email/SMS for kind ${input.kind}`
+      `sendOutboundChannels: OUTBOUND_DISABLED is set, skipping email/SMS/push for kind ${input.kind}`
     );
+    return;
+  }
+
+  // PUSH, started before the email/SMS gates below and deliberately ahead of
+  // the "no contact details" return: push needs no email address and no phone
+  // number, so a caller that has neither (most crons, and the job fan-out in
+  // proAlerts.ts) still reaches a phone. It is also NOT behind the Hearth Plus
+  // gate - see the note in src/lib/notifyGating.ts - and it has its own
+  // allowlist of kinds, its own opt-out, and its own quiet-hours rule, all of
+  // which sendPush applies itself.
+  const pushing = sendPush(input.userId, {
+    title: input.title,
+    body: input.body,
+    url: input.url,
+    // Group by kind AND destination, so five replies in one chat thread replace
+    // each other on the lock screen while a message and a new quote stay two
+    // separate notifications.
+    tag: `${input.kind}:${input.url ?? ""}`,
+    kind: input.kind,
+  });
+
+  // Nothing left to send when the caller passed no outbound contact at all -
+  // sendEmail/sendSms would both no-op. Returning here also spares the Plus
+  // lookup below from running once per recipient on crons that only write
+  // in-app rows. Push has already been started above.
+  if (!input.email && !input.phone) {
+    await pushing;
     return;
   }
 
@@ -137,7 +167,14 @@ export async function sendOutboundChannels(
   // looping cron or a misfiring fan-out costs a few hundred messages rather
   // than a few hundred thousand. Counted per recipient-notification, before
   // the Plus lookup below so a runaway does not also hammer the database.
-  if (!allowOutboundSend()) return;
+  //
+  // Push is deliberately NOT counted against it: this brake exists to bound a
+  // BILL, and push has none. The kill switch above still stops push, and the
+  // number of devices a person has is its own natural ceiling.
+  if (!allowOutboundSend()) {
+    await pushing;
+    return;
+  }
 
   // Hearth Plus gate on the OUTBOUND channels only (see src/lib/notifyGating.ts
   // for the kind list and the reasoning). Enforced here, at the one door every
@@ -146,10 +183,16 @@ export async function sendOutboundChannels(
   // written by the time this runs and is never affected.
   if (isPlusGatedKind(input.kind)) {
     const status = await lookupPlusStatus(input.userId);
-    if (!shouldSendOutboundChannels(input.kind, status)) return;
+    if (!shouldSendOutboundChannels(input.kind, status)) {
+      // Push is free and ungated, so it goes out even when the paid channels
+      // are withheld from a non-member.
+      await pushing;
+      return;
+    }
   }
 
   await Promise.all([
+    pushing,
     sendEmail(input, overrides?.emailOptOut),
     sendSms(input),
   ]);

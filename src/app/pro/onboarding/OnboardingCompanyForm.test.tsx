@@ -62,6 +62,12 @@ function fillStepOne() {
   fireEvent.change(screen.getByLabelText(/Company name/), {
     target: { value: "Acme Plumbing" },
   });
+  // Owner name (migration 0141) is required to leave step 1, same as the
+  // company name and the phone number, so every walk through the wizard has to
+  // answer it before Next will move.
+  fireEvent.change(screen.getByLabelText("Owner name"), {
+    target: { value: "Alex Rivera" },
+  });
   fireEvent.change(screen.getByLabelText("Phone number"), {
     target: { value: "7145551234" },
   });
@@ -365,5 +371,69 @@ describe("pro onboarding wizard: hydration safety", () => {
     );
 
     expect(withDraftHtml).toBe(noDraftHtml);
+  });
+});
+
+// D7 + D8: the two step-1 questions that changed. The contact email used to be
+// locked to the account email, which is wrong for a Sign in with Apple account
+// (its address is an @privaterelay.appleid.com forwarder the pro cannot read
+// replies at), and there was nowhere at all to say who the owner is.
+describe("pro onboarding wizard: step 1 identity fields", () => {
+  it("lets the pro edit the contact email instead of locking it to the account", () => {
+    render(
+      <OnboardingCompanyForm userId="user-1" defaultEmail="relay@privaterelay.appleid.com" />
+    );
+    const email = screen.getByLabelText("Email address") as HTMLInputElement;
+    expect(email).toHaveValue("relay@privaterelay.appleid.com");
+    expect(email).not.toHaveAttribute("readonly");
+    expect(email.className).not.toContain("cursor-not-allowed");
+
+    fireEvent.change(email, { target: { value: "alex@acmeplumbing.com" } });
+    expect(email).toHaveValue("alex@acmeplumbing.com");
+  });
+
+  it("asks for an owner name and prefills it from the account name", () => {
+    render(
+      <OnboardingCompanyForm
+        userId="user-1"
+        defaultEmail="pro@example.com"
+        defaultOwnerName="Alex Rivera"
+      />
+    );
+    const owner = screen.getByLabelText("Owner name") as HTMLInputElement;
+    expect(owner).toHaveValue("Alex Rivera");
+    expect(owner.name).toBe("owner_name");
+    // 120 is the ceiling the column's CHECK constraint enforces (0141).
+    expect(owner.maxLength).toBe(120);
+  });
+
+  it("will not leave step 1 without an owner name", () => {
+    render(<OnboardingCompanyForm userId="user-1" defaultEmail="pro@example.com" />);
+    fireEvent.change(screen.getByLabelText(/Company name/), {
+      target: { value: "Acme Plumbing" },
+    });
+    fireEvent.change(screen.getByLabelText("Phone number"), {
+      target: { value: "7145551234" },
+    });
+    next();
+    expect(screen.getByText("Enter the owner's name.")).toBeInTheDocument();
+    // Still on step 1: the city question belongs to step 2.
+    expect(screen.queryByLabelText("Irvine")).toBeNull();
+  });
+
+  it("keeps a half-typed owner name and contact email in the draft", async () => {
+    render(<OnboardingCompanyForm userId="user-1" defaultEmail="pro@example.com" />);
+    fillStepOne();
+    fireEvent.change(screen.getByLabelText("Email address"), {
+      target: { value: "alex@acmeplumbing.com" },
+    });
+    next();
+    // persist() is deferred a tick on purpose (see schedulePersist), so the
+    // draft always mirrors the form after the render the event caused.
+    await settle();
+
+    const draft = storedDraft("user-1");
+    expect(draft.ownerName).toBe("Alex Rivera");
+    expect(draft.email).toBe("alex@acmeplumbing.com");
   });
 });

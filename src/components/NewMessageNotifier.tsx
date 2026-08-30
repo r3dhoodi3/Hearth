@@ -5,12 +5,22 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { plainPreview } from "@/lib/previewText";
 import { leadContractorEmbed } from "@/lib/leadJoin";
+import PushRegistrar from "@/components/PushRegistrar";
+import PushPrompt from "@/components/PushPrompt";
+import { markPushMoment } from "@/lib/pushPrompt";
 
 type Toast = { id: string; name: string; body: string; href: string };
 
 // Mounted once per shell. Polls for incoming messages (from the other party)
 // across all your conversations and shows a bottom-right popup, anywhere in the
 // app. Only notifies about messages that arrive after the page loads.
+//
+// It also carries the two Web Push mounts (PushRegistrar, PushPrompt), because
+// it is the one component both shells already render for both roles - so push
+// reaches homeowners and pros without a second mount point in either layout.
+// This poller is ALSO the honest moment to ask about push: a toast for a
+// message that arrived while the app was open is exactly the thing the person
+// would have missed with the app closed.
 export default function NewMessageNotifier({
   role,
 }: {
@@ -90,6 +100,12 @@ export default function NewMessageNotifier({
 
       setToasts((t) => [...next, ...t].slice(0, 4));
       next.forEach((t) => setTimeout(() => dismiss(t.id), 6000));
+
+      // A real message just arrived from the other side. That is the moment the
+      // push prompt is allowed to appear (see src/lib/pushPrompt.ts) - it makes
+      // "want your phone to tell you next time?" self-explanatory instead of a
+      // permission request out of nowhere.
+      markPushMoment();
     }
 
     poll();
@@ -107,21 +123,32 @@ export default function NewMessageNotifier({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
-  if (!toasts.length) return null;
+  // The two push mounts render on every page, toasts or not - which is why the
+  // old `if (!toasts.length) return null` early exit is now a fragment: the
+  // service worker has to register on a quiet page too. PushRegistrar renders
+  // nothing at all and PushPrompt renders nothing unless a moment has just
+  // happened, so the DOM is unchanged whenever both are idle.
+  const pushSide = role === "contractor" ? "pro" : "homeowner";
 
   return (
-    <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-      {toasts.map((t) => (
-        <Link
-          key={t.id}
-          href={t.href}
-          onClick={() => dismiss(t.id)}
-          className="block w-72 rounded-xl border border-stone-200 bg-white p-3 shadow-pop transition hover:border-bark-500 dark:border-white/10 dark:bg-stone-800 dark:hover:border-bark-500"
-        >
-          <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">{t.name}</p>
-          <p className="truncate text-xs text-stone-500 dark:text-stone-400">{t.body}</p>
-        </Link>
-      ))}
-    </div>
+    <>
+      <PushRegistrar side={pushSide} />
+      <PushPrompt side={pushSide} />
+      {toasts.length > 0 && (
+        <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+          {toasts.map((t) => (
+            <Link
+              key={t.id}
+              href={t.href}
+              onClick={() => dismiss(t.id)}
+              className="block w-72 rounded-xl border border-stone-200 bg-white p-3 shadow-pop transition hover:border-bark-500 dark:border-white/10 dark:bg-stone-800 dark:hover:border-bark-500"
+            >
+              <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">{t.name}</p>
+              <p className="truncate text-xs text-stone-500 dark:text-stone-400">{t.body}</p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

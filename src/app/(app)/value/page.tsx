@@ -16,6 +16,7 @@ import {
 import ValueForm from "./ValueForm";
 import ValueAutoFetch from "./ValueAutoFetch";
 import RefreshValue from "./RefreshValue";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 // Same honest mask the /forecast page uses for its per-system amounts: real
 // rows, real years, a masked amount. Never blurred fake numbers, and never a
@@ -173,6 +174,7 @@ export default async function ValuePage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <ValueAutoFetch needsFetch={needsFetch} propertyId={property.id} />
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Home value & equity" }]} />
       <header className="mb-1">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Home value &amp; equity

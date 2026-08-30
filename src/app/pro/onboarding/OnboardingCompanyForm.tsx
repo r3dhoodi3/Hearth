@@ -60,6 +60,11 @@ type Draft = ProOnboardingValues & {
   step: number;
   license: string;
   referral: string;
+  // The contact email is editable now (it used to be a locked mirror of the
+  // account email), so a half-typed one has to survive a refresh like every
+  // other answer. A v2 draft written before this field existed simply reads
+  // back as "" and the account email prefills instead, so no version bump.
+  email: string;
 };
 
 // What is actually written to storage: the draft plus when it was saved and
@@ -110,6 +115,7 @@ function readDraft(userId: string): Draft | null {
     return {
       step: typeof d.step === "number" ? d.step : 0,
       name: text(d.name),
+      ownerName: text(d.ownerName),
       phone: text(d.phone),
       // Digits only, and no longer than the field itself accepts. The input
       // carries pattern="[0-9]{5,8}", and neither that nor maxLength applies
@@ -120,6 +126,7 @@ function readDraft(userId: string): Draft | null {
       // the way out of storage instead.
       license: text(d.license).replace(/\D+/g, "").slice(0, 8),
       referral: text(d.referral),
+      email: text(d.email),
       cities: stringList(d.cities),
       categories: stringList(d.categories),
     };
@@ -157,6 +164,7 @@ function readValues(form: HTMLFormElement): ProOnboardingValues {
   const data = new FormData(form);
   return {
     name: String(data.get("name") ?? ""),
+    ownerName: String(data.get("owner_name") ?? ""),
     phone: String(data.get("contact_phone") ?? ""),
     cities: data.getAll("service_cities").map(String),
     categories: data.getAll("categories").map(String),
@@ -302,6 +310,7 @@ function WaitlistedPanel({ userId }: { userId: string }) {
 function OnboardingCompanyFormInner({
   userId,
   defaultEmail,
+  defaultOwnerName = "",
   defaultReferralCode = "",
 }: {
   // The signed-in account's id, from the server page. The draft key is scoped
@@ -311,6 +320,9 @@ function OnboardingCompanyFormInner({
   // simply skips the draft entirely - no read, no write, no delete.
   userId: string;
   defaultEmail: string;
+  // The account's full name, when we have one, so the owner-name question is
+  // already answered for a pro who told us at sign-up.
+  defaultOwnerName?: string;
   defaultReferralCode?: string;
 }) {
   const searchParams = useSearchParams();
@@ -379,6 +391,7 @@ function OnboardingCompanyFormInner({
       const citiesTouched = allCitiesBox ? !allCitiesBox.checked : false;
       if (
         live.name.trim() ||
+        live.ownerName.trim() ||
         live.phone.trim() ||
         live.categories.some((c) => c.trim()) ||
         citiesTouched
@@ -414,9 +427,12 @@ function OnboardingCompanyFormInner({
       v: DRAFT_VERSION,
       step: atStep,
       name: field("name", 200),
+      // 120 matches the column's own check constraint (migration 0141).
+      ownerName: field("owner_name", 120),
       phone: field("contact_phone", 40),
       license: field("license_number", 50),
       referral: field("referral_code", 100),
+      email: field("contact_email", 254),
       cities: data.getAll("service_cities").map(String),
       categories: data.getAll("categories").map(String).slice(0, 40),
     };
@@ -608,6 +624,38 @@ function OnboardingCompanyFormInner({
           </div>
         </div>
 
+        {/* Who the homeowner is actually talking to. The company name is the
+            business; this is the person, and until now there was nowhere on
+            the profile to put it. Required, and prefilled from the account
+            name when we have one, so for most pros it is already answered. */}
+        <div>
+          <label className="label" htmlFor="owner-name">
+            Owner name
+          </label>
+          <div className="relative">
+            <FieldIcon>
+              <circle cx="12" cy="8" r="4" />
+              <path d="M6 21v-1a6 6 0 0112 0v1" />
+            </FieldIcon>
+            <input
+              key={`owner-name-${restoreKey}`}
+              id="owner-name"
+              name="owner_name"
+              className="input pl-9"
+              placeholder="e.g. Alex Rivera"
+              autoComplete="name"
+              // 120 is the ceiling the column's check constraint enforces
+              // (migration 0141); saveCompanyAction caps it again server-side.
+              maxLength={120}
+              defaultValue={draft?.ownerName || defaultOwnerName}
+              required={step === 0}
+            />
+          </div>
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+            The person homeowners will be talking to. Shown on your public profile.
+          </p>
+        </div>
+
         <div>
           <label className="label" htmlFor="company-phone">
             Phone number
@@ -638,19 +686,28 @@ function OnboardingCompanyFormInner({
             <FieldIcon>
               <path d="M4 4h16v16H4zM4 6l8 6 8-6" />
             </FieldIcon>
-            {/* Read-only, not disabled: a disabled field posts nothing, and
-                saveCompanyAction reads contact_email off this form. */}
+            {/* Editable, not read-only. It used to be locked to the account
+                email, which is wrong for Sign in with Apple: that account's
+                address is an @privaterelay.appleid.com forwarder, so the pro's
+                PUBLIC contact email would have been an address they cannot
+                give out and may not read. The account email stays the login;
+                this is only where replies go. saveCompanyAction already takes
+                whatever this field posts and only falls back to the account
+                email when it is empty, so nothing server-side had to change. */}
             <input
+              key={`contact-email-${restoreKey}`}
               id="company-email"
               name="contact_email"
               type="email"
-              readOnly
-              className="input cursor-not-allowed bg-stone-100 pl-9 text-stone-500 dark:bg-stone-700 dark:text-stone-400"
-              defaultValue={defaultEmail}
+              autoComplete="email"
+              maxLength={254}
+              className="input pl-9"
+              defaultValue={draft?.email || defaultEmail}
             />
           </div>
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            The email on your account. You can change it later in your profile.
+            Where homeowners and Hearth reach you. Prefilled from your sign-in,
+            change it if you want a different one.
           </p>
         </div>
       </div>
@@ -790,6 +847,29 @@ function OnboardingCompanyFormInner({
             Have a referral code?
           </button>
         )}
+
+        {/* TCPA SMS consent. Opt-in only: NEVER pre-ticked, and never a
+            condition of signing up. The hidden marker beside it is what tells
+            saveCompanyAction "unticked" apart from "this form did not ask" (an
+            unticked checkbox posts nothing at all). Without this box, every
+            job alert Hearth already builds and pays for is dropped by the gate
+            in src/lib/notify.ts, silently. Deliberately NOT saved into the
+            localStorage draft: a consent has to be given on the form that is
+            actually submitted, not restored from a week-old draft.
+            TODO(legal): have counsel review this consent copy before launch. */}
+        <input type="hidden" name="sms_consent_present" value="1" />
+        <label className="flex min-h-11 items-start gap-2">
+          <input
+            type="checkbox"
+            name="sms_consent"
+            className="mt-1 h-6 w-6 shrink-0 rounded border-stone-300 text-bark-600 focus:ring-bark-600 dark:border-white/20"
+          />
+          <span className="text-sm text-stone-600 dark:text-stone-400">
+            Text me when a job matches or a homeowner replies. Message and data
+            rates may apply. Message frequency varies. Reply STOP to opt out,
+            HELP for help.
+          </span>
+        </label>
       </div>
 
       {error && (
@@ -813,6 +893,7 @@ function OnboardingCompanyFormInner({
 export default function OnboardingCompanyForm(props: {
   userId: string;
   defaultEmail: string;
+  defaultOwnerName?: string;
   defaultReferralCode?: string;
 }) {
   return (

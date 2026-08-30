@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
-import { MAX_APPLICANTS_PER_JOB } from "@/lib/constants";
+import { MAX_APPLICANTS_PER_JOB,
+  PRO_LEADS_HREF,
+} from "@/lib/constants";
 
 export const runtime = "nodejs";
 
@@ -34,7 +36,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DUP_GUARD_MS = 20 * 60 * 60 * 1000;
 
 const ALERT_KIND = "aging_deal";
-const ALERT_URL = "/pro";
+const ALERT_URL = PRO_LEADS_HREF;
 const ALERT_TITLE = "Deals on jobs in your trades";
 
 // Keep Promise.all fan-out bounded.

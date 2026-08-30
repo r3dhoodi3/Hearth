@@ -1,3 +1,8 @@
+// Build-time guard: this module reads SUPABASE_SERVICE_ROLE_KEY as its signing
+// secret, so importing it from a Client Component must fail the build, not ship
+// the key. Same guard as src/lib/supabase/admin.ts and src/lib/stripe.ts; it
+// was the only module reading that variable without one.
+import "server-only";
 import { createHmac, timingSafeEqual } from "crypto";
 
 // Signs and verifies the per-user unsubscribe link embedded in every outgoing

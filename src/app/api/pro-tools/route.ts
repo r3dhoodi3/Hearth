@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
+import { claimProDraft, refundProDraft } from "@/lib/freeAiTasteServer";
+import { PRO_TOOLS_PAYWALL } from "@/lib/freeAiTaste";
 import { countAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
 import { reasonToClientPayload } from "@/lib/aiReason";
 import { readJsonBounded } from "@/lib/boundedBody";
@@ -9,14 +12,20 @@ import { wrapUntrusted } from "@/lib/promptSafe";
 import { JOB_CATEGORIES } from "@/lib/constants";
 import type { ProPastJobLineItem } from "@/lib/database.types";
 import { generateJson, hasClaudeKey, isRateLimitError } from "@/lib/claude";
+import { trackServerEvent } from "@/lib/trackServer";
 
 export const runtime = "nodejs";
 
 // AI back office (Hearth Pro membership): five writing tools for the
 // paperwork pros hate. The pro describes the job in plain words and Claude
 // drafts a clean estimate, invoice, follow-up message, review response, or
-// overdue invoice reminder they can copy and send. Members only: this is
-// brand-new surface, nothing free moves behind it.
+// overdue invoice reminder they can copy and send.
+//
+// Every contractor account gets FREE_PRO_DRAFTS real drafts first (migration
+// 0145), then the Pro wall. It was members-only until 2026-08-29, which meant
+// a pro was asked to pay for the idea of a draft, having never seen one.
+// Members are unmetered here beyond the shared daily/burst ceilings, exactly
+// as before; nothing that used to be free moved behind a wall.
 //
 // Each draft also carries in a few of the pro's own recent edits to that
 // same tool (pro_tool_edits, migration 0063) as style guidance, so the
@@ -191,6 +200,13 @@ const OVERDUE_STAGES: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  // CSRF, second lock. The session cookie is SameSite=Lax and this body is
+  // JSON, so a cross-site page cannot get a signed-in request here today;
+  // this refuses one outright rather than depending on those defaults.
+  // src/lib/csrf.ts only rejects on positive cross-site evidence.
+  const crossSite = sameOriginGuard(req);
+  if (crossSite) return crossSite;
+
   // Require a signed-in user before touching the paid model.
   const supabase = await createClient();
   const {
@@ -200,14 +216,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Members-only perk: must be a contractor with an active Pro membership.
+  // Must be a contractor. Membership is no longer the door: every contractor
+  // account gets FREE_PRO_DRAFTS real drafts first (migration 0145), then the
+  // Pro wall. Asking a pro to pay for the idea of a draft was the whole
+  // problem with the members-only version of this route.
   const contractor = await getCurrentContractor();
   if (!contractor) {
     return NextResponse.json({ error: "Not a contractor" }, { status: 403 });
   }
-  if (!(await hasProPlan())) {
-    return NextResponse.json({ error: "pro_required" }, { status: 403 });
-  }
+  const isMember = await hasProPlan();
 
   // BURST PRE-CHECK, in front of the body read. The authoritative burst check
   // lives inside countAiUsage far below, after the whole per-tool prompt has
@@ -514,6 +531,34 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // The free taste, claimed LAST of the three gates and immediately before the
+  // model call: a request that was going to be refused by the burst window or
+  // the daily cap anyway must not cost a pro one of their two drafts. Members
+  // pass straight through (claimed false) and stay bounded by the ceilings
+  // above, exactly as before. Refunded below if the model never produces a
+  // document. See src/lib/freeAiTasteServer.ts.
+  const taste = await claimProDraft(contractor.id, isMember);
+  if (!taste.allowed) {
+    // The same 402 and the same sentence the component already renders before
+    // the tap, so nobody meets a message the server would not have sent.
+    return NextResponse.json(
+      {
+        result: null,
+        error: PRO_TOOLS_PAYWALL.message,
+        link: PRO_TOOLS_PAYWALL.link,
+      },
+      { status: 402 }
+    );
+  }
+
+  // Funnel analytics (docs/ANALYTICS.md), right where the taste is spent -
+  // not gated on the draft actually landing below, since a taste is spent
+  // (and refundable) the moment the claim succeeds, regardless of what the
+  // model does with it.
+  if (taste.claimed) {
+    await trackServerEvent(user.id, "free_draft_used", { tool });
+  }
+
   try {
     // Customer-facing paperwork built from the pro's own words and numbers.
     // The hard rule here is arithmetic and invention: no made-up prices, no
@@ -529,12 +574,16 @@ export async function POST(req: NextRequest) {
       label: `pro-tools:${tool}`,
     });
     if (!parsed) {
+      // No document came back, so nothing was delivered: hand the free draft
+      // back too, not just the daily usage.
+      await refundProDraft(contractor.id, taste.claimed);
       return NextResponse.json({ result: null, reason: "failed" });
     }
     const result = assemble(tool, parsed, contractor.name);
     // Missing a required piece: better an honest failure than half a document
     // going out to the pro's customer.
     if (!result) {
+      await refundProDraft(contractor.id, taste.claimed);
       return NextResponse.json({ result: null, reason: "failed" });
     }
     return NextResponse.json({ result });
@@ -542,8 +591,9 @@ export async function POST(req: NextRequest) {
     // The pro was already charged one of today's usages above; a thrown
     // model call never produced a document, so hand it back rather than
     // spending their allowance on a request that failed before it reached
-    // them.
+    // them. Same for the free draft, when one was claimed.
     await refundAiUsage(user.id);
+    await refundProDraft(contractor.id, taste.claimed);
     return NextResponse.json({
       result: null,
       reason: isRateLimitError(e) ? "rate_limited" : "failed",

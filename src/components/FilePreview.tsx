@@ -97,7 +97,10 @@ function RemoveButton({ label, onRemove }: { label: string; onRemove: () => void
       type="button"
       onClick={onRemove}
       aria-label={`Remove ${label}`}
-      className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-stone-800 text-[10px] leading-none text-white shadow hover:bg-stone-900 dark:bg-stone-600 dark:hover:bg-stone-500"
+      // Phone only: the badge grows to 24px and an invisible ::after ring
+      // pushes the touch area to 44px. 16px was the smallest target in the
+      // app; growing the circle itself would cover the thumbnail.
+      className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-stone-800 text-[10px] leading-none text-white shadow hover:bg-stone-900 max-sm:h-6 max-sm:w-6 max-sm:text-sm max-sm:after:absolute max-sm:after:-inset-2.5 max-sm:after:content-[''] dark:bg-stone-600 dark:hover:bg-stone-500"
     >
       x
     </button>

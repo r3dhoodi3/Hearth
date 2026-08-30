@@ -1,14 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { startPlusCheckoutAction } from "./actions";
 import SubmitButton from "@/components/SubmitButton";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
 import {
   PLUS_PLAN,
-  PLUS_ASK_PER_DAY,
   PLUS_INCLUDED_HOMES,
-  TRIAL_ASK_PER_DAY,
   formatUsd,
   yearlySavings,
   yearlyAsMonthly,
@@ -42,25 +41,29 @@ const YEARLY_AS_MONTHLY = formatUsd(yearlyAsMonthly(PLUS_PLAN)); // $3.33
 // full row-by-row grid lives in the "See everything included" disclosure on
 // the page, so the card never grows past four.
 //
-// The line carrying NUMBERS reads them from src/lib/constants.ts rather than
-// stating them: a hand-typed "5 homes" or "15 asks a day" is a promise that
-// goes stale the first time a limit moves, and nobody re-reads a bullet list
-// when they change a cap.
+// The home count reads from src/lib/constants.ts rather than being typed: a
+// hand-typed "5 homes" is a promise that goes stale the first time the cap
+// moves, and nobody re-reads a bullet list when they change one.
 //
-// A function, not a constant, because ONE of those numbers is not the same on
-// every card. The free days ride on the weekly plan, and the trial enforces
-// TRIAL_ASK_PER_DAY, not PLUS_ASK_PER_DAY (see src/lib/aiUsage.ts): the weekly
-// card and the phone panel were promising 15 asks a day to a buyer whose first
-// three days give 8. Quoting the smaller number on the card that carries the
-// trial is the version the product actually keeps on day one.
-function plusBullets(asksPerDay: number): string[] {
-  return [
-    "Plan and forecast, in full",
-    "Quote analyzer, home report",
-    "Every alert, every channel",
-    `${PLUS_INCLUDED_HOMES} homes, ${asksPerDay} asks a day`,
-  ];
-}
+// The Ask line deliberately carries NO number. Naming the daily ceiling made
+// the offer sound small (it reads as a cap, not as a lift), and the number
+// also differs between the trial and a paid plan, so one printed figure was
+// wrong on one of the cards no matter which one it named. "More every day" is
+// true on every plan and stays true when the limit moves. The enforced limits
+// are unchanged, in src/lib/aiUsage.ts, and /ai-disclosure still says plainly
+// that a daily cap exists.
+//
+// One list, used by all three paid cards and by the phone panel. There used to
+// be two, differing only in the Ask number the weekly (trial) card was allowed
+// to promise; with no number on that line there is nothing left to differ, and
+// the weekly card must not look like it includes less than the other two - it
+// does not.
+const PLUS_BULLETS = [
+  "Plan and forecast, in full",
+  "Quote analyzer, home report",
+  "Every alert, every channel",
+  `${PLUS_INCLUDED_HOMES} homes, more Ask Hearth questions every day`,
+];
 
 // What the free tier actually includes, so the third card reads as a plan
 // somebody runs on rather than as a wall of dashes.
@@ -94,6 +97,32 @@ const FREE_BULLETS = [
 // startPlusCheckoutAction falls back to the same cadence, so the hidden field
 // and the server can never disagree.
 //
+// PHONE DISCLOSURE: TWO COPIES OF AutoRenewalTerms, ONE PER BREAKPOINT.
+// Each checkout form below renders the block twice - once inside a `sm:hidden`
+// <details> that starts CLOSED, once inside a `max-sm:hidden` div that renders
+// exactly as it always did. On a 390px screen the full block ran about a third
+// of a screen and pushed the button it belongs to below the fold, which is the
+// scrolling the owner asked us to stop.
+//
+// What is collapsed is the ITEMIZED version, never the material terms. The
+// one-line summary ("3 days free, then $1.99/week. Cancel anytime before the
+// trial ends" at the top, panelBilling[plan] at the picker) stays on screen
+// unconditionally, directly beside the button, which is what ROSCA
+// 15 U.S.C. 8403(1) and Cal. Bus. & Prof. Code 17602(a)(1) are about: material
+// terms disclosed before billing information is collected, in visual proximity
+// to the request for consent. One tap opens the rest, and it is inside the
+// same form as the button either way.
+//
+// Two elements rather than one because `open` is a boolean attribute that no
+// media query can drive, and flipping it from JS on mount would either flash
+// or mismatch hydration.
+//
+// THE STORED CONSENT RECORD IS UNAFFECTED. billingTermsText in the Stripe
+// metadata is built SERVER-SIDE by startPlusCheckoutAction from
+// src/lib/billingTerms.ts, off the posted cadence, never from what this
+// component rendered. AutoRenewalTerms reads that same module, so the screen
+// and the record cannot disagree no matter which copy is on screen.
+//
 // THE 3 FREE DAYS ARE PART OF WEEKLY, not a plan of their own and not an offer
 // on monthly or annual: those two bill at signup. `trialEligible` mirrors the
 // "no existing homeowner subscription row" signal startPlusCheckoutAction
@@ -114,17 +143,6 @@ export default function PlanToggle({
   const plan: Plan = choice === "free" ? "monthly" : choice;
   const weeklyTrial = trialEligible;
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  // Two bullet lists, differing in one number: the weekly card starts on the
-  // trial's smaller Ask ceiling when the trial is on offer, monthly and annual
-  // bill on day one and get the full one. See plusBullets above.
-  const WEEKLY_BULLETS = plusBullets(
-    weeklyTrial ? TRIAL_ASK_PER_DAY : PLUS_ASK_PER_DAY
-  );
-  const PAID_BULLETS = plusBullets(PLUS_ASK_PER_DAY);
-  // The phone panel shows the bullets for whichever card is selected, so it
-  // follows the same split rather than always quoting the paid ceiling.
-  const panelBullets = plan === "weekly" ? WEEKLY_BULLETS : PAID_BULLETS;
 
   // Roving tabindex: one stop for the whole group, arrows move the selection
   // the way a native radio group does. Space and Enter are already handled by
@@ -182,7 +200,10 @@ export default function PlanToggle({
       {items.map((f) => (
         <span
           key={f}
-          className="flex items-start gap-1 text-[11px] leading-snug text-stone-700 sm:text-sm dark:text-stone-300"
+          // text-sm at every width now. It used to be 11px below sm, which
+          // is under the readable floor on a phone; sm:text-sm was already
+          // 14px, so the desktop rendering is unchanged.
+          className="flex items-start gap-1 text-sm leading-snug text-stone-700 dark:text-stone-300"
         >
           <span className="font-bold text-bark-600 dark:text-bark-500" aria-hidden>
             ✓
@@ -257,14 +278,24 @@ export default function PlanToggle({
             {PLUS_PLAN.trialDays} days free, then {WEEKLY_PRICE}/week. Cancel
             anytime before the trial ends.
           </p>
-          {/* Same disclosure the plan picker below carries, for the same
-              reason: this button starts a Stripe checkout, so the recurring
-              terms have to be on screen next to it before any billing
-              information is collected (ROSCA 15 U.S.C. 8403(1)) and in visual
-              proximity to the request for consent (Cal. Bus. & Prof. Code
-              17602(a)(1)). Hard-coded to "weekly" because the hidden field
-              above is. */}
-          <AutoRenewalTerms plan="weekly" introEligible={trialEligible} />
+          {/* Weekly's terms, hard-coded because the hidden field above is.
+              Phone copy collapsed, desktop copy open: see PHONE DISCLOSURE at
+              the top of this file. */}
+          <details className="group sm:hidden">
+            <summary className="focus-ring flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-stone-700 [&::-webkit-details-marker]:hidden dark:text-stone-300">
+              <ChevronRight
+                className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
+                aria-hidden="true"
+              />
+              Billing terms
+            </summary>
+            <div className="mt-2">
+              <AutoRenewalTerms plan="weekly" introEligible={trialEligible} />
+            </div>
+          </details>
+          <div className="max-sm:hidden">
+            <AutoRenewalTerms plan="weekly" introEligible={trialEligible} />
+          </div>
         </form>
       )}
 
@@ -285,7 +316,7 @@ export default function PlanToggle({
         >
           {/* --- Weekly: the one cadence that carries the free days --- */}
           <button {...cardProps("weekly", 0, `Weekly, ${WEEKLY_PRICE} a week`)}>
-            <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 dark:text-bark-500">
+            <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 max-sm:text-xs dark:text-bark-500">
               {weeklyTrial ? `${PLUS_PLAN.trialDays} days free` : ""}
             </span>
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
@@ -298,7 +329,7 @@ export default function PlanToggle({
                   unchanged, so desktop is untouched. */}
               <span className="block text-sm font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
                 {WEEKLY_PRICE}
-                <span className="text-[11px] font-normal text-stone-500 sm:text-sm dark:text-stone-400">
+                <span className="text-sm font-normal text-stone-500 dark:text-stone-400">
                   {/* Short unit on a phone so the price never wraps in a
                       110px column; the full word from sm up, where there is
                       room for it. */}
@@ -306,20 +337,25 @@ export default function PlanToggle({
                   <span className="hidden sm:inline">/week</span>
                 </span>
               </span>
-              <span className="block text-[11px] font-medium leading-snug text-bark-700 sm:text-sm dark:text-stone-300">
+              <span className="block text-sm font-medium leading-snug text-bark-700 dark:text-stone-300">
                 {weeklyTrial ? "Try it, then decide" : "Pay as you go"}
               </span>
             </span>
             {bulletList(
-              WEEKLY_BULLETS,
+              PLUS_BULLETS,
               "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
             )}
           </button>
 
           {/* --- Monthly: the anchor, preselected --- */}
           <button {...cardProps("monthly", 1, `Monthly, ${MONTHLY_PRICE} a month`)}>
-            <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 dark:text-bark-500">
-              Most popular
+            <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 max-sm:text-xs dark:text-bark-500">
+              {/* "Most popular" is the only badge of the three that cannot
+                  hold one line at 12px in a ~92px phone column, and a wrapped
+                  badge would drop this card's plan name a line below its
+                  neighbours. Same meaning, one word, below sm only. */}
+              <span className="sm:hidden">Popular</span>
+              <span className="hidden sm:inline">Most popular</span>
             </span>
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
               Monthly
@@ -327,7 +363,7 @@ export default function PlanToggle({
             <span className="mt-0.5 block min-h-10 sm:mt-1 sm:min-h-11">
               <span className="block text-sm font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
                 {MONTHLY_PRICE}
-                <span className="text-[11px] font-normal text-stone-500 sm:text-sm dark:text-stone-400">
+                <span className="text-sm font-normal text-stone-500 dark:text-stone-400">
                   <span className="sm:hidden">/mo</span>
                   <span className="hidden sm:inline">/month</span>
                 </span>
@@ -336,12 +372,12 @@ export default function PlanToggle({
                   more than the monthly price, and a month is longer than four
                   weeks, so this understates the gap rather than overstating
                   it. */}
-              <span className="block text-[11px] font-medium leading-snug text-bark-700 sm:text-sm dark:text-stone-300">
+              <span className="block text-sm font-medium leading-snug text-bark-700 dark:text-stone-300">
                 Cheaper than 4 weeks
               </span>
             </span>
             {bulletList(
-              PAID_BULLETS,
+              PLUS_BULLETS,
               "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
             )}
           </button>
@@ -355,7 +391,7 @@ export default function PlanToggle({
                 said the same thing in different words. This badge instead
                 states the number Monthly's card cannot: what choosing Annual
                 over Monthly actually saves. */}
-            <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 dark:text-bark-500">
+            <span className="block min-h-4 text-[10px] font-medium uppercase tracking-wide text-bark-700 max-sm:text-xs dark:text-bark-500">
               Save {YEARLY_SAVING}
             </span>
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
@@ -364,7 +400,7 @@ export default function PlanToggle({
             <span className="mt-0.5 block min-h-10 sm:mt-1 sm:min-h-11">
               <span className="block text-sm font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
                 {YEARLY_PRICE}
-                <span className="text-[11px] font-normal text-stone-500 sm:text-sm dark:text-stone-400">
+                <span className="text-sm font-normal text-stone-500 dark:text-stone-400">
                   <span className="sm:hidden">/yr</span>
                   <span className="hidden sm:inline">/year</span>
                 </span>
@@ -373,12 +409,12 @@ export default function PlanToggle({
                   says the other honest fact about the same plan instead of
                   restating it: the yearly price read back as a monthly
                   figure, computed, never invented. */}
-              <span className="block text-[11px] font-medium leading-snug text-bark-700 sm:text-sm dark:text-stone-300">
+              <span className="block text-sm font-medium leading-snug text-bark-700 dark:text-stone-300">
                 About {YEARLY_AS_MONTHLY} a month
               </span>
             </span>
             {bulletList(
-              PAID_BULLETS,
+              PLUS_BULLETS,
               "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
             )}
           </button>
@@ -407,7 +443,7 @@ export default function PlanToggle({
               <span className="block text-base font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
                 $0
               </span>
-              <span className="block text-[11px] leading-snug text-stone-500 sm:text-sm dark:text-stone-400">
+              <span className="block text-sm leading-snug text-stone-500 dark:text-stone-400">
                 No card, ever
               </span>
             </span>
@@ -431,10 +467,13 @@ export default function PlanToggle({
           <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
             {PLAN_LABEL[plan]}, {PLAN_PRICE_LINE[plan]}
           </p>
-          <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">
+          {/* text-sm, not text-xs: this panel only exists below sm (the
+              wrapper is sm:hidden), and 12px is under the readable floor on a
+              phone. */}
+          <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
             {panelBilling[plan]}
           </p>
-          {bulletList(panelBullets, "mt-2 block space-y-1")}
+          {bulletList(PLUS_BULLETS, "mt-2 block space-y-1")}
         </div>
 
         {/* The recurring terms sit INSIDE the checkout form, immediately ABOVE
@@ -459,7 +498,35 @@ export default function PlanToggle({
             Free is the plan you are on now.
           </p>
         ) : (
-          <AutoRenewalTerms plan={plan} introEligible={trialEligible} />
+          <>
+            {/* The one-line material-terms summary, always visible on a phone:
+                what is charged, when, and how to stop it, for the selected
+                plan. It is the same sentence billingTerms() puts in the
+                consent record, so nothing behind the disclosure below is a
+                fact the reader was not shown. sm and up already reads it as
+                the first line of the block itself, so this copy is
+                phone-only. */}
+            <p className="text-center text-sm text-stone-600 sm:hidden dark:text-stone-300">
+              {panelBilling[plan]}
+            </p>
+            {/* Collapsed on a phone, open on desktop. See PHONE DISCLOSURE
+                at the top of this file. */}
+            <details className="group sm:hidden">
+              <summary className="focus-ring mx-auto flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-stone-700 [&::-webkit-details-marker]:hidden dark:text-stone-300">
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
+                  aria-hidden="true"
+                />
+                Billing terms
+              </summary>
+              <div className="mt-2">
+                <AutoRenewalTerms plan={plan} introEligible={trialEligible} />
+              </div>
+            </details>
+            <div className="max-sm:hidden">
+              <AutoRenewalTerms plan={plan} introEligible={trialEligible} />
+            </div>
+          </>
         )}
 
         {choice === "free" ? (

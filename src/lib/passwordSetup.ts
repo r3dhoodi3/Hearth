@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requestOriginFromHeaders } from "@/lib/requestOrigin";
 import { friendlyAuthError } from "@/lib/friendlyAuthError";
+import { passwordRecoveryRedirectTo } from "@/lib/passwordRecovery";
 
 // Not exported: a "use server" module may only export async functions, and
 // the one caller (AccountSecurityPanel) infers this from the return type.
@@ -46,9 +47,7 @@ export async function sendSetPasswordLinkAction(): Promise<SetPasswordLinkResult
   // at a mailbox the signed-in user doesn't already own.
   const origin = await requestOriginFromHeaders();
   const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-    redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(
-      "/reset-password?step=update"
-    )}`,
+    redirectTo: passwordRecoveryRedirectTo(origin),
   });
 
   // Supabase throttles these emails (one a minute per address by default).

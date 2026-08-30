@@ -8,6 +8,7 @@ import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 import { buildProStats } from "@/lib/proStats";
 import { computeResponseTimeMinutes } from "@/lib/responseTime";
 import AccountPanel from "@/components/pro/AccountPanel";
+import PushSettingsCard from "@/components/PushSettingsCard";
 import WinShareButton from "@/components/pro/WinShareButton";
 import ReviewShareRow from "@/components/pro/ReviewShareRow";
 import {
@@ -15,6 +16,7 @@ import {
   JOB_CATEGORIES,
   GHOST_PROTECTION_DAYS,
   COLD_START_FREE_ALERTS,
+  PRO_LEADS_HREF,
 } from "@/lib/constants";
 import { Lock } from "lucide-react";
 
@@ -313,6 +315,16 @@ export default async function ProBusinessPage() {
         </Link>
       </section>
 
+      {/* Phone notifications. Top level rather than inside the collapsed
+          Account panel below, and here rather than on a notification settings
+          page, because the pro side has no such page: /pro/business is where a
+          contractor's own settings live. This is the only control that reaches
+          a pro with the app closed, and speed to lead is the whole pro-side
+          product, so burying it one disclosure triangle down would cost the
+          feature most of its point. Renders nothing at all when the deployment
+          has no VAPID keys or the browser cannot do push. */}
+      <PushSettingsCard side="pro" />
+
       {/* Account: referral code and the license/insurance compliance
           calendar, folded into one collapsed-by-default panel. The code is
           the pro's public slug when the 0043 migration has run, else the
@@ -488,7 +500,11 @@ export default async function ProBusinessPage() {
                 <p className="text-sm font-medium text-stone-500 dark:text-stone-400">
                   Last 6 months
                 </p>
-                <p className="flex items-center gap-3 text-[10px] text-stone-500 dark:text-stone-400">
+                {/* 12px below sm, not 14px: this legend sits inside a
+                    width-bound chart where 14px overlaps the bars. It is the
+                    one place on the pro side that stops at 12px, and it is
+                    still a 20% lift from 10px. */}
+                <p className="flex items-center gap-3 text-[10px] text-stone-500 max-sm:text-xs dark:text-stone-400">
                   <span className="flex items-center gap-1">
                     <span className="inline-block h-2 w-2 rounded-sm bg-hearth-500 dark:bg-hearth-400" />
                     Applications
@@ -522,7 +538,7 @@ export default async function ProBusinessPage() {
                         }, ${m.wins} won`}
                         className="flex min-w-[2.5rem] flex-col items-center gap-1 transition hover:opacity-90"
                       >
-                        <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                        <span className="text-[10px] text-stone-500 max-sm:text-xs dark:text-stone-400">
                           {m.applications > 0 ? m.applications : ""}
                         </span>
                         <div className="flex items-end gap-0.5">
@@ -551,7 +567,7 @@ export default async function ProBusinessPage() {
                   {stats.trend.map((m) => (
                     <span
                       key={m.key}
-                      className="min-w-[2.5rem] text-center text-[10px] text-stone-500 dark:text-stone-400"
+                      className="min-w-[2.5rem] text-center text-[10px] text-stone-500 max-sm:text-xs dark:text-stone-400"
                     >
                       {m.label}
                     </span>
@@ -653,7 +669,7 @@ export default async function ProBusinessPage() {
           <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
             Nothing in flight.{" "}
             <Link
-              href="/pro"
+              href={PRO_LEADS_HREF}
               className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
             >
               Browse open jobs

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import GuideCta from "@/components/GuideCta";
+import Breadcrumbs, { BreadcrumbJsonLd } from "@/components/Breadcrumbs";
 
 // Public SEO guide. Orange County ADU cost ranges by type, aggregated from
 // published contractor pricing and industry cost reports as of July 2026.
@@ -23,12 +24,33 @@ const SITE_URL =
 // Anything added here that reads cookies()/headers()/searchParams undoes it.
 export const revalidate = 3600;
 
+// Title/description held once so metadata.title, openGraph, and twitter
+// can't drift from each other; the OG image at ./opengraph-image.tsx keeps
+// its own literal copy of the title (see that file's comment for why).
+const TITLE = "ADU cost in Orange County: typical ranges by type (2026)";
+const DESCRIPTION =
+  "What an ADU typically costs in Orange County by type: garage conversion, attached, and detached, plus cost per square foot, what drives the price, California ADU rules, and how to save. Estimate ranges, not a quote.";
+const CANONICAL = `${SITE_URL}/guides/adu-cost`;
+
 export const metadata: Metadata = {
-  title: "ADU cost in Orange County: typical ranges by type (2026)",
-  description:
-    "What an ADU typically costs in Orange County by type: garage conversion, attached, and detached, plus cost per square foot, what drives the price, California ADU rules, and how to save. Estimate ranges, not a quote.",
+  title: TITLE,
+  description: DESCRIPTION,
   alternates: {
-    canonical: `${SITE_URL}/guides/adu-cost`,
+    canonical: CANONICAL,
+  },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: CANONICAL,
+    siteName: "Hearth",
+    type: "article",
+    // og:image comes from the colocated opengraph-image.tsx; Next wires it
+    // up automatically for this segment.
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
   },
 };
 
@@ -80,11 +102,24 @@ export default function AduCostGuide() {
         }}
       />
 
-      <p className="text-sm">
-        <Link href="/guides" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
-          ← All guides
-        </Link>
-      </p>
+      {/* Breadcrumb replaces the old "All guides" back link: it still links
+          back to /guides, and adds the Home > Guides context the bare back
+          link didn't have. Don't render both. */}
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/" },
+          { label: "Guides", href: "/guides" },
+          { label: "ADU cost in Orange County" },
+        ]}
+      />
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Home", href: "/" },
+          { name: "Guides", href: "/guides" },
+          { name: "ADU cost in Orange County" },
+        ]}
+        siteUrl={SITE_URL}
+      />
 
       <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
         ADU cost in Orange County

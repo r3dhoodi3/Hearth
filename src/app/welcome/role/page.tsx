@@ -103,17 +103,20 @@ export default async function WelcomeRolePage(
             restated here, split by role since each side agrees to different
             terms (homeowner: /terms, contractor: /pro-terms). Follows the
             "By continuing you agree to the ..." phrasing on the signup pages. */}
-        <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 dark:border-white/10 dark:text-stone-400">
+        {/* Phone only: 14px copy, and each link gets max-sm:py-3. Padding on
+            an inline element grows the touch area to 44px without changing the
+            line box, so this centred paragraph does not reflow. */}
+        <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 max-sm:text-sm dark:border-white/10 dark:text-stone-400">
           By choosing homeowner you agree to the{" "}
-          <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+          <Link href="/terms" className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
             Terms
           </Link>
           ; by choosing contractor you agree to the{" "}
-          <Link href="/pro-terms" className="text-bark-700 hover:underline dark:text-stone-300">
+          <Link href="/pro-terms" className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
             Contractor Terms
           </Link>
           . Either way you agree to the{" "}
-          <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+          <Link href="/privacy" className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
             Privacy Policy
           </Link>
           .

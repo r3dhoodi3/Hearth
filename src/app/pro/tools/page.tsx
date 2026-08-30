@@ -6,13 +6,20 @@ import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { PRO_DEPOSIT_BOOST_PTS, COLD_START_FREE_ALERTS } from "@/lib/constants";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
+import { PRO_TOOLS_PAYWALL } from "@/lib/freeAiTaste";
+import { proDraftsLeft } from "@/lib/freeAiTasteServer";
 import ProToolsClient from "./ProToolsClient";
 
-// AI back office (Hearth Pro membership perk): three writing tools that turn a
-// pro's plain-words notes into paperwork they can send: an estimate, an
-// invoice, and a follow-up message. Members get the working tools; everyone
-// else gets a clear look at what's inside and a path to /pro/plus. Lead access
-// is never involved here: this is perks-only surface.
+// AI back office (Hearth Pro membership perk): writing tools that turn a pro's
+// plain-words notes into paperwork they can send: an estimate, an invoice, a
+// follow-up message, a review response, an overdue reminder.
+//
+// Every contractor gets FREE_PRO_DRAFTS real drafts first (migration 0145),
+// then the wall and a path to /pro/plus. It used to be members-only from the
+// first tap, which meant a pro was asked to pay for the idea of a draft with
+// nothing to judge it by. Lead access is never involved here: this is
+// perks-only surface, and the wall only ever stands between a pro and a DRAFT,
+// never between a pro and their own work.
 
 const TOOLS: Array<{ icon: LucideIcon; title: string; body: string }> = [
   {
@@ -37,8 +44,13 @@ export default async function ProToolsPage() {
   if (!contractor) redirect("/pro/onboarding");
 
   const member = await hasProPlan();
+  // How many free drafts are left, for the meter. Null for a member.
+  const draftsLeft = await proDraftsLeft(contractor.id, member);
 
-  if (!member) {
+  // Out of free drafts and not a member: the pitch, led by the exact sentence
+  // the route would have sent. Anyone with drafts still on the meter falls
+  // through to the working tools below, member or not.
+  if (!member && draftsLeft !== null && draftsLeft <= 0) {
     // The free trial is for first-time members only, and the pro-side
     // subscriptions row survives a cancellation, so a lapsed member gets the
     // plain "See Hearth Pro" button instead of a trial they cannot have.
@@ -67,7 +79,9 @@ export default async function ProToolsPage() {
             Pro membership tool
           </p>
           <p className="mt-1 text-sm text-hearth-700 dark:text-hearth-300">
-            The AI back office is part of the Hearth Pro membership.{" "}
+            {/* The same sentence /api/pro-tools sends on a 402, so the screen
+                never says something the server would not have. */}
+            {PRO_TOOLS_PAYWALL.message}{" "}
             {/* The real membership unlock here is the three tools. Two things
                 must stay honest: instant alerts are free for every pro while
                 COLD_START_FREE_ALERTS is on, so we don't sell them as a
@@ -159,6 +173,7 @@ export default async function ProToolsPage() {
         initialPastJobs={pastJobRows ?? []}
         categories={contractor.categories ?? []}
         leads={leadRows ?? []}
+        initialDraftsLeft={draftsLeft}
       />
       <p className="text-center text-xs text-stone-500 dark:text-stone-400">
         Drafts use only the details you type in. Always give them a quick read

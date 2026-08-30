@@ -32,6 +32,14 @@ export async function saveNotificationPrefsAction(formData: FormData) {
   if (current?.notification_prefs?.email_opt_out === true) {
     prefs.email_opt_out = true;
   }
+  // Same reasoning for the push opt-out, which the "Turn on / Turn off
+  // notifications" card writes through /api/push/subscribe rather than through
+  // this form. Without carrying it over, saving an unrelated channel toggle
+  // would quietly turn phone notifications back on for someone who switched
+  // them off.
+  if (current?.notification_prefs?.push_opt_out === true) {
+    prefs.push_opt_out = true;
+  }
 
   const { error } = await supabase
     .from("users")

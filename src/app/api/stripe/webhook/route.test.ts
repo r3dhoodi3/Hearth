@@ -56,6 +56,12 @@ let depositSessions: Record<string, unknown>[] = [];
 // plan name actually written to the subscriptions row.
 let tableUpdates: { table: string; payload: Record<string, unknown> }[] = [];
 
+// Every .from(table).insert(payload) the route fires, so the checkout_started/
+// completed/abandoned analytics tests below can assert the exact row written
+// to app_events (via trackServerEvent, src/lib/trackServer.ts) without also
+// having to distinguish it from every other insert the route makes.
+let tableInserts: { table: string; payload: Record<string, unknown> }[] = [];
+
 // What .from("subscriptions")...maybeSingle() reads back. Null by default,
 // which is every pre-existing test's "no stored row" path; the dunning tests
 // below set it so the route has a membership to act on.
@@ -109,7 +115,10 @@ function fakeAdmin() {
           }
           return Promise.resolve({ data: null, error: null });
         },
-        insert: () => Promise.resolve({ data: null, error: null }),
+        insert: (payload: Record<string, unknown>) => {
+          tableInserts.push({ table, payload });
+          return Promise.resolve({ data: null, error: null });
+        },
         upsert: () => Promise.resolve({ data: null, error: null }),
         update: (payload: Record<string, unknown>) => {
           tableUpdates.push({ table, payload });
@@ -144,6 +153,7 @@ beforeEach(() => {
   rpcCalls = [];
   depositSessions = [];
   tableUpdates = [];
+  tableInserts = [];
   updateFilters = [];
   subscriptionRow = null;
   existingNotification = null;
@@ -246,6 +256,56 @@ describe("a deposit credits what Stripe charged, not what metadata claims", () =
     expect(calls[0].args.p_deposit_cents).toBe(50_000);
     // Metadata still says WHICH contractor, just not how much.
     expect(calls[0].args.p_contractor).toBe("con_1");
+  });
+
+  // docs/ANALYTICS.md: deposit_made fires only on the call that actually
+  // credited the wallet, and carries a bucketed amount (nearest $250, rounded
+  // up), never the exact cents Stripe charged.
+  it("records deposit_made with a bucketed amount on a real credit", async () => {
+    constructEvent.mockReturnValue(
+      depositEvent({
+        id: "cs_test_5",
+        payment_status: "paid",
+        amount_total: 50_000,
+        metadata: { type: "deposit", contractor_id: "con_1", deposit_cents: "50000" },
+      })
+    );
+    const { POST } = await import("./route");
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    const tracked = tableInserts.find(
+      (i) => i.table === "app_events" && i.payload.event === "deposit_made"
+    );
+    expect(tracked?.payload).toMatchObject({
+      event: "deposit_made",
+      props: { amount_bucket: 500 },
+    });
+    expect(Object.keys(tracked!.payload.props as object)).toEqual([
+      "amount_bucket",
+    ]);
+  });
+
+  it("never fires deposit_made for a refused, out-of-band amount", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    constructEvent.mockReturnValue(
+      depositEvent({
+        id: "cs_test_6",
+        payment_status: "paid",
+        amount_total: 300_000, // over MAX_DEPOSIT_CENTS
+        metadata: { type: "deposit", contractor_id: "con_1", deposit_cents: "300000" },
+      })
+    );
+    const { POST } = await import("./route");
+
+    await POST(post());
+
+    expect(
+      tableInserts.some(
+        (i) => i.table === "app_events" && i.payload.event === "deposit_made"
+      )
+    ).toBe(false);
   });
 
   it("refuses an amount over the shared deposit cap, without retrying", async () => {
@@ -691,5 +751,209 @@ describe("customer.subscription.trial_will_end quotes the real price", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect((await run(trialEvent())).status).toBe(200);
     expect(notify).not.toHaveBeenCalled();
+  });
+});
+
+describe("a completed checkout marks the promo claim spent", () => {
+  // Why this matters: the checkout actions now read promo_claims.ref to tell an
+  // abandoned reservation (give the trial back) apart from a spent one (never
+  // again). claim_promo's "on conflict do nothing" cannot update that ref, so
+  // without this stamp a converted account could reclaim its own used trial.
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+  });
+
+  function completedPlusSession() {
+    return {
+      id: "evt_plus_1",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_plus_1",
+          payment_status: "paid",
+          customer: "cus_1",
+          subscription: "sub_1",
+          metadata: {
+            type: "plus_subscription",
+            user_id: "user_1",
+            plan: "weekly",
+            trial_reserved: "true",
+          },
+        },
+      },
+    };
+  }
+
+  it("stamps converted:<subscription id> on the Plus trial claim", async () => {
+    const { stripe } = await import("@/lib/stripe");
+    (stripe.subscriptions.retrieve as any).mockResolvedValue({
+      id: "sub_1",
+      status: "trialing",
+      items: { data: [{ price: { recurring: { interval: "week" } } }] },
+    });
+    constructEvent.mockReturnValue(completedPlusSession());
+    const { POST } = await import("./route");
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    const stamp = tableUpdates.find((u) => u.table === "promo_claims");
+    expect(stamp?.payload.ref).toBe("converted:sub_1");
+  });
+
+  // docs/ANALYTICS.md: checkout_completed is the trustworthy funnel signal
+  // for a Plus purchase (not the ?welcome=1 page render, which can beat or
+  // lose the race with this webhook). Asserts the exact row trackServerEvent
+  // writes to app_events: the right event name, the right user, and a
+  // payload that carries only the plan enum, never free text.
+  it("records checkout_completed with the plan, no free text", async () => {
+    const { stripe } = await import("@/lib/stripe");
+    (stripe.subscriptions.retrieve as any).mockResolvedValue({
+      id: "sub_1",
+      status: "trialing",
+      items: { data: [{ price: { recurring: { interval: "week" } } }] },
+    });
+    constructEvent.mockReturnValue(completedPlusSession());
+    const { POST } = await import("./route");
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    const tracked = tableInserts.find((i) => i.table === "app_events");
+    expect(tracked?.payload).toMatchObject({
+      event: "checkout_completed",
+      user_id: "user_1",
+      props: { plan: "weekly" },
+    });
+    // Only an id and an enum plan name - never a name, email, or anything a
+    // buyer typed into the checkout flow.
+    expect(Object.keys(tracked!.payload.props as object)).toEqual(["plan"]);
+  });
+
+  function completedProSession() {
+    return {
+      id: "evt_pro_1",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_pro_1",
+          payment_status: "paid",
+          customer: "cus_3",
+          subscription: "sub_pro_1",
+          metadata: {
+            type: "pro_subscription",
+            user_id: "user_4",
+            plan: "pro_monthly",
+            intro_reserved: "false",
+          },
+        },
+      },
+    };
+  }
+
+  // docs/ANALYTICS.md: pro_checkout_completed mirrors the homeowner
+  // checkout_completed event above - fired off the webhook (the trustworthy
+  // completion signal), never the ?welcome=1 page render.
+  it("records pro_checkout_completed with the plan, no free text", async () => {
+    const { stripe } = await import("@/lib/stripe");
+    (stripe.subscriptions.retrieve as any).mockResolvedValue({
+      id: "sub_pro_1",
+      status: "active",
+      items: { data: [{ price: { recurring: { interval: "month" } } }] },
+    });
+    constructEvent.mockReturnValue(completedProSession());
+    const { POST } = await import("./route");
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    const tracked = tableInserts.find(
+      (i) =>
+        i.table === "app_events" &&
+        i.payload.event === "pro_checkout_completed"
+    );
+    expect(tracked?.payload).toMatchObject({
+      event: "pro_checkout_completed",
+      user_id: "user_4",
+      props: { plan: "pro_monthly" },
+    });
+    expect(Object.keys(tracked!.payload.props as object)).toEqual(["plan"]);
+  });
+});
+
+describe("an expired Plus checkout records checkout_abandoned", () => {
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+  });
+
+  function expiredPlusSession() {
+    return {
+      id: "evt_plus_expired_1",
+      type: "checkout.session.expired",
+      data: {
+        object: {
+          id: "cs_plus_2",
+          customer: "cus_1",
+          metadata: {
+            type: "plus_subscription",
+            user_id: "user_2",
+            plan: "monthly",
+            trial_reserved: "false",
+          },
+        },
+      },
+    };
+  }
+
+  it("fires checkout_abandoned with the plan from metadata", async () => {
+    constructEvent.mockReturnValue(expiredPlusSession());
+    const { POST } = await import("./route");
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    const tracked = tableInserts.find((i) => i.table === "app_events");
+    expect(tracked?.payload).toMatchObject({
+      event: "checkout_abandoned",
+      user_id: "user_2",
+      props: { plan: "monthly" },
+    });
+  });
+
+  // docs/ANALYTICS.md: pro_checkout_abandoned mirrors checkout_abandoned
+  // above for the Pro side, so the funnel has a symmetric abandon signal on
+  // both memberships.
+  it("fires pro_checkout_abandoned for a Pro checkout session expiring", async () => {
+    constructEvent.mockReturnValue({
+      id: "evt_pro_expired_1",
+      type: "checkout.session.expired",
+      data: {
+        object: {
+          id: "cs_pro_1",
+          customer: "cus_2",
+          metadata: {
+            type: "pro_subscription",
+            user_id: "user_3",
+            plan: "pro_yearly",
+            intro_reserved: "false",
+          },
+        },
+      },
+    });
+    const { POST } = await import("./route");
+
+    const res = await POST(post());
+
+    expect(res.status).toBe(200);
+    const tracked = tableInserts.find(
+      (i) =>
+        i.table === "app_events" &&
+        i.payload.event === "pro_checkout_abandoned"
+    );
+    expect(tracked?.payload).toMatchObject({
+      event: "pro_checkout_abandoned",
+      user_id: "user_3",
+      props: { plan: "pro_yearly" },
+    });
   });
 });

@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+// Moved to src/lib/installState.ts so the push notification card can ask the
+// same two questions and never answer them differently. Same functions, same
+// fail-closed behavior; only their home changed.
+import { isIosSafari, isStandalone } from "@/lib/installState";
 
 // A one-time "install this as an app" nudge for iOS Safari, where there is no
 // native install prompt (unlike Android/Chrome, which get their own OS-level
@@ -71,41 +75,6 @@ function isExcludedPath(pathname: string | null): boolean {
   return EXCLUDED_PATH_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`)
   );
-}
-
-// iOS Safari only. iPhone/iPad is the target; other iOS browsers (Chrome,
-// Firefox, Edge, DuckDuckGo) all render on WebKit and carry "Safari" in their
-// user agent string too, but "Add to Home Screen" behaves differently (or is
-// unavailable) there, so they're explicitly excluded. iPadOS 13+ reports its
-// user agent as a plain Mac, so a touch-capable "Macintosh" UA counts as iOS
-// too.
-function isIosSafari(): boolean {
-  try {
-    const ua = window.navigator.userAgent;
-    const isIosDevice =
-      /iPad|iPhone|iPod/.test(ua) ||
-      (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-    if (!isIosDevice) return false;
-    return !/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo|Mercury/i.test(ua);
-  } catch {
-    return false;
-  }
-}
-
-// True once the app is already installed and running full-screen - the one
-// case this nudge exists to produce, so it has nothing left to say.
-// navigator.standalone is iOS Safari's own flag; the display-mode media query
-// is the standards-track fallback other engines use.
-function isStandalone(): boolean {
-  try {
-    const nav = window.navigator as Navigator & { standalone?: boolean };
-    if (nav.standalone === false) return false;
-    if (nav.standalone === true) return true;
-    return window.matchMedia("(display-mode: standalone)").matches;
-  } catch {
-    // Fail closed: if we can't tell, don't nudge.
-    return true;
-  }
 }
 
 function readCount(key: string): number {

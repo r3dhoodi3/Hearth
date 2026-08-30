@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listMyBlocks } from "@/lib/blocks";
 import BlockedUsersPanel from "@/components/BlockedUsersPanel";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 // The homeowner side of the blocked-accounts list (migration 0138). The pro
 // side is the same panel at /pro/blocks - pros with no claimed home never get
@@ -19,6 +20,13 @@ export default async function BlocksPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/dashboard" },
+          { label: "Account", href: "/account" },
+          { label: "Blocked accounts" },
+        ]}
+      />
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Blocked accounts

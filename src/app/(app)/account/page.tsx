@@ -5,6 +5,7 @@ import { getOrCreateReferralCode } from "@/lib/referralCode";
 import ProfileInfoForm from "./ProfileInfoForm";
 import AccountTabs from "./AccountTabs";
 import InviteNeighbor from "./InviteNeighbor";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 // Edit profile: identity only (name, phone). Everything security-shaped -
 // email, password, sessions, deletion - still lives at /account/security, now
@@ -36,6 +37,7 @@ export default async function AccountPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Account" }]} />
       <AccountTabs active="profile" />
       <ProfileInfoForm profile={profile} name={name} />
       {inviteCode && <InviteNeighbor code={inviteCode} />}

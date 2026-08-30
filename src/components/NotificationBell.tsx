@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import InlineSpinner from "@/components/InlineSpinner";
+
+// Below this width the panel is a bottom sheet instead of a dropdown. Matches
+// Tailwind's `sm` breakpoint (640px), so the JS behavior and the `max-sm:`
+// classes below can never disagree about which layout is on screen.
+const PHONE_MAX_WIDTH = "(max-width: 639.98px)";
 
 type Notification = {
   id: string;
@@ -50,6 +56,13 @@ export default function NotificationBell() {
   // closed transition the panel stays mounted for one more tick with
   // fade-scale-out, then drops.
   const [closing, setClosing] = useState(false);
+  // Which layout is on screen. Starts false so the server render and the first
+  // client render agree (the panel is closed at that point, so nothing is
+  // visible either way) and the desktop dropdown stays exactly what it was.
+  const [isPhone, setIsPhone] = useState(false);
+  // Only true once mounted, which is what makes the phone sheet's portal into
+  // document.body safe to render.
+  const [portalReady, setPortalReady] = useState(false);
   const wasOpen = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -152,29 +165,54 @@ export default function NotificationBell() {
     // reachable via React dev StrictMode's mount-cleanup-remount (the
     // cleanup's removeChannel is async, so the remount can win the race), so
     // a random suffix isolates every instance instead of sharing one topic.
+    //
+    // The subscription waits for the signed-in user id because it MUST carry a
+    // filter. Without one the client asks the realtime server for every
+    // notifications INSERT in the table and leans on RLS alone to trim the
+    // stream down to this user's rows; a filter means the server never
+    // considers anybody else's row in the first place. user_id is the owning
+    // column (0026_notifications.sql), the same one the RLS policy keys off.
+    // Until getUser() resolves the poll below is the only path, which is
+    // exactly what it is for.
     let channel: ReturnType<typeof supabase.channel> | null = null;
-    try {
-      const topic = "notifications-bell-" + Math.random().toString(36).slice(2);
-      channel = supabase
-        .channel(topic)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "notifications" },
-          () => active && poll()
-        )
-        .subscribe();
-    } catch {
-      // Realtime is strictly best-effort: the poll/focus paths below keep the
-      // bell working on their own, so a subscribe failure here must never
-      // crash the signed-in shell.
-      console.warn("NotificationBell: realtime subscription failed, falling back to polling");
-    }
+    let cancelled = false;
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        const uid = data?.user?.id;
+        if (cancelled || !uid) return;
+        try {
+          const topic = "notifications-bell-" + Math.random().toString(36).slice(2);
+          channel = supabase
+            .channel(topic)
+            .on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "notifications",
+                filter: `user_id=eq.${uid}`,
+              },
+              () => active && poll()
+            )
+            .subscribe();
+        } catch {
+          // Realtime is strictly best-effort: the poll/focus paths below keep
+          // the bell working on their own, so a subscribe failure here must
+          // never crash the signed-in shell.
+          console.warn("NotificationBell: realtime subscription failed, falling back to polling");
+        }
+      })
+      .catch(() => {
+        // No user id, no scoped channel. Same posture: polling covers it.
+      });
 
     const onFocus = () => poll();
     window.addEventListener("focus", onFocus);
     const t = setInterval(poll, 30000);
     return () => {
       active = false;
+      cancelled = true;
       if (channel) {
         try {
           supabase.removeChannel(channel);
@@ -200,9 +238,40 @@ export default function NotificationBell() {
   }, [open]);
   const shouldRender = open || closing;
 
+  // Track the breakpoint, because the two layouts do not just look different -
+  // they behave differently (see the outside-click effect below).
+  useEffect(() => {
+    setPortalReady(true);
+    let media: MediaQueryList;
+    try {
+      media = window.matchMedia(PHONE_MAX_WIDTH);
+    } catch {
+      // No matchMedia (very old engine, some test environments): stay on the
+      // desktop behavior, which is the one that works with a mouse.
+      return;
+    }
+    const sync = () => setIsPhone(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
   // Close on outside click or Escape - matches ProfileMenu. Escape hands
   // focus back to the trigger so keyboard users aren't dropped at the top of
   // the page.
+  //
+  // DESKTOP ONLY, and that is the fix for the reported bug. On a phone this
+  // listener was what closed the panel the moment somebody scrolled: a touch
+  // scroll that starts outside the panel dispatches a synthesized mousedown at
+  // the touch point, so "I flicked the page" and "I tapped outside" arrive as
+  // the same event. On the phone the sheet now closes only on its X, on
+  // opening a notification, or on navigating away - a scroll, a tap on the
+  // dimmed backdrop, and a tap anywhere else all leave it open, which is what
+  // the owner asked for.
+  //
+  // Nothing here has ever listened for `scroll`, on either layout, and nothing
+  // should: a dropdown that closes when the page moves under it is the other
+  // half of the same complaint.
   useEffect(() => {
     if (!open) return;
     function onClick(e: MouseEvent) {
@@ -214,13 +283,26 @@ export default function NotificationBell() {
         btnRef.current?.focus();
       }
     }
-    document.addEventListener("mousedown", onClick);
+    if (!isPhone) document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, isPhone]);
+
+  // Hold the page still behind the phone sheet. Without this the backdrop dims
+  // a page that still scrolls under the finger, which reads as broken. Restores
+  // whatever inline value was there before rather than assuming "" - another
+  // component may own it while a chat keyboard is open.
+  useEffect(() => {
+    if (!isPhone || !open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isPhone, open]);
 
   function togglePanel() {
     const next = !open;
@@ -230,6 +312,126 @@ export default function NotificationBell() {
       loadList(20);
     }
   }
+
+  // Everything inside the panel, shared by the desktop dropdown and the phone
+  // sheet so the two can never drift. Every phone-specific rule here is a
+  // `max-sm:` utility, which is inert from 640px up: the desktop dropdown
+  // computes exactly the styles it did before.
+  const panelBody = (
+    <>
+      <div className="flex items-center justify-between border-b border-stone-100 px-4 py-2 dark:border-white/10">
+        <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+          Notifications
+        </span>
+        {items.length > 0 && (
+          <button
+            type="button"
+            onClick={markAllRead}
+            disabled={markingRead}
+            // Phone only: 16px tall before, in a header row where every
+            // other target is bigger.
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-bark-700 hover:underline active:opacity-70 disabled:opacity-50 max-sm:min-h-11 max-sm:text-sm dark:text-stone-300"
+          >
+            {markingRead && <InlineSpinner size={12} />}
+            Mark all read
+          </button>
+        )}
+        {/* Phone only, and the sheet's ONLY close control besides opening a
+            notification: outside taps and scrolls deliberately leave it open,
+            so without this there would be no way out. `sm:hidden` removes it
+            from the flex row entirely on desktop (display:none is not a flex
+            item), so the dropdown's header is laid out exactly as before. */}
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            btnRef.current?.focus();
+          }}
+          aria-label="Close notifications"
+          className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100 hover:text-stone-600 sm:hidden dark:hover:bg-stone-600 dark:hover:text-stone-200"
+        >
+          <svg
+            viewBox="0 0 20 20"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M5 5l10 10M15 5L5 15" />
+          </svg>
+        </button>
+      </div>
+      {/* overscroll-contain: a flick that reaches the end of this list must
+          not hand the scroll to the page behind it (that "scroll chaining" is
+          what made the sheet feel like it was closing itself). max-sm:flex-1
+          lets the list, not the card, own the leftover height in the sheet. */}
+      <div className="max-h-80 overflow-y-auto overscroll-contain max-sm:max-h-none max-sm:flex-1">
+        {items.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-stone-500 dark:text-stone-400">
+            Nothing new right now.
+          </p>
+        ) : (
+          // role="list" restores list semantics that Tailwind's list-none
+          // reset strips in some screen readers.
+          <ul role="list">
+            {items.map((n) => {
+              const content = (
+                <>
+                  <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                    {n.title}
+                  </p>
+                  {n.body && (
+                    <p className="mt-0.5 line-clamp-2 text-xs text-stone-500 dark:text-stone-400">
+                      {n.body}
+                    </p>
+                  )}
+                  <p className="mt-1 text-[11px] text-stone-500 max-sm:text-xs dark:text-stone-400">
+                    {timeAgo(n.created_at)}
+                  </p>
+                </>
+              );
+              return (
+                <li
+                  key={n.id}
+                  className="border-b border-stone-50 last:border-b-0 dark:border-white/5"
+                >
+                  {n.url ? (
+                    <Link
+                      href={n.url}
+                      onClick={() => setOpen(false)}
+                      // max-sm:min-h-11: a row is the tap target, so it stays
+                      // at least 44px tall even for a one-line notification.
+                      className="block px-4 py-3 hover:bg-bark-50 max-sm:flex max-sm:min-h-11 max-sm:flex-col max-sm:justify-center dark:hover:bg-stone-600"
+                    >
+                      {content}
+                    </Link>
+                  ) : (
+                    <div className="px-4 py-3 max-sm:flex max-sm:min-h-11 max-sm:flex-col max-sm:justify-center">
+                      {content}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={showMore}
+          disabled={loadingMore}
+          // Phone only: 32px tall before.
+          className="flex w-full items-center justify-center gap-1.5 border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-bark-700 hover:bg-bark-50 hover:underline active:opacity-70 disabled:opacity-50 max-sm:min-h-11 max-sm:shrink-0 max-sm:text-sm dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-600"
+        >
+          {loadingMore && <InlineSpinner size={12} />}
+          Show more
+        </button>
+      )}
+    </>
+  );
 
   return (
     <div ref={ref} className="relative">
@@ -279,91 +481,60 @@ export default function NotificationBell() {
         </span>
       </button>
 
-      {/* Plain disclosure panel, not an ARIA menu: we don't implement the
-          menu keyboard contract (arrow keys, focus trapping), so we don't
-          claim the role either. The notifications themselves are a list. */}
-      {shouldRender && (
+      {/* DESKTOP: the dropdown, unchanged. Plain disclosure panel, not an ARIA
+          menu: we don't implement the menu keyboard contract (arrow keys,
+          focus trapping), so we don't claim the role either. The notifications
+          themselves are a list. */}
+      {shouldRender && !isPhone && (
         <div
+          data-testid="notification-panel"
           className={`absolute right-0 z-20 mt-1 w-80 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-menu dark:border-white/10 dark:bg-stone-700 ${
             open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
           }`}
         >
-          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-2 dark:border-white/10">
-            <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-              Notifications
-            </span>
-            {items.length > 0 && (
-              <button
-                type="button"
-                onClick={markAllRead}
-                disabled={markingRead}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-bark-700 hover:underline active:opacity-70 disabled:opacity-50 dark:text-stone-300"
-              >
-                {markingRead && <InlineSpinner size={12} />}
-                Mark all read
-              </button>
-            )}
-          </div>
-          <div className="max-h-80 overflow-y-auto">
-            {items.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-stone-500 dark:text-stone-400">
-                Nothing new right now.
-              </p>
-            ) : (
-              // role="list" restores list semantics that Tailwind's list-none
-              // reset strips in some screen readers.
-              <ul role="list">
-                {items.map((n) => {
-                  const content = (
-                    <>
-                      <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
-                        {n.title}
-                      </p>
-                      {n.body && (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-stone-500 dark:text-stone-400">
-                          {n.body}
-                        </p>
-                      )}
-                      <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
-                        {timeAgo(n.created_at)}
-                      </p>
-                    </>
-                  );
-                  return (
-                    <li
-                      key={n.id}
-                      className="border-b border-stone-50 last:border-b-0 dark:border-white/5"
-                    >
-                      {n.url ? (
-                        <Link
-                          href={n.url}
-                          onClick={() => setOpen(false)}
-                          className="block px-4 py-3 hover:bg-bark-50 dark:hover:bg-stone-600"
-                        >
-                          {content}
-                        </Link>
-                      ) : (
-                        <div className="px-4 py-3">{content}</div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-          {hasMore && (
-            <button
-              type="button"
-              onClick={showMore}
-              disabled={loadingMore}
-              className="flex w-full items-center justify-center gap-1.5 border-t border-stone-100 px-4 py-2 text-center text-xs font-medium text-bark-700 hover:bg-bark-50 hover:underline active:opacity-70 disabled:opacity-50 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-600"
-            >
-              {loadingMore && <InlineSpinner size={12} />}
-              Show more
-            </button>
-          )}
+          {panelBody}
         </div>
       )}
+
+      {/* PHONE: a bottom sheet instead of a dropdown, and it stays put. The
+          complaint was that tapping the bell, then scrolling or touching
+          anywhere, dropped the list and meant tapping the bell again.
+          Portalled to document.body rather than rendered here: this sits
+          inside the sticky header (z-40 homeowner, z-30 pro) and the fixed
+          bottom tab bar is also z-30, so a sheet left inside the header's
+          stacking context paints UNDER the tab bar on the pro side. The
+          portal puts it above everything. */}
+      {shouldRender && isPhone && portalReady &&
+        createPortal(
+          <div data-testid="notification-sheet" className="sm:hidden">
+            {/* Backdrop. Dims the page and swallows taps, but does NOT close:
+                the owner asked for a panel that stays open until the X, so a
+                mis-tap beside the sheet costs nothing. aria-hidden because it
+                is decoration with no action behind it. */}
+            <div
+              aria-hidden="true"
+              className={`fixed inset-0 z-[55] bg-stone-900/40 ${
+                open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
+              }`}
+            />
+            <div
+              role="dialog"
+              aria-label="Notifications"
+              // Anchored to the bottom of the screen and capped at 85% of the
+              // viewport, so the page behind stays visible enough to keep
+              // your place. flex-col + the list's flex-1 make the list the
+              // part that scrolls, never the sheet.
+              className={`fixed inset-x-0 bottom-0 z-[60] flex max-h-[85dvh] flex-col overflow-hidden rounded-t-2xl border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-menu dark:border-white/10 dark:bg-stone-700 ${
+                open
+                  ? "motion-safe:animate-fade-slide-up"
+                  : "motion-safe:animate-fade-slide-down"
+              }`}
+            >
+              {panelBody}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

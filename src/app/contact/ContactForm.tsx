@@ -9,7 +9,24 @@ import { sendContactMessageAction } from "./actions";
 // from requiring a session). Two of the three live here; the third, IP rate
 // limiting, lives server-side in ./actions.ts where it can't be bypassed by
 // skipping the client.
-export default function ContactForm({ topic }: { topic: string | null }) {
+//
+// Name / email / phone are prefilled when the visitor happens to be signed in
+// (the page reads the session and passes them down), so a member who follows a
+// legal-page link here does not retype what we already know.
+export default function ContactForm({
+  topic,
+  // Empty strings for a signed-out visitor, which is the common case here.
+  // defaultValue and not value: a prefilled field must still be editable (the
+  // account email is often not the one someone wants a reply at).
+  name = "",
+  email = "",
+  phone = "",
+}: {
+  topic: string | null;
+  name?: string;
+  email?: string;
+  phone?: string;
+}) {
   // A validation error stays on this page, so it comes back as an ActionResult
   // rendered inline here rather than through the flash cookie (which the root
   // layout only reads on a fresh GET, i.e. after a redirect). On the success
@@ -68,17 +85,33 @@ export default function ContactForm({ topic }: { topic: string | null }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="label">Name</label>
-          <input name="name" className="input" maxLength={200} />
+          <input
+            name="name"
+            defaultValue={name}
+            className="input"
+            maxLength={200}
+          />
         </div>
         <div>
           <label className="label">Email</label>
-          <input name="email" type="email" className="input" maxLength={254} />
+          <input
+            name="email"
+            type="email"
+            defaultValue={email}
+            className="input"
+            maxLength={254}
+          />
         </div>
       </div>
 
       <div className="mt-4">
         <label className="label">Phone</label>
-        <input name="phone" className="input" maxLength={40} />
+        <input
+          name="phone"
+          defaultValue={phone}
+          className="input"
+          maxLength={40}
+        />
       </div>
       <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
         Add an email or a phone number so we know how to reply.

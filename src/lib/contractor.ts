@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getVerifiedUser } from "@/lib/auth";
+import { hasProPlan } from "@/lib/subscription";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import type { Contractor } from "@/lib/database.types";
 import type { AuthRoleDecision, Role, Sides } from "@/lib/roleRouting";
@@ -38,6 +39,9 @@ const CONTRACTOR_COLUMNS = [
   "license_doc_path",
   "insurance_doc_path",
   "license_verified_status",
+  // Added 2026-08-30: without it the profile editor rendered the owner name
+  // empty and every save wrote null over it (pre-push review finding).
+  "owner_name",
   "license_verified_at",
   "license_verify_detail",
   "background_check_status",
@@ -352,5 +356,100 @@ export const countPaidLeadApplications = cache(
       return null;
     }
     return count ?? 0;
+  }
+);
+
+// Is this a real business, or is it a signup form somebody filled in?
+//
+// The pro copilot (/api/pro-ask) runs on the paid model, and anyone can type a
+// company name into the pro signup and start asking it questions for free. So
+// the copilot stays LOCKED until the account has done one of the things a
+// pretend business does not do:
+//
+//   1. a California license number we confirmed with the CSLB
+//      (license_verified_status "verified"; nothing but the verify flow in
+//      src/app/pro/actions.ts can write that value - 0078 revoked the column
+//      from the pro's own client),
+//   2. paid for at least one lead (countPaidLeadApplications above, which
+//      already excludes ghost-protection refunds),
+//   3. money in the wallet that actually settled,
+//   4. a live Hearth Pro membership, trial included - they are paying us now.
+//
+// Any ONE of those unlocks it; they are alternatives, not steps. A free pro who
+// clears the bar gets ASK_DAILY_FREE questions a day, the same as a free
+// homeowner. A Pro member gets ASK_DAILY_PRO.
+//
+// FAILS CLOSED, one signal at a time: an unreadable count, an unreadable wallet
+// or an unreadable contractors row is "not established", never "let them in".
+// A locked pro is told exactly how to unlock, so a false negative costs a
+// sentence, and the alternative is an outage turning into free model calls.
+//
+// Cached per request like its neighbours: the route asks, and so does the page
+// that decides whether to render the composer at all.
+export const isEstablishedPro = cache(
+  async (contractorId: string): Promise<boolean> => {
+    // Cheapest first, and the one most pros will have: a paid membership.
+    if (await hasProPlan()) return true;
+
+    // Admin client on purpose: migration 0069 revoked table SELECT on
+    // contractors and re-granted a column allowlist that does NOT include
+    // license_verified_status, so the RLS client returns null here and a
+    // CSLB-verified pro would never unlock (found by the 2026-08-30 review).
+    const admin = createAdminClient();
+
+    const { data: row, error: licenseError } = await admin
+      .from("contractors")
+      .select("license_verified_status")
+      .eq("id", contractorId)
+      .maybeSingle();
+    if (licenseError) {
+      console.error(
+        "isEstablishedPro license read failed:",
+        licenseError.message ?? licenseError
+      );
+    } else if (row?.license_verified_status === "verified") {
+      return true;
+    }
+
+    const paidLeads = await countPaidLeadApplications(contractorId);
+    // null is "could not read", which is not "has paid".
+    if ((paidLeads ?? 0) > 0) return true;
+
+    // Wallet reads stay on the RLS client: those columns are in the allowlist.
+    const supabase = await createClient();
+
+    // A settled deposit. wallet_transactions has no status column: the row is
+    // only written by apply_deposit (migration 0010), which the Stripe webhook
+    // calls after the money has actually landed, so the row's existence IS the
+    // settlement. Positive cash only, so a lead charge or a refund can never
+    // read as a deposit.
+    const { data: wallet, error: walletError } = await supabase
+      .from("wallets")
+      .select("id")
+      .eq("contractor_id", contractorId)
+      .maybeSingle();
+    if (walletError) {
+      console.error(
+        "isEstablishedPro wallet read failed:",
+        walletError.message ?? walletError
+      );
+      return false;
+    }
+    if (!wallet) return false;
+
+    const { count, error: txError } = await supabase
+      .from("wallet_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("wallet_id", wallet.id)
+      .eq("type", "deposit")
+      .gt("cash_delta_cents", 0);
+    if (txError) {
+      console.error(
+        "isEstablishedPro deposit read failed:",
+        txError.message ?? txError
+      );
+      return false;
+    }
+    return (count ?? 0) > 0;
   }
 );

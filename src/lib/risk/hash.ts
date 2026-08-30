@@ -1,3 +1,7 @@
+// Build-time guard: this module reads RISK_HASH_SALT, the secret that makes
+// every identity hash in public.account_signals irreversible, so importing it
+// from a Client Component must fail the build rather than ship the salt.
+import "server-only";
 import { createHash } from "crypto";
 
 // Salted, one-way hashing for every identifier the trial-abuse score looks at.

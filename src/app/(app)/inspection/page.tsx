@@ -6,6 +6,7 @@ import { hasPlus } from "@/lib/subscription";
 import { freeTastesLeft } from "@/lib/freeAiTasteServer";
 import InspectionRequest from "./InspectionRequest";
 import InspectionUpload from "./InspectionUpload";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 // Home inspection hub: request a professional inspection (posts a job to
 // local inspectors, same flow as any other trade), or add a report the
@@ -37,6 +38,7 @@ export default async function InspectionPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Home inspection" }]} />
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Home inspection

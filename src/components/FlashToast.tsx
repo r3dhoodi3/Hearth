@@ -28,6 +28,11 @@ import { useToast } from "@/components/ToastProvider";
 // never be pulled into the browser bundle. Keep the two in lockstep.
 const FLASH_COOKIE = "hearth_flash";
 
+// Same ceiling as FLASH_MAX_DURATION_MS in src/lib/flash.ts, duplicated for the
+// same reason the cookie name is: that module imports next/headers and must
+// never reach the browser bundle. Keep the two in lockstep.
+const MAX_DURATION_MS = 15000;
+
 type FlashType = "success" | "error" | "info" | "warning";
 
 const FLASH_TYPES: ReadonlySet<string> = new Set([
@@ -37,7 +42,12 @@ const FLASH_TYPES: ReadonlySet<string> = new Set([
   "warning",
 ]);
 
-type ClientFlash = { message: string; type: FlashType; id: string };
+type ClientFlash = {
+  message: string;
+  type: FlashType;
+  id: string;
+  duration?: number;
+};
 
 // Reads and validates the flash cookie. Everything about the payload is
 // treated as untrusted: it is a cookie, so a user can hand us anything, and a
@@ -69,10 +79,20 @@ function readFlashCookie(): ClientFlash | null {
     ) {
       return null;
     }
+    // duration is optional and, like everything else here, untrusted: only a
+    // finite non-negative number survives, capped so a cookie cannot pin a
+    // toast on screen. Anything else is dropped and the type default applies.
+    const duration =
+      typeof parsed.duration === "number" &&
+      Number.isFinite(parsed.duration) &&
+      parsed.duration >= 0
+        ? Math.min(parsed.duration, MAX_DURATION_MS)
+        : undefined;
     return {
       message: parsed.message,
       type: parsed.type as FlashType,
       id: parsed.id,
+      ...(duration === undefined ? {} : { duration }),
     };
   } catch {
     return null;
@@ -101,7 +121,10 @@ export default function FlashToast() {
     const flash = readFlashCookie();
     if (!flash || flash.id === lastId.current) return;
     lastId.current = flash.id;
-    toast[flash.type](flash.message);
+    toast[flash.type](
+      flash.message,
+      flash.duration === undefined ? undefined : { duration: flash.duration }
+    );
     document.cookie = `${FLASH_COOKIE}=; Max-Age=0; path=/`;
   });
 

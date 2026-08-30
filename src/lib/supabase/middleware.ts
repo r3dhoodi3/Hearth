@@ -3,6 +3,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 import { hasAuthCookie } from "@/lib/authCookie";
 import { requestOrigin } from "@/lib/requestOrigin";
+import {
+  ACTIVITY_COOKIE,
+  activityCookieOptions,
+  isIdleExpired,
+  shouldStampActivity,
+} from "@/lib/sessionActivity";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -124,6 +130,44 @@ export async function updateSession(request: NextRequest) {
         ? `?next=${encodeURIComponent(next)}`
         : "";
     return NextResponse.redirect(url);
+  }
+
+  // IDLE TIMEOUT (src/lib/sessionActivity.ts). Supabase's refresh token has no
+  // expiry of its own unless time-boxed sessions are enabled in the dashboard,
+  // and @supabase/ssr keeps it in a 400-day cookie, so a session left alone
+  // stays usable indefinitely. This is the app's own answer: 30 days without a
+  // guarded request ends the session. The check lives here because this is the
+  // one place every signed-in request already passes through.
+  const now = Date.now();
+  const stamp = request.cookies.get(ACTIVITY_COOKIE)?.value;
+  if (isIdleExpired(stamp, now)) {
+    // Cookie names collected BEFORE signOut, because signOut writes through the
+    // adapter above and rewrites request.cookies as it goes.
+    const authCookieNames = request.cookies
+      .getAll()
+      .map((c) => c.name)
+      .filter((name) => name.startsWith("sb-") && name.includes("-auth-token"));
+    try {
+      // Revoke THIS session's refresh token at Supabase (scope "local"), not
+      // every session the user has: the default global scope would sign the
+      // owner's phone out because a forgotten iPad went idle for 30 days.
+      // Local still hits the auth server, so the token is dead server-side.
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // Best effort. Clearing the cookies below is what actually ends this
+      // browser's session, and it has to happen whether or not the auth server
+      // was reachable.
+    }
+    const url = new URL("/signin", requestOrigin(request));
+    url.search = "?expired=1";
+    const bounced = NextResponse.redirect(url);
+    for (const name of authCookieNames) bounced.cookies.delete(name);
+    bounced.cookies.delete(ACTIVITY_COOKIE);
+    return bounced;
+  }
+  if (shouldStampActivity(stamp, now)) {
+    // Once an hour at most, so this is not a Set-Cookie on every navigation.
+    response.cookies.set(ACTIVITY_COOKIE, String(now), activityCookieOptions());
   }
 
   return response;

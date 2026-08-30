@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getUser } from "@/lib/auth";
+import { getUserProfile } from "@/lib/user";
 import ContactForm from "./ContactForm";
 
 // Public top-level page, same pattern as src/app/privacy/page.tsx: see
@@ -52,10 +54,35 @@ export default async function ContactPage(
   // to read as a sentence here and not as a bare word.
   const topic = rawTopic ? (TOPIC_LABELS[rawTopic.toLowerCase()] ?? rawTopic) : null;
 
+  // Prefill for a visitor who happens to be signed in, exactly the same three
+  // lookups the in-app Help page feeds SupportForm with (src/app/(app)/account/
+  // help/page.tsx). No account, no prefill: both helpers return null with no
+  // session, and the page keeps working for a logged-out visitor.
+  //
+  // This costs no static rendering: reading searchParams above already makes
+  // this route dynamic, so the session read rides along on a render that was
+  // never going to be cached. Only name / email / phone leave this function -
+  // never the rest of the profile row.
+  const [profile, user] = await Promise.all([getUserProfile(), getUser()]);
+  const metaName = (
+    user?.user_metadata?.full_name as string | undefined
+  )?.trim();
+  const prefill = {
+    name: profile?.full_name || metaName || "",
+    email: profile?.email || user?.email || "",
+    phone: profile?.phone || "",
+  };
+
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <Link href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
+        {/* Back link: a bare 14px text link is a thumb-sized miss on a
+            phone, so below sm it becomes a real 44px tall target at 16px.
+            The sm and up rendering is untouched: every added class is
+            max-sm:. Same treatment on every public page that carries this
+            link (terms, privacy, dmca, pricing, ai-disclosure, pro-terms,
+            emergency-help). */}
+        <Link href="/" className="text-stone-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
         </Link>
       </p>
@@ -69,7 +96,12 @@ export default async function ContactPage(
       </p>
 
       <div className="mt-8">
-        <ContactForm topic={topic} />
+        <ContactForm
+          topic={topic}
+          name={prefill.name}
+          email={prefill.email}
+          phone={prefill.phone}
+        />
       </div>
     </main>
   );

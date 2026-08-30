@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { ChevronRight } from "lucide-react";
 import { startProCheckoutAction } from "./actions";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
 import InlineSpinner from "@/components/InlineSpinner";
@@ -85,6 +86,58 @@ const PLAN_COPY: Record<
 // the trial (no existing Pro-side subscription row), so a returning member who
 // churned and came back is never shown trial copy for a trial they will not
 // get. It applies the same way to both cadences.
+//
+// PHONE DISCLOSURE: TWO COPIES OF AutoRenewalTerms, ONE PER BREAKPOINT.
+// (The full reasoning lives here rather than beside each block: a long comment
+// wedged between the disclosure and the button it belongs to is exactly what
+// the autoRenewalPlacement test refuses, and rightly - the two must stay
+// within a screenful of each other in the source as well as on the page.)
+// Every checkout form here starts a Stripe checkout, so the recurring terms
+// must be on screen next to its button before any billing information is
+// collected (ROSCA 15 U.S.C. 8403(1)) and in visual proximity to the request
+// for consent (Cal. Bus. and Prof. Code 17602(a)(1)).
+// Same treatment the homeowner PlanToggle got: each checkout form renders the
+// block twice, once inside a `sm:hidden` <details> that starts CLOSED and once
+// inside a `max-sm:hidden` div that renders exactly as it always did. On a
+// 390px screen the full block ran about a third of a screen and pushed the
+// button it belongs to below the fold.
+//
+// What is collapsed is the ITEMIZED version, never the material terms. The
+// one-line summary (PLAN_BILLING below, and the trial recap on the top form)
+// stays on screen unconditionally, directly beside the button, which is what
+// ROSCA 15 U.S.C. 8403(1) and Cal. Bus. & Prof. Code 17602(a)(1) are about:
+// material terms disclosed before billing information is collected, in visual
+// proximity to the request for consent. One tap opens the rest, and it is
+// inside the same form as the button either way.
+//
+// Two elements rather than one because `open` is a boolean attribute no media
+// query can drive, and flipping it from JS on mount would either flash or
+// mismatch hydration.
+//
+// THE STORED CONSENT RECORD IS UNAFFECTED. The billing-terms text in the
+// Stripe metadata is built SERVER-SIDE by startProCheckoutAction from
+// src/lib/billingTerms.ts, off the posted cadence, never from what this
+// component rendered.
+//
+// PHONE TEXT SIZES. Every 10px and 11px line below carries a `max-sm:`
+// override up to 12px or 14px. Desktop keeps the original class, so sm and up
+// renders byte-identical to before.
+
+// One plain sentence per cadence: what is charged, when, and how to stop it.
+// Every number read from PRO_PLAN / formatUsd / yearlySavings above rather
+// than typed. This is the line that stays visible on a phone while the
+// itemized block folds away.
+function planBilling(plan: Plan, trialEligible: boolean): string {
+  if (plan === "monthly") {
+    return trialEligible
+      ? `${PRO_PLAN.trialDays} days free, then ${PLAN_COPY.monthly.price} a month. Cancel before the trial ends and you pay nothing.`
+      : `${PLAN_COPY.monthly.price} a month, cancel anytime.`;
+  }
+  return trialEligible
+    ? `${PRO_PLAN.trialDays} days free, then ${PLAN_COPY.yearly.price} for the year. Cancel before the trial ends and you pay nothing.`
+    : `One payment of ${PLAN_COPY.yearly.price} a year, that is ${YEARLY_SAVING} less than paying monthly.`;
+}
+
 export default function ProPlanToggle({
   trialEligible = true,
 }: {
@@ -160,13 +213,24 @@ export default function ProPlanToggle({
             {PRO_PLAN.trialDays} days free, then {PLAN_COPY.monthly.price}
             /month. Cancel anytime before the trial ends.
           </p>
-          {/* Same disclosure the picker below carries, for the same reason:
-              this button starts a Stripe checkout, so the recurring terms have
-              to be on screen next to it before any billing information is
-              collected (ROSCA 15 U.S.C. 8403(1)) and in visual proximity to
-              the request for consent (Cal. Bus. & Prof. Code 17602(a)(1)).
-              Hard-coded to pro_monthly because the hidden field above is. */}
-          <AutoRenewalTerms plan="pro_monthly" introEligible={trialEligible} />
+          {/* Hard-coded to pro_monthly because the hidden field above is.
+              Phone copy collapsed, desktop copy open, recap line above never
+              folds: see PHONE DISCLOSURE at the top of this file. */}
+          <details className="group sm:hidden">
+            <summary className="focus-ring flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-stone-700 [&::-webkit-details-marker]:hidden dark:text-stone-300">
+              <ChevronRight
+                className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
+                aria-hidden="true"
+              />
+              Billing terms
+            </summary>
+            <div className="mt-2">
+              <AutoRenewalTerms plan="pro_monthly" introEligible={trialEligible} />
+            </div>
+          </details>
+          <div className="max-sm:hidden">
+            <AutoRenewalTerms plan="pro_monthly" introEligible={trialEligible} />
+          </div>
         </form>
       )}
 
@@ -188,14 +252,17 @@ export default function ProPlanToggle({
           <p className="mt-0.5 text-2xl font-semibold text-stone-900 dark:text-stone-100">
             $0
           </p>
-          <p className="mt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
+          {/* 11px is under the readable floor on a phone; 14px below sm, the
+              original class from sm up so desktop is untouched. Same rule on
+              every 10/11px line in this file. */}
+          <p className="mt-0.5 text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
             Yours forever, no card.
           </p>
           <ul className="mt-3 space-y-1.5">
             {FREE_INCLUDES.map((f) => (
               <li
                 key={f}
-                className="flex items-start gap-1.5 text-xs text-stone-600 dark:text-stone-300"
+                className="flex items-start gap-1.5 text-xs text-stone-600 max-sm:text-sm dark:text-stone-300"
               >
                 <span className="mt-px font-bold text-green-600" aria-hidden>
                   ✓
@@ -204,7 +271,7 @@ export default function ProPlanToggle({
               </li>
             ))}
           </ul>
-          <p className="mt-auto pt-3 text-[11px] text-stone-500 dark:text-stone-400">
+          <p className="mt-auto pt-3 text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
             No monthly lead credit, no +{PRO_DEPOSIT_BOOST_PTS}% deposit match,
             no AI back office, no win-rate analytics, and a plain public page.
           </p>
@@ -218,7 +285,7 @@ export default function ProPlanToggle({
           )}
           className={`relative order-1 sm:order-2 ${columnClass("yearly")}`}
         >
-          <span className="absolute -top-2.5 left-4 whitespace-nowrap rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-medium text-white">
+          <span className="absolute -top-2.5 left-4 whitespace-nowrap rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-medium text-white max-sm:text-xs">
             Best value
           </span>
           <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
@@ -226,22 +293,22 @@ export default function ProPlanToggle({
           </span>
           <span className="mt-0.5 block text-2xl font-semibold text-stone-900 dark:text-stone-100">
             {PLAN_COPY.yearly.price}
-            <span className="text-xs font-normal text-stone-500 dark:text-stone-400">
+            <span className="text-xs font-normal text-stone-500 max-sm:text-sm dark:text-stone-400">
               {PLAN_COPY.yearly.unit}
             </span>
           </span>
           {/* Honest arithmetic, not a discount claim: the yearly price divided
               by 365, rounded up to the cent. */}
-          <span className="mt-0.5 block text-[11px] text-stone-500 dark:text-stone-400">
+          <span className="mt-0.5 block text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
             About {YEARLY_PER_DAY} a day
           </span>
-          <span className="mt-2 block text-xs font-medium text-hearth-700 dark:text-hearth-300">
+          <span className="mt-2 block text-xs font-medium text-hearth-700 max-sm:text-sm dark:text-hearth-300">
             Save {YEARLY_SAVING} vs monthly
           </span>
-          <span className="mt-0.5 block text-[11px] text-stone-500 dark:text-stone-400">
+          <span className="mt-0.5 block text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
             {YEARLY_PER_MONTH} a month, billed once a year.
           </span>
-          <span className="mt-auto pt-3 text-[11px] text-stone-500 dark:text-stone-400">
+          <span className="mt-auto pt-3 text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
             {/* Mirrors grant_membership_credit in the Stripe webhook: the
                 yearly plan's $120 of bonus lead credit lands in one grant with
                 a 400-day expiry, so it outlives the year. */}
@@ -263,21 +330,21 @@ export default function ProPlanToggle({
           </span>
           <span className="mt-0.5 block text-2xl font-semibold text-stone-900 dark:text-stone-100">
             {PLAN_COPY.monthly.price}
-            <span className="text-xs font-normal text-stone-500 dark:text-stone-400">
+            <span className="text-xs font-normal text-stone-500 max-sm:text-sm dark:text-stone-400">
               {PLAN_COPY.monthly.unit}
             </span>
           </span>
-          <span className="mt-0.5 block text-[11px] text-stone-500 dark:text-stone-400">
+          <span className="mt-0.5 block text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
             = {MONTHLY_YEAR_TOTAL} a year
           </span>
-          <span className="mt-2 block text-xs text-stone-600 dark:text-stone-300">
+          <span className="mt-2 block text-xs text-stone-600 max-sm:text-sm dark:text-stone-300">
             The same perks, month to month. $10 of lead credit each cycle,
             good for 60 days.
           </span>
           {/* The page's one loss-framed line, and the loss is real today: the
               actual delta between the two plans on offer, not urgency or
               scarcity. */}
-          <span className="mt-auto pt-3 text-[11px] text-stone-500 dark:text-stone-400">
+          <span className="mt-auto pt-3 text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
             Monthly pays {YEARLY_SAVING} more for the same year.
           </span>
         </button>
@@ -317,10 +384,36 @@ export default function ProPlanToggle({
             selected, so they can never say two different things. */}
         <form action={startProCheckoutAction} className="space-y-3">
           <input type="hidden" name="plan" value={plan} />
-          <AutoRenewalTerms
-            plan={plan === "monthly" ? "pro_monthly" : "pro_yearly"}
-            introEligible={trialEligible}
-          />
+          {/* The one-line material-terms summary, always visible on a phone:
+              what is charged, when, and how to stop it, for the SELECTED
+              cadence. sm and up already reads it as the first line of the
+              block itself, so this copy is phone-only. */}
+          <p className="text-sm text-stone-600 sm:hidden dark:text-stone-300">
+            {planBilling(plan, trialEligible)}
+          </p>
+          {/* Collapsed on a phone, open on desktop. See PHONE DISCLOSURE at
+              the top of this file. */}
+          <details className="group sm:hidden">
+            <summary className="focus-ring mx-auto flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-stone-700 [&::-webkit-details-marker]:hidden dark:text-stone-300">
+              <ChevronRight
+                className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
+                aria-hidden="true"
+              />
+              Billing terms
+            </summary>
+            <div className="mt-2">
+              <AutoRenewalTerms
+                plan={plan === "monthly" ? "pro_monthly" : "pro_yearly"}
+                introEligible={trialEligible}
+              />
+            </div>
+          </details>
+          <div className="max-sm:hidden">
+            <AutoRenewalTerms
+              plan={plan === "monthly" ? "pro_monthly" : "pro_yearly"}
+              introEligible={trialEligible}
+            />
+          </div>
           <CheckoutButton
             label={
               trialEligible

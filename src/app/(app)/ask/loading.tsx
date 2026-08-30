@@ -3,10 +3,9 @@ import { Skeleton } from "@/components/Skeleton";
 // Mirrors page.tsx: the mobile-only "All conversations" back line, then the
 // same full-height rounded chat frame (h-[calc(100dvh-14rem)] / sm's
 // h-[calc(100vh-12rem)]) so the frame doesn't resize when the real chat
-// swaps in. Inside the frame, the shape cribs from AskHearthDock's own
-// OpeningSkeleton: a header line, then message-shaped blocks, then an input
-// bar, just stretched to fill the full-page pane instead of the dock's small
-// one.
+// swaps in. Inside the frame, the shape of the conversation that is about to
+// appear: a header line, then message-shaped blocks, then an input bar, so the
+// wait reads as the pane filling in rather than as nothing happening.
 export default function Loading() {
   return (
     <div aria-hidden="true">

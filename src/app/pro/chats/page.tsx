@@ -4,12 +4,14 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
-import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
+import { labelFor, JOB_CATEGORIES, PRO_LEADS_HREF } from "@/lib/constants";
+import { Briefcase, ChevronRight } from "lucide-react";
 import { isUnreadSince } from "@/lib/unread";
 import { plainPreview } from "@/lib/previewText";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import AskHearthRow from "@/components/AskHearthRow";
+import PhoneChatFrame from "@/components/PhoneChatFrame";
 import {
   sendQuoteAction,
   withdrawQuoteAction,
@@ -164,16 +166,39 @@ export default async function ProChatsPage(props: {
               accent="hearth"
             />
 
+            {/* Pinned second: the way OUT of an empty inbox. A pro with no
+                conversations has nothing to do on this screen, and the answer
+                is always the same one - go find a job to apply to. Same row
+                shape as the copilot above it so the list stays one thing.
+                PRO_LEADS_HREF rather than a literal "/pro", so it follows the
+                open-jobs board when the pro Home / Leads tab split moves it. */}
+            <li>
+              <Link
+                href={PRO_LEADS_HREF}
+                className="flex min-h-11 items-center gap-3 border-l-4 border-transparent px-4 py-3 transition hover:bg-stone-50 dark:hover:bg-stone-700"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-hearth-100 text-hearth-700 dark:bg-hearth-900/50 dark:text-hearth-300">
+                  <Briefcase className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-stone-900 dark:text-stone-100">
+                    Find clients
+                  </span>
+                  <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+                    Open jobs near you, ready to apply
+                  </span>
+                </span>
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-stone-400 dark:text-stone-500"
+                  aria-hidden="true"
+                />
+              </Link>
+            </li>
+
             {convos.length === 0 && (
               <li className="px-4 py-6 text-sm text-stone-500 dark:text-stone-400">
-                No conversations yet. Apply to jobs on the{" "}
-                <Link
-                  href="/pro"
-                  className="font-medium text-hearth-700 underline dark:text-hearth-300"
-                >
-                  Leads
-                </Link>{" "}
-                page, and when a homeowner picks you, your chat opens here.
+                No conversations yet. Find clients to start one: when a
+                homeowner picks you, your chat opens here.
               </li>
             )}
 
@@ -204,7 +229,7 @@ export default async function ProChatsPage(props: {
                         {l.homeowner_name || "Homeowner"}
                       </span>
                       {unread ? (
-                        <span className="shrink-0 rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                        <span className="shrink-0 rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white max-sm:text-xs">
                           New
                         </span>
                       ) : (
@@ -240,14 +265,20 @@ export default async function ProChatsPage(props: {
 
           {/* ---- Open thread (the only pane on phones once one is picked) ---- */}
           {selected ? (
-            <div
+            // Below sm PhoneChatFrame pins this panel to the visual viewport so
+            // the software keyboard can't push the composer off screen; sm and
+            // up render exactly the classes below, as before.
+            <PhoneChatFrame
               className={`${
                 threadOpenOnMobile ? "flex" : "hidden md:flex"
               } h-[calc(100dvh-13rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)]`}
             >
               <Link
                 href="/pro/chats"
-                className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300 md:hidden"
+                // Already md:hidden, so these sizes are phone-only: this
+                // is the pro twin of the homeowner /chats back link, 44px tall
+                // and 16px, with the negative margin keeping the text in line.
+                className="mb-2 -ml-2 inline-flex min-h-11 w-fit shrink-0 items-center gap-1 px-2 text-base font-medium text-hearth-700 hover:underline dark:text-hearth-300 md:hidden"
               >
                 <span aria-hidden="true">←</span> All conversations
               </Link>
@@ -270,7 +301,7 @@ export default async function ProChatsPage(props: {
                   voidInvoiceAction={voidInvoiceAction}
                 />
               </div>
-            </div>
+            </PhoneChatFrame>
           ) : (
             <div
               className={`${
@@ -280,7 +311,9 @@ export default async function ProChatsPage(props: {
               Select a conversation
               <Link
                 href="/pro/chats"
-                className="text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300 md:hidden"
+                // Same treatment as the back link above, and as the
+                // homeowner empty-state link.
+                className="-ml-2 inline-flex min-h-11 items-center px-2 text-base font-medium text-hearth-700 hover:underline dark:text-hearth-300 md:hidden"
               >
                 <span aria-hidden="true">←</span> All conversations
               </Link>

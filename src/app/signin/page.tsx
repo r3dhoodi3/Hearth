@@ -11,7 +11,7 @@ import DeviceFingerprint from "@/components/DeviceFingerprint";
 // the form again. Everyone else gets the client form (./SignInForm.tsx).
 export default async function SignInPage(
   props: {
-    searchParams?: Promise<{ next?: string; error?: string }>;
+    searchParams?: Promise<{ next?: string; error?: string; expired?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -31,6 +31,16 @@ export default async function SignInPage(
   // ?error=auth_failed: set by /auth/callback when a confirmation or magic
   // link couldn't be exchanged for a session (expired or already used), so
   // the form can explain instead of showing a blank sign-in.
+  //
+  // link_invalid is the same situation from the other route: /auth/confirm
+  // sends it when verifyOtp rejects a token_hash. It was not in this check, so
+  // somebody whose emailed reset link had expired landed on a silent sign-in
+  // page with no idea why - which is exactly the "the forgot-password link
+  // doesn't work" report. Same copy fits both: try signing in, and use Forgot
+  // password for a fresh link.
+  const authFailed =
+    searchParams?.error === "auth_failed" ||
+    searchParams?.error === "link_invalid";
   return (
     <>
       {/* Renders nothing. See the note on the homeowner sign-up page: a coarse
@@ -39,7 +49,11 @@ export default async function SignInPage(
           as on the sign-up pages because a farmer's second account is often
           created in a browser that has signed in before. */}
       <DeviceFingerprint />
-      <SignInForm next={next} authFailed={searchParams?.error === "auth_failed"} />
+      <SignInForm
+        next={next}
+        authFailed={authFailed}
+        sessionExpired={searchParams?.expired === "1"}
+      />
     </>
   );
 }

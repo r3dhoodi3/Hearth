@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentContractor, getSides } from "@/lib/contractor";
 import { getUser } from "@/lib/auth";
+import { getUserProfile } from "@/lib/user";
 import { chooseRoleAction } from "@/app/welcome/role/actions";
 import OnboardingCompanyForm from "./OnboardingCompanyForm";
 
@@ -28,8 +29,19 @@ export default async function ProOnboardingPage(
   // no preferred side yet.
 
   // Prefill the company email with the account email. They can change it.
-  // sides only decides whether the way out below is worth showing.
-  const [user, sides] = await Promise.all([getUser(), getSides()]);
+  // sides only decides whether the way out below is worth showing. The profile
+  // row is read for one field: the account's full name, which prefills the new
+  // "Owner name" question so a pro who already told us their name once does
+  // not type it again.
+  const [user, sides, profile] = await Promise.all([
+    getUser(),
+    getSides(),
+    getUserProfile(),
+  ]);
+  const defaultOwnerName =
+    profile?.full_name?.trim() ||
+    (user?.user_metadata?.full_name as string | undefined)?.trim() ||
+    "";
 
   // Referral attribution: /pros?ref=CODE links land here with the code in the
   // query string. Prefill it; the pro can still edit or clear it.
@@ -46,6 +58,7 @@ export default async function ProOnboardingPage(
         // machine two pros share never prefills one with the other's answers.
         userId={user?.id ?? ""}
         defaultEmail={user?.email ?? ""}
+        defaultOwnerName={defaultOwnerName}
         defaultReferralCode={referralCode}
       />
       {/* WAYS OUT. This page is a dead end for an account with a contractor

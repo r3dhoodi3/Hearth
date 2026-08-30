@@ -57,3 +57,22 @@ Honest Plus page and Stripe terms, 2 to 4 taps to an account, address autocomple
 - 46 `TODO(legal)` placeholders (DMCA agent, business address, pro-terms numbers) for the lawyer.
 - Desktop header at 640-1023px still collides (brand vs nav links). Structural: the top strip switches on at `sm` but only fits at ~1024px. Fix is moving the top strip + bottom tab bar from `sm` to `lg`; that gives tablets the app shell, your call.
 - Review comments moderation is done; `open_jobs_for_me` already had a LIMIT (old STATUS item was stale).
+
+## Wave 2026-08-29/30 (overnight, pushed with permission)
+
+Gate before push: tsc 0, eslint 0, vitest 178 files / 2463 pass, isolated build 0, two verifier agents (security + regression), fixes from the security review applied by the lead.
+
+What is in code (needs the SQL bundle below to be fully active on live):
+- Phone chat composer pinned above the iOS keyboard (visualViewport frame, auto-growing textarea, tab bar hides while typing) on /ask, /chats, /pro/ask, /pro/chats. Ask Hearth daily-limit lock persists across visits.
+- Ask Hearth reachable only from Messages (dock, dashboard rows, Tools row, pro menu, /learn pane removed; /search panes kept, owner to decide).
+- Weekly = monthly = yearly incl. trial; Plus copy prints no numbers. Pro copilot: free 3/day, Pro 20/day, locked until the business is real (verified license, paid lead, deposit, or membership).
+- Checkout: trial reservation is session-scoped and resumable (no more idempotency errors); pro side mirrored; conversion stamped by the webhook.
+- Pro side: /pro is Home (greeting, quick actions, 3 tool tiles, asked-for-you, numbers, trend, feedback card, nudge), /pro/leads is the board, 5-tab bar with Home centred; SMS consent checkbox (pro texts were silently dropped before); license/insurance expiry chips; "Find jobs" / "Find clients"; billing tier prices moved to /pro/help#lead-pricing; trial popup on billing visits 1/11/21; footer clears the tab bar.
+- Paywall parity on pro: 2 free back-office drafts then Pro (0145), ProChip, ?reason= banners on /pro/plus, once-a-day nudge. Feedback credit: $5 lead credit once per established pro (0144), never tied to store ratings.
+- Owner name on pro profiles (0141), contact email editable (Apple relay), prefilled forms, thank-you pages (/contact/thanks, help forms sent state), error toasts fade at 5s, This-month checklist stays open, maintenance plan button stays, Energy card hidden on phone.
+- Rating prompt: active-time gate (15-20 min, sessions 2-5 then 1-in-4), honest "Did you get a chance to rate?" follow-up, native adapter for the App Store build (Apple 5.6.1 branch), no incentives.
+- Web push (0143 + VAPID env): service worker, subscribe API, push channel in sendNotification (free for everyone, allowlisted kinds), settings cards both sides, one-time prompt; bell opens as a phone sheet that only the X closes.
+- Security: 30-day idle sign-out (this device only), password reset link fixed + expired-link notice, log redactor, same-origin guard on mutating routes + coverage test, cron secret pattern test, server-only on secret readers, robots covers all private routes, upload guard (magic bytes, PDF active content, EXIF strip) on the server upload path + bucket caps paste, env guard (staging DB fatal; test Stripe warns until REQUIRE_LIVE_STRIPE=1), realtime subscriptions filtered + replica identity default (0146), RLS audit paste, backups/restore + environments docs.
+- Launch polish: share images for 12 guides + pricing + pros, breadcrumbs on 30 pages (+JSON-LD on guides), first-party analytics events both sides (docs/ANALYTICS.md).
+
+Owner to do: paste supabase/PASTE-ME-ALL-PENDING-2026-08-30.sql (0141-0146 + storage caps, one paste, after the 0129-0140 bundle); Vercel env NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT then redeploy; Supabase Auth settings (sessions, URL config, reset template, secure password change, confirm email ON); run supabase/AUDIT-rls-2026-08-29.sql and send results; confirm the Supabase plan / backups; Vercel firewall rule for /api/health; environments split per docs/ENVIRONMENTS.md; Apple key rotation before Apple sign-in.

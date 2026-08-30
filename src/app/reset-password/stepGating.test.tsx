@@ -37,7 +37,9 @@ import {
   PW_RECOVERY_COOKIE,
   PW_RECOVERY_MAX_AGE_SECONDS,
   passwordRecoveryCookieOptions,
+  passwordRecoveryRedirectTo,
 } from "@/lib/passwordRecovery";
+import { safeNextPath } from "@/lib/safeNext";
 
 async function stepFor(
   step: string | undefined,
@@ -111,5 +113,42 @@ describe("the recovery cookie itself", () => {
 
   it("has the name both auth routes and the page agree on", () => {
     expect(PW_RECOVERY_COOKIE).toBe("hearth_pwrecovery");
+  });
+});
+
+// The link the reset email actually carries. If any of these drift, the click
+// lands back on step one ("enter your email") and the owner's report is "the
+// forgot-password link doesn't work".
+describe("the reset link we hand Supabase", () => {
+  const link = passwordRecoveryRedirectTo("https://gethearth.vercel.app");
+  const url = new URL(link);
+
+  it("lands on the callback route that performs the code exchange", () => {
+    expect(url.origin).toBe("https://gethearth.vercel.app");
+    expect(url.pathname).toBe("/auth/callback");
+  });
+
+  it("carries type=recovery, the only signal that unlocks the update step", () => {
+    // /auth/callback sets the hearth_pwrecovery cookie on this parameter and
+    // nothing else. Without it the exchange still succeeds and the user is
+    // still signed in, but /reset-password?step=update quietly renders step
+    // one instead of the password form.
+    expect(url.searchParams.get("type")).toBe("recovery");
+  });
+
+  it("points next at the update step, encoded so its own query survives", () => {
+    expect(url.searchParams.get("next")).toBe("/reset-password?step=update");
+    // Encoded in the raw string, or the inner "?" would be read as a second
+    // parameter of the callback URL and `next` would arrive truncated.
+    expect(link).toContain("next=%2Freset-password%3Fstep%3Dupdate");
+  });
+
+  it("hands the callback a next value that safeNextPath will accept", () => {
+    // The callback runs every ?next= through safeNextPath and falls back to
+    // /dashboard on a reject, which would drop the user on their dashboard
+    // with no way to set a password.
+    expect(safeNextPath(url.searchParams.get("next"))).toBe(
+      "/reset-password?step=update"
+    );
   });
 });

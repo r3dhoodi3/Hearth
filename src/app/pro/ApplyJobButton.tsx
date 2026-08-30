@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { markPushMoment } from "@/lib/pushPrompt";
 import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
@@ -19,8 +20,20 @@ import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 // form itself.
 function ConfirmPayButton({ fee }: { fee: string }) {
   const { pending } = useFormStatus();
+    // A pro paying for a lead is exactly the moment the push prompt is allowed
+    // to appear: they now have money on a job and want to know the second the
+    // homeowner replies. markPushMoment only stamps localStorage; the prompt
+    // itself decides whether to ask (see src/lib/pushPrompt.ts). Fired on the
+    // tap rather than on a success callback because this is a plain server-
+    // action form with no client success state - a rare failed charge means at
+    // worst one prompt shown a moment early.
   return (
-    <button type="submit" disabled={pending} className="btn-primary flex-1 text-sm">
+    <button
+      type="submit"
+      disabled={pending}
+      onClick={() => markPushMoment()}
+      className="btn-primary flex-1 text-sm"
+    >
       {pending && <InlineSpinner />}
       Confirm and pay {fee}
     </button>
@@ -204,7 +217,9 @@ export default function ApplyJobButton({
             key={t.label}
             type="button"
             onClick={() => applyTemplate(t.text)}
-            className="chip border border-stone-200 bg-white text-stone-600 hover:border-hearth-300 hover:text-hearth-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-400 dark:hover:text-hearth-300"
+            // Phone only: .chip is py-0.5 text-xs, about 20px tall, and
+            // these chips fill the application message.
+            className="chip border border-stone-200 bg-white text-stone-600 hover:border-hearth-300 hover:text-hearth-700 max-sm:min-h-11 max-sm:px-3 max-sm:text-sm dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-hearth-400 dark:hover:text-hearth-300"
           >
             {t.label}
           </button>
@@ -224,7 +239,8 @@ export default function ApplyJobButton({
           type="button"
           onClick={draftForMe}
           disabled={drafting}
-          className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50"
+          // Phone only: 16px tall before.
+          className="text-xs font-medium text-hearth-700 hover:underline disabled:opacity-50 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm"
         >
           {drafting ? "Drafting..." : "Draft it for me"}
         </button>
@@ -244,7 +260,8 @@ export default function ApplyJobButton({
             type="button"
             onClick={() => setDraftError(null)}
             aria-label="Dismiss"
-            className="shrink-0 text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-400"
+            // Phone only: a bare ~20px glyph is how you clear this error.
+            className="shrink-0 text-red-400 hover:text-red-600 max-sm:flex max-sm:h-11 max-sm:w-11 max-sm:items-center max-sm:justify-center dark:text-red-500 dark:hover:text-red-400"
           >
             ✕
           </button>

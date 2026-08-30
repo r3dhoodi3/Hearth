@@ -112,3 +112,49 @@ describe("PublicProfileForm phone tap targets", () => {
     ).toContain("max-sm:min-h-11");
   });
 });
+
+describe("PublicProfileForm owner name", () => {
+  // D8 / migration 0141: the business name is the company, owner_name is the
+  // person a homeowner ends up talking to. Every pro who signed up before the
+  // question existed has to be able to fill it in here.
+  //
+  // Queried by field name, not by label: the labels in this form are plain
+  // <label className="label"> with no htmlFor and no wrapping, so there is no
+  // accessible association for getByLabelText to follow.
+  function field(container: HTMLElement, name: string): HTMLInputElement {
+    return container.querySelector(`input[name="${name}"]`) as HTMLInputElement;
+  }
+
+  it("renders an editable Owner Name field, prefilled from the row", () => {
+    const { container } = render(
+      <PublicProfileForm
+        contractor={{ ...CONTRACTOR, owner_name: "Alex Rivera" }}
+      />
+    );
+    const input = field(container, "owner_name");
+    expect(input).toBeTruthy();
+    expect(input).toHaveValue("Alex Rivera");
+    expect(input).not.toHaveAttribute("readonly");
+    // The column's own CHECK caps it at 120.
+    expect(input.maxLength).toBe(120);
+    expect(screen.getByText("Owner Name")).toBeInTheDocument();
+  });
+
+  it("leaves the field empty, not absent, for a company that predates the question", () => {
+    const { container } = render(
+      <PublicProfileForm contractor={{ ...CONTRACTOR, owner_name: null }} />
+    );
+    expect(field(container, "owner_name")).toHaveValue("");
+  });
+
+  // D7: the pro side must never lock the contact email to the account email. A
+  // Sign in with Apple account carries a privaterelay.appleid.com forwarder,
+  // which is not an address a homeowner should be sent to.
+  it("keeps the contact email editable", () => {
+    const { container } = render(<PublicProfileForm contractor={CONTRACTOR} />);
+    const input = field(container, "contact_email");
+    expect(input).toBeTruthy();
+    expect(input).not.toHaveAttribute("readonly");
+    expect(input).not.toBeDisabled();
+  });
+});

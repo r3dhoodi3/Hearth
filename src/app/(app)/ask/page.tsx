@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getProactiveGreeting } from "@/lib/greeting";
 import AskHearth from "@/components/AskHearth";
+import PhoneChatFrame from "@/components/PhoneChatFrame";
 
 // The greeting is per-user, per-home, and reflects issues and tasks that
 // change under the user's own hands. Never cached, at any layer.
@@ -34,24 +35,28 @@ export default async function AskPage(props: {
           conversation on a phone. The h1 stays for structure and screen
           readers. */}
       <h1 className="sr-only">Ask Hearth</h1>
-      {/* Phone-only way back. This screen is opened from the pinned Ask Hearth
-          row at the top of Messages, and the bottom bar shows Messages as the
-          active tab while you're here, so the trip back has to be one tap -
-          the same "All conversations" link every open thread in /chats
-          carries. Desktop reaches Ask Hearth through the dock and the in-page
-          pane instead, and is left exactly as it was (the frame's sm: height
-          included). */}
-      <Link
-        href="/chats"
-        className="mb-2 inline-flex w-fit items-center gap-1 text-sm font-medium text-bark-700 hover:underline sm:hidden dark:text-stone-300"
-      >
-        <span aria-hidden="true">←</span> All conversations
-      </Link>
       {/* Same frame the Messages screen puts its Ask Hearth pane in, so the
-          two entry points look like one feature. dvh on phones so the browser
-          chrome collapsing doesn't leave the composer under the fold; the
-          phone height gives back the 2rem the link above takes. */}
-      <div className="flex h-[calc(100dvh-14rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 sm:h-[calc(100vh-12rem)]">
+          two entry points look like one feature. The sm: height is the desktop
+          box, unchanged; below sm PhoneChatFrame takes over and pins the panel
+          between the header and the keyboard (see .hearth-chat-frame in
+          globals.css), which is what keeps the composer on screen while you
+          type. */}
+      <PhoneChatFrame className="flex h-[calc(100dvh-14rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 sm:h-[calc(100vh-12rem)]">
+        {/* Phone-only way back. This screen is opened from the pinned Ask
+            Hearth row at the top of Messages, and the bottom bar shows
+            Messages as the active tab while you're here, so the trip back has
+            to be one tap - the same "All conversations" link every open thread
+            in /chats carries. It sits INSIDE the panel because on a phone the
+            panel covers everything under the header. Desktop hides it, exactly
+            as before. */}
+        <Link
+          href="/chats"
+          // Already sm:hidden, so these sizes are phone-only: 20px tall was
+          // below the touch floor for the only way back.
+          className="mb-2 -ml-2 inline-flex min-h-11 w-fit shrink-0 items-center gap-1 px-2 text-base font-medium text-bark-700 hover:underline sm:hidden dark:text-stone-300"
+        >
+          <span aria-hidden="true">←</span> All conversations
+        </Link>
         <div className="min-h-0 flex-1">
           {/* replaceUrlAfterInitial drops the ?q= from the address bar once
               the question has been handled, so a reload or a Back into this
@@ -64,7 +69,7 @@ export default async function AskPage(props: {
             replaceUrlAfterInitial="/ask"
           />
         </div>
-      </div>
+      </PhoneChatFrame>
     </div>
   );
 }

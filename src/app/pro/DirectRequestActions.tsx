@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { markPushMoment } from "@/lib/pushPrompt";
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
@@ -15,8 +16,20 @@ import { GHOST_PROTECTION_DAYS } from "@/lib/constants";
 // it belongs to, matching ApplyJobButton's ConfirmPayButton.
 function UnlockPayButton({ fee }: { fee: string }) {
   const { pending } = useFormStatus();
+    // A pro unlocking a direct request is exactly the moment the push prompt is allowed
+    // to appear: they now have money on a job and want to know the second the
+    // homeowner replies. markPushMoment only stamps localStorage; the prompt
+    // itself decides whether to ask (see src/lib/pushPrompt.ts). Fired on the
+    // tap rather than on a success callback because this is a plain server-
+    // action form with no client success state - a rare failed charge means at
+    // worst one prompt shown a moment early.
   return (
-    <button type="submit" disabled={pending} className="btn-primary flex-1 text-sm">
+    <button
+      type="submit"
+      disabled={pending}
+      onClick={() => markPushMoment()}
+      className="btn-primary flex-1 text-sm"
+    >
       {pending && <InlineSpinner />}
       Confirm and pay {fee}
     </button>

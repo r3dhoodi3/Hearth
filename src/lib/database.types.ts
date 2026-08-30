@@ -370,6 +370,12 @@ export interface Database {
           // Nullable here because a database that has not run 0124 yet returns
           // no column at all (the missing-column retries treat that as "skip").
           launch_cities: string[] | null;
+          // Migration 0141: the business owner's own name, shown under the
+          // company name on the public /p/<id> page. Nullable, and nullable
+          // here for the same reason launch_cities is: a database that has not
+          // run 0141 yet returns no column at all, which the missing-column
+          // retries in src/app/pro/actions.ts treat as "skip this field".
+          owner_name: string | null;
           contact_email: string | null;
           contact_phone: string | null;
           vetted: boolean;
@@ -401,6 +407,7 @@ export interface Database {
           categories?: string[] | null;
           service_area?: string | null;
           launch_cities?: string[] | null;
+          owner_name?: string | null;
           contact_email?: string | null;
           contact_phone?: string | null;
           vetted?: boolean;
@@ -1301,6 +1308,39 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["app_feedback"]["Insert"]>;
+        Relationships: [];
+      };
+      // One row per DEVICE that agreed to receive Web Push (migration 0143).
+      // `endpoint` is unique, which is what the upsert in
+      // src/app/api/push/subscribe keys on; p256dh/auth are the browser's
+      // PUBLIC encryption keys, useless without the private half that never
+      // leaves that device.
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          side: string | null;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent: string | null;
+          created_at: string;
+          last_used_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          side?: string | null;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          user_agent?: string | null;
+          created_at?: string;
+          last_used_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["push_subscriptions"]["Insert"]
+        >;
         Relationships: [];
       };
     };

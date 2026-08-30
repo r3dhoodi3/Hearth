@@ -34,7 +34,9 @@ export default function AiDisclosurePage() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
       <p className="text-sm">
-        <Link href="/" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
+        {/* Same phone-only 44px tap target as the /contact back link: all
+            added classes are max-sm:, so sm and up is unchanged. */}
+        <Link href="/" className="text-stone-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-400 dark:hover:text-stone-300">
           ← Hearth
         </Link>
       </p>
@@ -156,8 +158,8 @@ export default function AiDisclosurePage() {
           <p className="mt-4 leading-relaxed">
             Ask Hearth has daily caps, because each question costs us money at
             the vendor and we would rather it stay up for everyone. On the free
-            plan you get 3 text questions a day. On Hearth Plus you get 15 a
-            day, and photo answers. There is also a short burst limit on both
+            plan you get 3 text questions a day. Hearth Plus raises that limit
+            and adds photo answers. There is also a short burst limit on both
             plans, so a script can&apos;t fire hundreds of questions in a row.
             When you hit a cap, the assistant tells you so.
           </p>

@@ -84,14 +84,15 @@ export default function Lightbox({
 
       <div
         onClick={(e) => e.stopPropagation()}
-        className="absolute bottom-3 left-1/2 flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-full bg-black/50 px-3 py-1.5 text-xs text-white"
+        className="absolute bottom-3 left-1/2 flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-full bg-black/50 px-3 py-1.5 text-xs text-white max-sm:text-sm"
       >
         {caption && <span className="truncate">{caption}</span>}
         <a
           href={src}
           target="_blank"
           rel="noreferrer"
-          className="shrink-0 underline hover:no-underline"
+          // Phone only: a bare underlined link in a 12px caption bar.
+          className="shrink-0 underline hover:no-underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
         >
           Open in new tab
         </a>

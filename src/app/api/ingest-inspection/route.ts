@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sameOriginGuard } from "@/lib/csrf";
 import { SYSTEM_TYPES, ISSUE_CATEGORIES, SEVERITIES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import { getPlusTier } from "@/lib/subscription";
@@ -135,6 +136,12 @@ const RESPONSE_SCHEMA = {
 };
 
 export async function POST(req: NextRequest) {
+  // CSRF, second lock. The session cookie is SameSite=Lax and this body is
+  // JSON, so a cross-site page cannot get a signed-in request here today;
+  // this refuses one outright rather than depending on those defaults.
+  // src/lib/csrf.ts only rejects on positive cross-site evidence.
+  const crossSite = sameOriginGuard(req);
+  if (crossSite) return crossSite;
   // Require a signed-in user before touching the paid vision model.
   const supabase = await createClient();
   const {

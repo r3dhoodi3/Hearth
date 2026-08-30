@@ -3,6 +3,7 @@ import { getUserProfile } from "@/lib/user";
 import { getUser } from "@/lib/auth";
 import SupportForm from "./SupportForm";
 import ShowAppGuideButton from "@/components/ShowAppGuideButton";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 const FAQ: { q: string; a: string; href?: string; hrefLabel?: string }[] = [
   {
@@ -41,17 +42,34 @@ const FAQ: { q: string; a: string; href?: string; hrefLabel?: string }[] = [
   },
 ];
 
-export default async function HelpPage() {
-  const [profile, user] = await Promise.all([getUserProfile(), getUser()]);
+export default async function HelpPage(props: {
+  searchParams?: Promise<{ sent?: string }>;
+}) {
+  const [profile, user, searchParams] = await Promise.all([
+    getUserProfile(),
+    getUser(),
+    props.searchParams,
+  ]);
   const metaName = (
     user?.user_metadata?.full_name as string | undefined
   )?.trim();
   const name = profile?.full_name || metaName || "";
   const email = profile?.email || user?.email || "";
   const phone = profile?.phone || "";
+  // Set by saveSupportMessageAction's post-success redirect (./actions.ts)
+  // so SupportForm can swap itself for a confirmation card instead of the
+  // plain form on the reload.
+  const sent = searchParams?.sent === "1";
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/dashboard" },
+          { label: "Account", href: "/account" },
+          { label: "Help" },
+        ]}
+      />
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Help</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
@@ -66,14 +84,15 @@ export default async function HelpPage() {
         <div className="mt-3 divide-y divide-stone-100 dark:divide-white/10">
           {FAQ.map((f) => (
             <details key={f.q} className="group py-3">
-              <summary className="cursor-pointer text-sm font-medium text-stone-900 marker:text-stone-500 dark:text-stone-100 dark:marker:text-stone-400">
+              {/* Phone only: ~20px per question, and there is one per row. */}
+              <summary className="cursor-pointer text-sm font-medium text-stone-900 marker:text-stone-500 max-sm:flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-100 dark:marker:text-stone-400">
                 {f.q}
               </summary>
               <p className="mt-2 text-sm text-stone-600 dark:text-stone-300">{f.a}</p>
               {f.href && (
                 <Link
                   href={f.href}
-                  className="mt-2 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
+                  className="mt-2 inline-block text-sm font-medium text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
                 >
                   {f.hrefLabel} →
                 </Link>
@@ -84,7 +103,7 @@ export default async function HelpPage() {
       </div>
 
       <div id="support-form">
-        <SupportForm name={name} email={email} phone={phone} />
+        <SupportForm name={name} email={email} phone={phone} sent={sent} />
       </div>
 
       {/* Found a bug: reports go through the support form on this page, same
@@ -101,7 +120,7 @@ export default async function HelpPage() {
         </p>
         <a
           href="#support-form"
-          className="mt-3 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
+          className="mt-3 inline-block text-sm font-medium text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
         >
           Report a bug
         </a>
@@ -123,13 +142,13 @@ export default async function HelpPage() {
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
           <Link
             href="/contact?topic=abuse"
-            className="text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
+            className="text-sm font-medium text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
           >
             Report abuse or a safety concern
           </Link>
           <Link
             href="/account/blocks"
-            className="text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
+            className="text-sm font-medium text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
           >
             Blocked accounts
           </Link>

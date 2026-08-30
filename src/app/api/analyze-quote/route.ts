@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPlusTier } from "@/lib/subscription";
@@ -66,6 +67,13 @@ const MAX_BODY_BYTES = 15_000_000;
 // Output: { analysis: Analysis | null, reason? }
 
 export async function POST(req: NextRequest) {
+  // CSRF, second lock. The session cookie is SameSite=Lax and this body is
+  // JSON, so a cross-site page cannot get a signed-in request here today;
+  // this refuses one outright rather than depending on those defaults.
+  // src/lib/csrf.ts only rejects on positive cross-site evidence.
+  const crossSite = sameOriginGuard(req);
+  if (crossSite) return crossSite;
+
   // Require a signed-in user before touching the paid vision model.
   const supabase = await createClient();
   const {
@@ -97,8 +105,9 @@ export async function POST(req: NextRequest) {
   // the same 403 as before. If this request never produces an analysis, the
   // claim is refunded below so a blurry photo still doesn't burn the credit.
   // The tier, not the boolean: the free-taste claim below only cares whether
-  // this is a free account, but the daily ceiling further down gives a trial
-  // its own, smaller budget - see PlusTier in src/lib/subscription.ts.
+  // this is a free account, while the daily ceiling further down resolves per
+  // tier (a trial gets the paid budget today, but the three-way shape is what
+  // lets that change in one line) - see PlusTier in src/lib/subscription.ts.
   const tier = await getPlusTier();
   const isPlus = tier !== "free";
   let claimedFreeCredit = false;

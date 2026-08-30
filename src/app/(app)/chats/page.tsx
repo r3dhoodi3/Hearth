@@ -14,6 +14,7 @@ import MarkChatSeen from "@/components/MarkChatSeen";
 import MarkChatsSeen from "@/components/MarkChatsSeen";
 import AskHearth from "@/components/AskHearth";
 import AskHearthRow from "@/components/AskHearthRow";
+import PhoneChatFrame from "@/components/PhoneChatFrame";
 import { getUser } from "@/lib/auth";
 import { getProactiveGreeting } from "@/lib/greeting";
 import ReviewButton from "@/app/(app)/contractors/ReviewButton";
@@ -71,7 +72,11 @@ async function markAllChatsSeenAction(_leadIds: string[]) {
 
 export default async function HomeownerChatsPage(
   props: {
-    searchParams: Promise<{ lead?: string }>;
+    // `q` prefills and sends one question into the Ask Hearth pane, the way
+    // /ask?q= does on a phone. It is how an "ask about this" link elsewhere in
+    // the app (the forecast plan button) reaches the assistant on a desktop
+    // now that the floating dock is gone.
+    searchParams: Promise<{ lead?: string; q?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -337,7 +342,9 @@ export default async function HomeownerChatsPage(
           <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
             Quotes from your pros
           </p>
-          <p className="text-xs text-stone-500 dark:text-stone-400">
+          {/* Phone only: 12px is too small for the line that explains a
+              list of prices. */}
+          <p className="text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
             Prices your pros have sent in chat, lowest first.
           </p>
           <ul className="mt-2 space-y-1">
@@ -348,7 +355,8 @@ export default async function HomeownerChatsPage(
               >
                 <Link
                   href={`/chats?lead=${q.id}`}
-                  className="truncate text-sm text-stone-700 hover:text-bark-700 hover:underline dark:text-stone-300"
+                  // Phone only: 20px tall row link sitting opposite a price.
+                  className="truncate text-sm text-stone-700 hover:text-bark-700 hover:underline max-sm:flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-300"
                 >
                   {q.name}
                 </Link>
@@ -459,30 +467,49 @@ export default async function HomeownerChatsPage(
 
           {/* ---- Open thread (the only pane on phones once one is picked) ---- */}
           {askSelected ? (
-            <div
+            // Below sm PhoneChatFrame pins this to the visual viewport so the
+            // keyboard can't push the composer off screen; sm and up render
+            // exactly the classes below, as before.
+            <PhoneChatFrame
               className={`${
                 threadOpenOnMobile ? "flex" : "hidden md:flex"
               } h-[calc(100dvh-13rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)]`}
             >
               <Link
                 href="/chats"
-                className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-sm font-medium text-bark-700 hover:underline md:hidden"
+                // Already md:hidden, so these sizes are phone-only: this is
+                // the only way out of an open thread and it was 20px tall.
+                className="mb-2 -ml-2 inline-flex min-h-11 w-fit shrink-0 items-center gap-1 px-2 text-base font-medium text-bark-700 hover:underline md:hidden"
               >
                 <span aria-hidden="true">←</span> All conversations
               </Link>
               <div className="min-h-0 flex-1">
-                <AskHearth fill greeting={greeting} />
+                {/* replaceUrlAfterInitial drops the ?q= from the address bar
+                    once the question has been handled, so a reload or a Back
+                    into this page does not ask it a second time (and spend a
+                    second free question on an answer already on screen). Same
+                    contract as /ask. */}
+                <AskHearth
+                  fill
+                  greeting={greeting}
+                  initialQuestion={searchParams.q}
+                  replaceUrlAfterInitial="/chats?lead=ask-hearth"
+                />
               </div>
-            </div>
+            </PhoneChatFrame>
           ) : selected ? (
-            <div
+            // Same phone panel as the Ask pane above: fixed to the visual
+            // viewport below sm, untouched from sm up.
+            <PhoneChatFrame
               className={`${
                 threadOpenOnMobile ? "flex" : "hidden md:flex"
               } h-[calc(100dvh-13rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)]`}
             >
               <Link
                 href="/chats"
-                className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-sm font-medium text-bark-700 hover:underline md:hidden"
+                // Already md:hidden, so these sizes are phone-only: this is
+                // the only way out of an open thread and it was 20px tall.
+                className="mb-2 -ml-2 inline-flex min-h-11 w-fit shrink-0 items-center gap-1 px-2 text-base font-medium text-bark-700 hover:underline md:hidden"
               >
                 <span aria-hidden="true">←</span> All conversations
               </Link>
@@ -535,7 +562,7 @@ export default async function HomeownerChatsPage(
                   signInvoiceAction={signInvoiceAction}
                 />
               </div>
-            </div>
+            </PhoneChatFrame>
           ) : (
             <div
               className={`${
@@ -545,7 +572,7 @@ export default async function HomeownerChatsPage(
               Select a conversation
               <Link
                 href="/chats"
-                className="text-sm font-medium text-bark-700 hover:underline md:hidden"
+                className="-ml-2 inline-flex min-h-11 items-center px-2 text-base font-medium text-bark-700 hover:underline md:hidden"
               >
                 <span aria-hidden="true">←</span> All conversations
               </Link>

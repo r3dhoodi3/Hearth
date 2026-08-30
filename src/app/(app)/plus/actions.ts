@@ -18,9 +18,20 @@ import {
   subscriptionCheckoutData,
 } from "@/lib/checkoutSubscriptionData";
 import { PLUS_PLAN, EXTRA_HOME, extraHomeUnitPrice } from "@/lib/constants";
+import {
+  checkoutIdempotencyBucket,
+  checkoutIdempotencyKey,
+  IDEMPOTENCY_BUCKET_MS,
+} from "@/lib/checkoutIdempotency";
+import { PLUS_RESERVATION_REF } from "@/lib/promoClaimRef";
+import {
+  markReservationSession,
+  reclaimCheckoutReservation,
+} from "@/lib/checkoutReservation";
 import { setFlash } from "@/lib/flash";
 import { trialDecision, RISK_BLOCK_MESSAGE } from "@/lib/risk/decision";
 import { recordRequestSignals } from "@/lib/risk/signals";
+import { trackServerEvent } from "@/lib/trackServer";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -296,15 +307,34 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // A FAILED RPC MEANS NO TRIAL. Unlike the Pro intro (which fails through to
   // full price for the same reason), free days are the thing being farmed here,
   // and "the counter was unreadable" must never be a way to get a second one.
+  //
+  // WHEN THE CLAIM IS LOST, ASK WHO HOLDS IT. This is the live bug: the webhook
+  // only releases an abandoned reservation when Stripe expires the session, up
+  // to 24 hours later, so a buyer who opened Stripe Checkout and pressed back
+  // lost the race against their own dead reservation on every click after that.
+  // The old code read that as "no trial" and built a different request body
+  // under the same idempotency key, which Stripe refused outright
+  // (StripeIdempotencyError) - so the button simply stopped working. And once
+  // the key's time bucket rolled over it got worse than an error: a session
+  // with no trial, sold under a button that says free 3 day trial.
+  //
+  // reclaimCheckoutReservation answers the question the bare row could not:
+  // resume the open session, take over a dead one, or stand down. It fails
+  // closed, so the two-tabs-at-once case this block was written for still ends
+  // in exactly one trial.
   let freeTrial = false;
   let claimedTrial = false;
+  // An open Stripe Checkout we should send the buyer back to. Collected here
+  // and acted on after the try/catch, because redirect() works by throwing and
+  // the catch below would swallow it.
+  let resumeUrl: string | null = null;
   if (wantsTrial) {
     const admin = createAdminClient();
     try {
       const { data, error } = await admin.rpc("claim_promo", {
         p_user: user.id,
         p_key: "plus_trial",
-        p_ref: "plus_checkout_reservation",
+        p_ref: PLUS_RESERVATION_REF,
       });
       if (error) {
         console.error(
@@ -314,13 +344,38 @@ export async function startPlusCheckoutAction(formData: FormData) {
       } else if (data === true) {
         claimedTrial = true;
         freeTrial = true;
+      } else {
+        const outcome = await reclaimCheckoutReservation(admin, {
+          userId: user.id,
+          promoKey: "plus_trial",
+          reservationRef: PLUS_RESERVATION_REF,
+          plan,
+        });
+        if (outcome.kind === "resume") {
+          resumeUrl = outcome.url;
+        } else if (outcome.kind === "reclaimed") {
+          claimedTrial = true;
+          freeTrial = true;
+        }
+        // "held": another tab is mid-checkout, or the trial is already spent.
+        // Charge today instead.
       }
-      // data === false: another tab (or an earlier, spent trial) already holds
-      // this account's one reservation. Charge today instead.
     } catch (err) {
       console.error("claim_promo(plus_trial) reservation threw:", err);
     }
   }
+  // Back to the checkout they already opened. Same session, same trial, same
+  // terms, and nothing new is created for Stripe to object to.
+  if (resumeUrl) redirect(resumeUrl);
+
+  // HOW THE TWO ONE-TRIAL CHECKS COMBINE. isPlusTrialEligible() (see
+  // src/lib/subscription.ts) is the fast one: any homeowner-side subscriptions
+  // row at all, live or canceled, means the trial is gone, and it fails closed
+  // on a read error. The promo_claims ledger above is the durable one: it
+  // survives even if that row is ever pruned, and the webhook stamps it
+  // converted:<subscription id> the moment a checkout completes, so a reclaim
+  // can never hand a second trial to somebody who already converted. Both have
+  // to say yes.
 
   // Consent record. California's Automatic Renewal Law requires keeping proof
   // of what the subscriber agreed to (Bus. & Prof. Code 17602(b)(2): at least
@@ -338,8 +393,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // double-click (two form submits landing on the server milliseconds apart)
   // replays the same Stripe session instead of minting two, but a genuine
   // later retry (new bucket) still creates a fresh one.
-  const idempotencyBucket = Math.floor(Date.now() / (5 * 60 * 1000));
-  const idempotencyKey = `plus-checkout:${user.id}:${plan}:${idempotencyBucket}`;
+  const idempotencyBucket = checkoutIdempotencyBucket();
 
   // consent_at has to be derived from the bucket start, not a fresh Date: the
   // idempotency key above is stable across two submits landing in the same
@@ -348,7 +402,28 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // different body as a conflict error. This lands within 5 minutes of "now",
   // which is fine for what it records - the billing-terms acknowledgment
   // above, not a precise click time.
-  const consentAt = new Date(idempotencyBucket * 5 * 60 * 1000).toISOString();
+  const consentAt = new Date(
+    idempotencyBucket * IDEMPOTENCY_BUCKET_MS
+  ).toISOString();
+
+  // ...and the bucket alone is NOT enough, which is what broke checkout live.
+  // The body changes between clicks whenever the trial does, and Stripe rejects
+  // a replayed key carrying a different body instead of creating the session
+  // (see checkoutIdempotency.ts). So every input that can vary goes into the
+  // key as well.
+  const idempotencyKey = checkoutIdempotencyKey({
+    prefix: "plus-checkout",
+    userId: user.id,
+    plan,
+    bucket: idempotencyBucket,
+    varying: {
+      freeTrial,
+      customer: customerId ?? "new",
+      price: priceId ?? "inline",
+      consentTerms,
+      consentAt,
+    },
+  });
 
   let session: Stripe.Checkout.Session;
   try {
@@ -408,6 +483,23 @@ export async function startPlusCheckoutAction(formData: FormData) {
     await setFlash("We couldn't start checkout. Please try again.", "error");
     redirect("/plus");
   }
+
+  // Write the session id onto the reservation now that there is one. This is
+  // what lets the NEXT click tell "they backed out of this checkout" apart from
+  // "another tab is opening one right now", instead of failing every retry.
+  if (claimedTrial) {
+    await markReservationSession(createAdminClient(), {
+      userId: user.id,
+      promoKey: "plus_trial",
+      reservationRef: PLUS_RESERVATION_REF,
+      sessionId: session.id,
+    });
+  }
+
+  // Funnel analytics (docs/ANALYTICS.md), right before handing off to Stripe:
+  // the session exists at this point, so this only fires for a checkout that
+  // actually reached Stripe, not one refused by an earlier guard above.
+  await trackServerEvent(user.id, "checkout_started", { plan });
 
   if (session.url) redirect(session.url);
   redirect("/plus");

@@ -9,6 +9,7 @@ import {
 } from "@/lib/parcelSanity";
 import TaxForm from "./TaxForm";
 import AppealLetter from "./AppealLetter";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 function money(n: number): string {
   return `$${Math.round(Math.abs(n)).toLocaleString()}`;
@@ -137,6 +138,7 @@ export default async function TaxesPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Property tax watch" }]} />
       <header className="mb-1">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Property tax watch

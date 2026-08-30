@@ -3,10 +3,12 @@
 import { useEffect, useId, useState } from "react";
 
 // An interactive maintenance-basics card: shows the owner's actual system status
-// inline, a short summary that's always visible, checkable upkeep steps
-// (remembered per system) once expanded, and buttons that fire a question into
-// Ask Hearth (the box at the top of Learn). Personalized + tied to the AI - the
-// thing a Google search can't be.
+// inline, a short summary that's always visible, and checkable upkeep steps
+// (remembered per system) once expanded.
+//
+// It used to end with two buttons that fired a question into the Ask Hearth box
+// at the top of this page. Both are gone with that box: Ask Hearth lives in the
+// Messages tab now, and Learn is the guides on their own.
 export default function LearnGuide({
   systemType,
   label,
@@ -16,7 +18,6 @@ export default function LearnGuide({
   statusStyle,
   age,
   tips,
-  askQuestion,
 }: {
   systemType: string;
   label: string;
@@ -26,7 +27,6 @@ export default function LearnGuide({
   statusStyle?: string;
   age?: number | null;
   tips: string[];
-  askQuestion: string;
 }) {
   const key = `hearth_guide_${systemType}`;
   const panelId = useId();
@@ -54,11 +54,6 @@ export default function LearnGuide({
     });
   }
 
-  function ask(q: string) {
-    window.dispatchEvent(new CustomEvent("hearth:ask-question", { detail: q }));
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
   return (
     <li className="card">
       <button
@@ -66,7 +61,7 @@ export default function LearnGuide({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 max-sm:-my-2 max-sm:min-h-10 max-sm:py-2 dark:text-stone-100"
+        className="flex w-full items-center justify-between gap-2 text-left font-medium text-stone-900 max-sm:-my-2 max-sm:min-h-11 max-sm:py-2 dark:text-stone-100"
       >
         <span className="flex flex-wrap items-center gap-2">
           <span>{label}</span>
@@ -135,29 +130,6 @@ export default function LearnGuide({
               </li>
             ))}
           </ul>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => ask(askQuestion)}
-              tabIndex={open ? 0 : -1}
-              className="btn-primary px-3 py-1.5 text-xs"
-            >
-              Ask Hearth about this
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                ask(
-                  `Something seems off with my ${label.toLowerCase()}. Can you help me figure out what's going on and whether I need a pro?`
-                )
-              }
-              tabIndex={open ? 0 : -1}
-              className="inline-flex min-h-11 items-center rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:border-bark-500 hover:text-bark-700 sm:inline-block sm:min-h-0 dark:border-white/10 dark:text-stone-300"
-            >
-              Something wrong?
-            </button>
-          </div>
         </div>
       </div>
     </li>

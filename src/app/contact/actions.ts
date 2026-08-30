@@ -3,11 +3,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { getSides, landingFor } from "@/lib/contractor";
 import { cappedField, FIELD_MAX } from "@/lib/formFields";
-import { setFlash } from "@/lib/flash";
 import { err, type ActionResult } from "@/lib/actionResult";
+import { trackServerEvent } from "@/lib/trackServer";
 
 // Length caps for an endpoint with no session and no per-user rate limit to
 // fall back on - account/help's saveSupportMessageAction (which this mirrors)
@@ -18,22 +16,12 @@ import { err, type ActionResult } from "@/lib/actionResult";
 // to this form.
 const MIN_MESSAGE = 10;
 
-const HONEST_SUCCESS =
-  "Thanks. We read every message and will reach out by phone call or email.";
-
-// Where a successful send lands. Signed-in users go home with the same role
-// split as src/app/page.tsx (pros to /pro, everyone else to /dashboard);
-// signed-out visitors go back to the landing page. The flash cookie survives
-// the redirect, and the root layout (src/app/layout.tsx) reads it on every
-// route, so the confirmation toast still shows at the destination.
-async function successDestination(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return "/";
-  return landingFor(await getSides());
-}
+// Where a successful send lands: a dedicated confirmation page
+// (src/app/contact/thanks/page.tsx), not a flash toast. A toast on top of
+// whatever page the visitor landed on (home page or dashboard) was easy to
+// miss and said nothing about what happens next; the thanks page carries that
+// message itself, so no setFlash() call is needed alongside this redirect.
+const THANKS_PATH = "/contact/thanks";
 
 // Saves a message from the public /contact form (src/app/contact/page.tsx)
 // so the team can read and reply, the same way saveSupportMessageAction
@@ -43,12 +31,11 @@ export async function sendContactMessageAction(
 ): Promise<ActionResult> {
   // Honeypot: see ContactForm.tsx for how "company_website" is hidden from a
   // real visitor. A bot that fills every field in the form fills this one
-  // too. Pretend success and store nothing - same flash, same redirect as the
-  // real success path below - so it gets no signal to adapt on.
+  // too. Pretend success and store nothing - same redirect as the real
+  // success path below - so it gets no signal to adapt on.
   const honeypot = ((formData.get("company_website") as string) || "").trim();
   if (honeypot) {
-    setFlash(HONEST_SUCCESS, "success");
-    redirect(await successDestination());
+    redirect(THANKS_PATH);
   }
 
   const name = cappedField(formData, "name", FIELD_MAX.name);
@@ -98,9 +85,9 @@ export async function sendContactMessageAction(
   // phone they typed - digits-only last 10 on the phone side, across
   // auth.users, the public.users signup mirror, and contractors' business
   // contact details. Nothing the visitor sees depends on the outcome: no
-  // gating, no different copy, same flash and same redirect either way. Fails
-  // open like the rate limiter above - an RPC error logs and the message still
-  // gets stored, just without the hint.
+  // gating, no different copy, same redirect either way. Fails open like the
+  // rate limiter above - an RPC error logs and the message still gets stored,
+  // just without the hint.
   let matchedUserId: string | null = null;
   let matchedVia: string | null = null;
   const { data: matchRows, error: matchError } = await admin.rpc(
@@ -146,8 +133,13 @@ export async function sendContactMessageAction(
     return err("Couldn't send your message. Please try again.");
   }
 
+  // Funnel analytics (docs/ANALYTICS.md). user_id is deliberately null here,
+  // not matchedUserId: that match is an unverified triage hint (anyone can
+  // type someone else's email or phone into this form), and attributing an
+  // analytics event to a guessed identity is worse than leaving it anonymous.
+  await trackServerEvent(null, "contact_sent", {});
+
   // redirect() throws to unwind the action, so nothing may run after it; the
   // error paths above stay put on /contact so the visitor can fix and resend.
-  setFlash(HONEST_SUCCESS, "success");
-  redirect(await successDestination());
+  redirect(THANKS_PATH);
 }

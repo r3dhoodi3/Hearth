@@ -98,6 +98,10 @@ type PublicProfile = {
   created_at: string;
   rating: number | null;
   review_count: number;
+  // Optional: absent until migration 0141 runs, and null until the pro fills
+  // it in. The person behind the business, as opposed to `name`, which is the
+  // business. Free for every pro, never gated on membership.
+  owner_name?: string | null;
   member: boolean;
   logo_url: string | null;
   about: string | null;
@@ -407,6 +411,16 @@ export default async function PublicProPage(
           </div>
 
           <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">{profile.name}</h1>
+
+          {/* Who a homeowner is actually going to be talking to (0141). Only
+              when set: it is null for every company created before the signup
+              wizard started asking, and an "Owner: " label with nothing after
+              it would look broken. */}
+          {profile.owner_name && (
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+              Owner: {profile.owner_name}
+            </p>
+          )}
 
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             {hasRating ? (

@@ -20,6 +20,7 @@ import {
   COLD_START_FREE_POSTING,
   BONUS_EXPIRY_DAYS,
   isMajorCategory,
+  PRO_LEADS_HREF,
 } from "@/lib/constants";
 import { setFlash } from "@/lib/flash";
 import { hasPlus } from "@/lib/subscription";
@@ -40,39 +41,13 @@ import {
 import { isAllowedValue } from "@/lib/formFields";
 import { POST_JOB_ERRORS, type PostJobErrorCode } from "./postJobErrors";
 import { isOwnedStoragePath } from "@/lib/ownedStoragePath";
-import type { Json } from "@/lib/database.types";
-
-// Server-side counterpart to src/lib/analytics.ts's track(): that helper
-// fires via navigator.sendBeacon, which doesn't exist in a server action, so
-// this writes straight to app_events with the admin client instead. Mirrors
-// src/app/pro/actions.ts's own trackServerEvent (same table, same
-// isMissingSchemaError fallback to a log line if migration 0091 hasn't run
-// on this DB yet, and never throws), duplicated here rather than imported
-// since pro/actions.ts is a "use server" file and doesn't export it.
-async function trackServerEvent(
-  userId: string | null,
-  event: string,
-  props?: Record<string, unknown>
-) {
-  try {
-    const admin = createAdminClient();
-    const { error } = await admin.from("app_events").insert({
-      event,
-      props: (props ?? null) as Json | null,
-      user_id: userId,
-    });
-    if (error && !isMissingSchemaError(error)) {
-      console.error(`trackServerEvent(${event}): insert failed:`, error.message);
-    } else if (error) {
-      console.log("[track]", event, props ?? {});
-    }
-  } catch (e) {
-    console.error(
-      `trackServerEvent(${event}) failed:`,
-      e instanceof Error ? e.message : e
-    );
-  }
-}
+// trackServerEvent used to be a private copy of this exact function (same
+// table, same isMissingSchemaError fallback), duplicated because pro/actions.ts
+// doesn't export its own copy. Both callers now share one module so a growing
+// event list stops multiplying copies - see src/lib/trackServer.ts.
+// src/app/pro/actions.ts still carries its own local copy for tonight (worker
+// E owns the pro side); migrating it to this shared import is part 2's job.
+import { trackServerEvent } from "@/lib/trackServer";
 
 // Apply fee formatted for a notification body: whole-dollar fees ($25/$50/$99)
 // read as "$50", an aging-discounted fee ($42.50) keeps its cents. cents comes
@@ -791,7 +766,7 @@ export async function postJobAction(formData: FormData) {
           kind: "new_lead",
           title: `New ${categoryLabel} job posted nearby`,
           body: "A homeowner just posted a job. Apply before other pros do.",
-          url: "/pro",
+          url: PRO_LEADS_HREF,
         },
       ];
     });
@@ -1052,7 +1027,7 @@ export async function closeJobAction(formData: FormData) {
                 kind: "job_closed",
                 title: "The homeowner closed this job",
                 body,
-                url: "/pro",
+                url: PRO_LEADS_HREF,
                 email: contact?.email ?? null,
                 phone: contact?.phone ?? null,
                 smsConsent: contact?.sms_consent === true,
@@ -1192,7 +1167,7 @@ export async function chooseApplicantAction(formData: FormData) {
               kind: "apply_credit_back",
               title: "Your fee came back as credit",
               body: `The homeowner went with another pro this time. Your ${feeLabel} apply fee is back in your wallet as credit, good for ${BONUS_EXPIRY_DAYS} days.`,
-              url: "/pro",
+              url: PRO_LEADS_HREF,
               email: contact?.email ?? null,
               phone: contact?.phone ?? null,
               smsConsent: contact?.sms_consent === true,
@@ -1321,7 +1296,10 @@ export async function saveReviewAction(
               // reviewable bar is "a pro was assigned to this job", not
               // "the pro marked it closed".
               body: "A homeowner just reviewed a job you were hired for. Check your profile to see it.",
-              url: "/pro",
+              // Same anchor the 4/5-star branch above already links to
+              // (src/app/pro/business/page.tsx:715): /pro is Home now, not
+              // where reviews live, since the 2026-08-29 restructure.
+              url: "/pro/business#share-reviews",
             });
           }
         }
@@ -1559,7 +1537,7 @@ export async function requestProAction(
       kind: "direct_request",
       title: "A homeowner asked for you",
       body: `A homeowner wants a quote for ${categoryLabel} work and asked for you specifically. Open your jobs to see it.`,
-      url: "/pro",
+      url: PRO_LEADS_HREF,
       email: contact?.email ?? null,
       phone: contact?.phone ?? null,
       smsConsent: contact?.sms_consent === true,
@@ -1732,7 +1710,7 @@ export async function postDirectPubliclyAction(formData: FormData) {
           kind: "new_lead",
           title: `New ${categoryLabel} job posted nearby`,
           body: "A homeowner just posted a job. Apply before other pros do.",
-          url: "/pro",
+          url: PRO_LEADS_HREF,
         },
       ];
     });
@@ -1844,7 +1822,7 @@ export async function rehireProAction(
         kind: "new_lead",
         title: `${homeownerName} wants to hire you again: free repeat lead`,
         body: "No apply fee, they already trust your work. Check your jobs to say hi.",
-        url: "/pro",
+        url: PRO_LEADS_HREF,
       });
     }
   } catch {

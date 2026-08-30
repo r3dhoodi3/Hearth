@@ -3,9 +3,8 @@ import { Skeleton } from "@/components/Skeleton";
 // Mirrors page.tsx (the pro copilot's own full-page frame, identical shape
 // to the homeowner /ask page): the mobile-only "All conversations" back
 // line, then the same full-height rounded chat frame, so the frame doesn't
-// resize when the real conversation swaps in. Inside, the shape cribs from
-// AskHearthDock's OpeningSkeleton: header line, message-shaped blocks, input
-// bar.
+// resize when the real conversation swaps in. Inside, the shape of the
+// conversation about to appear: header line, message-shaped blocks, input bar.
 export default function Loading() {
   return (
     <div aria-hidden="true">

@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
+import { clearAllAskLocks } from "@/lib/askLock";
 import type { PaidPlan } from "@/lib/billingTerms";
 
 type Step = {
@@ -99,6 +100,17 @@ export default function PlusWelcome({
   const last = step === STEPS.length - 1;
   const current = STEPS[step];
 
+  // Someone who ran out of Ask Hearth questions and then bought Plus is on the
+  // bigger allowance from this second. Ask Hearth remembers a spent allowance
+  // in localStorage so the composer stays locked across mounts (see
+  // src/lib/askLock.ts), and that note is now wrong: without this, the one
+  // screen they just paid to use more of would stay shut until the daily
+  // window rolled over. This page only renders off ?welcome=1, straight out of
+  // checkout, so it is exactly the moment every stored lock is stale.
+  useEffect(() => {
+    clearAllAskLocks();
+  }, []);
+
   // Drive the fade/slide-in transition: drop back to the "entering" position
   // the instant the step changes, then flip to visible a tick later so the
   // motion-safe transition classes actually have something to animate.
@@ -171,7 +183,7 @@ export default function PlusWelcome({
           )}
           {last ? (
             <Link href="/dashboard" className="btn-primary flex-1">
-              Go to my dashboard
+              Build my maintenance plan
             </Link>
           ) : (
             <button
@@ -185,7 +197,11 @@ export default function PlusWelcome({
           )}
         </div>
         {!last && (
-          <Link href="/dashboard" className="text-sm text-stone-500 hover:underline dark:text-stone-400">
+          <Link
+            href="/dashboard"
+            // max-sm: bare 20px link, and it is the exit from the whole tour.
+            className="text-sm text-stone-500 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400"
+          >
             Skip
           </Link>
         )}
@@ -201,10 +217,13 @@ export default function PlusWelcome({
             />
           ) : (
             <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-left dark:border-white/10 dark:bg-stone-900">
-              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+              {/* max-sm:text-sm: this is the ROSCA/ARL post-purchase
+                  acknowledgment fallback (the webhook hasn't landed the plan
+                  yet), read at 12px on a phone otherwise. */}
+              <p className="text-xs max-sm:text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
                 Your Hearth Plus renewal terms
               </p>
-              <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
+              <p className="mt-2 text-xs max-sm:text-sm text-stone-600 dark:text-stone-300">
                 Hearth Plus renews automatically until you cancel. Your
                 confirmation email lists the exact amount and renewal date.
                 Cancel anytime from{" "}

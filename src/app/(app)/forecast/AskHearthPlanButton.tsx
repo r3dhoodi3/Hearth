@@ -1,18 +1,28 @@
-"use client";
+import Link from "next/link";
 
-// Fires a prefilled question into the app-wide Ask Hearth dock, same pattern
-// the Learn tab uses (see LearnGuide.tsx). Lets the forecast page hand off
-// straight into a conversation about the owner's actual upcoming costs,
-// which is the thing a generic Google search can never do.
+// Hands the forecast's own numbers to Ask Hearth as a prefilled question.
+//
+// This used to dispatch a "hearth:ask-question" window event that the floating
+// dock picked up. The dock is gone (Ask Hearth lives in Messages now), so this
+// navigates instead: on a phone to the full-screen /ask, on sm and up to the
+// Ask Hearth pane inside Messages. Two plain links behind a breakpoint rather
+// than measuring the viewport in JS, so the href is right before hydration.
+// Both destinations drop the ?q= from the address bar once the question has
+// been asked, so a reload does not spend a second question on the same answer.
 export default function AskHearthPlanButton({ question }: { question: string }) {
-  function ask() {
-    window.dispatchEvent(new CustomEvent("hearth:ask-question", { detail: question }));
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+  const q = encodeURIComponent(question);
 
   return (
-    <button type="button" onClick={ask} className="btn-secondary text-sm">
-      Ask Hearth to help me plan
-    </button>
+    <>
+      <Link href={`/ask?q=${q}`} className="btn-secondary text-sm sm:hidden">
+        Ask Hearth to help me plan
+      </Link>
+      <Link
+        href={`/chats?lead=ask-hearth&q=${q}`}
+        className="btn-secondary hidden text-sm sm:inline-flex"
+      >
+        Ask Hearth to help me plan
+      </Link>
+    </>
   );
 }

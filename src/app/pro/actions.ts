@@ -28,6 +28,7 @@ import {
   PRO_DEPOSIT_BOOST_PTS,
   BACKGROUND_CHECK_MIN_PAID_LEADS,
   isMajorCategory,
+  PRO_LEADS_HREF,
 } from "@/lib/constants";
 import { agingLeadFee } from "@/lib/leadPricing";
 import { hasProPlan } from "@/lib/subscription";
@@ -54,45 +55,13 @@ import {
 } from "@/lib/formFields";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import { selectLaunchCities } from "./onboarding/launchCities";
-import type { Json } from "@/lib/database.types";
+import { trackServerEvent } from "@/lib/trackServer";
 
 // Ceiling for the free-text "Other" service on CategoryPicker. It renders on
 // the public /p/<id> page and the browse cards next to the canonical labels,
 // which are all short, so this is generous for a real answer and still bounds
 // a forged post.
 const MAX_CUSTOM_CATEGORY = 100;
-
-// Server-side counterpart to src/lib/analytics.ts's track(): that helper
-// fires via navigator.sendBeacon, which doesn't exist in a server action, so
-// this writes straight to app_events with the admin client instead. Mirrors
-// src/app/api/track/route.ts's own insert: same table, same
-// isMissingSchemaError fallback to a log line if migration 0091 hasn't run
-// on this DB yet, and never throws, so a call site never needs its own
-// try/catch around it.
-async function trackServerEvent(
-  userId: string | null,
-  event: string,
-  props?: Record<string, unknown>
-) {
-  try {
-    const admin = createAdminClient();
-    const { error } = await admin.from("app_events").insert({
-      event,
-      props: (props ?? null) as Json | null,
-      user_id: userId,
-    });
-    if (error && !isMissingSchemaError(error)) {
-      console.error(`trackServerEvent(${event}): insert failed:`, error.message);
-    } else if (error) {
-      console.log("[track]", event, props ?? {});
-    }
-  } catch (err) {
-    console.error(
-      `trackServerEvent(${event}) failed:`,
-      err instanceof Error ? err.message : err
-    );
-  }
-}
 
 // Real CSLB check (0055) is debounced off the most recent check we recorded:
 // license_verified_at (stamped only on a 'verified' outcome) or the
@@ -214,7 +183,11 @@ async function verifyContractorLicense(
   // contractors row and the account holder's own full name. A CSLB record
   // that matches NONE of them is somebody else's license (0125). Callers pass
   // what they have; nulls are ignored.
-  candidateNames: Array<string | null | undefined> = []
+  candidateNames: Array<string | null | undefined> = [],
+  // For license_verified analytics (docs/ANALYTICS.md) only. Optional: the
+  // weekly recheck cron has no session user and simply gets no event, which
+  // is fine since nobody is watching a funnel dashboard for it.
+  userId: string | null = null
 ): Promise<LicenseVerifyResult | null> {
   const lastCheckedAt =
     ((currentDetail as { checked_at?: string } | null | undefined)
@@ -331,6 +304,12 @@ async function verifyContractorLicense(
         return { ...result, decision, failureReason };
       }
       console.error("license verification write failed:", error.message);
+    } else if (decision === "verified") {
+      // Funnel analytics (docs/ANALYTICS.md), only on a write that actually
+      // landed the 'verified' status - never on a failed or unknown outcome,
+      // and never on the 23505 race above (that branch already returned its
+      // own downgraded result before reaching here).
+      await trackServerEvent(userId, "license_verified");
     }
   }
 
@@ -391,6 +370,65 @@ function contractorsWriteFailureFlash(error: {
 }
 
 // Create (onboarding) or update (profile) the current user's contractor company.
+// Record (or withdraw) a pro's consent to be texted. See the block inside
+// saveCompanyAction that calls this for why it exists and why it runs on the
+// admin client.
+//
+// The phone the consent is against: a pro-side text is sent to users.phone
+// (every caller of sendNotification reads it from there), and the pro forms
+// only edit contractors.contact_phone. So when the box is ticked and the
+// account has NO phone of its own yet, the business contact number is copied
+// across, which is the number the pro just agreed on. An account that already
+// has a phone keeps it untouched: on a dual-side account that is their
+// personal number, and overwriting it from a business form would redirect
+// their homeowner texts without asking.
+async function saveProSmsConsent(
+  formData: FormData,
+  userId: string
+): Promise<void> {
+  const marker = formData.get("sms_consent_present");
+  if (marker === null) return; // this form never asked
+  const wants = formData.get("sms_consent") !== null;
+
+  try {
+    const admin = createAdminClient();
+    const { data: current, error: readError } = await (admin as any)
+      .from("users")
+      .select("sms_consent, phone")
+      .eq("id", userId)
+      .maybeSingle();
+    if (readError) throw readError;
+
+    const priorConsent = current?.sms_consent === true;
+    const fields: Record<string, unknown> = { sms_consent: wants };
+    // Only on a fresh grant, never on a re-save and never on a revocation.
+    if (wants && !priorConsent) {
+      fields.sms_consent_at = new Date().toISOString();
+    }
+    if (!wants) fields.sms_consent_at = null;
+
+    const priorPhone =
+      typeof current?.phone === "string" ? current.phone.trim() : "";
+    const contactPhone = cappedFieldOrNull(formData, "contact_phone", 40);
+    if (wants && !priorPhone && contactPhone) {
+      fields.phone = contactPhone;
+    }
+
+    const { error } = await (admin as any)
+      .from("users")
+      .update(fields)
+      .eq("id", userId);
+    if (error) throw error;
+  } catch (err) {
+    // Never blocks the company save. 0075 not being live answers the
+    // missing-column fingerprint, in which case there is nothing to store and
+    // consent stays off, which is the safe direction.
+    if (!isMissingSchemaError(err as { code?: string; message?: string })) {
+      console.error("saveProSmsConsent failed:", err);
+    }
+  }
+}
+
 export async function saveCompanyAction(formData: FormData) {
   const supabase = await createClient();
   const {
@@ -661,6 +699,69 @@ export async function saveCompanyAction(formData: FormData) {
   // saved." would be a lie they only discover by reloading the form.
   let reviewLinksDropped = false;
 
+  // Business owner's name (migration 0141). The business name is what a
+  // homeowner books; the owner name is who they are actually talking to, and
+  // until now there was nowhere to put it.
+  //
+  // Same missing-field-safe discipline as service_state / launch_cities /
+  // the review links above: only written when the submitting form carried the
+  // field, so a lean post can never blank a stored value. Kept out of `fields`
+  // and written through the (as any) casts with its own retry, because 0141
+  // lands after the generated types and after 0085's column-level INSERT and
+  // UPDATE allowlists - on a live database that has not run it yet, including
+  // it unconditionally would fail every company save.
+  const ownerNameEntry = formData.get("owner_name");
+  const hasOwnerNameWrite = ownerNameEntry !== null;
+  // 120 is the ceiling the column's own check constraint enforces (0141).
+  const ownerName = cappedFieldOrNull(formData, "owner_name", 120);
+  if (hasOwnerNameWrite && ownerName && ownerName.length < 2) {
+    await backToForm("Enter the owner's name.");
+    return;
+  }
+  // MODERATION: this renders verbatim on the public /p/<id> page, so it gets
+  // the same gate the business name has. Only when it CHANGED, for the same
+  // reason the name check is conditional: a stored value the filter dislikes
+  // must never lock a pro out of editing the rest of their profile forever.
+  if (
+    hasOwnerNameWrite &&
+    ownerName &&
+    ownerName !== ((existing as any)?.owner_name ?? null) &&
+    !isAcceptablePublicText(ownerName)
+  ) {
+    await backToForm(
+      "That owner name can't be used. Please use the person's real name."
+    );
+    return;
+  }
+  const ownerNameWrite = hasOwnerNameWrite ? { owner_name: ownerName } : {};
+
+  // TCPA SMS CONSENT (users.sms_consent / sms_consent_at, migration 0075).
+  //
+  // Why it is here at all: every pro-side text Hearth already builds and pays
+  // for - the new-job alert, the winback credit, the weekly digest, the
+  // compliance reminder - is dropped on the floor by the gate in
+  // src/lib/notify.ts unless this column is true, and until now the pro side
+  // had no way to set it. A pro who never wandered into the homeowner
+  // /account page therefore got no texts at all, silently.
+  //
+  // Unchecked by default, always: this is an opt-in, never a pre-ticked box.
+  // A checkbox posts NOTHING when it is unticked, so the form carries a hidden
+  // sms_consent_present marker to tell "unticked" apart from "this form never
+  // asked" - the same trick service_cities_present uses above.
+  //
+  // Written on the ADMIN client because 0139 locks both columns against
+  // anything but the service role: a consent record the consenting account can
+  // rewrite at will is not a record, and TCPA damages are per text. Mirrors
+  // saveAccountAction on the homeowner side, including the rule that
+  // sms_consent_at only moves on a false -> true transition, so the date
+  // consent was first given survives a re-save.
+  //
+  // Best effort: a failure here never blocks the company save. The pro is told
+  // in the flash below only if the whole save fails for other reasons; a
+  // consent write that misses simply leaves texts off, which is the safe
+  // direction.
+  await saveProSmsConsent(formData, user.id);
+
   if (existing) {
     // The license is a legal identifier: locked once VERIFIED (0037), not
     // before. Until a check confirms the number, the pro can still correct a
@@ -692,8 +793,47 @@ export async function saveCompanyAction(formData: FormData) {
       : {};
     let { error } = await supabase
       .from("contractors")
-      .update({ ...updateFields, ...stateWrite, ...ocWrite, ...cityWrite, ...reviewLinkWrite } as any)
+      .update({
+        ...updateFields,
+        ...stateWrite,
+        ...ocWrite,
+        ...cityWrite,
+        ...reviewLinkWrite,
+        ...ownerNameWrite,
+      } as any)
       .eq("id", existing.id);
+
+    // owner_name is the newest column (0141), so it is the most likely one a
+    // live database has not caught up with - either the column itself is
+    // absent, or it exists without the column-level UPDATE grant 0085's
+    // allowlist cannot know about. Dropped FIRST, ahead of every other retry:
+    // it is the cheapest thing on this form to lose, and running the review-
+    // link or city retries first would throw away answers that had nothing to
+    // do with the failure.
+    let effectiveOwnerNameWrite = ownerNameWrite;
+    let ownerNameDropped = false;
+    if (
+      error &&
+      hasOwnerNameWrite &&
+      (error.code === "42501" || isMissingSchemaError(error))
+    ) {
+      console.error(
+        "contractors update: owner_name column or grant missing (run migration 0141); retrying without it:",
+        error.message
+      );
+      effectiveOwnerNameWrite = {};
+      ownerNameDropped = true;
+      ({ error } = await supabase
+        .from("contractors")
+        .update({
+          ...updateFields,
+          ...stateWrite,
+          ...ocWrite,
+          ...cityWrite,
+          ...reviewLinkWrite,
+        } as any)
+        .eq("id", existing.id));
+    }
 
     // The review links need the same thing launch_cities does: 0085 revoked the
     // TABLE-level UPDATE and re-granted an allowlist, and 0113 added yelp_url /
@@ -717,7 +857,13 @@ export async function saveCompanyAction(formData: FormData) {
       reviewLinksDropped = true;
       ({ error } = await supabase
         .from("contractors")
-        .update({ ...updateFields, ...stateWrite, ...ocWrite, ...cityWrite } as any)
+        .update({
+          ...updateFields,
+          ...stateWrite,
+          ...ocWrite,
+          ...cityWrite,
+          ...effectiveOwnerNameWrite,
+        } as any)
         .eq("id", existing.id));
     }
     // launch_cities needs both the column (0124) and its own column-level
@@ -752,6 +898,7 @@ export async function saveCompanyAction(formData: FormData) {
           ...stateWrite,
           ...(columnMissing ? ocWrite : {}),
           ...effectiveReviewLinkWrite,
+          ...effectiveOwnerNameWrite,
         } as any)
         .eq("id", existing.id));
     }
@@ -765,6 +912,8 @@ export async function saveCompanyAction(formData: FormData) {
     ) {
       // This retry drops the review links too, so the pro has to be told.
       if (hasReviewLinkWrite) reviewLinksDropped = true;
+      // Last-ditch retry: everything optional is gone, owner_name included.
+      if (hasOwnerNameWrite) ownerNameDropped = true;
       ({ error } = await supabase
         .from("contractors")
         .update(updateFields as any)
@@ -835,7 +984,8 @@ export async function saveCompanyAction(formData: FormData) {
             existing.name,
             await accountFullName(user.id),
             (user.user_metadata?.full_name as string | undefined) ?? null,
-          ]
+          ],
+          user.id
         );
       } catch (err) {
         console.error(
@@ -852,15 +1002,25 @@ export async function saveCompanyAction(formData: FormData) {
     // Same single-slot reasoning covers the dropped review links (0128 not
     // applied yet). When both went wrong the rejected service name is the one
     // the pro has to act on, so it leads, with the links noted after it.
+    // Same single-slot reasoning covers a dropped owner name (0141 not applied
+    // yet): the save succeeded, but that one field is not on the row, and a
+    // plain "Profile saved." would be a lie the pro only finds on a reload.
+    const droppedNote = [
+      reviewLinksDropped ? "Review links" : null,
+      ownerNameDropped ? "Owner name" : null,
+    ].filter(Boolean);
     if (customRejected) {
       await setFlash(
-        reviewLinksDropped
-          ? `${CUSTOM_CATEGORY_REJECTED} Review links could not be stored yet.`
+        droppedNote.length > 0
+          ? `${CUSTOM_CATEGORY_REJECTED} ${droppedNote.join(" and ")} could not be stored yet.`
           : CUSTOM_CATEGORY_REJECTED,
         "error"
       );
-    } else if (reviewLinksDropped) {
-      await setFlash("Saved. Review links could not be stored yet.", "warning");
+    } else if (droppedNote.length > 0) {
+      await setFlash(
+        `Saved. ${droppedNote.join(" and ")} could not be stored yet.`,
+        "warning"
+      );
     } else {
       await setFlash("Profile saved.");
     }
@@ -990,7 +1150,43 @@ export async function saveCompanyAction(formData: FormData) {
   // the retry itself.
   let { error } = await supabase
     .from("contractors")
-    .insert({ ...base, ...referral, ...stateWrite, ...ocWrite, ...cityWrite, ...reviewLinkWrite } as any);
+    .insert({
+      ...base,
+      ...referral,
+      ...stateWrite,
+      ...ocWrite,
+      ...cityWrite,
+      ...reviewLinkWrite,
+      ...ownerNameWrite,
+    } as any);
+
+  // owner_name (0141) is the newest column and the one a live database is most
+  // likely missing, either outright or as a column-level INSERT grant 0085's
+  // allowlist could not know about. Dropped first, same reasoning as the
+  // update path: losing the owner name is far cheaper than losing the city
+  // answers a later retry would throw away.
+  let effectiveOwnerNameWrite = ownerNameWrite;
+  if (
+    error &&
+    hasOwnerNameWrite &&
+    (error.code === "42501" || isMissingSchemaError(error))
+  ) {
+    console.error(
+      "contractors insert: owner_name column or grant missing (run migration 0141); retrying without it:",
+      error.message
+    );
+    effectiveOwnerNameWrite = {};
+    ({ error } = await supabase
+      .from("contractors")
+      .insert({
+        ...base,
+        ...referral,
+        ...stateWrite,
+        ...ocWrite,
+        ...cityWrite,
+        ...reviewLinkWrite,
+      } as any));
+  }
 
   // Same story as the update path above: 0085 re-granted INSERT by column list
   // and 0113's yelp_url / google_reviews_url never joined it (0128 is the fix),
@@ -1008,7 +1204,14 @@ export async function saveCompanyAction(formData: FormData) {
     reviewLinksDropped = true;
     ({ error } = await supabase
       .from("contractors")
-      .insert({ ...base, ...referral, ...stateWrite, ...ocWrite, ...cityWrite } as any));
+      .insert({
+        ...base,
+        ...referral,
+        ...stateWrite,
+        ...ocWrite,
+        ...cityWrite,
+        ...effectiveOwnerNameWrite,
+      } as any));
   }
   if (
     error &&
@@ -1037,6 +1240,7 @@ export async function saveCompanyAction(formData: FormData) {
         ...stateWrite,
         ...(columnMissing ? ocWrite : {}),
         ...effectiveReviewLinkWrite,
+        ...effectiveOwnerNameWrite,
       } as any));
   }
   if (error && hasOcWrite && error.code === "42501") {
@@ -1046,9 +1250,24 @@ export async function saveCompanyAction(formData: FormData) {
     );
     ({ error } = await supabase
       .from("contractors")
-      .insert({ ...base, ...referral, ...stateWrite, ...effectiveReviewLinkWrite } as any));
+      .insert({
+        ...base,
+        ...referral,
+        ...stateWrite,
+        ...effectiveReviewLinkWrite,
+        ...effectiveOwnerNameWrite,
+      } as any));
   }
-  if (error && (referredBy || hasStateWrite || hasOcWrite || hasReviewLinkWrite)) {
+  if (
+    error &&
+    (referredBy ||
+      hasStateWrite ||
+      hasOcWrite ||
+      hasReviewLinkWrite ||
+      // owner_name (0141) rides here too, so a database missing it still gets
+      // the company created rather than the pro stuck at signup.
+      hasOwnerNameWrite)
+  ) {
     // isMissingSchemaError, not a hand-rolled regex: PostgREST reports a
     // missing INSERT column as PGRST204 "schema cache", which the old
     // pattern here missed, hard-500ing every new pro signup on a live DB
@@ -1075,6 +1294,12 @@ export async function saveCompanyAction(formData: FormData) {
     revalidatePath("/pro/onboarding");
     return;
   }
+
+  // Funnel analytics (docs/ANALYTICS.md), right where the contractor row
+  // actually landed - not at the end of this function, which still has a CSLB
+  // lookup and a preferred-side stamp ahead of it that a signup should not
+  // wait on to be counted.
+  await trackServerEvent(user.id, "signup_pro");
 
   // A supplied license number is only "on file", not checked: queue it as
   // 'pending' (0037) so nothing downstream can claim a verification that
@@ -1120,7 +1345,8 @@ export async function saveCompanyAction(formData: FormData) {
           fields.name,
           await accountFullName(user.id),
           (user.user_metadata?.full_name as string | undefined) ?? null,
-        ]
+        ],
+        user.id
       );
     } catch (err) {
       console.error(
@@ -1186,6 +1412,12 @@ export async function saveCompanyAction(formData: FormData) {
   } else {
     await setFlash("You're all set. Leads will appear here.");
   }
+
+  // Funnel analytics (docs/ANALYTICS.md). Distinct from signup_pro above: this
+  // is the wizard actually finishing (terms accepted, license check attempted,
+  // side stamped), not just the moment the row was created.
+  await trackServerEvent(user.id, "onboarding_done");
+
   revalidatePath("/", "layout");
   redirect("/pro");
 }
@@ -1293,7 +1525,8 @@ export async function verifyLicenseNowAction(formData: FormData) {
     licenseChanged ? null : (contractor as any).license_verify_detail,
     // 0125 identity check: this company's name plus the account holder's own
     // name (CSLB registers a sole proprietor's license to the person).
-    [contractor.name, await accountFullName(contractor.user_id)]
+    [contractor.name, await accountFullName(contractor.user_id)],
+    contractor.user_id ?? null
   );
 
   if (!result) {
@@ -1570,6 +1803,9 @@ export async function updateLeadStatusAction(formData: FormData) {
   }
 
   revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
 }
 
 // Dollar string for a fee in cents, matching the board's money() formatting
@@ -1650,6 +1886,9 @@ export async function applyToJobAction(formData: FormData) {
       "error"
     );
     revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
     return;
   }
 
@@ -1666,6 +1905,9 @@ export async function applyToJobAction(formData: FormData) {
       "error"
     );
     revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
     return;
   }
 
@@ -1698,6 +1940,9 @@ export async function applyToJobAction(formData: FormData) {
       "error"
     );
     revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
     return;
   }
   // Any error here (0092 not run yet, or an unrelated hiccup) falls through
@@ -1722,6 +1967,9 @@ export async function applyToJobAction(formData: FormData) {
     if (!existingAppError && existingApp) {
       await setFlash("You already applied to this job.");
       revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
       return;
     }
   } catch {
@@ -1742,6 +1990,9 @@ export async function applyToJobAction(formData: FormData) {
   if (staleError) {
     await setFlash(staleError, "error");
     revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
     return;
   }
 
@@ -1829,7 +2080,7 @@ export async function applyToJobAction(formData: FormData) {
             body: feeStr
               ? `You applied to a ${labelFor(JOB_CATEGORIES, lead.category)} job. ${feeStr} was charged to your wallet.`
               : `You applied to a ${labelFor(JOB_CATEGORIES, lead.category)} job. The fee was charged to your wallet.`,
-            url: "/pro",
+            url: PRO_LEADS_HREF,
           });
           // "pro_apply" (src/app/api/track/route.ts): fires once per
           // successful, fee-charged application. No PII, just the category.
@@ -1843,6 +2094,9 @@ export async function applyToJobAction(formData: FormData) {
     }
   }
   revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
   revalidatePath("/pro/billing");
 }
 
@@ -1901,6 +2155,9 @@ export async function unlockDirectRequestAction(formData: FormData) {
     if (staleError) {
       await setFlash(staleError, "error");
       revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
       return;
     }
   }
@@ -1914,11 +2171,17 @@ export async function unlockDirectRequestAction(formData: FormData) {
     console.error("unlockDirectRequestAction: unlock_direct_request failed:", error);
     await setFlash("Couldn't unlock this request just now. Please try again.", "error");
     revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
     return;
   }
   if (data === false) {
     await setFlash("Not enough balance. Add funds to unlock.", "error");
     revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
     revalidatePath("/pro/billing");
     return;
   }
@@ -1971,6 +2234,9 @@ export async function unlockDirectRequestAction(formData: FormData) {
   }
 
   revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
   revalidatePath("/pro/billing");
   // Land the pro in the chat for the lead they just unlocked, the way choosing
   // or rehiring drops the homeowner straight into the thread.
@@ -2023,6 +2289,9 @@ export async function declineDirectRequestAction(formData: FormData) {
     console.error("declineDirectRequestAction: decline_direct_request failed:", error);
     await setFlash("Couldn't pass on this request just now. Please try again.", "error");
     revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
     return;
   }
 
@@ -2054,6 +2323,9 @@ export async function declineDirectRequestAction(formData: FormData) {
 
   await setFlash("You passed on this request.");
   revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
 }
 
 // NOTE: a markLeadPaidAction used to live here that wrote the client-supplied

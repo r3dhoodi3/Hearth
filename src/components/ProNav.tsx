@@ -17,11 +17,21 @@ export default function ProNav({
   // invitation to add one.
   hasHome: boolean;
 }) {
-  // Primary nav stays to the four or five destinations a pro checks daily.
-  // Playbook, Tools, and Membership moved into the profile menu's "Grow"
-  // group below: useful, but not a daily-use tab.
+  // Five destinations a pro checks daily. Playbook, Tools, and Membership stay
+  // in the profile menu's "Grow" group below: useful, but not a daily-use tab.
+  //
+  // HOME AND LEADS ARE TWO TABS NOW (2026-08-29). /pro used to BE the leads
+  // board; it is the Home screen now and the board lives at /pro/leads
+  // (PRO_LEADS_HREF). NavLinks already refuses to let an index link like /pro
+  // swallow its own sub-pages, so /pro lights up on exactly /pro while
+  // /pro/leads lights up on itself - without that carve-out, Home would be lit
+  // on every pro screen in the app.
+  //
+  // Desktop order leads with Home, which is how a top strip reads. The phone
+  // bar below uses a different order on purpose.
   const LINKS = [
-    { href: "/pro", label: "Leads", icon: "leads" },
+    { href: "/pro", label: "Home", icon: "home" },
+    { href: "/pro/leads", label: "Leads", icon: "leads" },
     {
       href: "/pro/chats",
       label: "Messages",
@@ -37,13 +47,27 @@ export default function ProNav({
     },
   ];
 
-  // Phone bottom bar: the same four destinations as the top strip, mirroring
-  // the homeowner Nav. The copilot briefly had a tab of its own here; it lives
-  // inside Messages now, as a pinned conversation at the top of /pro/chats
-  // that opens the full-screen /pro/ask view (see AskHearthRow), with NavLinks
-  // treating /pro/ask as a child of Messages so the tab stays lit while you're
-  // in there. The floating pill remains desktop-only (see pro/layout.tsx).
-  const BOTTOM_LINKS = LINKS;
+  // Phone bottom bar: the same five destinations, re-ordered so HOME SITS IN
+  // THE CENTRE, which is where a thumb rests and where every phone app people
+  // already use puts it. Leads and Messages (the two working screens) flank it
+  // on the left, Clients and Business on the right.
+  //
+  // Five tabs at 390px: NavLinks gives each a flex-1 column, so about 78px
+  // each, with 12px labels. The longest label here is "Messages" at 8
+  // characters, which is the ceiling NavLinks' own comment sets, so nothing
+  // truncates.
+  //
+  // The copilot briefly had a tab of its own here; it lives inside Messages
+  // now, as a pinned conversation at the top of /pro/chats that opens the
+  // full-screen /pro/ask view (see AskHearthRow), with NavLinks treating
+  // /pro/ask as a child of Messages so the tab stays lit while you're in there.
+  const BOTTOM_LINKS = [
+    LINKS[1], // Leads
+    LINKS[2], // Messages
+    LINKS[0], // Home
+    LINKS[3], // Clients
+    LINKS[4], // Business
+  ];
 
   return (
     <>
@@ -94,12 +118,11 @@ export default function ProNav({
             name={company}
             themeToggle
             links={[
-              // First entry, mirroring the homeowner ToolsMenu's askLink: the
-              // copilot otherwise lives only as a pinned row inside Messages
-              // (AskHearthRow, /pro/chats), which a tester never found. This
-              // is the second door, reachable from every page in the pro
-              // shell, not just the inbox.
-              { href: "/pro/ask", label: "Ask Hearth" },
+              // No "Ask Hearth" entry here on purpose: the copilot lives in
+              // one place, the pinned row at the top of /pro/chats. A second
+              // door in the profile menu is what made it feel bigger than the
+              // rest of the app.
+              //
               // Company profile is the pro's storefront: top-level. "Edit
               // business" says what you DO here.
               { href: "/pro/profile", label: "Edit business profile" },

@@ -55,6 +55,17 @@ describe("client-chosen storage keys", () => {
     expect(src).toMatch(/validPhotoUrls\(formData,\s*property\.id\)/);
   });
 
+  // The singular sibling of the list above: the emergency prep card posts one
+  // hidden `photo_url`, not a `photo_urls` list, so it never joined
+  // PHOTO_URL_ACTION_FILES and for a while a length check was its whole guard.
+  it("the emergency prep slot checks its single photo key too", () => {
+    const src = appSource("(app)/emergency/actions.ts");
+    expect(src).toContain('formData.get("photo_url")');
+    expect(src).toMatch(/isOwnedStoragePath\(rawUrl,\s*property\.id\)/);
+    // The old check, which accepted any string under 1000 characters.
+    expect(src).not.toMatch(/rawUrl\.length <= 1000 \? rawUrl : ""/);
+  });
+
   it("the system editor's photo attach filters on the owning property", () => {
     const src = appSource("(app)/profile/actions.ts");
     expect(src).toMatch(/isOwnedStoragePath\(u,\s*propertyId\)/);

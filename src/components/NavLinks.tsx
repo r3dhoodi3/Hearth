@@ -97,7 +97,11 @@ export default function NavLinks({
               key={l.href}
               href={l.href}
               aria-current={active ? "page" : undefined}
-              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1 text-[11px] ${
+              // 11px was the smallest primary-navigation text in the app.
+              // 12px still fits five tabs at 360px (about 64px of label room
+              // each, longest short label measures about 53px), so keep new
+              // shortLabels to 8 characters or truncate will bite.
+              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1 text-xs ${
                 active
                   ? accent === "hearth"
                     ? "font-semibold text-hearth-700 dark:text-stone-300"
@@ -116,7 +120,7 @@ export default function NavLinks({
                     <LiveUnreadBadge role={l.liveBadge} />
                   </span>
                 ) : l.badge ? (
-                  <span className="absolute -right-2 -top-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+                  <span className="absolute -right-2 -top-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-semibold text-white">
                     {l.badge}
                   </span>
                 ) : null}

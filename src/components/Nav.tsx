@@ -54,8 +54,8 @@ export default function Nav({
   // and gave the assistant a top-level home it doesn't need. It lives inside
   // Messages instead - a pinned conversation at the top of /chats that opens
   // the full-screen /ask view (see AskHearthRow), with NavLinks treating /ask
-  // as a child of Messages so the tab stays lit while you're in there. The
-  // floating pill remains desktop-only (see AskHearthDock).
+  // as a child of Messages so the tab stays lit while you're in there. There
+  // is no floating pill any more, at any width: Messages is the only door.
   const BOTTOM_LINKS = LINKS;
 
   return (

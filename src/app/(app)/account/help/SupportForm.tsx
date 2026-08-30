@@ -1,20 +1,52 @@
 "use client";
 
+import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
 import { saveSupportMessageAction } from "./actions";
 
 // The in-app contact form. Name, email, and phone are prefilled from the
 // account so the homeowner rarely has to type them, and they tell us how they
 // would prefer to be reached.
+//
+// `sent` comes from page.tsx reading ?sent=1, which saveSupportMessageAction
+// (./actions.ts) adds to its redirect on a successful send. When true, this
+// swaps the form for a confirmation card rather than leaving a blank form on
+// screen with only a toast (easy to miss, and gone in a few seconds) to say
+// anything happened. "Send another" links back to the plain path so a
+// homeowner who forgot to attach something, or has a second question, is one
+// tap from a fresh form instead of stuck on the card.
 export default function SupportForm({
   name,
   email,
   phone,
+  sent = false,
 }: {
   name: string;
   email: string;
   phone: string;
+  sent?: boolean;
 }) {
+  if (sent) {
+    return (
+      <div className="card">
+        <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
+          Message sent
+        </h2>
+        <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
+          Thanks - we got your message. We&apos;ll reply by email or phone.
+        </p>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+          <Link href="/dashboard" className="btn-primary text-center">
+            Back to my dashboard
+          </Link>
+          <Link href="/account/help" className="btn-secondary text-center">
+            Send another
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form action={saveSupportMessageAction} className="card">
       <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">Contact us</h2>

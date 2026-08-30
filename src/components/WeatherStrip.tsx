@@ -323,7 +323,9 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
               ? "Show temperatures in Fahrenheit"
               : "Show temperatures in Celsius"
           }
-          className={`flex h-10 min-w-[2.5rem] items-center justify-center px-2 text-xs font-medium ${
+          // Phone only: 40x40 with a 12px glyph was below the touch floor and
+          // hard to read. The phone home for this toggle has room for 44px.
+          className={`flex h-10 min-w-[2.5rem] items-center justify-center px-2 text-xs font-medium max-sm:h-11 max-sm:min-w-11 max-sm:text-sm ${
             unit === u
               ? "bg-bark-700 text-white dark:bg-bark-600"
               : "text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
@@ -376,7 +378,7 @@ export default function WeatherStrip({ propertyId }: { propertyId: string }) {
             the only cost of getting it off a 342px row that could not hold
             it and the clock at the same time. */}
         <div className="flex items-center justify-between gap-3 border-t border-stone-200 px-4 py-2 sm:hidden dark:border-white/10">
-          <span className="text-xs text-stone-500 dark:text-stone-400">
+          <span className="text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
             Units
           </span>
           {unitToggle("")}

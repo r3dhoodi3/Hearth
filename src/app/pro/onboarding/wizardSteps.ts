@@ -44,6 +44,8 @@ export const PRO_ONBOARDING_STEP_COUNT = PRO_ONBOARDING_STEPS.length;
 /** Everything the gate looks at, read off the live form at click time. */
 export type ProOnboardingValues = {
   name: string;
+  /** The business owner's own name, migration 0141. */
+  ownerName: string;
   phone: string;
   /** Checked launch cities. */
   cities: readonly string[];
@@ -67,6 +69,12 @@ export function validateProOnboardingStep(
   switch (index) {
     case 0: {
       if (!values.name.trim()) return "Enter your company name.";
+      // The company name is the business; this is the person a homeowner ends
+      // up talking to, and the public profile now shows it, so it is asked for
+      // here rather than left to be filled in later or never.
+      if (values.ownerName.trim().length < 2) {
+        return "Enter the owner's name.";
+      }
       const digits = values.phone.replace(/\D/g, "");
       if (digits.length === 0) {
         return "Add a phone number so homeowners can reach you.";

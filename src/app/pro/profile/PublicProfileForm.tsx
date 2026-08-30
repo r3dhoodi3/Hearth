@@ -131,8 +131,13 @@ function formatVerifiedDate(iso: string): string {
 
 export default function PublicProfileForm({
   contractor,
+  smsConsent = false,
 }: {
   contractor: Contractor;
+  // Current TCPA SMS consent for the ACCOUNT (users.sms_consent), not the
+  // company row, so it has to be passed in rather than read off contractor.
+  // Defaults to false: an unread value must never render as a ticked opt-in.
+  smsConsent?: boolean;
 }) {
   const hasLicense = Boolean(contractor.license_number);
   const verifyStatus = contractor.license_verified_status ?? "unverified";
@@ -218,6 +223,32 @@ export default function PublicProfileForm({
                 </div>
               </div>
 
+              {/* Who the homeowner is actually talking to, migration 0141.
+                  Editable here for pros who set their company up before the
+                  question existed, and shown on the public /p/<id> page under
+                  the business name. */}
+              <div>
+                <label className="label">Owner Name</label>
+                <div className="relative">
+                  <FieldIcon>
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M6 21v-1a6 6 0 0112 0v1" />
+                  </FieldIcon>
+                  <input
+                    name="owner_name"
+                    className="input pl-9"
+                    // 120 is the ceiling the column's check constraint
+                    // enforces; saveCompanyAction caps it again server-side.
+                    maxLength={120}
+                    defaultValue={contractor.owner_name ?? ""}
+                    placeholder="e.g. Alex Rivera"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  The person homeowners will be talking to. Shown on your public profile.
+                </p>
+              </div>
+
               <div>
                 <label className="label">Email Address</label>
                 <div className="relative">
@@ -247,6 +278,30 @@ export default function PublicProfileForm({
                   />
                 </div>
               </div>
+
+              {/* TCPA SMS consent. Opt-in only: NEVER pre-ticked, and the
+                  hidden marker beside it is what tells saveCompanyAction
+                  "unticked" apart from "this form did not ask" (an unticked
+                  checkbox posts nothing at all). Without this box every pro
+                  text Hearth already builds is dropped by the gate in
+                  src/lib/notify.ts. See saveProSmsConsent in
+                  src/app/pro/actions.ts.
+                  TODO(legal): have counsel review this consent copy before
+                  launch. */}
+              <input type="hidden" name="sms_consent_present" value="1" />
+              <label className="flex min-h-11 items-start gap-2">
+                <input
+                  type="checkbox"
+                  name="sms_consent"
+                  defaultChecked={smsConsent}
+                  className="mt-1 h-6 w-6 shrink-0 rounded border-stone-300 text-hearth-600 focus:ring-hearth-600 dark:border-white/20"
+                />
+                <span className="text-sm text-stone-600 dark:text-stone-400">
+                  Text me when a job matches or a homeowner replies. Message
+                  and data rates may apply. Message frequency varies. Reply
+                  STOP to opt out, HELP for help.
+                </span>
+              </label>
 
               <div>
                 <label className="label">Cities You Serve</label>
@@ -298,7 +353,7 @@ export default function PublicProfileForm({
                       backs 'verified' and 'failed'. Never claim "Verified"
                       beyond what was actually confirmed. */}
                   {hasLicense && verifyStatus === "verified" && (
-                    <span className="inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700 dark:bg-green-950/40 dark:text-green-200">
+                    <span className="inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700 max-sm:text-xs dark:bg-green-950/40 dark:text-green-200">
                       <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 6L9 17l-5-5" />
                       </svg>
@@ -306,13 +361,13 @@ export default function PublicProfileForm({
                     </span>
                   )}
                   {hasLicense && verifyStatus === "failed" && (
-                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 dark:bg-red-950/40 dark:text-red-200">
+                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 max-sm:text-xs dark:bg-red-950/40 dark:text-red-200">
                       Not confirmed
                     </span>
                   )}
                   {hasLicense &&
                     (verifyStatus === "pending" || verifyStatus === "unverified") && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 max-sm:text-xs dark:bg-amber-500/15 dark:text-amber-300">
                         Verification pending
                       </span>
                     )}

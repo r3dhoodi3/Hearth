@@ -1,17 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan } from "@/lib/subscription";
-import { cappedField, FIELD_MAX } from "@/lib/formFields";
+import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
 
 // Save a pro's support message so the team can read and reply. Contact details
-// come from the company record (no extra typing), and messages from active Pro
-// members are flagged priority so the team answers them first. The flag is
-// computed server-side; it is never taken from the form.
+// are prefilled from the company record and editable on the form, falling back
+// to the record when a field is left empty. Messages from active Pro members
+// are flagged priority so the team answers them first. The flag is computed
+// server-side; it is never taken from the form.
 export async function sendProSupportMessageAction(formData: FormData) {
   const supabase = await createClient();
   const {
@@ -56,11 +58,23 @@ export async function sendProSupportMessageAction(formData: FormData) {
     return;
   }
 
+  // The form now prefills these three from the company record and lets the pro
+  // edit them, so take what was submitted and fall back to the record when a
+  // field comes back empty. Capped server-side with the same ceilings the
+  // homeowner help form and the public contact form use: they write to this
+  // same table and are read by the same people, and an <input maxLength> is
+  // only a client hint.
   const base = {
     user_id: user.id,
-    name: contractor.name,
-    email: contractor.contact_email || user.email || null,
-    phone: contractor.contact_phone,
+    name: cappedFieldOrNull(formData, "name", FIELD_MAX.name) ?? contractor.name,
+    email:
+      cappedFieldOrNull(formData, "email", FIELD_MAX.email) ??
+      contractor.contact_email ??
+      user.email ??
+      null,
+    phone:
+      cappedFieldOrNull(formData, "phone", FIELD_MAX.phone) ??
+      contractor.contact_phone,
     message,
   };
 
@@ -74,7 +88,20 @@ export async function sendProSupportMessageAction(formData: FormData) {
     ({ error } = await supabase.from("support_messages").insert(base));
   }
 
-  if (error) await setFlash("Couldn't send your message. Please try again.", "error");
-  else await setFlash("Thanks. We got your message and will get back to you.", "success");
-  revalidatePath("/pro/help");
+  if (error) {
+    await setFlash("Couldn't send your message. Please try again.", "error");
+    revalidatePath("/pro/help");
+    return;
+  }
+
+  // ?sent=1 is what tells the page (src/app/pro/help/page.tsx) to swap
+  // ProSupportForm for its confirmation card instead of the plain form - the
+  // flash toast alone was easy to miss and said nothing about what happens
+  // next. Kept alongside the toast rather than instead of it: it is cheap and
+  // gives feedback immediately, before the redirected page finishes loading.
+  // This used to be a bare revalidatePath() with no redirect at all (a plain
+  // in-place re-render); the redirect below still lands on the same route, so
+  // it does not change how the form POST behaves for anyone with JS off.
+  await setFlash("Thanks. We got your message and will get back to you.", "success");
+  redirect("/pro/help?sent=1");
 }

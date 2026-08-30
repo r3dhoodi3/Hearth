@@ -14,7 +14,6 @@ import { getUser } from "@/lib/auth";
 import { hasPlus } from "@/lib/subscription";
 import Nav from "@/components/Nav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
-import AskHearthDock from "@/components/AskHearthDock";
 import ReviewPrompt from "@/components/ReviewPrompt";
 import AppGuideMount from "@/components/AppGuideMount";
 
@@ -91,21 +90,16 @@ export default async function AppLayout({
         hasPro={contractor !== null}
       />
       {/* Extra bottom padding on phones keeps content clear of the fixed
-          Ask Hearth dock. */}
+          bottom tab bar. */}
       <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 sm:pb-8">
         {children}
       </main>
-      {/* A personalized opener so Ask Hearth speaks first about the home's top
-          item. The layout no longer computes it: getProactiveGreeting() costs
-          three DB queries (issues, home_systems, maintenance_tasks, two of
-          which the Home page reads again for itself), and it was paying them
-          on EVERY signed-in page view to produce a string that is only ever
-          read if someone opens the dock. Suspense kept it off the critical
-          path for first byte, but the queries still ran every time.
-          The dock now fetches it from /api/ask-greeting on first open, and
-          prefetches on hover, so a page view that never touches Ask Hearth
-          costs nothing at all. */}
-      <AskHearthDock greetingUrl="/api/ask-greeting" hideOnPhone />
+      {/* The floating Ask Hearth dock used to mount here, on every signed-in
+          screen. It is gone on purpose: Messages is now the one place the
+          assistant lives (the pinned Ask Hearth row at the top of /chats, and
+          /ask behind it), so a pill floating over every other page was a
+          second door to the same room. Its proactive opener is computed by
+          /ask and /chats themselves, where it is actually read. */}
       <NewMessageNotifier role="homeowner" />
       <ReviewPrompt />
       {/* First sign-in only: four cards explaining what the app does, now that

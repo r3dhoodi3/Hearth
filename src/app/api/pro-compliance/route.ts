@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasPlus } from "@/lib/subscription";
@@ -8,6 +9,7 @@ import {
   type AiClientReason,
 } from "@/lib/aiReason";
 import { readBodyBounded } from "@/lib/boundedBody";
+import { checkUpload, extensionFor } from "@/lib/uploadGuard";
 import { generateJson, hasClaudeKey } from "@/lib/claude";
 
 export const runtime = "nodejs";
@@ -44,16 +46,10 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB, matches extract-document's cap
 const MAX_BODY_BYTES = 11 * 1024 * 1024;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// Exactly what the pro-docs bucket's own allowed_mime_types permits
-// (supabase/migrations/0081_storage_mime_limits.sql). Kept in sync by hand
-// because the bucket config lives in SQL; anything not on this list is stored
-// as application/octet-stream rather than under the type the client claimed.
-const ALLOWED_UPLOAD_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "application/pdf",
-]);
+// The allow-list used to live here as a hand-kept copy of the pro-docs
+// bucket's allowed_mime_types. It now lives in src/lib/uploadGuard.ts
+// (UPLOAD_KINDS.compliance), which every upload path shares, so tightening it
+// tightens all of them at once.
 
 // Structured output: the model is constrained to this shape server-side. The
 // optional fields are nullable rather than omitted, since "no expiration date
@@ -180,6 +176,13 @@ async function extractExpiry(
 }
 
 export async function POST(req: NextRequest) {
+  // CSRF, second lock. The session cookie is SameSite=Lax and this body is
+  // JSON, so a cross-site page cannot get a signed-in request here today;
+  // this refuses one outright rather than depending on those defaults.
+  // src/lib/csrf.ts only rejects on positive cross-site evidence.
+  const crossSite = sameOriginGuard(req);
+  if (crossSite) return crossSite;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -260,24 +263,40 @@ export async function POST(req: NextRequest) {
     if (uploadedFile.size > MAX_FILE_BYTES) {
       return NextResponse.json({ error: "File too large." }, { status: 413 });
     }
-    // The client's file.type is a claim, not a fact, and it used to be passed
-    // straight through as the stored object's contentType - which is what a
-    // browser trusts when the file is fetched back. Anything outside the list
-    // the pro-docs bucket itself allows (migration 0079) is stored as an inert
-    // octet-stream instead, so a mislabeled or crafted upload can never be
-    // served back as something a browser will render or execute.
-    const claimedMime = uploadedFile.type || "";
-    const mime = ALLOWED_UPLOAD_TYPES.has(claimedMime)
-      ? claimedMime
-      : "application/octet-stream";
-    const bytes = new Uint8Array(await uploadedFile.arrayBuffer());
+    const rawBytes = new Uint8Array(await uploadedFile.arrayBuffer());
+
+    // THE FILE IS DECIDED BY ITS BYTES, NOT BY WHAT IT CLAIMS TO BE.
+    // src/lib/uploadGuard.ts sniffs the magic number, refuses anything that is
+    // not one of the four types the pro-docs bucket allows, refuses a PDF that
+    // carries /JavaScript or /OpenAction, and hands back image bytes with EXIF
+    // and any appended payload removed. This replaces the old "trust
+    // file.type, and store an unrecognised one as octet-stream" handling:
+    // storing a crafted file inertly still stored it, and the pro's own signed
+    // GET would hand it back.
+    const verdict = await checkUpload({
+      bytes: rawBytes,
+      kind: "compliance",
+      declaredType: uploadedFile.type || null,
+    });
+    if (!verdict.ok) {
+      return NextResponse.json(
+        { error: verdict.message },
+        { status: verdict.status }
+      );
+    }
+    const mime = verdict.type;
+    const bytes = verdict.bytes;
 
     // Upload first through the caller's own session, so storage RLS (the
     // pro-docs owner policies from migration 0051) is the only gate: no
     // service role, no manual ownership check needed here.
-    const rawExt = (uploadedFile.name.split(".").pop() || "").toLowerCase();
-    const ext = /^[a-z0-9]{1,5}$/.test(rawExt) ? rawExt : "bin";
-    docPath = `${contractor.id}/${kind}-${Date.now()}.${ext}`;
+    //
+    // The extension comes from the sniffed type, not from the name the pro's
+    // file happened to carry, and the random suffix replaces Date.now(): two
+    // uploads inside the same millisecond used to collide on the key and the
+    // second one failed under upsert: false.
+    const ext = extensionFor(mime);
+    docPath = `${contractor.id}/${kind}-${crypto.randomUUID()}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("pro-docs")
       .upload(docPath, bytes, { contentType: mime, upsert: false });

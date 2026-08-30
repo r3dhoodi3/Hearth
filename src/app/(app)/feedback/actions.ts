@@ -6,10 +6,42 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getProperties } from "@/lib/property";
 import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
+import { trackServerEvent } from "@/lib/trackServer";
 
 const FEEDBACK_PATH = "/feedback";
 
-type ReviewPromptKind = "prompt_shown" | "loved" | "not_really";
+// Every event the review prompt can write. 'rate_clicked', 'rate_deferred'
+// and 'rated' are migration 0142: tapping through to the App Store is an
+// intent, not a rating (Apple never tells us whether one was left), so the
+// tap and the person's own later answer are two separate rows.
+type ReviewPromptKind =
+  | "prompt_shown"
+  | "loved"
+  | "not_really"
+  | "rate_clicked"
+  | "rate_deferred"
+  | "rated";
+
+// The two rows that end the conversation for good, on every device: an
+// explicit "Yes, done" on the follow-up, and the negative branch (which sends
+// somebody to the private feedback form instead and must never ask again).
+// Everything else - shown, loved, tapped the link, "Not yet" - is a snooze.
+const SETTLING_KINDS = new Set(["rated", "not_really"]);
+
+export type ReviewPromptSignals = {
+  // Whose signals these are. The prompt keys its per-account session count in
+  // localStorage on this (src/lib/reviewPrompt.ts), so two people sharing a
+  // phone never inherit each other's count.
+  userId: string;
+  settled: boolean;
+  // A 'rate_clicked' row with no 'rated' after it: they tapped through to the
+  // store and we still owe them the honest "did you get a chance?" question.
+  awaitingRateConfirm: boolean;
+  // They have answered that question with "Not yet" at least once, which puts
+  // the card into the random-session pool instead of asking at every open.
+  rateDeferred: boolean;
+  hasMeaningfulActivity: boolean;
+};
 
 // What ReviewPrompt.tsx (mounted once in src/app/(app)/layout.tsx) needs to
 // decide whether to show itself. Server-only because app_feedback has no
@@ -19,10 +51,7 @@ type ReviewPromptKind = "prompt_shown" | "loved" | "not_really";
 //
 // Returns null when there is no signed-in user (shouldn't happen inside the
 // (app) shell, but the caller treats null the same as "not eligible").
-export async function getReviewPromptSignals(): Promise<{
-  alreadyShownOrAnswered: boolean;
-  hasMeaningfulActivity: boolean;
-} | null> {
+export async function getReviewPromptSignals(): Promise<ReviewPromptSignals | null> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -30,21 +59,32 @@ export async function getReviewPromptSignals(): Promise<{
   if (!user) return null;
 
   try {
-    // Any event row at all - shown, loved, or not_really - means never ask
-    // again. This is what makes dismissing with the X "count as answered":
-    // the card writes 'prompt_shown' the moment it actually renders, before
-    // the person does anything, so a silent dismissal already leaves a row
-    // behind. Service-role only, since the account cannot select this table.
+    // Read the KINDS, not just "does a row exist". The old check settled the
+    // account on any row at all, which meant a card that merely appeared once
+    // (kind 'prompt_shown') was the end of it forever. Service-role only,
+    // since the account cannot select this table.
     const admin = createAdminClient();
-    const { data: existing, error } = await admin
+    const { data: rows, error } = await admin
       .from("app_feedback")
-      .select("id")
+      .select("kind")
       .eq("user_id", user.id)
-      .limit(1);
+      // Far more than the flow can produce: the prompt writes at most one row
+      // per kind (unique index, migration 0133) and the /feedback form is
+      // rate limited to 5 an hour.
+      .limit(50);
     if (error) throw error;
-    if (existing && existing.length > 0) {
-      return { alreadyShownOrAnswered: true, hasMeaningfulActivity: false };
+    const kinds = new Set((rows ?? []).map((r) => r.kind));
+    if ([...SETTLING_KINDS].some((k) => kinds.has(k))) {
+      return {
+        userId: user.id,
+        settled: true,
+        awaitingRateConfirm: false,
+        rateDeferred: false,
+        hasMeaningfulActivity: false,
+      };
     }
+    const awaitingRateConfirm = kinds.has("rate_clicked");
+    const rateDeferred = kinds.has("rate_deferred");
 
     // "Claimed a home" from the owner's four-way OR (the other three are
     // posted a job, asked Ask Hearth 3+ times, and a pro applied to a job).
@@ -57,7 +97,10 @@ export async function getReviewPromptSignals(): Promise<{
     // homeowner-only assumption.
     const properties = await getProperties();
     return {
-      alreadyShownOrAnswered: false,
+      userId: user.id,
+      settled: false,
+      awaitingRateConfirm,
+      rateDeferred,
       hasMeaningfulActivity: properties.length > 0,
     };
   } catch (err) {
@@ -67,15 +110,24 @@ export async function getReviewPromptSignals(): Promise<{
     );
     // Fail toward NOT showing: a broken signal check must never turn into a
     // repeat nag, and skipping the ask costs nothing but one missed prompt.
-    return { alreadyShownOrAnswered: true, hasMeaningfulActivity: false };
+    //
+    // null, not a `settled: true` object, on purpose. The caller writes a
+    // permanent "never ask again" flag into localStorage when it is told this
+    // account has settled, and a database hiccup must not be able to end the
+    // prompt for a browser forever. null says "not now", and the next mount
+    // asks again.
+    return null;
   }
 }
 
 // Logs one prompt event: 'prompt_shown' the moment the card actually renders,
-// 'loved' / 'not_really' when a button is tapped. Best effort and silent on
-// failure - a homeowner tapping a review prompt button must never see an
-// error toast over it, and the worst case of a dropped write is one extra ask
-// later, not a broken page.
+// 'loved' / 'not_really' when a button on the first card is tapped,
+// 'rate_clicked' when they tap through to the App Store, and then 'rated' or
+// 'rate_deferred' depending on how they answer "did you get a chance to rate
+// Hearth?" when they come back. Only 'rated' and 'not_really' end the
+// prompt for good. Best effort and silent on failure - a homeowner tapping a
+// review prompt button must never see an error toast over it, and the worst
+// case of a dropped write is one extra ask later, not a broken page.
 export async function recordReviewPromptEvent(
   kind: ReviewPromptKind
 ): Promise<void> {
@@ -88,16 +140,18 @@ export async function recordReviewPromptEvent(
 
     // This is an unauthenticated-shaped write in practice: any signed-in
     // account can call the server action directly, with any kind, as often as
-    // it likes, and every call lands a row in the table staff read. Ten a day
-    // is far more than the real flow can produce (the card writes one
-    // 'prompt_shown' and at most one answer, ever), so a legitimate homeowner
-    // never meets this. Same fixed-window limiter and same fail-open posture as
+    // it likes, and every call lands a row in the table staff read. Twenty a
+    // day is far more than the real flow can produce: the card can now appear
+    // once per app open rather than once per account, so a busy day is a
+    // handful of 'prompt_shown' calls (all but the first collide with the
+    // unique index and store nothing) plus at most a few answers. Same
+    // fixed-window limiter and same fail-open posture as
     // account/help/actions.ts: only an explicit `false` blocks, so a limiter
     // outage cannot turn into a repeat nag or a lost event.
     const admin = createAdminClient();
     const { data: allowed } = await admin.rpc("rate_limit_hit", {
       p_bucket: `review-prompt:${user.id}`,
-      p_limit: 10,
+      p_limit: 20,
       p_window_seconds: 86400,
     });
     if (allowed === false) return;
@@ -106,8 +160,10 @@ export async function recordReviewPromptEvent(
       .from("app_feedback")
       .insert({ user_id: user.id, side: "homeowner", kind });
     // 23505 = unique_violation. Migration 0133's
-    // app_feedback_one_event_per_kind_idx makes the three message-less prompt
-    // events idempotent per account, so a double-submit (React strict mode,
+    // app_feedback_one_event_per_kind_idx makes the message-less prompt
+    // events idempotent per account (all six kinds), so a repeat - the card
+    // showing again in a later session, a double-submit from React strict
+    // mode,
     // a retried action, a replayed request) collides here instead of writing a
     // second row. That collision IS the success case - the event is already
     // recorded - so it is swallowed rather than logged as a failure.
@@ -177,7 +233,13 @@ export async function submitFeedbackAction(formData: FormData) {
     contact_email: contactEmail,
   });
 
-  if (error) setFlash("Couldn't send that. Please try again.", "error");
-  else setFlash("Thanks. This goes straight to us.", "success");
+  if (error) {
+    setFlash("Couldn't send that. Please try again.", "error");
+  } else {
+    setFlash("Thanks. This goes straight to us.", "success");
+    // Funnel analytics (docs/ANALYTICS.md). No message text in the payload -
+    // the id and side are enough to count that feedback was sent.
+    await trackServerEvent(user.id, "feedback_sent", { side: "homeowner" });
+  }
   redirect(FEEDBACK_PATH);
 }

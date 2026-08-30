@@ -14,6 +14,7 @@ import {
   Building2,
   ShieldCheck,
 } from "lucide-react";
+import Breadcrumbs, { BreadcrumbJsonLd } from "@/components/Breadcrumbs";
 
 // Index for the public guide pages. Kept as a plain list: this section is
 // meant to stay small and good rather than grow into thin programmatic pages.
@@ -130,6 +131,16 @@ export const metadata: Metadata = {
 export default function GuidesIndex() {
   return (
     <main className="mx-auto max-w-2xl px-6 pb-16 pt-10">
+      {/* One-crumb trail on the index itself: just Home > Guides, since
+          Guides is the current page here. */}
+      <Breadcrumbs
+        items={[{ label: "Home", href: "/" }, { label: "Guides" }]}
+      />
+      <BreadcrumbJsonLd
+        items={[{ name: "Home", href: "/" }, { name: "Guides" }]}
+        siteUrl={SITE_URL}
+      />
+
       <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">
         Home maintenance guides
       </h1>

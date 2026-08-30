@@ -157,7 +157,10 @@ describe("the photo-attach control on a trial plan", () => {
 });
 
 describe("the free-allowance hint under an empty composer", () => {
-  const hint = "3 free questions a day. Plus gives you 15 and photo answers.";
+  // No number on the Plus side on purpose: naming the ceiling made the upgrade
+  // read as a cap rather than a lift, and the copy must not go stale when the
+  // limit moves. The free "3" stays, since that is the one being spent.
+  const hint = "3 free questions a day. Plus gives you more, plus photo answers.";
 
   it("shows for a remembered free plan", async () => {
     rememberedPlan("free");
@@ -167,8 +170,8 @@ describe("the free-allowance hint under an empty composer", () => {
   });
 
   it("stays hidden for a remembered trial plan", async () => {
-    // A trial member already gets 8 questions a day and photos, so a pitch
-    // for Plus does not belong under their composer.
+    // A trial member is already on the full Plus allowance and has photos, so
+    // a pitch for Plus does not belong under their composer.
     rememberedPlan("trial");
     render(<AskHearth fill />);
     await attachControl();
@@ -211,7 +214,7 @@ describe("askTier tells a trial member apart from a free one", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByText(
-        "3 free questions a day. Plus gives you 15 and photo answers."
+        "3 free questions a day. Plus gives you more, plus photo answers."
       )
     ).not.toBeInTheDocument();
     // A trial member keeps photos: the picker, not the Plus-gated button.

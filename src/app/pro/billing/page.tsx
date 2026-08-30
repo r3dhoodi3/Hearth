@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getCurrentContractor } from "@/lib/contractor";
 import { createClient } from "@/lib/supabase/server";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
@@ -6,9 +7,6 @@ import {
   labelFor,
   JOB_CATEGORIES,
   PRO_DEPOSIT_BOOST_PTS,
-  LEAD_TIER_FEES,
-  MAJOR_INTRO_FEE,
-  isMajorCategory,
 } from "@/lib/constants";
 import {
   GHOST_PROTECTION_GUARANTEE,
@@ -19,6 +17,7 @@ import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 import DepositForm from "./DepositForm";
 import FadingBanner from "@/components/FadingBanner";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
+import ProTrialNudge from "@/components/pro/ProTrialNudge";
 
 function dollars(cents: number | string | null) {
   const v = Number(cents ?? 0);
@@ -47,6 +46,9 @@ const TX_LABEL: Record<string, string> = {
   membership_credit_reversal: "Membership credit reversed",
   referral_reward: "Referral credit",
   chargeback_reversal: "Deposit reversed after a chargeback",
+  // The one-time thank-you for sending product feedback (migration 0144). Not
+  // a rating and not a review: see src/lib/proFeedback.ts.
+  feedback_credit: "Feedback thank-you credit",
 };
 
 // Never show a raw transaction type like "apply_fee": mapped label first,
@@ -78,7 +80,7 @@ export default async function ProBillingPage(props: {
   // five round trips stacked in front of first byte; concurrently it is one.
   // The only genuinely dependent read (wallet transactions, which needs the
   // wallet id) stays behind in its own wave below.
-  const [proMember, proSub, { data: wallet }, { data: tiers }, { data: allApps }] =
+  const [proMember, proSub, { data: wallet }, { data: tiers }] =
     await Promise.all([
       // Pro members earn extra points on every deposit bonus (display only
       // here; the webhook applies the real boost when the payment lands).
@@ -100,12 +102,6 @@ export default async function ProBillingPage(props: {
         .from("deposit_tiers")
         .select("min_cents, max_cents, bonus_pct")
         .order("min_cents", { ascending: true }),
-      // Whether this pro still has their first big-ticket lead intro price
-      // ($49.99, migration 0113) ahead of them: no paid application on a
-      // major-tier lead yet. Mirrors the DB's own check; the intro line below
-      // only shows while it is still true, so the page never advertises a
-      // discount this pro can no longer get.
-      (supabase as any).rpc("my_applications"),
     ]);
 
   const trialEligible = !proMember && !proSub;
@@ -121,10 +117,6 @@ export default async function ProBillingPage(props: {
 
   const cash = Number((wallet as any)?.cash_balance_cents ?? 0);
   const bonus = Number((wallet as any)?.bonus_balance_cents ?? 0);
-
-  const hasPaidMajor = ((allApps ?? []) as any[]).some(
-    (a) => Number(a.fee_cents ?? 0) > 0 && isMajorCategory(a.category)
-  );
 
   let txns: any[] = [];
   if ((wallet as any)?.id) {
@@ -157,57 +149,41 @@ export default async function ProBillingPage(props: {
 
   return (
     <div className="space-y-8">
+      {/* First visit to billing, then every tenth after it: a pro standing at
+          the wallet is the one moment the trial is actually relevant. Renders
+          nothing at all for a member, or for a pro who already used the trial
+          (trialEligible is the same "no pro-side subscriptions row at all"
+          signal the upgrade card below uses, since that row outlives a
+          cancellation). The visit counting is per user in localStorage. */}
+      <ProTrialNudge
+        eligible={trialEligible}
+        userId={contractor.user_id ?? null}
+      />
+
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Billing</h1>
+        {/* No per-trade price list here any more. A wall of "Light jobs $X /
+            Skilled trades $Y / Big-ticket $Z" was the first thing a pro saw on
+            the page they open to add money, and it read as a bill before they
+            had won anything. The numbers still exist where they matter: the
+            exact fee for the job in hand is printed on the apply button and
+            again on its confirm step (src/app/pro/ApplyJobButton.tsx: "Apply .
+            $X", "Applying charges the $X lead fee", "Confirm and pay $X"), so
+            nobody is ever charged an amount they were not shown, and the full
+            tier list lives on the help page linked below. */}
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          You pay per lead you apply to. Ghost protection and the
-          first-application guarantee can return some of that as wallet
-          credit; see Activity below for how each one works.
+          You pay per lead you apply to, and you see the exact price before you
+          apply. Ghost protection and the first-application guarantee can
+          return some of that as wallet credit; see Activity below for how each
+          one works.{" "}
+          <Link
+            href="/pro/help#lead-pricing"
+            className="font-medium text-hearth-700 underline dark:text-hearth-300"
+          >
+            How lead pricing works
+          </Link>
         </p>
-        <table className="mt-3 w-full max-w-md text-sm">
-          <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-            <tr>
-              <td className="py-1.5 pr-3 font-medium text-stone-700 dark:text-stone-300">
-                Light jobs
-              </td>
-              <td className="py-1.5 pr-3 font-semibold text-stone-900 dark:text-stone-100">
-                ${LEAD_TIER_FEES.light}
-              </td>
-              <td className="py-1.5 text-xs text-stone-500 dark:text-stone-400">
-                cleaning, landscaping, painting, handyman
-              </td>
-            </tr>
-            <tr>
-              <td className="py-1.5 pr-3 font-medium text-stone-700 dark:text-stone-300">
-                Skilled trades
-              </td>
-              <td className="py-1.5 pr-3 font-semibold text-stone-900 dark:text-stone-100">
-                ${LEAD_TIER_FEES.skilled}
-              </td>
-              <td className="py-1.5 text-xs text-stone-500 dark:text-stone-400">
-                plumbing, electrical, HVAC, windows
-              </td>
-            </tr>
-            <tr>
-              <td className="py-1.5 pr-3 font-medium text-stone-700 dark:text-stone-300">
-                Big-ticket
-              </td>
-              <td className="py-1.5 pr-3 font-semibold text-stone-900 dark:text-stone-100">
-                ${LEAD_TIER_FEES.major}
-              </td>
-              <td className="py-1.5 text-xs text-stone-500 dark:text-stone-400">
-                roofing, structural, remodeling
-              </td>
-            </tr>
-          </tbody>
-        </table>
         <ul className="mt-2 space-y-1 text-xs text-stone-500 dark:text-stone-400">
-          {!hasPaidMajor && (
-            <li>
-              Your first big-ticket lead is ${MAJOR_INTRO_FEE}, after that
-              big-ticket leads are the normal ${LEAD_TIER_FEES.major}.
-            </li>
-          )}
           <li>
             Jobs that sit unclaimed get cheaper: {agingTiers[0].off}% off
             after {agingTiers[0].days} days, {agingTiers[1].off}% off after{" "}

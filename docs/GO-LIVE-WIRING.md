@@ -239,6 +239,43 @@ refusing its own customers rather than an individual abusing their allowance:
 
 Nothing pages a human on these yet. Saving the search is the interim answer.
 
+## 10. Phone notifications (Web Push)
+
+This is what makes a phone buzz when Hearth is CLOSED. It costs nothing per message: the
+browser's own push service (Apple, Google, Mozilla) does the delivery, so it is free for
+homeowners and pros alike and is not a Hearth Plus perk. Code is in `src/lib/push.ts`,
+`public/sw.js` and `src/app/api/push/subscribe`, dormant until the keys exist.
+
+1. Run the database bundle `supabase/PASTE-ME-live-2026-08-29-push.sql` (migration 0143,
+   one new table `public.push_subscriptions`). Without it the "Turn on notifications"
+   button reports that the server is not set up yet.
+2. Generate a key pair once, from the repo:
+   `npx web-push generate-vapid-keys`
+3. In Vercel, set all three (Production and Preview):
+   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` - the public half. Public by design: the browser needs
+     it to subscribe, so it ships in the client bundle.
+   - `VAPID_PRIVATE_KEY` - the secret half. Server only. Never prefix it with `NEXT_PUBLIC_`.
+   - `VAPID_SUBJECT` - a contact address for the push services, as `mailto:you@example.com`.
+   Missing any one of them and push stays dormant with a single `sendPush:` warning in the
+   logs. Nothing else breaks.
+4. Verify on an iPhone. THIS IS THE STEP PEOPLE GET WRONG: iOS delivers Web Push only to a
+   site that has been added to the Home Screen (iOS 16.4+). In a Safari tab there is no
+   permission to grant, and the app says so instead of showing a dead button. So: open
+   Hearth in Safari, Share -> Add to Home Screen, open it from the new icon, then
+   Account -> Notifications -> Turn on notifications and allow the prompt. On the pro side
+   the same control is on My Business. Android Chrome works from a plain tab.
+5. Then have a second account send a message and confirm the notification arrives with the
+   app fully closed (swiped away, not just backgrounded).
+
+Rotating the keys invalidates every stored subscription. The app self-heals: anyone who
+already granted permission is re-subscribed on their next visit
+(`src/components/PushRegistrar.tsx`), and dead rows are deleted the first time a send comes
+back 404/410.
+
+`OUTBOUND_DISABLED` (section 9) stops push as well as email and SMS. That is deliberate: the
+lever exists for the moment a cron is looping, and a looping cron buzzing every phone we have
+is exactly the blast radius it is there to contain.
+
 ## Not covered here
 
 Legal blockers (DMCA agent registration, TODO(legal) placeholders) are tracked separately

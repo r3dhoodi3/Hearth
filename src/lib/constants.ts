@@ -566,12 +566,12 @@ export const FREE_ASK_PER_DAY = 3;
 // ASK_DAILY_TRIAL in src/lib/aiUsage.ts for exactly the reason above, and
 // src/lib/constants.test.ts fails if the two drift.
 //
-// Deliberately under PLUS_ASK_PER_DAY. A trial is there to show what Plus
-// feels like, not to hand the full ceiling to an account that costs nothing to
-// create and can be created again from a fresh email. Eight is more than
-// double the free allowance and more than anybody asks in one evening, so a
-// homeowner genuinely trying Plus never runs into it.
-export const TRIAL_ASK_PER_DAY = 8;
+// The SAME as PLUS_ASK_PER_DAY, written as an alias so the two cannot drift.
+// The trial rides on the weekly plan, and weekly, monthly, and annual include
+// exactly the same things: a smaller trial ceiling made the weekly card look
+// like a lesser plan. The trade-off is spelled out on ASK_DAILY_TRIAL in
+// src/lib/aiUsage.ts.
+export const TRIAL_ASK_PER_DAY = PLUS_ASK_PER_DAY;
 
 // Pay-per-extra-home add-on (Plus members only). The ONE place the add-on
 // pricing lives, so the /plus "More homes" UI, the setExtraHomesAction server
@@ -914,3 +914,9 @@ export function seasonForMonth(month: number): keyof typeof SEASONAL_TASKS {
   if (month <= 7) return "summer";
   return "fall";
 }
+
+// Where "Find jobs" / "Find clients" send a pro: the open-jobs board. The pro
+// side split into a Home tab and a Leads tab on 2026-08-29, so this is now
+// /pro/leads and /pro is the Home screen. One constant so that move was a
+// one-line change instead of a hunt through every call site.
+export const PRO_LEADS_HREF = "/pro/leads";

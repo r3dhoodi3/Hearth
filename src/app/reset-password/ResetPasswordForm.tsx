@@ -5,14 +5,16 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
+import { passwordRecoveryRedirectTo } from "@/lib/passwordRecovery";
 import { clearPasswordRecoveryAction } from "./actions";
 
 // Password reset, styled to match src/app/signin/page.tsx.
 //
 // step="request": collect an email and call resetPasswordForEmail. The
-// emailed link points at /auth/callback?next=/reset-password?step=update
-// (next= is URL-encoded so its own "?" survives), and the callback exchanges
-// the code for a recovery session before redirecting here.
+// emailed link points at
+// /auth/callback?type=recovery&next=/reset-password?step=update (next= is
+// URL-encoded so its own "?" survives), and the callback exchanges the code for
+// a recovery session, sets the short-lived recovery cookie, and redirects here.
 //
 // step="update": the user is back with that recovery session, so
 // supabase.auth.updateUser({ password }) sets the new password. If the link
@@ -36,9 +38,11 @@ export default function ResetPasswordForm({
     setBusy(true);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-        "/reset-password?step=update"
-      )}`,
+      // Shared with src/lib/passwordSetup.ts so the two reset entry points
+      // cannot drift; it also stamps type=recovery, which is the signal
+      // /auth/callback needs before it will let the "set a new password" step
+      // render. See the note in src/lib/passwordRecovery.ts.
+      redirectTo: passwordRecoveryRedirectTo(window.location.origin),
     });
 
     setBusy(false);

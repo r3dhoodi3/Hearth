@@ -112,12 +112,21 @@ vi.mock("@/lib/risk/signals", () => ({ recordSignal: vi.fn(async () => {}) }));
 vi.mock("@/app/(auth)/recordTermsAcceptance", () => ({
   recordTermsAcceptance: vi.fn(),
 }));
+// Spied directly rather than let the real trackServerEvent run against the
+// throwing createAdminClient mock above: that mock exists to prove nothing
+// admin-client-shaped runs after a FAILED write, and trackServerEvent's own
+// internal try/catch would just swallow that throw silently either way,
+// leaving no way to assert signup_pro / onboarding_done actually fired.
+vi.mock("@/lib/trackServer", () => ({ trackServerEvent: vi.fn() }));
 
-import { saveCompanyAction } from "./actions";
+import { saveCompanyAction, verifyLicenseNowAction } from "./actions";
 import { setFlash } from "@/lib/flash";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { trackServerEvent } from "@/lib/trackServer";
+import { lookupCslbLicense } from "@/lib/cslb";
+import { licenseNameMatches } from "@/lib/licenseMatch";
 
 function fd(fields: Record<string, string | string[]>): FormData {
   const f = new FormData();
@@ -141,6 +150,7 @@ beforeEach(() => {
   vi.mocked(revalidatePath).mockClear();
   vi.mocked(redirect).mockClear();
   vi.mocked(createAdminClient).mockClear();
+  vi.mocked(trackServerEvent).mockClear();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -323,5 +333,230 @@ describe("saveCompanyAction: validation floors", () => {
     expect(redirect).not.toHaveBeenCalled();
     expect(revalidatePath).toHaveBeenCalledWith("/pro/profile");
     expect(lastUpdate).toBeNull();
+  });
+});
+
+// D8 / migration 0141. owner_name is the newest column on contractors, so it
+// is the one a live database is most likely missing - either outright, or as a
+// column-level grant 0085's allowlist could not know about. It must save when
+// it can, degrade quietly when it cannot, and never be the reason a company
+// fails to be created.
+describe("saveCompanyAction: owner_name", () => {
+  const NO_GRANT = {
+    code: "42501",
+    message: "permission denied for column owner_name of relation contractors",
+  };
+  const MISSING_COLUMN = {
+    code: "PGRST204",
+    message:
+      "Could not find the 'owner_name' column of 'contractors' in the schema cache",
+  };
+  // A city answer is required to get past the launch gate and reach the
+  // insert at all; without one the action lands on the waitlist instead.
+  const inLaunchArea = {
+    contact_phone: "7145550100",
+    service_state: "CA",
+    service_cities_present: "1",
+    service_cities: ["Irvine"],
+  };
+
+  // An insert that SUCCEEDS runs the admin-client work after it (the pending
+  // license status, the side stamp), and this file's createAdminClient mock
+  // deliberately throws so the failure-path tests can prove nothing downstream
+  // ran. These two tests want the opposite - a successful write - so they
+  // swallow that marker and assert on the row that was actually sent.
+  async function saveExpectingSuccess(form: FormData) {
+    await expect(saveCompanyAction(form)).rejects.toThrow(
+      /createAdminClient must not be called|REDIRECT/
+    );
+  }
+
+  it("writes a trimmed owner name on first-time setup", async () => {
+    await saveExpectingSuccess(
+      fd({ name: "Ivy Plumbing", owner_name: "  Alex Rivera  ", ...inLaunchArea })
+    );
+    expect(lastInsert?.owner_name).toBe("Alex Rivera");
+  });
+
+  it("never touches a stored owner name when the form did not carry the field", async () => {
+    existingContractor = {
+      id: "contractor-1",
+      name: "Acme Plumbing",
+      owner_name: "Alex Rivera",
+      license_number: null,
+      license_verified_status: "unverified",
+      service_state: null,
+    };
+    await saveCompanyAction(fd({ name: "Acme Plumbing", contact_phone: "7145550100" }));
+    // Absent, not null: a lean post must not blank what is stored.
+    expect(lastUpdate).not.toHaveProperty("owner_name");
+  });
+
+  it("refuses a one-character owner name, the same floor the column's CHECK has", async () => {
+    await expect(
+      saveCompanyAction(
+        fd({ name: "Ivy Plumbing", owner_name: "A", ...inLaunchArea })
+      )
+    ).resolves.toBeUndefined();
+    expect(setFlash).toHaveBeenCalledWith("Enter the owner's name.", "error");
+    expect(lastInsert).toBeNull();
+  });
+
+  it("creates the company anyway when the live database has no owner_name column", async () => {
+    // The first insert fails with the missing-column fingerprint; the retry
+    // drops owner_name and succeeds. Signup must never be blocked on a
+    // migration nobody has pasted yet. The console.error the retry logs is
+    // where the error is cleared, so the second attempt goes through.
+    insertError = MISSING_COLUMN;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {
+      insertError = null;
+    });
+
+    await saveExpectingSuccess(
+      fd({ name: "Ivy Plumbing", owner_name: "Alex Rivera", ...inLaunchArea })
+    );
+
+    // The row landed, without the field this database cannot hold yet.
+    expect(lastInsert).not.toBeNull();
+    expect(lastInsert).not.toHaveProperty("owner_name");
+    spy.mockRestore();
+  });
+
+  it("tells the pro when a profile save had to drop the owner name", async () => {
+    existingContractor = {
+      id: "contractor-1",
+      name: "Acme Plumbing",
+      owner_name: null,
+      license_number: null,
+      license_verified_status: "unverified",
+      service_state: null,
+    };
+    updateError = NO_GRANT;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {
+      updateError = null;
+    });
+
+    await saveCompanyAction(
+      fd({
+        name: "Acme Plumbing",
+        owner_name: "Alex Rivera",
+        contact_phone: "7145550100",
+      })
+    );
+
+    // The save DID succeed; a plain "Profile saved." would be a lie the pro
+    // only discovers on a reload.
+    expect(setFlash).toHaveBeenCalledWith(
+      "Saved. Owner name could not be stored yet.",
+      "warning"
+    );
+    spy.mockRestore();
+  });
+});
+
+// docs/ANALYTICS.md. signup_pro fires the moment the contractors row lands;
+// onboarding_done fires only once the whole wizard finishes (terms accepted,
+// CSLB attempted, preferred side stamped) - two distinct moments in the same
+// first-time-setup branch, not duplicate events for the same thing.
+describe("saveCompanyAction: funnel analytics (signup_pro / onboarding_done)", () => {
+  const inLaunchArea = {
+    contact_phone: "7145550100",
+    service_state: "CA",
+    service_cities_present: "1",
+    service_cities: ["Irvine"],
+  };
+
+  it("records signup_pro right when the contractor row lands", async () => {
+    // No user_metadata.role set, so the preferred-side stamp below still runs
+    // and hits this file's throwing createAdminClient mock - proof the row
+    // really was created (see the "owner_name" describe block's own comment
+    // on this pattern) and, more importantly here, proof signup_pro fired
+    // BEFORE that later admin-client work, not after it.
+    await expect(
+      saveCompanyAction(fd({ name: "Ivy Plumbing", ...inLaunchArea }))
+    ).rejects.toThrow(/createAdminClient must not be called|REDIRECT/);
+
+    expect(trackServerEvent).toHaveBeenCalledWith(sessionUser.id, "signup_pro");
+  });
+
+  it("records onboarding_done once the wizard actually finishes", async () => {
+    // Pre-stamped, so the preferred-side block is skipped and the action can
+    // run all the way to its real redirect("/pro") instead of the mock's
+    // throwing admin client.
+    sessionUser.user_metadata.role = "contractor";
+    try {
+      await expect(
+        saveCompanyAction(fd({ name: "Ivy Plumbing", ...inLaunchArea }))
+      ).rejects.toThrow(/REDIRECT/);
+
+      expect(trackServerEvent).toHaveBeenCalledWith(
+        sessionUser.id,
+        "onboarding_done"
+      );
+    } finally {
+      sessionUser.user_metadata = {};
+    }
+  });
+});
+
+// docs/ANALYTICS.md. license_verified fires only on the write that actually
+// lands 'verified' - verifyLicenseNowAction ("Verify now" on /pro/profile) is
+// the simplest of verifyContractorLicense's three call sites to drive directly,
+// since it needs no contractors insert/update machinery of its own when the
+// license number on the form matches what's already on file.
+describe("verifyLicenseNowAction: license_verified analytics", () => {
+  it("records license_verified for the account, on a real CSLB pass", async () => {
+    existingContractor = {
+      id: "contractor-1",
+      user_id: "user-1",
+      name: "Ivy Plumbing",
+      license_number: "270663",
+      // Not 'verified': a verified number is locked and this action would
+      // never reach the CSLB call at all.
+      license_verified_status: "pending",
+      license_verified_at: null,
+      license_verify_detail: null,
+      service_state: "CA",
+    };
+    vi.mocked(lookupCslbLicense).mockResolvedValue({
+      outcome: "active",
+      businessName: "Ivy Plumbing",
+      statusText: "Active",
+      classifications: [],
+      expires: null,
+    } as any);
+    vi.mocked(licenseNameMatches).mockReturnValue(true);
+    // Two clean admin-client calls, queued in the exact order this path
+    // makes them: accountFullName's read (best-effort, for the 0125 name
+    // candidates), then the license write itself. Everything before and
+    // after them in this file still goes through the throwing base mock, so
+    // this only lets through the two calls being exercised here.
+    vi.mocked(createAdminClient)
+      .mockImplementationOnce(
+        () =>
+          ({
+            from: () => ({
+              select: () => ({
+                eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+              }),
+            }),
+          }) as any
+      )
+      .mockImplementationOnce(
+        () =>
+          ({
+            from: () => ({ update: () => ({ eq: async () => ({ error: null }) }) }),
+          }) as any
+      );
+
+    // Same license number as stored, so licenseChanged is false and this
+    // never touches the (untested-here) license-correction write path.
+    await verifyLicenseNowAction(fd({ license_number: "270663" }));
+
+    expect(trackServerEvent).toHaveBeenCalledWith("user-1", "license_verified");
+    expect(setFlash).toHaveBeenCalledWith(
+      "License verified against the CSLB database.",
+      "success"
+    );
   });
 });

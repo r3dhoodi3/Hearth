@@ -490,4 +490,32 @@ describe("postJobAction success path", () => {
     expect(Number.isFinite(posted)).toBe(true);
     expect(posted).toBeGreaterThanOrEqual(before);
   });
+
+  // trackServerEvent used to be a private copy of this function in this file;
+  // it now comes from the shared src/lib/trackServer.ts (see that module's own
+  // tests for the retry/degrade behavior). This pins the one thing specific to
+  // THIS call site: the event name and a payload with no free text - not the
+  // homeowner's message, not their name, just the category enum.
+  it("records post_job with the category only, no free text", async () => {
+    const sink = {
+      rows: [] as Record<string, unknown>[],
+      returning: { id: "lead-1", created_at: "2026-08-28T12:00:00.000Z" },
+    };
+    dbTables = () => tableStub([null, [{ id: "lead-1" }]], sink);
+    const events = { rows: [] as Record<string, unknown>[], returning: null };
+    adminTables = (table: string) => {
+      if (table === "app_events") return tableStub([[]], events);
+      return tableStub([[]]);
+    };
+    vi.mocked(alertProsForNewLead).mockImplementation(
+      async () => new Set<string>()
+    );
+
+    await runAndCatchRedirect(fd(REAL_SUBMIT));
+
+    expect(events.rows).toHaveLength(1);
+    const tracked = events.rows[0];
+    expect(tracked.event).toBe("post_job");
+    expect(tracked.props).toEqual({ category: "plumbing" });
+  });
 });

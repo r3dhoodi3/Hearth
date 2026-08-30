@@ -57,12 +57,31 @@ function Check({ className = "h-4 w-4" }: { className?: string }) {
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// Title/description held once so metadata.title, openGraph, and twitter
+// can't drift from each other; the OG image at ./opengraph-image.tsx keeps
+// its own literal copy of the title (see that file's comment for why).
+const TITLE = "Hearth for Pros: real local leads, honest pricing";
+const DESCRIPTION =
+  "Browse local jobs free and pay only when you apply, with the price on every card. No subscription required, no ghost leads, and free license-verified badges for California pros.";
+const CANONICAL = `${SITE_URL}/pros`;
+
 export const metadata: Metadata = {
-  title: "Hearth for Pros: real local leads, honest pricing",
-  description:
-    "Browse local jobs free and pay only when you apply, with the price on every card. No subscription required, no ghost leads, and free license-verified badges for California pros.",
+  title: TITLE,
+  description: DESCRIPTION,
   alternates: {
-    canonical: `${SITE_URL}/pros`,
+    canonical: CANONICAL,
+  },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: CANONICAL,
+    siteName: "Hearth",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
   },
 };
 

@@ -33,6 +33,7 @@ import { PROPERTY_TYPES, PLUS_INCLUDED_HOMES } from "@/lib/constants";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import { recordSignal } from "@/lib/risk/signals";
+import { trackServerEvent } from "@/lib/trackServer";
 import {
   boundedNumber,
   boundedInt,
@@ -933,6 +934,16 @@ export async function claimPropertyAction(
     console.error("Could not claim property:", error);
     return err("We couldn't claim your home just now. Please try again.");
   }
+
+  // Funnel analytics (docs/ANALYTICS.md): ids and enums only, never the
+  // address itself. match_source is the same signal deriveOwnershipStatus
+  // above reads: parcelFactsMatchClaim is true only when the county assessor
+  // has a record for this exact street, so "real" here means a records-backed
+  // claim, not a name-verified one - a claim on an unmatched street is still
+  // "manual" even when the ownership check later says verified.
+  await trackServerEvent(user.id, "home_claimed", {
+    match_source: parcelFactsMatchClaim ? "real" : "manual",
+  });
 
   // Homeowner terms, recorded at the moment a home is actually claimed. The
   // signup pages and /auth/callback already record this for anyone who came

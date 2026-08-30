@@ -287,15 +287,18 @@ export default function ProfileMenu({
             )}
             <div>
               {linksLabel && (
-                <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                <p className="px-4 pb-0.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500 max-sm:text-xs dark:text-stone-400">
                   {linksLabel}
                 </p>
               )}
               {links.map((l) => {
+                // Phone only: every row was 36px tall at 14px. This menu is
+                // the way to profile, household, notifications and help, so
+                // the rows get the 44px floor and 16px labels.
                 const rowClass =
                   l.accent === "red"
-                    ? "mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/15"
-                    : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 dark:text-stone-300 dark:hover:bg-stone-600";
+                    ? "mx-1 flex items-center rounded-md px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 max-sm:min-h-11 max-sm:text-base dark:text-red-400 dark:hover:bg-red-500/15"
+                    : "mx-1 flex items-center rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-bark-50 max-sm:min-h-11 max-sm:text-base dark:text-stone-300 dark:hover:bg-stone-600";
                 if (l.action) {
                   return (
                     <form key={l.href} action={l.action}>
@@ -339,7 +342,8 @@ export default function ProfileMenu({
             >
               <button
                 type="submit"
-                className="block w-full px-4 py-2 text-left text-sm font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-stone-400 dark:hover:bg-red-500/15 dark:hover:text-red-400"
+                // Phone only: 36px before, same floor as the rows above.
+                className="block w-full px-4 py-2 text-left text-sm font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600 max-sm:min-h-11 max-sm:text-base dark:text-stone-400 dark:hover:bg-red-500/15 dark:hover:text-red-400"
               >
                 Log out
               </button>

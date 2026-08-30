@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // "server-only" and throws the moment it is imported outside a server
 // component. Mocking that module out means the real lookup logic below can be
 // exercised for real against a fake table, the same trick aiUsage.test.ts uses.
+// parcel.ts also states the "server-only" guard directly now (it reads
+// RENTCAST_API_KEY), and that module does not resolve outside a Next build.
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => currentAdmin,
 }));

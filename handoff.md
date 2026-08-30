@@ -274,3 +274,25 @@ What they caught and what changed:
 
 Probe scripts: scratchpad/hdr/probe.js (header pair intersections per width), budget.js.
 Not done: 640-1023 header shell decision; RISK_ENFORCE is still off (log-only), so the decision cache does nothing until it is turned on.
+
+## Wave 2026-08-29/30 (overnight)
+
+### Goals
+Everything Landen asked for on the evening of 2026-08-29: iMessage-style phone composer, Ask Hearth only in Messages, plan parity, checkout bug, pro Home/Leads split with retention hooks and paywall parity, feedback credit, owner name, push notifications, rating prompt, eyesight pass, thank-you pages, share images, breadcrumbs, analytics, and the security checklist.
+
+### Current state
+All of it is in this commit, gate green (tsc 0, eslint 0, vitest 178 files / 2463, build 0), two verifiers (V1 security: blockers fixed; V2 regression: PUSH yes). Not active on live until the owner pastes the SQL bundle and sets the VAPID env.
+
+### Files touched
+About 320 paths (183 modified, about 110 new): src/components (AskHearth, LeadChat, PhoneChatFrame, NotificationBell, Push*, Breadcrumbs, RememberedDetails, ReviewPrompt, ProNudge, ProChip, ProTrialNudge), src/lib (useVisualViewport, askLock, csrf, sessionActivity, logSafe, uploadGuard, envGuard, push*, trackServer, checkoutReservation, checkoutIdempotency, promoClaimRef, proHome*, proFeedback*, nativeReview, reviewPrompt), pro pages (page = Home, leads/, feedback/, plus, billing, chats, onboarding, profile), homeowner pages (plus, dashboard, chats, ask, account/*, contact/thanks, guides OG), api routes (push/subscribe, pro-tools, pro-ask, ask, stripe webhook, pro-compliance), migrations 0141-0146 + PASTE-ME files + PASTE-ME-ALL-PENDING-2026-08-30.sql, docs (SECURITY-OPS, ENVIRONMENTS, BACKUPS-AND-RESTORE, ANALYTICS, GO-LIVE-WIRING), public/sw.js.
+
+### What changed
+See STATUS.md "Wave 2026-08-29/30" for the product list. Review fixes applied by the lead after the verifiers: env guard test-Stripe warn-only (REQUIRE_LIVE_STRIPE=1 makes it fatal), idle sign-out scope local, free drafts fail closed without 0145, license unlock via admin client (0069 allowlist), owner_name in CONTRACTOR_COLUMNS, push upsert via admin client (shared device takeover), webhook rollback also releases session-scoped reservations, owner-name hint says it is public, feedback credit capped at $5 inside SQL.
+
+### What failed
+Nothing in the gate. Not verifiable without a device or live keys: real iOS keyboard behaviour, real push delivery, Twilio SMS, realtime filters at volume, 0141-0146 on a real database. Known deviations: /search still has inline Ask panes; LeadsRealtime no longer live-refreshes on competing applications (poll covers it); pro texts go to users.phone.
+
+### Next steps
+1. Owner: SQL bundle, VAPID env + redeploy, Supabase Auth settings, RLS audit results, plan/backups check, /api/health firewall rule, environments split, Apple key rotation.
+2. Live checks (5 agents), 10-persona click-everything wave, red team incl. Ask Hearth and account break-ins, fix loop, then the CEO-level product pass.
+3. Hardening queue: server upload route for the 7 direct-to-storage uploads; convert 3 own-row admin reads; pro-logos bucket privacy; lead_quotes/invoices realtime publication; breadcrumbs on pro/profile, pro/billing, pro/crm/[id].

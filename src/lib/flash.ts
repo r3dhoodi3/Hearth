@@ -26,13 +26,35 @@ export interface Flash {
   message: string;
   type: FlashType;
   id: string;
+  // Optional per-flash override, in milliseconds, for how long the toast stays
+  // up. Omit for the per-type default in ToastProvider. Added so a single
+  // wordy message (the maintenance-plan confirmation) can get extra read time
+  // without slowing down every success toast in the app. FlashToast validates
+  // it and caps it, because the cookie is user-writable.
+  duration?: number;
 }
+
+// Hard ceiling for a cookie-supplied duration. A hostile cookie must not be
+// able to pin a toast on screen; 15s is well past any real message.
+export const FLASH_MAX_DURATION_MS = 15000;
 
 // Call from inside a Server Action, before redirect()/revalidatePath().
 // Both helpers are async since Next 15, where cookies() returns a Promise.
-export async function setFlash(message: string, type: FlashType = "success") {
+export async function setFlash(
+  message: string,
+  type: FlashType = "success",
+  opts?: { duration?: number }
+) {
   const id = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-  (await cookies()).set(FLASH_COOKIE, JSON.stringify({ message, type, id }), {
+  const payload: Flash = { message, type, id };
+  if (
+    typeof opts?.duration === "number" &&
+    Number.isFinite(opts.duration) &&
+    opts.duration >= 0
+  ) {
+    payload.duration = Math.min(opts.duration, FLASH_MAX_DURATION_MS);
+  }
+  (await cookies()).set(FLASH_COOKIE, JSON.stringify(payload), {
     httpOnly: false,
     sameSite: "lax",
     path: "/",

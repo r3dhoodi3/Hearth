@@ -23,6 +23,30 @@
 
 export const PW_RECOVERY_COOKIE = "hearth_pwrecovery";
 
+// The redirectTo every resetPasswordForEmail() call in the app hands Supabase.
+// One function so the two callers (the forgot-password form and the "set a
+// password" link for Google-only accounts) cannot drift apart.
+//
+// WHY type=recovery IS WRITTEN HERE. /auth/callback sets the recovery cookie on
+// exactly one signal: ?type=recovery on the request that lands back on our
+// site. Whether Supabase itself puts that parameter on the redirect depends on
+// the auth flow and the email template, and when it does not arrive the reset
+// silently falls back to step one - the user clicks the emailed link and is
+// asked for their email again, which is the "the forgot-password link doesn't
+// even work" report. Putting it on the URL we hand over means it is there by
+// construction.
+//
+// This does NOT widen anything. `type` was already read straight off the URL,
+// so anyone who could craft a callback URL could already append it; and the
+// cookie is only ever set inside the `if (code)` branch, AFTER
+// exchangeCodeForSession has succeeded. A made-up ?type=recovery with no valid
+// code still gets nothing. See the long note in src/app/auth/callback/route.ts.
+export function passwordRecoveryRedirectTo(origin: string): string {
+  return `${origin}/auth/callback?type=recovery&next=${encodeURIComponent(
+    "/reset-password?step=update"
+  )}`;
+}
+
 // 15 minutes. The window between clicking the emailed link and typing a new
 // password, with room for a slow reader.
 export const PW_RECOVERY_MAX_AGE_SECONDS = 15 * 60;

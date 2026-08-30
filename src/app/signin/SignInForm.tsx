@@ -25,6 +25,7 @@ function currentNextPath(): string | null {
 export default function SignInForm({
   next,
   authFailed,
+  sessionExpired,
 }: {
   next: string | null;
   // Set when /auth/callback couldn't exchange the link's code for a session
@@ -38,6 +39,11 @@ export default function SignInForm({
   // below has to read as true in both cases, so it points at signing in first
   // rather than shouting "expired," which was wrong (and alarming) for case 2.
   authFailed?: boolean;
+  // Set when the middleware ended a session that had gone 30 days unused
+  // (?expired=1, see src/lib/sessionActivity.ts). Nothing went wrong and
+  // nothing was lost, so the copy says exactly that instead of reading like an
+  // error.
+  sessionExpired?: boolean;
 }) {
   const supabase = createClient();
   // Same ?next=, from the server-provided prop instead of window so it's
@@ -85,6 +91,16 @@ export default function SignInForm({
           </p>
         </div>
 
+        {sessionExpired && (
+          <p
+            role="status"
+            className="mb-4 rounded-lg border border-stone-200 bg-stone-50 p-3 text-center text-sm text-stone-700 dark:border-white/10 dark:bg-white/5 dark:text-stone-300"
+          >
+            You were signed out because this device had not used Hearth in a
+            while. Sign in again to pick up where you left off.
+          </p>
+        )}
+
         {authFailed && (
           <p
             role="status"
@@ -127,10 +143,12 @@ export default function SignInForm({
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-            <p className="mt-1.5 text-right text-xs">
+            {/* Phone only: 16px tall, right-aligned. This is the recovery
+                path for someone who cannot read what they typed. */}
+            <p className="mt-1.5 text-right text-xs max-sm:text-sm">
               <Link
                 href="/reset-password"
-                className="text-bark-700 hover:underline dark:text-stone-300"
+                className="text-bark-700 hover:underline max-sm:-mr-2 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-2 dark:text-stone-300"
               >
                 Forgot password?
               </Link>
@@ -152,7 +170,7 @@ export default function SignInForm({
 
         <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
-          <span className="text-xs text-stone-500 dark:text-stone-400">or</span>
+          <span className="text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">or</span>
           <div className="h-px flex-1 bg-stone-200 dark:bg-white/10" />
         </div>
 

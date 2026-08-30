@@ -10,6 +10,9 @@ import {
 
 const complete: ProOnboardingValues = {
   name: "Acme Home Services",
+  // Migration 0141: the person behind the business, asked for on step 1 next
+  // to the company name.
+  ownerName: "Alex Rivera",
   phone: "(555) 123-4567",
   cities: ["Huntington Beach"],
   categories: ["plumbing"],
@@ -40,6 +43,21 @@ describe("validateProOnboardingStep", () => {
   it("blocks step 1 on a blank or whitespace-only company name", () => {
     expect(validateProOnboardingStep(0, values({ name: "" }))).toMatch(/company name/i);
     expect(validateProOnboardingStep(0, values({ name: "   " }))).toMatch(/company name/i);
+  });
+
+  it("blocks step 1 on a missing or too-short owner name", () => {
+    expect(validateProOnboardingStep(0, values({ ownerName: "" }))).toMatch(
+      /owner/i
+    );
+    expect(validateProOnboardingStep(0, values({ ownerName: "  " }))).toMatch(
+      /owner/i
+    );
+    // One character is a typo, not a name; the column's own CHECK (0141)
+    // enforces the same floor of 2.
+    expect(validateProOnboardingStep(0, values({ ownerName: "A" }))).toMatch(
+      /owner/i
+    );
+    expect(validateProOnboardingStep(0, values({ ownerName: "Jo" }))).toBeNull();
   });
 
   it("blocks step 1 on a missing or partial phone number", () => {

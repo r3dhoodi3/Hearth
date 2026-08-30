@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isMissingSchemaError } from "@/lib/dbErrors";
+import { logSafe } from "@/lib/logSafe";
 import type { Json } from "@/lib/database.types";
 
 export const runtime = "nodejs";
@@ -29,6 +30,8 @@ const CLIENT_ALLOWED_EVENTS = new Set([
   "post_job_from_chat", // AskHearth.tsx
   "hero_demo_play", // HeroDemoPlayer.tsx
   "signup_homeowner", // homeowner-signup/page.tsx
+  "push_enabled", // PushSettingsCard.tsx, both sides (props.side tells them apart)
+  "message_replied", // LeadChat.tsx, pro side only (props.side is always "pro")
 ]);
 
 // Sink for src/lib/analytics.ts's track(). Inserts into app_events with the
@@ -116,7 +119,13 @@ export async function POST(req: NextRequest) {
       // app_events migration (0091) hasn't run on this DB yet: log instead
       // of dropping the event silently, same graceful-degrade pattern used
       // elsewhere for not-yet-migrated tables.
-      console.log("[track]", event, propsJson ?? {});
+      //
+      // logSafe, not console.log: `props` is whatever the caller put in the
+      // beacon body. The event NAME is allowlisted above, the props are not, so
+      // this is the one line in the route that could copy an unvetted payload
+      // into Vercel's logs. The redactor drops token/email/phone-shaped keys
+      // and truncates long strings first.
+      logSafe("[track]", event, propsJson ?? {});
     }
   } catch {
     /* ignore - never fail the client over analytics */

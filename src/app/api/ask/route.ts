@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
 import {
   getActiveProperty,
@@ -13,8 +14,6 @@ import {
   overAiGlobalHourlyLimit,
   refundAskUsage,
   ASK_DAILY_FREE,
-  ASK_DAILY_PLUS,
-  ASK_DAILY_TRIAL,
 } from "@/lib/aiUsage";
 import { readJsonBounded } from "@/lib/boundedBody";
 import { TOPIC_GUARD_HOMEOWNER, newTurnHasImage } from "@/lib/aiGuard";
@@ -36,6 +35,7 @@ import {
   encodeDone,
   ndjsonBody,
 } from "@/lib/askStream";
+import { trackServerEvent } from "@/lib/trackServer";
 
 export const runtime = "nodejs";
 
@@ -72,6 +72,13 @@ const MAX_CONTEXT_TASKS = 30;
 const MAX_CONTEXT_CHARS = 12_000;
 
 export async function POST(req: NextRequest) {
+  // CSRF, second lock. The session cookie is SameSite=Lax and this body is
+  // JSON, so a cross-site page cannot get a signed-in request here today;
+  // this refuses one outright rather than depending on those defaults.
+  // src/lib/csrf.ts only rejects on positive cross-site evidence.
+  const crossSite = sameOriginGuard(req);
+  if (crossSite) return crossSite;
+
   // Require a signed-in user before touching the paid model. Ask Hearth is an
   // authenticated feature; gating here (not just in middleware) stops anonymous
   // abuse that would run up model cost.
@@ -168,12 +175,12 @@ export async function POST(req: NextRequest) {
   // it before any of the expensive work below so a locked or throttled request
   // costs nothing.
   //
-  // The TIER, not the boolean, because the two decisions want different
-  // answers for someone on the 3-day trial. Photos are a feature, so a trial
-  // gets them (that is what a trial is for). The daily count is money, and a
-  // trial is free to start and free to start again from a fresh email, so it
-  // gets ASK_DAILY_TRIAL rather than the full paid ceiling. See PlusTier in
-  // src/lib/subscription.ts.
+  // The TIER, not the boolean, so the three cases stay tellable apart in the
+  // copy below (a trialer must not be pitched the plan they are already on).
+  // A trial gets photos AND the full paid daily ceiling: ASK_DAILY_TRIAL is an
+  // alias for ASK_DAILY_PLUS, because the trial rides on the weekly plan and
+  // weekly, monthly, and annual include exactly the same things. See PlusTier
+  // in src/lib/subscription.ts.
   const tier = await getPlusTier();
   const isPlus = tier !== "free";
 
@@ -247,10 +254,13 @@ export async function POST(req: NextRequest) {
         tier === "paid"
           ? "You have reached today's Ask Hearth limit. It resets tomorrow."
           : tier === "trialing"
-            ? // Already inside the funnel: state the number and the reset, and
-              // do not pitch them something they are currently on.
-              `That's your ${ASK_DAILY_TRIAL} questions for today on your Plus trial. They reset tomorrow, and a paid plan gives you ${ASK_DAILY_PLUS} a day.`
-            : `You've used your ${ASK_DAILY_FREE} free questions for today. Hearth Plus gives you ${ASK_DAILY_PLUS} a day and photo answers.`,
+            ? // Already inside the funnel, and on the full Plus ceiling: the
+              // trial gets exactly what a paid plan gets (ASK_DAILY_TRIAL is an
+              // alias for ASK_DAILY_PLUS), so there is nothing to upsell here.
+              // Just the reset, and no number for a limit we describe rather
+              // than count everywhere else in the product.
+              "That's your Ask Hearth questions for today on your Plus trial. They reset tomorrow."
+            : `You've used your ${ASK_DAILY_FREE} free questions for today. Hearth Plus gives you more questions a day, plus photo answers.`,
       // The message names Hearth Plus, so give the reader something to tap
       // instead of a page to go hunt for. The chat bubble renders plain text
       // (see src/components/Markdown.tsx - no link support on purpose), so
@@ -281,6 +291,13 @@ export async function POST(req: NextRequest) {
       { status: 503 }
     );
   }
+
+  // Funnel analytics (docs/ANALYTICS.md): fired only once the question has
+  // cleared every gate above and is actually about to be answered. tier, not
+  // the question text - the payload rule is ids and enums only, never free
+  // text, and a homeowner's question is exactly the kind of free text that
+  // must never land in app_events.
+  await trackServerEvent(authUser.id, "ask_asked", { tier });
 
   // Build the home context (name + systems). If any DB/auth step fails, fall
   // back to a minimal prompt rather than erroring the whole request.

@@ -382,7 +382,8 @@ export default function DocumentUpload({
             <button
               type="button"
               onClick={cancelReading}
-              className="mt-2 text-xs text-stone-500 underline-offset-2 hover:text-stone-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
+              // Phone only: 16px tall, and it is the way out of a stuck read.
+              className="mt-2 text-xs text-stone-500 underline-offset-2 hover:text-stone-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-stone-400 dark:hover:text-stone-300"
             >
               Cancel and pick a different file
             </button>
@@ -554,7 +555,8 @@ export default function DocumentUpload({
             <button
               type="button"
               onClick={cancel}
-              className="text-sm text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
+              // Phone only: ~20px tall beside a full-size save button.
+              className="text-sm text-stone-500 hover:text-stone-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400 dark:hover:text-stone-300"
             >
               Cancel
             </button>

@@ -207,7 +207,7 @@ export default function HomeownerSignUpPage(props: {
             </p>
           </div>
 
-          <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+          <p className="text-center text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
             Nothing after a couple of minutes? Check your spam folder, or
             resend it.
           </p>
@@ -237,13 +237,13 @@ export default function HomeownerSignUpPage(props: {
             </p>
           )}
 
-          <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 dark:border-white/10 dark:text-stone-400">
+          <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 max-sm:text-sm dark:border-white/10 dark:text-stone-400">
             Already confirmed, or used the wrong email?{" "}
-            <Link href={`/signin${nextQuery}`} className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href={`/signin${nextQuery}`} className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
               Sign in
             </Link>{" "}
             or{" "}
-            <Link href="/reset-password" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/reset-password" className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
               reset your password
             </Link>
             .
@@ -307,38 +307,46 @@ export default function HomeownerSignUpPage(props: {
                 type="button"
                 onClick={() => setShowPassword((s) => !s)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
-                className="focus-ring absolute inset-y-0 right-0 flex items-center px-3 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+                // Phone only: a slightly wider strip and a bigger glyph.
+                // The show/hide toggle is how you check what you typed.
+                className="focus-ring absolute inset-y-0 right-0 flex items-center px-3 text-stone-400 hover:text-stone-600 max-sm:px-3.5 dark:hover:text-stone-200"
               >
                 {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
+                  <EyeOff className="h-4 w-4 max-sm:h-5 max-sm:w-5" />
                 ) : (
-                  <Eye className="h-4 w-4" />
+                  <Eye className="h-4 w-4 max-sm:h-5 max-sm:w-5" />
                 )}
               </button>
             </div>
             <PasswordStrengthMeter password={password} />
           </div>
+          {/* Every inline link on this page carries max-sm:py-3. Padding on
+              an inline element grows the touch area to 44px without changing
+              the line box, so the sentences around it do not reflow. */}
           {/* Unchecked-by-default, gated in onSubmit (Berman fix - a
               pre-ticked or merely-decorative agreement line doesn't bind).
               Also carries the 18+ age gate. */}
-          <label className="flex items-start gap-2 text-xs text-stone-500 dark:text-stone-400">
+          {/* Phone only: 12px consent copy and a 20px box were the smallest
+              gate in signup, so the label reads at 14px and the whole row is
+              a 44px target. */}
+          <label className="flex items-start gap-2 text-xs text-stone-500 max-sm:min-h-11 max-sm:py-1 max-sm:text-sm dark:text-stone-400">
             <input
               type="checkbox"
               // 20px on a phone: the default box is ~13px, which is a miss
               // waiting to happen on the one control that has to be ticked to
               // sign up. Behind max-sm, so desktop keeps the box it had.
-              className="mt-0.5 max-sm:h-5 max-sm:w-5 max-sm:shrink-0"
+              className="mt-0.5 max-sm:h-6 max-sm:w-6 max-sm:shrink-0"
               checked={agreedToTerms}
               onChange={(e) => setAgreedToTerms(e.target.checked)}
               required
             />
             <span>
               I am at least 18 years old and I have read and agree to the{" "}
-              <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+              <Link href="/terms" className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
                 Terms
               </Link>{" "}
               and{" "}
-              <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+              <Link href="/privacy" className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
                 Privacy Policy
               </Link>
               .
@@ -375,14 +383,16 @@ export default function HomeownerSignUpPage(props: {
               restated here instead. Covers whichever buttons are above: the
               Apple one is hidden until its provider is configured, and naming
               a button that isn't on screen would read as a mistake. */}
-          <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+          {/* Phone only: for OAuth signups this paragraph IS the agreement,
+              so it reads at 14px and its links carry a 44px touch area. */}
+          <p className="text-center text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
             By continuing with Google{APPLE_SIGNIN_ENABLED ? " or Apple" : ""}{" "}
             you confirm you are 18 or older and agree to the{" "}
-            <Link href="/terms" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/terms" className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
               Terms
             </Link>{" "}
             and{" "}
-            <Link href="/privacy" className="text-bark-700 hover:underline dark:text-stone-300">
+            <Link href="/privacy" className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
               Privacy Policy
             </Link>
             .
@@ -421,7 +431,7 @@ export default function HomeownerSignUpPage(props: {
         Are you a contractor?{" "}
         <Link
           href={`/contractor-signup${nextQuery}`}
-          className="text-bark-700 hover:underline dark:text-stone-300"
+          className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300"
         >
           Sign up for Hearth for Pros
         </Link>

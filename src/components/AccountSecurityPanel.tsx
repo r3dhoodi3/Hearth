@@ -372,7 +372,9 @@ export default function AccountSecurityPanel({
             </p>
             <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
               Download everything we hold for your account as a JSON file.{" "}
-              <Link href={privacyHref} className="font-medium text-bark-700 hover:underline dark:text-stone-300">
+              {/* Phone only: padding grows an inline link to a 44px touch
+                  area without changing the line box. */}
+              <Link href={privacyHref} className="font-medium text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
                 Your privacy rights
               </Link>{" "}
               explains what&apos;s in it.
@@ -405,7 +407,9 @@ export default function AccountSecurityPanel({
               <button
                 type="button"
                 onClick={() => setConfirmingDelete(true)}
-                className="whitespace-nowrap rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                // Phone only: 36px before, on the most destructive control
+                // in the account.
+                className="whitespace-nowrap rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
               >
                 Delete Account
               </button>

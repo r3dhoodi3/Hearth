@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { createClient } from "@/lib/supabase/client";
 
 // Loads the unread-message count on the client (after render) so it never
@@ -56,9 +63,27 @@ export type UnreadRole = "homeowner" | "contractor";
 // instance's result skip the poll/subscription entirely, so the hook can
 // always be called (satisfying the rules of hooks) without ever doing
 // duplicate work when a provider is already supplying the count.
+
+// Realtime postgres_changes takes exactly ONE filter per subscription and the
+// server puts a ceiling on how long it can be, so the lead-scoped `in.(...)`
+// list below is capped. Past the cap the newest leads stay live and the rest
+// fall back to the poll, which is the same safety net every other path here
+// leans on. 60 uuids is roughly 2.2KB of filter, comfortably inside the limit,
+// and no account in the app is anywhere near that many open conversations.
+const REALTIME_LEAD_CAP = 60;
+
 export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
   const supabase = createClient();
   const [count, setCount] = useState(0);
+  // The lead ids the poll last saw, newest first, as a comma-joined string.
+  // Kept as a string rather than an array so the subscription effect below
+  // re-runs when the SET changes (a lead created after mount) and not on every
+  // poll tick that happens to rebuild an identical array.
+  const [leadKey, setLeadKey] = useState("");
+  // The subscription effect has to re-poll, but poll() is defined inside the
+  // poll effect. A ref hands the current one over without making the
+  // subscription depend on a function identity that changes every render.
+  const pollRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!enabled) return;
@@ -83,10 +108,13 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
         const { data: props } = await supabase.from("properties").select("id");
         const propertyIds = (props ?? []).map((p: { id: string }) => p.id);
         if (!propertyIds.length) return [];
+        // Newest first so the realtime cap below keeps the conversations most
+        // likely to receive the next message.
         const { data: leads } = await supabase
           .from("contractor_leads")
           .select("id")
-          .in("property_id", propertyIds);
+          .in("property_id", propertyIds)
+          .order("created_at", { ascending: false });
         return (leads ?? []).map((l: { id: string }) => l.id);
       }
       // contractor: "contractors" RLS also allows reading OTHER contractors'
@@ -108,7 +136,8 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
       const { data: leads } = await supabase
         .from("contractor_leads")
         .select("id")
-        .eq("contractor_id", mine.id);
+        .eq("contractor_id", mine.id)
+        .order("created_at", { ascending: false });
       return (leads ?? []).map((l: { id: string }) => l.id);
     }
 
@@ -116,6 +145,11 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
       if (typeof document !== "undefined" && document.hidden) return;
       const cookieName = SEEN_COOKIE[role];
       const leadIds = await myLeadIds();
+      // Hand the current lead set to the subscription effect. A lead created
+      // after mount lands here on the next poll (or focus, or chat-seen) and
+      // the channel re-subscribes with it included, so a brand new
+      // conversation still gets live updates without a page reload.
+      if (active) setLeadKey(leadIds.slice(0, REALTIME_LEAD_CAP).join(","));
       if (!leadIds.length) {
         if (active) setCount(0);
         return;
@@ -140,9 +174,45 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
       }
       if (active) setCount(unread.size);
     }
+    pollRef.current = poll;
     poll();
 
-    // Realtime: a new message from the other role updates the count instantly.
+    const onFocus = () => poll();
+    window.addEventListener("focus", onFocus);
+    // Opening a conversation marks it read and fires this event; re-poll at once
+    // so the count clears immediately instead of lingering until the next poll.
+    const onSeen = () => poll();
+    window.addEventListener("hearth:chat-seen", onSeen);
+    const t = setInterval(poll, 120000);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("hearth:chat-seen", onSeen);
+      clearInterval(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, enabled]);
+
+  // Realtime: a new message on one of THIS user's leads updates the count
+  // instantly. Its own effect because the filter depends on the lead set,
+  // which the poll discovers asynchronously and can grow while mounted; this
+  // re-subscribes whenever that set changes and leaves the poll effect alone.
+  //
+  // The filter used to be `sender_role=eq.<other role>`, which is not a scope
+  // at all: it asked the realtime server for every message in the app written
+  // by that role and relied on RLS alone to trim the stream. postgres_changes
+  // accepts exactly one filter per subscription, so the lead scoping replaces
+  // it rather than joining it: `lead_id=in.(...)` over the user's own leads.
+  // Nothing is lost by dropping the role half, because the callback only
+  // triggers poll(), and poll() still counts `sender_role=eq.<other role>`
+  // rows only. The cost is a wasted poll when the user sends a message from
+  // another tab, which is the same query the 120s tick runs anyway.
+  //
+  // One channel with an `in.(...)` list rather than one channel per lead: the
+  // realtime client caps how many channels a socket can join, and a pro with
+  // 40 jobs would otherwise open 40 of them for a single badge.
+  useEffect(() => {
+    if (!enabled || !leadKey) return;
     // The topic is unique per mount, not just per role: supabase-js returns the
     // SAME already-subscribed channel instance for a repeated topic, and a
     // second .on() on an already-subscribed channel throws. That collision is
@@ -162,27 +232,18 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
             event: "INSERT",
             schema: "public",
             table: "messages",
-            filter: `sender_role=eq.${OTHER[role]}`,
+            filter: `lead_id=in.(${leadKey})`,
           },
-          () => poll()
+          () => pollRef.current()
         )
         .subscribe();
     } catch {
-      // Realtime is strictly best-effort: the poll/focus/interval paths below
-      // keep the count working on their own, so a subscribe failure here must
-      // never crash the signed-in shell.
+      // Realtime is strictly best-effort: the poll/focus/interval paths in the
+      // effect above keep the count working on their own, so a subscribe
+      // failure here must never crash the signed-in shell.
       console.warn("useUnreadPoll: realtime subscription failed, falling back to polling");
     }
-
-    const onFocus = () => poll();
-    window.addEventListener("focus", onFocus);
-    // Opening a conversation marks it read and fires this event; re-poll at once
-    // so the count clears immediately instead of lingering until the next poll.
-    const onSeen = () => poll();
-    window.addEventListener("hearth:chat-seen", onSeen);
-    const t = setInterval(poll, 120000);
     return () => {
-      active = false;
       if (channel) {
         try {
           supabase.removeChannel(channel);
@@ -191,12 +252,9 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
           // going away along with the component either way.
         }
       }
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("hearth:chat-seen", onSeen);
-      clearInterval(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, enabled]);
+  }, [role, enabled, leadKey]);
 
   return count;
 }

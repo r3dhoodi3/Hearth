@@ -11,6 +11,12 @@
 // property type, and everything else below) null for them to fill in or
 // skip.
 
+// Build-time guard: this module reads RENTCAST_API_KEY, so importing it from a
+// Client Component must fail the build rather than ship the key. It was
+// already guarded transitively (it imports the service-role client, which is
+// "server-only"), but a transitive guard survives only as long as that import
+// does. Stated directly here it cannot be lost to a refactor.
+import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/database.types";
 

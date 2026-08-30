@@ -8,6 +8,7 @@ import {
 import { getProperties } from "@/lib/property";
 import { FREE_TASTE_PAYWALL } from "@/lib/freeAiTaste";
 import { getUser } from "@/lib/auth";
+import { trackServerEvent } from "@/lib/trackServer";
 import { trialDecision, TRIAL_DECISION_TTL_MS } from "@/lib/risk/decision";
 import {
   manageBillingAction,
@@ -26,10 +27,8 @@ import {
   COLD_START_FREE_POSTING,
   COLD_START_FREE_ALERTS,
   FREE_ASK_PER_DAY,
-  PLUS_ASK_PER_DAY,
   PLUS_INCLUDED_HOMES,
   PLUS_PLAN,
-  TRIAL_ASK_PER_DAY,
   formatUsd,
   yearlySavings,
 } from "@/lib/constants";
@@ -40,17 +39,19 @@ const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
   { label: "Cost forecast & repair fund", free: "10-year total + set-aside", plus: "Full per-system breakdown" },
   { label: "Quote analyzer", free: "-", plus: "Included" },
   { label: "Home report for resale & insurance", free: "-", plus: "Included" },
-  // Photo diagnosis is the Plus-only half of Ask Hearth; the question count is
-  // the other half. Every number is read from src/lib/constants.ts, which
-  // src/lib/constants.test.ts pins to what src/lib/aiUsage.ts actually
+  // Photo diagnosis is the Plus-only half of Ask Hearth; more questions a day
+  // is the other half. The FREE number is read from src/lib/constants.ts,
+  // which src/lib/constants.test.ts pins to what src/lib/aiUsage.ts actually
   // enforces, so this row cannot quote an allowance the server does not give.
-  // The trial is called out in the Plus column because the 3 free days run on
-  // their own, smaller ceiling and a buyer arriving from the weekly card would
-  // otherwise read 15 and get 8 on day one.
+  // The Plus column deliberately carries no number: naming the ceiling made
+  // the upgrade read as a cap rather than a lift, and a printed figure goes
+  // stale the first time the limit moves. The cap itself is still disclosed
+  // plainly on /ai-disclosure. The trial is not called out separately any
+  // more - it runs on the same ceiling as a paid plan.
   {
     label: "Ask Hearth",
     free: `${FREE_ASK_PER_DAY} a day, text only`,
-    plus: `${PLUS_ASK_PER_DAY} a day, with photos (${TRIAL_ASK_PER_DAY} during the trial)`,
+    plus: "More questions a day, with photos",
   },
   // The first estimate for a home is free and stays free (see the note at the
   // top of src/app/(app)/value/actions.ts). "Refresh monthly" is the honest
@@ -219,11 +220,11 @@ export default async function PlusPage(
           )}
           {sub?.stripe_subscription_id && !cancelsAt && (
             <div className="space-y-2 border-t border-stone-100 pt-4 dark:border-white/10">
-              <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+              <p className="text-xs max-sm:text-sm font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
                 Change plan
               </p>
               {isWeekly && (
-                <p className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-left text-xs text-stone-600 dark:border-white/10 dark:bg-stone-900 dark:text-stone-300">
+                <p className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-left text-xs max-sm:text-sm text-stone-600 dark:border-white/10 dark:bg-stone-900 dark:text-stone-300">
                   You&apos;re on the weekly plan. Extra homes come with the
                   monthly and yearly plans, so switch below if you want to add
                   one. Monthly works out cheaper than four weeks, and yearly
@@ -239,7 +240,7 @@ export default async function PlusPage(
                       yesLabel="Yes, switch to yearly"
                     />
                   </form>
-                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                  <p className="text-xs max-sm:text-sm text-stone-500 dark:text-stone-400">
                     Starts today. Your unused time is credited toward the yearly
                     charge.
                   </p>
@@ -254,7 +255,7 @@ export default async function PlusPage(
                       yesLabel="Yes, switch at renewal"
                     />
                   </form>
-                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                  <p className="text-xs max-sm:text-sm text-stone-500 dark:text-stone-400">
                     You keep every Plus benefit through {renewsOn}. Monthly
                     billing starts after that, so you lose nothing you paid for.
                   </p>
@@ -357,9 +358,12 @@ export default async function PlusPage(
             </form>
           </div>
         </div>
-        <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+        <p className="text-center text-xs max-sm:text-sm text-stone-500 dark:text-stone-400">
           Questions?{" "}
-          <Link href="/account/help" className="hover:underline">
+          <Link
+            href="/account/help"
+            className="hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+          >
             Visit help
           </Link>
           .
@@ -432,6 +436,31 @@ export default async function PlusPage(
       .eq("id", viewer.id)
       .maybeSingle();
     quoteCreditSpent = !!creditRow?.free_quote_used_at;
+  }
+
+  // Funnel analytics (docs/ANALYTICS.md): one call covers every reason=
+  // banner below, since they all render off the same searchParams.reason and
+  // this is the one place all of them are known to be about to show. The
+  // allowlist mirrors the reason values the banners below actually check -
+  // an unrecognized or missing reason (a bare /plus visit) fires nothing.
+  const PAYWALL_REASONS = new Set([
+    "job_limit",
+    "home_limit",
+    "plan",
+    "forecast",
+    "quote",
+    "ask",
+    "report",
+    "tax",
+    "value",
+    "insurance",
+    "documents",
+    "inspection",
+  ]);
+  if (searchParams.reason && PAYWALL_REASONS.has(searchParams.reason)) {
+    await trackServerEvent(viewer?.id ?? null, "paywall_seen", {
+      reason: searchParams.reason,
+    });
   }
 
   return (
@@ -594,7 +623,7 @@ export default async function PlusPage(
           row-by-row version for anyone who wants to check the free tier's
           limits, and it costs no height until it's opened. */}
       <details className="group">
-        <summary className="w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm font-semibold text-stone-900 dark:text-stone-100">
+        <summary className="w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm font-semibold text-stone-900 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-100">
           <span className="mr-1 inline-block transition-transform group-open:rotate-90">
             ▸
           </span>
@@ -602,13 +631,16 @@ export default async function PlusPage(
         </summary>
         <div className="card mt-3 overflow-hidden p-0">
           {/* Tighter cells and smaller text below sm so all three columns fit
-              a 360px viewport without horizontal scrolling. */}
-          <table className="w-full text-xs sm:text-sm">
+              a 360px viewport without horizontal scrolling. 13px, not the
+              full 14px text-sm, and px-1.5 rather than px-2, so the free
+              tier's limits are still readable without pushing the table into
+              a horizontal scroll on a phone. */}
+          <table className="w-full text-[13px] sm:text-sm">
             <thead>
               <tr className="border-b border-stone-200 text-left text-stone-500 dark:border-stone-700 dark:text-stone-400">
-                <th className="px-2 py-3 font-medium sm:px-4"> </th>
-                <th className="px-2 py-3 font-medium sm:px-4">Free</th>
-                <th className="px-2 py-3 font-medium text-bark-700 sm:px-4 dark:text-stone-300">
+                <th className="px-1.5 py-3 font-medium sm:px-4"> </th>
+                <th className="px-1.5 py-3 font-medium sm:px-4">Free</th>
+                <th className="px-1.5 py-3 font-medium text-bark-700 sm:px-4 dark:text-stone-300">
                   Hearth Plus
                 </th>
               </tr>
@@ -616,9 +648,9 @@ export default async function PlusPage(
             <tbody>
               {COMPARISON.map((row) => (
                 <tr key={row.label} className="border-b border-stone-100 last:border-0 dark:border-white/10">
-                  <td className="px-2 py-3 text-stone-700 sm:px-4 dark:text-stone-300">{row.label}</td>
-                  <td className="px-2 py-3 text-stone-500 sm:px-4 dark:text-stone-400">{row.free}</td>
-                  <td className="px-2 py-3 font-medium text-bark-700 sm:px-4 dark:text-stone-300">
+                  <td className="px-1.5 py-3 text-stone-700 sm:px-4 dark:text-stone-300">{row.label}</td>
+                  <td className="px-1.5 py-3 text-stone-500 sm:px-4 dark:text-stone-400">{row.free}</td>
+                  <td className="px-1.5 py-3 font-medium text-bark-700 sm:px-4 dark:text-stone-300">
                     {row.plus}
                   </td>
                 </tr>
@@ -628,9 +660,12 @@ export default async function PlusPage(
         </div>
       </details>
 
-      <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+      <p className="text-center text-xs max-sm:text-sm text-stone-500 dark:text-stone-400">
         Questions?{" "}
-        <Link href="/account/help" className="hover:underline">
+        <Link
+          href="/account/help"
+          className="hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+        >
           Visit help
         </Link>
         .

@@ -43,15 +43,36 @@ export default function LeadsRealtime({
           refresh
         )
         // Any newly posted job (unassigned) so the open-jobs board updates live.
+        // Filtered to status='new', the value open_jobs_for_me() itself filters
+        // on for an unassigned job (contractor_leads.contractor_id is null and
+        // status = 'new', see supabase/migrations/0138_user_blocks.sql) - the
+        // coarsest honest narrowing Realtime's single-column filter allows,
+        // rather than subscribing to every insert on the whole table.
         .on(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "contractor_leads" },
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "contractor_leads",
+            filter: "status=eq.new",
+          },
           refresh
         )
-        // A new application changes the applicant counts on the open-jobs board.
+        // This pro's own applications changing (applied, withdrawn, chosen,
+        // declined). Scoped to contractor_id, not the whole table: a
+        // competing pro's application to the same open job also moves that
+        // job's applicant count, but this component's refresh() re-fetches
+        // the whole page anyway, and the 20s poll/focus fallbacks below cover
+        // that count going briefly stale between a stranger's apply and the
+        // next refresh.
         .on(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "lead_applications" },
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "lead_applications",
+            filter: `contractor_id=eq.${contractorId}`,
+          },
           refresh
         )
         .subscribe();

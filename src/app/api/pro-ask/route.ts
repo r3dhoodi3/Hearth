@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentContractor } from "@/lib/contractor";
+import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import {
   allowAbortRefund,
-  countAiUsage,
+  countAskUsage,
   countAiUsageWindow,
   overAiGlobalHourlyLimit,
-  refundAiUsage,
+  refundAskUsage,
 } from "@/lib/aiUsage";
 import { readJsonBounded } from "@/lib/boundedBody";
 import { TOPIC_GUARD_PRO, newTurnHasImage } from "@/lib/aiGuard";
@@ -66,6 +67,13 @@ const MAX_IMAGES_PER_REQUEST = 4;
 const MAX_BODY_BYTES = 6_000_000;
 
 export async function POST(req: NextRequest) {
+  // CSRF, second lock. The session cookie is SameSite=Lax and this body is
+  // JSON, so a cross-site page cannot get a signed-in request here today;
+  // this refuses one outright rather than depending on those defaults.
+  // src/lib/csrf.ts only rejects on positive cross-site evidence.
+  const crossSite = sameOriginGuard(req);
+  if (crossSite) return crossSite;
+
   // Require a signed-in user before touching the paid model. Gating here (not
   // just in middleware) stops anonymous abuse that would run up model cost.
   const authClient = await createClient();
@@ -178,6 +186,29 @@ export async function POST(req: NextRequest) {
   // further down, so asking for it here costs nothing extra.
   isProMember = await hasProPlan();
 
+  // IS THIS A REAL BUSINESS? Anyone can type a company name into the pro
+  // signup, and until now that was enough to get an unmetered-looking run at a
+  // paid model. So the copilot is locked until the account has done one thing a
+  // pretend business does not do: a CSLB-confirmed license, a paid lead, a
+  // settled deposit, or a Hearth Pro membership (see isEstablishedPro in
+  // src/lib/contractor.ts, which fails closed on every read).
+  //
+  // FIRST, before the daily counter and before the context build: a locked
+  // request must not spend the pro's allowance, must not touch the model, and
+  // must not run a page of wallet and lead queries. The copy says how to
+  // unlock, because "no" without a next step reads as a bug.
+  //
+  // The /pro/ask page and the pinned Ask Hearth row ask the same helper and
+  // show the same note instead of a composer, so this is the backstop, not the
+  // first thing a pro sees.
+  if (!(await isEstablishedPro(contractor.id))) {
+    return NextResponse.json({
+      answer:
+        "Ask Hearth opens once your business is verified: add a California license number we can confirm, or place your first lead. Hearth Pro members get it right away.",
+      link: { href: "/pro/profile", label: "Add your license" },
+    });
+  }
+
   // PHOTO GATE, mirroring the homeowner route's (see /api/ask): vision calls
   // are the expensive ones, so they are the paid tier's feature on this side
   // too. Only the NEWEST turn counts, because the client replays its whole
@@ -191,16 +222,27 @@ export async function POST(req: NextRequest) {
       // Same shape the homeowner lock uses, so the shared chat component shows
       // the lock and hands the photo back instead of eating it.
       locked: true,
-      link: { href: "/pro/plus", label: "See Hearth Pro" },
+      // ?reason=ask: the plus page opens on the Ask pitch, matching the
+      // homeowner side's /plus?reason= banners.
+      link: { href: "/pro/plus?reason=ask", label: "See Hearth Pro" },
     });
   }
 
   // Per-user daily cap so a single account can't run up the paid model bill.
-  // A paying Pro member gets the higher ceiling. Counted in the shared ai_usage
-  // table (fails closed, resets at midnight); see src/lib/aiUsage.ts.
-  // burst/hourly off: this route runs the chat's own tighter burst limit at
-  // the top and its own hourly check below, in that deliberate order. Letting
-  // countAiUsage run them again would double-count both.
+  //
+  // THE CHAT'S OWN BUCKET, not the tool budget. This route used to call
+  // countAiUsage, which is the document-scan allowance (25 a day free, 250
+  // paid) - so the pro copilot was quietly the most generous free AI surface
+  // in the product, and a free pro got eight times what a free homeowner gets
+  // for the same kind of question. It now counts exactly like the homeowner
+  // chat: countAskUsage, a free pro on ASK_DAILY_FREE and a Hearth Pro member
+  // (trial included) on ASK_DAILY_PRO, in the pro chat's own key so the two
+  // sides of a dual account never drain each other. Fails closed, resets at
+  // midnight; see src/lib/aiUsage.ts.
+  //
+  // The chat's tighter burst limit ran at the top of this route and the hourly
+  // ceiling runs just below, in that deliberate order, and countAskUsage runs
+  // neither, so nothing is double-counted.
   //
   // COUNTED HERE, in front of the context build below, not after it. Every
   // wallet, open-lead and application query underneath used to run before
@@ -209,10 +251,15 @@ export async function POST(req: NextRequest) {
   // still cost a fistful of database round trips per refused request. Nothing
   // between the gate above and here touches the database except the membership
   // read this needs anyway.
-  const { overLimit, reason } = await countAiUsage(authUser.id, isProMember, {
-    burst: false,
-    hourly: false,
-  });
+  //
+  // windowStart is the 24 hour window this call actually CHARGED, threaded
+  // into every refund below so a request that starts at 23:59:59 and fails at
+  // 00:00:01 hands the question back to the row it was charged in.
+  const { overLimit, reason, windowStart } = await countAskUsage(
+    authUser.id,
+    isProMember ? "paid" : "free",
+    "pro"
+  );
   if (overLimit) {
     // Only "user_daily" is this pro's own allowance. A tripped owner-wide
     // breaker or an unreadable counter is Hearth's problem, and telling a pro
@@ -225,6 +272,9 @@ export async function POST(req: NextRequest) {
       );
     }
     return NextResponse.json({
+      // No numbers: the limit is described, not counted, everywhere the pro
+      // can see it. Both lines stay true - a member's ceiling really is
+      // higher than a free pro's.
       answer: isProMember
         ? "You have reached today's Ask Hearth limit. It resets tomorrow."
         : "You have reached today's Ask Hearth limit. It resets tomorrow. Hearth Pro raises your daily limit if you want more room.",
@@ -238,7 +288,7 @@ export async function POST(req: NextRequest) {
   // are being turned away by OUR ceiling, not theirs, and charging for that is
   // the bug. Best effort, exactly like the homeowner route's refundAskUsage.
   if (await overAiGlobalHourlyLimit()) {
-    await refundAiUsage(authUser.id);
+    await refundAskUsage(authUser.id, windowStart, "pro");
     return NextResponse.json(
       { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
       { status: 503 }
@@ -491,7 +541,7 @@ export async function POST(req: NextRequest) {
   const refundOnce = async (): Promise<void> => {
     if (refunded) return;
     refunded = true;
-    await refundAiUsage(authUser.id);
+    await refundAskUsage(authUser.id, windowStart, "pro");
   };
   const failedAnswer = async (e: unknown): Promise<string> => {
     console.error("Ask Hearth for Pros: model call failed:", e);

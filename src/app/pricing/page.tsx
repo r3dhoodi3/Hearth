@@ -4,9 +4,7 @@ import {
   PLUS_PLAN,
   COLD_START_FREE_POSTING,
   FREE_ASK_PER_DAY,
-  PLUS_ASK_PER_DAY,
   PLUS_INCLUDED_HOMES,
-  TRIAL_ASK_PER_DAY,
   formatUsd,
   yearlyAsMonthly,
   yearlyPerDay,
@@ -37,13 +35,34 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 // Anything added here that reads cookies()/headers()/searchParams undoes it.
 export const revalidate = 3600;
 
+// Title/description held once so metadata.title, openGraph, and twitter
+// can't drift from each other; the OG image at ./opengraph-image.tsx keeps
+// its own literal copy of the title (see that file's comment for why).
+const TITLE = "Pricing";
+const DESCRIPTION =
+  "Hearth pricing, in plain terms. Your first home is free with no card. Hearth Plus is optional, with an honest auto-renewing subscription you can cancel anytime.";
+const CANONICAL = `${SITE_URL}/pricing`;
+
 export const metadata: Metadata = {
   // The root layout's title template appends "| Hearth"; don't repeat it here.
-  title: "Pricing",
-  description:
-    "Hearth pricing, in plain terms. Your first home is free with no card. Hearth Plus is optional, with an honest auto-renewing subscription you can cancel anytime.",
+  title: TITLE,
+  description: DESCRIPTION,
   alternates: {
-    canonical: `${SITE_URL}/pricing`,
+    canonical: CANONICAL,
+  },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: CANONICAL,
+    siteName: "Hearth",
+    type: "website",
+    // og:image comes from the colocated opengraph-image.tsx; Next wires it
+    // up automatically for this segment.
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
   },
 };
 
@@ -101,9 +120,11 @@ export default function PricingPage() {
     // price line.
     <main className="mx-auto max-w-4xl px-6 pb-16 pt-10">
       <p className="text-base">
+        {/* Same phone-only 44px tap target as the /contact back link: all
+            added classes are max-sm:, so sm and up is unchanged. */}
         <Link
           href="/"
-          className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300"
+          className="text-stone-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-400 dark:hover:text-stone-300"
         >
           ← Hearth
         </Link>
@@ -246,19 +267,21 @@ export default function PricingPage() {
       </div>
 
       {/* Plain disclosure of Ask Hearth's daily cap, so the AI features above
-          never read as unlimited. The numbers are READ from src/lib/constants.ts
-          rather than typed: those constants mirror ASK_DAILY_FREE /
-          ASK_DAILY_PLUS / ASK_DAILY_TRIAL in src/lib/aiUsage.ts, which is what
-          /api/ask actually enforces (the tool routes run on a separate, larger
-          budget), and src/lib/constants.test.ts fails the build if the mirror
-          ever drifts. The trial's smaller ceiling is stated here too, since the
-          weekly plan's free days are sold two paragraphs down. */}
+          never read as unlimited. The FREE number is READ from
+          src/lib/constants.ts rather than typed: it mirrors ASK_DAILY_FREE in
+          src/lib/aiUsage.ts, which is what /api/ask actually enforces (the tool
+          routes run on a separate, larger budget), and src/lib/constants.test.ts
+          fails the build if the mirror ever drifts. The Plus ceiling is stated
+          as "higher", not as a figure: naming it made the upgrade read as a cap
+          rather than a lift, and a printed number goes stale the first time the
+          limit moves. The cap still gets said out loud, which is the part that
+          has to be true, and the trial runs on the same ceiling as a paid
+          plan. */}
       <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
         Ask Hearth, the AI assistant, is capped at {FREE_ASK_PER_DAY} text
-        questions a day on Free and {PLUS_ASK_PER_DAY} a day on Plus, with photo
-        answers on Plus only, so it stays fast and available for everyone.
-        During the {TRIAL_DAYS}-day trial it is {TRIAL_ASK_PER_DAY} a day, with
-        photos.
+        questions a day on Free, so it stays fast and available for everyone.
+        Plus raises that limit and adds photo answers. The {TRIAL_DAYS} free
+        days include everything Plus includes, at the same daily limit.
       </p>
 
       {/* The honest auto-renew disclosure, stated plainly. Same facts the

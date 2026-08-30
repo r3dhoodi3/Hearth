@@ -613,14 +613,16 @@ export default function QuoteAnalyzer({
           />
         </div>
 
-        <p className="text-xs text-stone-500 dark:text-stone-400">
+        <p className="text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
           Heads up: your quote is sent to our AI provider, Anthropic, to be
           read. Under its paid API terms it is not used to train their models.
           It can be wrong, so treat the read as a second opinion, not a verdict.
           {" "}
           <Link
             href="/ai-disclosure"
-            className="underline decoration-dotted hover:text-stone-600 dark:hover:text-stone-300"
+            // Phone only: padding grows an inline link to a 44px touch area
+            // without changing the line box.
+            className="underline decoration-dotted hover:text-stone-600 max-sm:py-3 dark:hover:text-stone-300"
           >
             How Hearth uses AI
           </Link>
@@ -708,7 +710,8 @@ export default function QuoteAnalyzer({
               <button
                 type="button"
                 onClick={startNew}
-                className="font-medium text-bark-700 hover:underline dark:text-stone-300"
+                // Phone only: ~20px tall before.
+                className="font-medium text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
               >
                 Analyze another quote
               </button>
@@ -837,7 +840,8 @@ export default function QuoteAnalyzer({
                             <button
                               type="button"
                               onClick={() => markCovered(i)}
-                              className="shrink-0 text-xs font-medium underline-offset-2 hover:underline"
+                              // Phone only: 16px tall before.
+                              className="shrink-0 text-xs font-medium underline-offset-2 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm"
                             >
                               It&apos;s covered
                             </button>
@@ -875,7 +879,7 @@ export default function QuoteAnalyzer({
                         <button
                           type="button"
                           onClick={() => unmarkCovered(i)}
-                          className="shrink-0 text-xs font-medium text-green-700 hover:text-green-800 dark:text-green-300 dark:hover:text-green-200"
+                          className="shrink-0 text-xs font-medium text-green-700 hover:text-green-800 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-green-300 dark:hover:text-green-200"
                         >
                           Undo
                         </button>
@@ -894,7 +898,7 @@ export default function QuoteAnalyzer({
                       <button
                         type="button"
                         onClick={() => removeAdded(i)}
-                        className="shrink-0 text-xs font-medium text-green-700 hover:text-green-800 dark:text-green-300 dark:hover:text-green-200"
+                        className="shrink-0 text-xs font-medium text-green-700 hover:text-green-800 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-green-300 dark:hover:text-green-200"
                       >
                         Undo
                       </button>

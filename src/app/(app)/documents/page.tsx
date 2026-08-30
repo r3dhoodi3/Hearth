@@ -18,6 +18,7 @@ import {
 import { insuranceRateFor, DEFAULT_INSURANCE_RATE } from "./insuranceRates";
 import InsuranceForm from "./InsuranceForm";
 import InsurancePacket from "./InsurancePacket";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 const DOC_TYPE_LABEL: Record<string, string> = {
   warranty: "Warranty",
@@ -125,6 +126,7 @@ export default async function DocumentsPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Documents" }]} />
       <header className="mb-1">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Documents</h1>
       </header>

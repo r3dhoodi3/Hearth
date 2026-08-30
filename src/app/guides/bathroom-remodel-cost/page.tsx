@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import GuideCta from "@/components/GuideCta";
+import Breadcrumbs, { BreadcrumbJsonLd } from "@/components/Breadcrumbs";
 
 // Public SEO guide. Orange County bathroom remodel cost ranges, aggregated
 // from published contractor pricing and industry cost reports as of July
@@ -21,12 +22,31 @@ const SITE_URL =
 // Anything added here that reads cookies()/headers()/searchParams undoes it.
 export const revalidate = 3600;
 
+// Title/description held once so metadata.title, openGraph, and twitter
+// can't drift from each other; the OG image at ./opengraph-image.tsx keeps
+// its own literal copy of the title (see that file's comment for why).
+const TITLE = "Bathroom remodel cost in Orange County: typical ranges (2026)";
+const DESCRIPTION =
+  "What a bathroom remodel typically costs in Orange County, broken down by budget, mid-range, and premium tiers, cost per square foot, what drives the price, and how to save. Estimate ranges, not a quote.";
+const CANONICAL = `${SITE_URL}/guides/bathroom-remodel-cost`;
+
 export const metadata: Metadata = {
-  title: "Bathroom remodel cost in Orange County: typical ranges (2026)",
-  description:
-    "What a bathroom remodel typically costs in Orange County, broken down by budget, mid-range, and premium tiers, cost per square foot, what drives the price, and how to save. Estimate ranges, not a quote.",
+  title: TITLE,
+  description: DESCRIPTION,
   alternates: {
-    canonical: `${SITE_URL}/guides/bathroom-remodel-cost`,
+    canonical: CANONICAL,
+  },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: CANONICAL,
+    siteName: "Hearth",
+    type: "article",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
   },
 };
 
@@ -78,11 +98,24 @@ export default function BathroomRemodelCostGuide() {
         }}
       />
 
-      <p className="text-sm">
-        <Link href="/guides" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
-          ← All guides
-        </Link>
-      </p>
+      {/* Breadcrumb replaces the old "All guides" back link: it still links
+          back to /guides, and adds the Home > Guides context the bare back
+          link didn't have. Don't render both. */}
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/" },
+          { label: "Guides", href: "/guides" },
+          { label: "Bathroom remodel cost in Orange County" },
+        ]}
+      />
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Home", href: "/" },
+          { name: "Guides", href: "/guides" },
+          { name: "Bathroom remodel cost in Orange County" },
+        ]}
+        siteUrl={SITE_URL}
+      />
 
       <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
         Bathroom remodel cost in Orange County

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getVerifiedUser } from "@/lib/auth";
 import { hasPlus } from "@/lib/subscription";
 import QuoteAnalyzer from "@/components/QuoteAnalyzer";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 // Quote analyzer (Hearth Plus): the homeowner hands over a photo or
 // the text of a contractor's quote, and Hearth reads it, checks the total and
@@ -40,6 +41,7 @@ export default async function QuoteCheckPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Quote analyzer" }]} />
       <header>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Quote analyzer

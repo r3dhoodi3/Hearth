@@ -55,6 +55,42 @@ Templates) to the confirm-route form, which carries it by construction:
 `src/app/auth/confirm/route.ts` already handles that shape and sets the cookie
 on `type === "recovery"`.
 
+**Update, 2026-08-29.** The app no longer waits for Supabase to add that
+parameter: `passwordRecoveryRedirectTo()` in `src/lib/passwordRecovery.ts` puts
+`type=recovery` on the `redirectTo` we hand `resetPasswordForEmail`, so the
+default PKCE link carries it by construction. Two things still need the owner:
+
+1. **The redirect allow-list has to accept it.** Authentication, URL
+   Configuration: Site URL = the real domain, no trailing slash, and Redirect
+   URLs must include `https://<domain>/**` (the `**` matters - the reset link
+   now carries a query string). Keep `http://localhost:3000/**` for dev. If the
+   URL is not allow-listed Supabase silently falls back to the Site URL and the
+   click lands on the home page instead of the reset form.
+2. **Cross-device clicks still need the confirm-route template.** The default
+   link is a PKCE code, and the code_verifier lives only in the browser that
+   asked for the reset. Request the reset on a laptop, open the email on a
+   phone, and the exchange fails - the phone lands on `/signin` with the "try
+   signing in" notice (which now also shows for `?error=link_invalid`, it used
+   to show nothing at all). The `token_hash` template above has no verifier and
+   works on any device, which is why it is still the recommended setting.
+
+### 1c. Link expiry
+
+**Where**: Authentication, Email Templates / Providers, "Email OTP Expiration"
+(some dashboards label it Advanced settings, `MAILER_OTP_EXP`). It governs how
+long a recovery link stays valid. Default is 3600 seconds (1 hour); 3600 or less
+is the recommendation, and it must not be raised. A reset link is a bearer
+credential sitting in a mailbox.
+
+Two other expiries stack on top of it and are already fixed in code, so nothing
+to click:
+
+- The `hearth_pwrecovery` cookie is 15 minutes (`src/lib/passwordRecovery.ts`),
+  so the "set a new password" form is only reachable for 15 minutes after the
+  click, and `src/app/reset-password/actions.ts` clears it the moment the
+  password actually changes. One emailed link, one password change.
+- Supabase invalidates a recovery token once it has been used.
+
 ### 2. CAPTCHA on auth endpoints
 
 **Where**: Authentication, Settings, "Enable CAPTCHA protection" (hCaptcha or
@@ -92,6 +128,54 @@ script cannot live with:
 Set a number, then watch the auth logs for a week for legitimate users hitting
 it. Too low is visible and fixable; too high is invisible.
 
+### 3b. Session expiry
+
+**Where**: Authentication, Sessions.
+
+**The problem in one line**: the access token expires in an hour, the refresh
+token does not expire at all by default, and `@supabase/ssr` stores it in a
+cookie with a 400-day Max-Age. So a phone or a laptop that signed in once stays
+signed in indefinitely, minting a fresh access token on every visit. That is
+what "tokens work forever" means here, and no amount of code in this repo
+changes it: only this screen does.
+
+Set, in order of value:
+
+- **Time-box sessions**: on. A session is force-ended after a fixed lifetime no
+  matter how active it is. 30 days is a sensible number for both sides of the
+  app: it matches the app-side idle rule below, and a re-sign-in once a month is
+  not something a homeowner notices.
+- **Inactivity timeout**: on, 30 days. This is the dashboard twin of the app
+  rule below. Belt and braces on purpose: this one is enforced by Supabase and
+  survives any change to our middleware.
+- **Refresh token rotation**: on. Each refresh issues a new refresh token and
+  retires the old one, so a stolen token is usable once, not forever.
+- **Reuse interval / reuse detection**: leave the small interval (10 seconds is
+  the default) and make sure detection is on. When an already-used refresh token
+  comes back outside that window, Supabase revokes the whole family - which is
+  the only automatic signal we get that a token was copied off a device.
+- **JWT expiry**: leave at 3600 seconds. Shorter costs a refresh round trip on
+  every page; longer widens the window a leaked access token is good for.
+
+Both of the timeout settings are plan-dependent on some Supabase tiers. If they
+are greyed out, the app-side rule below is the whole protection until the
+project is upgraded, and it is worth upgrading for.
+
+**What the app already does, so this is not the only line of defence.**
+`src/lib/sessionActivity.ts` plus the check in
+`src/lib/supabase/middleware.ts` end a session that has gone 30 days without a
+single signed-in request: the middleware calls `signOut()` (which revokes the
+refresh token at Supabase, not just locally), clears the auth cookies, and lands
+the person on `/signin?expired=1` with a plain "you were signed out because this
+device had not used Hearth in a while". The stamp lives in one httpOnly cookie
+(`hearth_seen`), written at most once an hour, and `/auth/signout` clears it
+along with the session.
+
+**Also on that screen, worth knowing**: "Sign out other devices" in the app
+(Account, Security, and the pro Profile's Account Security tab) calls
+`signOut({ scope: "others" })`, which revokes every other refresh token and
+keeps the current one. That is the user-facing kill switch if a phone is lost.
+
 ## Twilio
 
 ### 4. Geo Permissions: US and CA only
@@ -122,7 +206,11 @@ While in that console, also confirm:
 
 - [ ] Supabase: Secure password change enabled
 - [ ] Supabase: reset link verified end to end in production (step 1b)
+- [ ] Supabase: Site URL + Redirect URLs allow-list the real domain with `/**`
+- [ ] Supabase: email OTP expiry 3600 seconds or less (step 1c)
 - [ ] Supabase: CAPTCHA enabled (and the token wired into the auth forms)
 - [ ] Supabase: rate limits lowered, anonymous sign-ins off
+- [ ] Supabase: sessions time-boxed + inactivity timeout, refresh rotation and
+      reuse detection on (step 3b)
 - [ ] Twilio: Geo Permissions restricted to US and CA
 - [ ] Twilio: spend alert set

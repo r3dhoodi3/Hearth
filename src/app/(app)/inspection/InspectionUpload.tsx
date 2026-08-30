@@ -600,7 +600,10 @@ export default function InspectionUpload({
                   <button
                     type="button"
                     onClick={() => removeImage(i)}
-                    className="absolute -right-1 -top-1 rounded-full bg-stone-800 px-1.5 text-xs text-white"
+                    aria-label={`Remove report page ${i + 1}`}
+                    // Phone only: an invisible ::after ring lifts the touch
+                    // area to 44px without the badge covering the thumbnail.
+                    className="absolute -right-1 -top-1 rounded-full bg-stone-800 px-1.5 text-xs text-white max-sm:after:absolute max-sm:after:-inset-3 max-sm:after:content-['']"
                   >
                     ×
                   </button>
@@ -641,7 +644,9 @@ export default function InspectionUpload({
               <button
                 type="button"
                 onClick={removePdf}
-                className="shrink-0 rounded-full bg-stone-800 px-1.5 text-xs text-white"
+                // Phone only: same invisible ::after ring, 44px touch area
+                // without moving the row's layout.
+                className="relative shrink-0 rounded-full bg-stone-800 px-1.5 text-xs text-white max-sm:after:absolute max-sm:after:-inset-3 max-sm:after:content-['']"
                 aria-label="Remove PDF"
               >
                 ×

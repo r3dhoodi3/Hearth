@@ -40,12 +40,16 @@ export default function ChatDock({
         <span className="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">
           {chat.name}
         </span>
+        {/* Three bare glyphs 8px apart. On phones grow each to 44px and label
+            them: they were unreadable and untappable with poor eyesight, and
+            close is the only way to dismiss the dock. Desktop size unchanged. */}
         <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400">
           <button
             type="button"
             onClick={() => setMinimized((m) => !m)}
             title={minimized ? "Open" : "Minimize"}
-            className="leading-none hover:text-stone-700 dark:hover:text-stone-200"
+            aria-label={minimized ? "Open chat" : "Minimize chat"}
+            className="leading-none hover:text-stone-700 max-sm:inline-flex max-sm:h-11 max-sm:w-11 max-sm:items-center max-sm:justify-center max-sm:text-lg dark:hover:text-stone-200"
           >
             {minimized ? "▢" : "-"}
           </button>
@@ -53,7 +57,8 @@ export default function ChatDock({
             type="button"
             onClick={() => setExpanded((x) => !x)}
             title={expanded ? "Shrink" : "Expand"}
-            className="leading-none hover:text-stone-700 dark:hover:text-stone-200"
+            aria-label={expanded ? "Shrink chat" : "Expand chat"}
+            className="leading-none hover:text-stone-700 max-sm:inline-flex max-sm:h-11 max-sm:w-11 max-sm:items-center max-sm:justify-center max-sm:text-lg dark:hover:text-stone-200"
           >
             ⤢
           </button>
@@ -61,7 +66,8 @@ export default function ChatDock({
             type="button"
             onClick={() => setChat(null)}
             title="Close"
-            className="leading-none hover:text-red-600 dark:hover:text-red-400"
+            aria-label="Close chat"
+            className="leading-none hover:text-red-600 max-sm:inline-flex max-sm:h-11 max-sm:w-11 max-sm:items-center max-sm:justify-center max-sm:text-lg dark:hover:text-red-400"
           >
             ✕
           </button>

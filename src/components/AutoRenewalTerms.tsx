@@ -14,6 +14,11 @@ import { billingTerms, type PaidPlan } from "@/lib/billingTerms";
 // with information that "interferes with, detracts from, contradicts, or
 // otherwise undermines" it, so there is no marketing copy, no countdown, and
 // no competing call to action inside this block.
+//
+// PHONE TYPE SIZE. Every line here is text-xs (12px) from sm up, which is the
+// established look, but 12px is below the readable floor on a phone and this
+// is the block a buyer is legally entitled to actually read. Each one carries
+// max-sm:text-sm so it lands at 14px below sm; sm and up is byte-identical.
 // `variant` switches the same three facts between the two moments they are
 // legally required. "checkout" is the pre-purchase disclosure; "acknowledgment"
 // is the post-purchase one California requires under 17602(a)(3), which has to
@@ -32,7 +37,7 @@ export default function AutoRenewalTerms({
 
   return (
     <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-left dark:border-white/10 dark:bg-stone-900">
-      <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+      <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 max-sm:text-sm dark:text-stone-400">
         {acknowledgment
           ? `Your ${terms.product} renewal terms`
           : "This subscription renews automatically"}
@@ -46,10 +51,10 @@ export default function AutoRenewalTerms({
           front in the first sentence a buyer reads rather than buried in a
           bullet - and it says it for the plan actually selected, so the
           monthly-only trial never leaks onto an annual checkout. */}
-      <p className="mt-2 text-xs font-medium text-stone-900 dark:text-stone-100">
+      <p className="mt-2 text-xs font-medium text-stone-900 max-sm:text-sm dark:text-stone-100">
         {terms.summary}
       </p>
-      <ul className="mt-2 space-y-1 text-xs text-stone-600 dark:text-stone-300">
+      <ul className="mt-2 space-y-1 text-xs text-stone-600 max-sm:text-sm dark:text-stone-300">
         <li>
           <span className="font-medium text-stone-900 dark:text-stone-100">
             {acknowledgment ? "You paid:" : "You pay:"}

@@ -239,12 +239,16 @@ const activeHomeOwnerHasPlus = cache(async (): Promise<boolean> => {
 
 // Which side of the Plus line someone is on, at the resolution money cares
 // about. hasPlus() answers "may they use this", and deliberately says yes to a
-// trial. That is the right answer for a FEATURE gate and the wrong one for a
-// per-day CEILING: a trial is free to start and free to start again from a
-// fresh email, so handing a trialing account the full paid allowance hands it
-// to anyone with a spare inbox. Callers that spend money per request (the
-// chat's daily questions, the AI tool budget) ask for the tier instead and
-// give "trialing" its own, smaller number.
+// trial. The tier is the finer answer, and callers that spend money per request
+// (the chat's daily questions, the AI tool budget) ask for it.
+//
+// Today "trialing" resolves to the SAME ceilings as "paid" (see ASK_DAILY_TRIAL
+// in src/lib/aiUsage.ts: the trial rides on the weekly plan and the three paid
+// cadences include exactly the same things). The three-way distinction is kept
+// anyway, because it is also what the copy reads (a trialer must not be pitched
+// the plan they are on) and because a trial is free to start and free to start
+// again from a fresh email, so a future decision to give it its own smaller
+// number is one line rather than a rewrite.
 //
 // Same precedence as hasPlus(): the viewer's own live row first, then the
 // active home's owner. "paid" means an active (invoiced) subscription;

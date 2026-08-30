@@ -65,7 +65,8 @@ export default function ContractorReviews({
         type="button"
         onClick={toggle}
         disabled={loading}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-bark-700 hover:underline dark:text-stone-300"
+        // Phone only: 16px tall before.
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-bark-700 hover:underline max-sm:min-h-11 max-sm:text-sm dark:text-stone-300"
       >
         {loading && <InlineSpinner size={12} />}
         {open ? "Hide reviews" : `Read ${count} review${count === 1 ? "" : "s"}`}

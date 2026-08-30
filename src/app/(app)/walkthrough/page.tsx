@@ -5,6 +5,7 @@ import { homeHealthScore, scoreBand } from "@/lib/health";
 import { labelFor, SYSTEM_TYPES } from "@/lib/constants";
 import type { HomeSystem, Issue } from "@/lib/database.types";
 import SystemCaptureCard from "./SystemCaptureCard";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 // "Walk your home": the Centriq-style capture flow. Lists every system,
 // grouped by whether its details are still an onboarding ESTIMATE
@@ -45,6 +46,7 @@ export default async function WalkthroughPage(props: {
 
   return (
     <div className="space-y-8">
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Walk your home" }]} />
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Walk your home

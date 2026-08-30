@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import { JOB_CATEGORIES, labelFor } from "@/lib/constants";
 import type { ProPastJob } from "@/lib/database.types";
+import Link from "next/link";
 import AiNotice from "@/components/AiNotice";
+import { PRO_TOOLS_PAYWALL, proDraftMeterLabel } from "@/lib/freeAiTaste";
 import { fetchWithTimeout, isTimeoutError } from "@/lib/fetchWithTimeout";
 import {
   deletePastJobAction,
@@ -78,12 +80,27 @@ export default function ProToolsClient({
   initialPastJobs,
   categories,
   leads,
+  initialDraftsLeft = null,
 }: {
   initialPastJobs: ProPastJob[];
   categories: string[];
   leads: ToolsLead[];
+  // Free drafts remaining for a NON-member (migration 0145). Null for a Pro
+  // member, who sees no meter at all: they are bounded only by the shared
+  // daily ceiling, exactly as before.
+  initialDraftsLeft?: number | null;
 }) {
   const [tool, setTool] = useState<Tool>("estimate");
+
+  // The meter counts down in front of the pro rather than surprising them
+  // afterwards. Server-rendered starting value, decremented locally on each
+  // draft that actually comes back, so the number on screen matches what the
+  // next tap will cost without a round trip to re-read it.
+  const [draftsLeft, setDraftsLeft] = useState<number | null>(initialDraftsLeft);
+  // Set when the server says the free drafts are gone (402). Replaces the
+  // generic error line with the wall and its one link, the same sentence
+  // src/lib/freeAiTaste.ts sends.
+  const [paywalled, setPaywalled] = useState(false);
 
   // Show only the trades this pro actually lists on their profile, so the
   // dropdown isn't a wall of every category on Hearth. If they haven't
@@ -325,11 +342,21 @@ export default function ProToolsClient({
         setError("This tool is part of the Hearth Pro membership.");
         return;
       }
+      // Free drafts spent. Not an error the pro did anything wrong with, so it
+      // renders as the wall below rather than a red line.
+      if (resp.status === 402) {
+        setDraftsLeft(0);
+        setPaywalled(true);
+        return;
+      }
 
       const data = await resp.json().catch(() => ({}));
       if (typeof data?.result === "string" && data.result) {
         setResults((r) => ({ ...r, [tool]: data.result }));
         setDrafts((d) => ({ ...d, [tool]: data.result }));
+        // One draft delivered, one off the meter. Only on a real document: a
+        // failed call is refunded server-side, so the counter must not move.
+        setDraftsLeft((n) => (n === null ? null : Math.max(0, n - 1)));
       } else if (data?.reason === "rate_limited") {
         setError("You've hit today's drafting limit. It resets at midnight.");
       } else if (data?.reason === "no_key") {
@@ -560,7 +587,8 @@ export default function ProToolsClient({
                           type="button"
                           onClick={() => removePastJob(job.id)}
                           disabled={pjRemovingId === job.id}
-                          className="shrink-0 text-xs font-medium text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+                          // Phone only: 16px tall, and it deletes a past job.
+                          className="shrink-0 text-xs font-medium text-stone-500 hover:text-red-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-stone-400 dark:hover:text-red-400"
                         >
                           {pjRemovingId === job.id ? "Removing…" : "Remove"}
                         </button>
@@ -756,14 +784,40 @@ export default function ProToolsClient({
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-        <button
-          type="button"
-          onClick={generate}
-          disabled={loading}
-          className="btn-primary w-full"
-        >
-          {loading ? "Writing your draft…" : "Write it for me"}
-        </button>
+        {paywalled ? (
+          // The wall, in place of the button: a plain statement of what was
+          // used up and what Pro adds, with the one door out. Never a cold
+          // 402, never a disabled button with no explanation.
+          <div className="rounded-lg border border-hearth-200 bg-hearth-50 p-3 dark:border-hearth-500/30 dark:bg-hearth-500/15">
+            <p className="text-sm text-hearth-800 dark:text-hearth-200">
+              {PRO_TOOLS_PAYWALL.message}
+            </p>
+            <Link
+              href={PRO_TOOLS_PAYWALL.link}
+              className="btn-primary mt-3 inline-block text-sm"
+            >
+              See Hearth Pro
+            </Link>
+          </div>
+        ) : (
+          <>
+            {/* The meter goes in FRONT of the button, never after the fact:
+                a non-member should know what a tap costs before making it. */}
+            {draftsLeft !== null && (
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                {proDraftMeterLabel(draftsLeft)}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={generate}
+              disabled={loading}
+              className="btn-primary w-full"
+            >
+              {loading ? "Writing your draft…" : "Write it for me"}
+            </button>
+          </>
+        )}
       </div>
 
       {result && (
@@ -773,7 +827,8 @@ export default function ProToolsClient({
             <button
               type="button"
               onClick={copyResult}
-              className="shrink-0 text-xs font-medium text-hearth-700 hover:text-hearth-800 dark:text-hearth-300 dark:hover:text-hearth-200"
+              // Phone only: 16px tall before.
+              className="shrink-0 text-xs font-medium text-hearth-700 hover:text-hearth-800 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-hearth-300 dark:hover:text-hearth-200"
             >
               {copied ? "Copied" : "Copy"}
             </button>

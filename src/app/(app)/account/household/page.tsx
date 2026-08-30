@@ -6,6 +6,7 @@ import type { HouseholdMember } from "@/lib/database.types";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import SubmitButton from "@/components/SubmitButton";
 import HouseholdQrCode from "./HouseholdQrCode";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import {
   inviteMemberAction,
   removeMemberAction,
@@ -72,6 +73,13 @@ export default async function HouseholdPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/dashboard" },
+          { label: "Account", href: "/account" },
+          { label: "Household" },
+        ]}
+      />
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Household</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">

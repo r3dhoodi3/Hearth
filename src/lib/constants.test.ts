@@ -34,20 +34,24 @@ describe("the Plus allowances quoted in marketing copy", () => {
     expect(FREE_ASK_PER_DAY).toBe(constant(src("./aiUsage.ts"), "ASK_DAILY_FREE"));
   });
 
-  it("quotes the same trial question count the server enforces", () => {
-    expect(TRIAL_ASK_PER_DAY).toBe(
-      constant(src("./aiUsage.ts"), "ASK_DAILY_TRIAL")
+  // The trial now gets the PAID ceiling, not a smaller one: the trial rides on
+  // the weekly plan, and weekly, monthly, and annual must include exactly the
+  // same things. Both sides are written as aliases rather than as a repeated
+  // digit, so the check is that the alias is still an alias.
+  it("gives the trial the same question count as a paid plan", () => {
+    expect(TRIAL_ASK_PER_DAY).toBe(PLUS_ASK_PER_DAY);
+    expect(src("./aiUsage.ts")).toContain(
+      "export const ASK_DAILY_TRIAL = ASK_DAILY_PLUS;"
+    );
+    expect(src("./constants.ts")).toContain(
+      "export const TRIAL_ASK_PER_DAY = PLUS_ASK_PER_DAY;"
     );
   });
 
-  it("keeps the trial allowance between free and paid", () => {
-    // A trial that matched Plus would hand the whole ceiling to any account
-    // with a spare inbox; one that matched free would demo nothing.
-    const aiUsage = src("./aiUsage.ts");
+  it("still keeps the trial well above the free allowance", () => {
     expect(TRIAL_ASK_PER_DAY).toBeGreaterThan(
-      constant(aiUsage, "ASK_DAILY_FREE")
+      constant(src("./aiUsage.ts"), "ASK_DAILY_FREE")
     );
-    expect(TRIAL_ASK_PER_DAY).toBeLessThan(PLUS_ASK_PER_DAY);
   });
 
   it("quotes the same home count the claim cap enforces", () => {

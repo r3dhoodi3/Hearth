@@ -28,6 +28,8 @@ import SystemRow from "../profile/SystemRow";
 import { addSystemFormAction } from "../profile/actions";
 import SeasonalChecklist from "@/components/SeasonalChecklist";
 import ChecklistProvider from "@/components/ChecklistProvider";
+import RememberedDetails from "@/components/RememberedDetails";
+import ReviewMomentReporter from "@/components/ReviewMomentReporter";
 import ReminderItem from "./ReminderItem";
 import SystemsPhoneList from "./SystemsPhoneList";
 import WalkthroughNudge from "./WalkthroughNudge";
@@ -41,7 +43,6 @@ import {
   FileText,
   CalendarDays,
   ChevronRight,
-  Sparkles,
 } from "lucide-react";
 import { calculateEquity, headlineHomeValue } from "@/lib/homeValue";
 import { plausibleHomeFigure } from "@/lib/parcelSanity";
@@ -96,11 +97,10 @@ export default async function HomePage(
   // "View my plan" lands here with ?plan=open so the collapsed task groups
   // start expanded, making the click visibly do something.
   const planOpen = searchParams.plan === "open";
-  // First visit after claiming a home (?welcome=1): the banner below already
-  // walks through the started systems, so the below-the-fold detail sections
-  // default collapsed instead of dumping everything open at once. Health
-  // Score and "This month" stay expanded either way. Normal visits are
-  // untouched.
+  // First visit after claiming a home (?welcome=1): drives the welcome banner
+  // at the bottom of the page. It used to also force "This month" open, which
+  // is no longer needed: that section defaults open on every visit now (see
+  // RememberedDetails below), so first and thousandth visit look the same.
   const isFirstVisit = !!searchParams.welcome;
   // getActiveProperty, hasPlus and getUser don't depend on each other - run
   // them together instead of stacking round trips before the redirect check.
@@ -621,10 +621,12 @@ export default async function HomePage(
       {property.ownership_status === "verified" && (
         <section>
           <details className="inline-block">
-            <summary className="chip-ok focus-ring w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <summary className="chip-ok focus-ring w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden max-sm:min-h-11 max-sm:px-3 max-sm:text-sm">
               Matches county records
             </summary>
-            <p className="mt-1.5 max-w-sm text-xs text-stone-500 dark:text-stone-400">
+            {/* max-sm:text-sm: soft trust signal, still worth reading at a
+                floor size on a phone. */}
+            <p className="mt-1.5 max-w-sm text-xs max-sm:text-sm text-stone-500 dark:text-stone-400">
               The name on your account matches the county assessor&apos;s
               public owner-of-record for this address. It&apos;s a soft trust
               signal we show pros, not proof of ownership.
@@ -636,33 +638,10 @@ export default async function HomePage(
       {/* Proactive weather + safety-recall alerts; self-hides when there's none */}
       <HomeAlerts propertyId={property.id} />
 
-      {/* PHONE ONLY. The floating Ask Hearth pill is desktop-only (see
-          AskHearthDock's hideOnPhone), so on a phone the assistant lived
-          entirely inside Messages as a pinned row - a tester never found it.
-          This is the door: one compact row right under the weather and
-          alerts, above every number on the page. Desktop is untouched; the
-          pill is already on screen there. */}
-      <Link
-        href="/ask"
-        data-testid="ask-hearth-card"
-        className="card-link flex min-h-11 items-center gap-3 p-4 sm:hidden"
-      >
-        <span className="icon-chip">
-          <Sparkles className="h-5 w-5 text-bark-700 dark:text-stone-300" aria-hidden="true" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium text-stone-900 dark:text-stone-100">
-            Ask Hearth anything about your home
-          </span>
-          <span className="mt-0.5 block truncate text-xs text-stone-500 dark:text-stone-400">
-            Like: why is my water heater making that noise?
-          </span>
-        </span>
-        <ChevronRight
-          className="h-5 w-5 shrink-0 text-stone-400 dark:text-stone-500"
-          aria-hidden="true"
-        />
-      </Link>
+      {/* A phone-only "Ask Hearth anything" row used to sit here. Ask Hearth
+          has one home now, the Messages tab: the pinned row at the top of
+          /chats. Scattering doors to it across the app is what made it feel
+          like the whole product, and it is not. */}
 
       {/* Key stats, kept above the fold so the Health Score is the first
           thing the owner sees. */}
@@ -688,7 +667,7 @@ export default async function HomePage(
           <p className="stat-number mt-1 text-4xl">{score}</p>
           <p className="text-sm">{mostlyEstimated ? "Estimated score" : band.label}</p>
           <details className="group mt-2 text-sm">
-            <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden opacity-80 hover:opacity-100">
+            <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden opacity-80 hover:opacity-100 max-sm:min-h-11">
               <ChevronRight
                 className="h-4 w-4 shrink-0 transition-transform duration-150 group-open:rotate-90"
                 aria-hidden="true"
@@ -791,8 +770,12 @@ export default async function HomePage(
             a tester followed it expecting an energy breakdown and found
             nothing about energy on the page. In place of navigating
             anywhere, it now discloses its own method inline, matching the
-            Health Score card's "Why this score?" pattern above. */}
-        <div className="card">
+            Health Score card's "Why this score?" pattern above.
+            Phone: hidden. It is a ballpark of a bill nobody can act on from
+            here, and the home page was already too long to scroll on a 390px
+            screen. The estimate is still computed for desktop, which keeps the
+            four-card grid exactly as it was. */}
+        <div className="card max-sm:hidden">
           <p className="stat-label text-sm">Energy this season</p>
           {energyEstimate ? (
             <>
@@ -939,7 +922,7 @@ export default async function HomePage(
                 ) : (
                   <Link
                     href="/plus?reason=plan"
-                    className="text-sm font-medium hover:underline"
+                    className="text-sm font-medium hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
                   >
                     Plan my next round
                     <PlusChip className="mx-1.5" />
@@ -949,12 +932,18 @@ export default async function HomePage(
               </div>
             )}
 
-            <details
-              open={planOpen || isFirstVisit}
+            {/* Open on every visit, and stays open, unless the user closed it
+                themselves: RememberedDetails keeps that one bit per user in
+                localStorage. ?plan=open still forces it open and clears the
+                flag. isFirstVisit no longer needs to be threaded in here - the
+                default is open for everyone now. */}
+            <RememberedDetails
+              storageKey={`this-month-${user?.id ?? "anon"}`}
+              forceOpen={planOpen}
               className="group mt-3"
-              data-testid="this-month-tasks"
+              testId="this-month-tasks"
             >
-              <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden text-sm font-medium text-stone-700 dark:text-stone-300">
+              <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden text-sm font-medium text-stone-700 max-sm:min-h-11 dark:text-stone-300">
                 <ChevronRight
                   className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
                   aria-hidden="true"
@@ -996,7 +985,9 @@ export default async function HomePage(
                     .map((u) => (
                       <details key={u} open={planOpen} className="group">
                         <summary
-                          className={`focus-ring flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden px-2 text-xs font-semibold uppercase tracking-wide ${URGENCY_TONE[u]}`}
+                          // max-sm: "Later"/"Done" group header, ~16px tall at
+                          // 12px text before this.
+                          className={`focus-ring flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden px-2 text-xs font-semibold uppercase tracking-wide max-sm:min-h-11 max-sm:text-sm ${URGENCY_TONE[u]}`}
                         >
                           <ChevronRight
                             className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
@@ -1020,7 +1011,7 @@ export default async function HomePage(
                     ))}
 
                   <details open={planOpen || remindersTotal === 0} className="group">
-                    <summary className="focus-ring flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden px-2 text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-400">
+                    <summary className="focus-ring flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden px-2 text-xs font-semibold uppercase tracking-wide max-sm:min-h-11 max-sm:text-sm text-stone-600 dark:text-stone-400">
                       <ChevronRight
                         className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90"
                         aria-hidden="true"
@@ -1069,14 +1060,17 @@ export default async function HomePage(
                   </ul>
                   <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
                     Pulled from your{" "}
-                    <Link href="/documents" className="text-bark-700 hover:underline dark:text-stone-300">
+                    <Link
+                      href="/documents"
+                      className="text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
+                    >
                       documents
                     </Link>
                     .
                   </p>
                 </div>
               )}
-            </details>
+            </RememberedDetails>
           </div>
         </div>
       </section>
@@ -1102,12 +1096,37 @@ export default async function HomePage(
           </div>
           {plus ? (
             hasOpenPlan ? (
-              <Link
-                href="/dashboard?plan=open#this-month"
-                className="btn-primary whitespace-nowrap text-center"
-              >
-                View my plan
-              </Link>
+              // The build control used to vanish the moment a plan existed, so
+              // a member who pressed it had nothing left to press and no way to
+              // top the plan up later. Keep a real button here forever: "View
+              // my plan" stays primary, and the same action returns as a
+              // secondary "Update my maintenance plan". "Update" and not
+              // "Rebuild": the action only adds the schedule items that are not
+              // already open, it never clears or redoes existing tasks.
+              <div className="flex flex-col gap-1.5 sm:items-end">
+                {/* The plan-ready state, which is the "plan_built" moment
+                    src/lib/nativeReview.ts names as the one it could not wire:
+                    the build is a server action posted from a plain form, so
+                    there is no client success state to call from. This is it.
+                    Renders nothing and reports once per browser session; the
+                    ask itself is ReviewPrompt's call, and does nothing at all
+                    on the web today. */}
+                <ReviewMomentReporter moment="plan_built" />
+                <Link
+                  href="/dashboard?plan=open#this-month"
+                  className="btn-primary whitespace-nowrap text-center"
+                >
+                  View my plan
+                </Link>
+                <form action={generateMaintenancePlanAction}>
+                  <SubmitButton
+                    className="btn-secondary w-full whitespace-nowrap sm:w-auto"
+                    pendingLabel="Updating…"
+                  >
+                    Update my maintenance plan
+                  </SubmitButton>
+                </form>
+              </div>
             ) : (
               <form action={generateMaintenancePlanAction}>
                 <SubmitButton
@@ -1205,7 +1224,7 @@ export default async function HomePage(
           the person who needs them. The summary line stays visible either
           way - collapsing only drops the list under it. */}
       <details id="systems" open className="group space-y-4">
-        <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden text-lg font-semibold text-stone-900 dark:text-stone-100">
+        <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden text-lg font-semibold text-stone-900 max-sm:min-h-11 dark:text-stone-100">
           {/* Real chevron rather than a "▸" glyph: it rotates to point down
               when the section is open, so the control shows its own state. */}
           <ChevronRight

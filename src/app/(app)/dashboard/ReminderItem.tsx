@@ -169,7 +169,9 @@ export default function ReminderItem({
   return (
     <li className="list-none">
       <div
-        className={`flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 transition-colors ${
+        // max-sm:py-0.5 with the min-h-11 button below keeps the phone row at
+        // about 48px instead of growing it to 64px.
+        className={`flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 transition-colors max-sm:py-0.5 ${
           done ? "bg-stone-50/60 dark:bg-stone-700/40" : "hover:bg-stone-50 dark:hover:bg-stone-700/40"
         }`}
       >
@@ -182,10 +184,12 @@ export default function ReminderItem({
           role="checkbox"
           aria-checked={done}
           aria-label={due ? `${title}, due ${formatDue(due)}` : title}
-          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          // Phone only: the button was only as tall as its text (~20px) in a
+          // 40px row. Marking a task done is the most repeated action here.
+          className="flex min-w-0 flex-1 items-center gap-3 text-left max-sm:min-h-11"
         >
           <span
-            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] max-sm:h-6 max-sm:w-6 max-sm:text-xs ${
               done
                 ? "border-green-500 bg-green-500 text-white"
                 : "border-stone-300 text-transparent dark:border-stone-600"

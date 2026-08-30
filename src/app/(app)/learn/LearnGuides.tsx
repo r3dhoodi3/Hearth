@@ -15,7 +15,6 @@ export type GuideData = {
   statusStyle?: string;
   age: number | null;
   tips: string[];
-  askQuestion: string;
 };
 
 const ALL = "All";
@@ -111,7 +110,6 @@ export default function LearnGuides({ guides }: { guides: GuideData[] }) {
               statusStyle={g.statusStyle}
               age={g.age}
               tips={g.tips}
-              askQuestion={g.askQuestion}
             />
           ))}
         </ul>

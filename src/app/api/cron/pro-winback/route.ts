@@ -1,3 +1,4 @@
+import { PRO_LEADS_HREF } from "@/lib/constants";
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -33,7 +34,7 @@ const CONTRACTOR_PAGE = 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const CREDIT_KIND = "winback_credit";
-const CREDIT_URL = "/pro";
+const CREDIT_URL = PRO_LEADS_HREF;
 const CREDIT_TITLE = "$15 of application credit added";
 const CREDIT_BODY =
   "We added $15 of application credit to your wallet. It covers most of a first application fee and expires in 14 days.";

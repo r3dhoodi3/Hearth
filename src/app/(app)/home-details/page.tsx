@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { formatAddressLine, getActiveProperty } from "@/lib/property";
 import HomeDetailsForm from "./HomeDetailsForm";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 export default async function HomeDetailsPage() {
   const property = await getActiveProperty();
@@ -10,6 +11,7 @@ export default async function HomeDetailsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Home details" }]} />
       <header className="mb-6">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Home details

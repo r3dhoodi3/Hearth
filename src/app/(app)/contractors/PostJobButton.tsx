@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { COLD_START_FREE_POSTING } from "@/lib/constants";
+import { markPushMoment } from "@/lib/pushPrompt";
 
 // The same 20-character floor postJobAction enforces on the server. Catching it
 // here first means a too-short post never submits, so the form (and any photos
@@ -81,6 +82,13 @@ export default function PostJobButton({
       return;
     }
     setError(null);
+    // Posting a job is the moment the push offer makes sense: pros are about to
+    // reply and the homeowner will want to know when they do. Stamped here
+    // rather than after the redirect because postJobAction redirects away and
+    // there is no client callback on the far side. See src/lib/pushPrompt.ts -
+    // the stamp is only good for two minutes and the card still has to pass its
+    // own once-per-14-days gate.
+    markPushMoment();
   }
 
   return (

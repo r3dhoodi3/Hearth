@@ -59,6 +59,34 @@ export const FREE_TASTE_PAYWALL: Record<
   },
 };
 
+// ---------------------------------------------------------------------------
+// The pro side's taste (migration 0145)
+// ---------------------------------------------------------------------------
+// The AI back office (/pro/tools) was members-only with no way in at all: a pro
+// was asked to pay for the idea of a draft. Same medicine as above, one level
+// up - the counter belongs to the BUSINESS rather than the person, because the
+// business is what has a membership and a wallet, so it lives on
+// contractors.free_tool_drafts_used rather than on public.users. That is also
+// why it is not part of FREE_TASTE_LIMIT / FREE_TASTE_COLUMN above: those two
+// maps are keyed to columns on users and claim_free_ai_taste's feature names.
+//
+// Two, like the document read: enough to see a real estimate and a real
+// invoice come out, which is the whole pitch.
+export const FREE_PRO_DRAFTS = 2;
+
+export const PRO_TOOLS_PAYWALL = {
+  message: `You've used your ${FREE_PRO_DRAFTS} free drafts. Hearth Pro includes unlimited drafts: estimates, invoices, follow-ups, review responses, and overdue reminders.`,
+  link: "/pro/plus?reason=tools",
+};
+
+// The meter a non-member sees BEFORE they tap, never after the fact. Same rule
+// as tasteMeterLabel above: state the exact number and unit in front of the
+// button.
+export function proDraftMeterLabel(left: number): string {
+  if (left <= 0) return "No free drafts left";
+  return `${left} of ${FREE_PRO_DRAFTS} free drafts left`;
+}
+
 // The quote analyzer's one free check is older than this file and lives in its
 // own column (users.free_quote_used_at, migration 0030), so it is not part of
 // FREE_TASTE_PAYWALL above. Its refusal copy belongs here anyway: the repeat

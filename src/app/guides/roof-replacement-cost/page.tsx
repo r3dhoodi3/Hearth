@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import GuideCta from "@/components/GuideCta";
+import Breadcrumbs, { BreadcrumbJsonLd } from "@/components/Breadcrumbs";
 
 // Public SEO guide. The national range and the "why" copy are pulled from the
 // same REPLACEMENT_INFO.roof entry the signed-in app uses on the Home Health
@@ -23,12 +24,31 @@ const SITE_URL =
 // Anything added here that reads cookies()/headers()/searchParams undoes it.
 export const revalidate = 3600;
 
+// Title/description held once so metadata.title, openGraph, and twitter
+// can't drift from each other; the OG image at ./opengraph-image.tsx keeps
+// its own literal copy of the title (see that file's comment for why).
+const TITLE = "Roof replacement cost in Orange County: what to expect";
+const DESCRIPTION =
+  "The typical national cost to replace a roof, plus realistic Orange County ranges for asphalt shingle and tile roofs, what drives the price, when a repair makes more sense, permits, and fire hardening.";
+const CANONICAL = `${SITE_URL}/guides/roof-replacement-cost`;
+
 export const metadata: Metadata = {
-  title: "Roof replacement cost in Orange County: what to expect",
-  description:
-    "The typical national cost to replace a roof, plus realistic Orange County ranges for asphalt shingle and tile roofs, what drives the price, when a repair makes more sense, permits, and fire hardening.",
+  title: TITLE,
+  description: DESCRIPTION,
   alternates: {
-    canonical: `${SITE_URL}/guides/roof-replacement-cost`,
+    canonical: CANONICAL,
+  },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: CANONICAL,
+    siteName: "Hearth",
+    type: "article",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
   },
 };
 
@@ -80,11 +100,24 @@ export default function RoofReplacementCostGuide() {
         }}
       />
 
-      <p className="text-sm">
-        <Link href="/guides" className="text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
-          ← All guides
-        </Link>
-      </p>
+      {/* Breadcrumb replaces the old "All guides" back link: it still links
+          back to /guides, and adds the Home > Guides context the bare back
+          link didn't have. Don't render both. */}
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/" },
+          { label: "Guides", href: "/guides" },
+          { label: "Roof replacement cost in Orange County: what to expect" },
+        ]}
+      />
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Home", href: "/" },
+          { name: "Guides", href: "/guides" },
+          { name: "Roof replacement cost in Orange County: what to expect" },
+        ]}
+        siteUrl={SITE_URL}
+      />
 
       <h1 className="mt-3 text-2xl font-bold text-stone-900 sm:text-3xl dark:text-stone-100">
         Roof replacement cost in Orange County: what to expect

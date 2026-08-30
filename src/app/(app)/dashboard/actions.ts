@@ -10,6 +10,7 @@ import { cappedField, FIELD_MAX } from "@/lib/formFields";
 import { setFlash } from "@/lib/flash";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { ALWAYS_SCHEDULE, SYSTEM_SCHEDULE } from "@/lib/maintenancePlan";
+import { trackServerEvent } from "@/lib/trackServer";
 
 // Mark a reminder (maintenance task) done. RLS limits it to the caller's tasks.
 // Called programmatically from ReminderItem, which needs the ActionResult to
@@ -236,13 +237,36 @@ export async function generateMaintenancePlanAction() {
       status: "open",
     }));
 
+  // Both confirmations get 2 extra seconds over the 4s success/info default in
+  // ToastProvider: the owner reported this one vanishing before it could be
+  // read, and it is the only feedback that the build actually did anything
+  // (the new tasks are further up the page). Targeted rather than raising the
+  // global default, so every other terse toast keeps its snappy timing.
+  const PLAN_TOAST_MS = 6000;
   if (rows.length > 0) {
     await supabase.from("maintenance_tasks").insert(rows);
-    await setFlash("Your maintenance plan is ready. Check your reminders.", "success");
+    await setFlash(
+      "Your maintenance plan is ready. Check your reminders.",
+      "success",
+      { duration: PLAN_TOAST_MS }
+    );
+    // Funnel analytics (docs/ANALYTICS.md), only when the build actually
+    // scheduled something - a no-op re-run (the else branch) never fires
+    // this. task_count is a number, not a task title, so no free text.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await trackServerEvent(user.id, "plan_built", {
+        task_count: rows.length,
+      });
+    }
   } else {
     // Nothing new to add: don't let the one free build be spent on a no-op.
     await refundFreeCredit();
-    await setFlash("Your maintenance plan is already up to date.", "info");
+    await setFlash("Your maintenance plan is already up to date.", "info", {
+      duration: PLAN_TOAST_MS,
+    });
   }
   revalidatePath("/dashboard");
 }

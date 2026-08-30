@@ -77,11 +77,25 @@ export default async function ProProfilePage() {
   // asking for a current password that doesn't exist. Read on every load.
   const { hasPassword, provider } = await getPasswordStatus();
 
+  // TCPA SMS consent (users.sms_consent, migration 0075). It lives on the
+  // account row rather than the company row, so the profile form has to be
+  // handed its current value; without it the checkbox would render unticked
+  // for a pro who already opted in and a save would silently switch their
+  // texts off. Reads as false when the column is not live yet, which is the
+  // safe direction (no texts).
+  const { data: accountRow } = await (supabase as any)
+    .from("users")
+    .select("sms_consent")
+    .eq("id", user?.id ?? "")
+    .maybeSingle();
+  const smsConsent = accountRow?.sms_consent === true;
+
   return (
     <div className="mx-auto max-w-4xl">
       <ProfileTabs
         contractor={contractor}
         member={member}
+        smsConsent={smsConsent}
         trialEligible={trialEligible}
         projects={projects}
         checkrEnabled={checkrEnabled}

@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
-import { MAX_APPLICANTS_PER_JOB } from "@/lib/constants";
+import { MAX_APPLICANTS_PER_JOB,
+  PRO_LEADS_HREF,
+} from "@/lib/constants";
 
 export const runtime = "nodejs";
 
@@ -511,7 +513,7 @@ async function runCron(req: NextRequest) {
         parts.push(renewalSentence);
       } else {
         title = "This week in your trades";
-        url = "/pro";
+        url = PRO_LEADS_HREF;
       }
       parts.push(...pipelineParts);
 

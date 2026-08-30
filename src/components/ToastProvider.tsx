@@ -48,13 +48,17 @@ interface ToastItem {
   exiting: boolean;
 }
 
-// Errors persist (duration 0): an unread error is a silent failure. Warnings
-// get extra read time; success/info are terse and self-clear quickly.
+// Errors used to persist (duration 0) so an unread error was never a silent
+// failure, but the owner found having to press the X on every error annoying.
+// Five seconds is long enough to read a one-line error, and any error worth
+// acting on re-fires the moment the user retries the same action. Warnings
+// still get extra read time; success/info are terse and self-clear quickly.
+// Callers that truly must persist can still pass `duration: 0` explicitly.
 const DEFAULT_DURATION: Record<ToastType, number> = {
   success: 4000,
   info: 4000,
   warning: 8000,
-  error: 0,
+  error: 5000,
 };
 
 const MAX_VISIBLE = 3;
@@ -352,7 +356,8 @@ function ToastCard({
     <li className="pointer-events-auto w-full list-none">
       <div
         // Pause-on-hover and pause-on-focus: clear the timer on enter, restart
-        // it on leave. Errors have no timer so this is a no-op for them.
+        // it on leave. Errors now auto-dismiss too, so hovering one holds it on
+        // screen for as long as the user is reading it.
         onMouseEnter={onPause}
         onMouseLeave={onResume}
         onFocus={onPause}
@@ -380,9 +385,13 @@ function ToastCard({
             type="button"
             onClick={onDismiss}
             aria-label="Dismiss"
-            className="-mr-1 -mt-0.5 shrink-0 rounded p-0.5 text-stone-400 transition hover:text-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bark-600 dark:text-stone-500 dark:hover:text-stone-300 dark:focus-visible:ring-bark-500"
+            // max-sm: the visible glyph stays the same size, but the hit area
+            // grows to 44px - this is the only way to dismiss a persistent
+            // error toast, and it used to be a 20px target sitting over the
+            // bottom tab bar.
+            className="-mr-1 -mt-0.5 shrink-0 rounded p-0.5 text-stone-400 transition hover:text-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bark-600 max-sm:-m-2 max-sm:flex max-sm:h-11 max-sm:w-11 max-sm:items-center max-sm:justify-center max-sm:p-0 dark:text-stone-500 dark:hover:text-stone-300 dark:focus-visible:ring-bark-500"
           >
-            <X aria-hidden="true" className="h-4 w-4" />
+            <X aria-hidden="true" className="h-4 w-4 max-sm:h-5 max-sm:w-5" />
           </button>
         </div>
       </div>

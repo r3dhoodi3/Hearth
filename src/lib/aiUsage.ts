@@ -13,27 +13,45 @@ import { AI_GLOBAL_DAILY_LIMIT, AI_GLOBAL_BUCKET } from "@/lib/constants";
 // spendable on document scans, nor drained by them.
 export const DAILY_LIMIT_FREE = 25;
 export const DAILY_LIMIT_PLUS = 250;
-// The 3-day trial's own tool budget. Well past the free 25 (a trialer can scan
-// their whole document drawer and an inspection report on day one and never
-// feel it), well under the paid 250, for the reason spelled out on
-// ASK_DAILY_TRIAL below: a trial costs nothing to start and nothing to start
-// again from a fresh email.
-export const DAILY_LIMIT_TRIAL = 60;
+// The trial's tool budget IS the paid one. An alias, not a copied number, so
+// the two cannot drift apart later. See ASK_DAILY_TRIAL below for why parity
+// was chosen over a smaller trial ceiling.
+export const DAILY_LIMIT_TRIAL = DAILY_LIMIT_PLUS;
 
 // The homeowner chat's OWN daily bucket. Free is a taste, not a product:
 // three text questions a day, no photos (the vision calls are the expensive
-// ones). Plus gets 15 a day with photos.
+// ones). Plus gets more, with photos.
 export const ASK_DAILY_FREE = 3;
 export const ASK_DAILY_PLUS = 15;
-// The trial sits between them, with photos allowed. A 3-day trial exists to
-// show what Plus feels like, not to hand the full ceiling to an account that
-// costs nothing to create: 8 is well over double the free allowance and more
-// than anyone asks in an evening, so a real homeowner trying Plus never
-// notices the gap, while a throwaway account cannot farm 15 vision calls a day
-// for three days. MIRRORED by TRIAL_ASK_PER_DAY in src/lib/constants.ts (which
-// the client-side /plus card reads), and src/lib/constants.test.ts fails if the
-// two ever drift.
-export const ASK_DAILY_TRIAL = 8;
+// The trial gets the SAME ceiling as a paid plan, as an alias so the two can
+// never drift. The trial rides on the weekly plan, and the owner's rule is that
+// weekly, monthly, and annual include exactly the same things: a smaller trial
+// number made the weekly card look like a lesser plan, and someone who paid for
+// a week of Plus was getting less Plus than someone who paid for a month.
+// The trade-off, kept here so a future reader knows it was a choice: a trial
+// costs nothing to start and nothing to start again from a fresh email, so full
+// parity does let a throwaway account farm a paid day of vision calls. The
+// burst limits, the global bucket below, and the per-account trial eligibility
+// check are what hold that line now. MIRRORED by TRIAL_ASK_PER_DAY in
+// src/lib/constants.ts (which the client-side /plus card reads), and
+// src/lib/constants.test.ts fails if the two ever drift.
+export const ASK_DAILY_TRIAL = ASK_DAILY_PLUS;
+
+// The PRO copilot's ceiling for a paying Hearth Pro member (and a Pro trial:
+// same rule the homeowner trial follows, parity with paid). A free pro is on
+// ASK_DAILY_FREE, exactly like a free homeowner - the copilot used to run on
+// the tool budget (DAILY_LIMIT_FREE, 25 a day), which is the document-scan
+// allowance and far too generous for a chat.
+//
+// A few more than Plus's 15, because a pro is asking about their own business
+// during a working day, not about their house on a weekend.
+export const ASK_DAILY_PRO = 20;
+
+// Which chat this is. The two surfaces have different ceilings AND their own
+// counters (see askBucket): a dual-side account is one person, but their
+// homeowner questions must not eat the pro copilot's allowance, or a Pro member
+// would be told they were out of questions after three asks on the other side.
+export type AskSurface = "homeowner" | "pro";
 
 // Which allowance a caller gets. Not the same question as hasPlus(): see
 // PlusTier in src/lib/subscription.ts, which is where these strings come from.
@@ -53,7 +71,15 @@ export function toAiTier(plan: AiTier | boolean): AiTier {
 
 // The two ceilings, as pure functions of the tier, so the three-way resolution
 // is testable without a database.
-export function askDailyLimitFor(tier: AiTier): number {
+export function askDailyLimitFor(
+  tier: AiTier,
+  surface: AskSurface = "homeowner"
+): number {
+  // The pro copilot: free is the same taste a free homeowner gets, and both
+  // paid and trialing Pro get ASK_DAILY_PRO (the trial is not a lesser plan).
+  if (surface === "pro") {
+    return tier === "free" ? ASK_DAILY_FREE : ASK_DAILY_PRO;
+  }
   if (tier === "paid") return ASK_DAILY_PLUS;
   if (tier === "trialing") return ASK_DAILY_TRIAL;
   return ASK_DAILY_FREE;
@@ -258,7 +284,11 @@ export async function countAskUsage(
   userId: string,
   // Tier or the older boolean (see toAiTier). "trialing" gets ASK_DAILY_TRIAL:
   // photos and a real Plus-sized allowance, but not the paid ceiling.
-  plan: AiTier | boolean
+  plan: AiTier | boolean,
+  // Which chat is asking. "pro" swaps in the pro copilot's ceiling and its own
+  // counter; omitted means the homeowner chat, so every existing call site
+  // behaves exactly as before.
+  surface: AskSurface = "homeowner"
 ): Promise<{
   overLimit: boolean;
   reason: AiLimitReason | null;
@@ -274,9 +304,9 @@ export async function countAskUsage(
 }> {
   const tier = toAiTier(plan);
   const isPlus = tier !== "free";
-  const dailyLimit = askDailyLimitFor(tier);
+  const dailyLimit = askDailyLimitFor(tier, surface);
   const admin = createAdminClient();
-  const bucket = askBucket(userId);
+  const bucket = askBucket(userId, surface);
   const windowStart = askWindowStart();
 
   try {
@@ -327,7 +357,7 @@ export async function countAskUsage(
   // nothing is ever refunded to them either.
   const globalDaily = await checkAiGlobalDailyLimit();
   if (globalDaily !== "ok" && !(await exemptFromGlobalDaily(userId, isPlus))) {
-    await refundAskUsage(userId, windowStart);
+    await refundAskUsage(userId, windowStart, surface);
     return {
       overLimit: true,
       reason: globalDaily === "over" ? "global" : "counter_unavailable",
@@ -346,8 +376,11 @@ export async function countAskUsage(
   };
 }
 
-function askBucket(userId: string): string {
-  return `ask-day:${userId}`;
+// One bucket per user PER SURFACE. The homeowner key is unchanged, so nobody's
+// count moves; the pro copilot counts in its own key so the two chats cannot
+// drain each other on a dual-side account.
+function askBucket(userId: string, surface: AskSurface = "homeowner"): string {
+  return surface === "pro" ? `ask-day:pro:${userId}` : `ask-day:${userId}`;
 }
 
 // Hand back one chat question this user was charged but never got an answer
@@ -380,9 +413,12 @@ function askBucket(userId: string): string {
 // carries on, exactly like addAiUsage. It also never drives a count below 0.
 export async function refundAskUsage(
   userId: string,
-  windowStart?: string
+  windowStart?: string,
+  // Which chat's counter to hand the question back to. Same default as
+  // countAskUsage, so every homeowner call site is untouched.
+  surface: AskSurface = "homeowner"
 ): Promise<void> {
-  const bucket = askBucket(userId);
+  const bucket = askBucket(userId, surface);
   const target = windowStart ?? askWindowStart();
   try {
     const admin = createAdminClient();

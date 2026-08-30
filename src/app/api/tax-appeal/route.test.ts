@@ -13,6 +13,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sessionUser = { id: "user-1", email: "owner@example.com" };
 
+// The route now takes the request so it can check where the call came from
+// (src/lib/csrf.ts). These tests are about the building-record gate, so they
+// hand it an ordinary same-origin POST, exactly like the app's own fetch.
+function sameOriginRequest(): any {
+  return new Request("https://gethearth.vercel.app/api/tax-appeal", {
+    method: "POST",
+    headers: {
+      host: "gethearth.vercel.app",
+      "sec-fetch-site": "same-origin",
+    },
+  });
+}
+
 let activeProperty: Record<string, unknown> | null = null;
 let plusTier: "free" | "trialing" | "paid" = "paid";
 
@@ -119,7 +132,7 @@ describe("the building-record gate on /api/tax-appeal", () => {
   it("refuses a building-level assessment/purchase price before any model call", async () => {
     const { POST } = await import("./route");
 
-    const res = await POST();
+    const res = await POST(sameOriginRequest());
     const body = await res.json();
 
     expect(res.status).toBe(400);
@@ -145,7 +158,7 @@ describe("the building-record gate on /api/tax-appeal", () => {
     };
     const { POST } = await import("./route");
 
-    const res = await POST();
+    const res = await POST(sameOriginRequest());
     const body = await res.json();
 
     expect(res.status).toBe(400);
@@ -157,12 +170,33 @@ describe("the building-record gate on /api/tax-appeal", () => {
     activeProperty = SINGLE_FAMILY_PROPERTY;
     const { POST } = await import("./route");
 
-    const res = await POST();
+    const res = await POST(sameOriginRequest());
     const body = await res.json();
 
     // Reaches the model call this time: the gate let it through.
     expect(res.status).toBe(200);
     expect(body.letter).toBe("a letter that should never be drafted");
     expect(generateTextCalled).toBe(true);
+  });
+
+  it("refuses a cross-site caller before it does any work", async () => {
+    activeProperty = SINGLE_FAMILY_PROPERTY;
+    const { POST } = await import("./route");
+
+    const res = await POST(
+      new Request("https://gethearth.vercel.app/api/tax-appeal", {
+        method: "POST",
+        headers: {
+          host: "gethearth.vercel.app",
+          origin: "https://evil.example",
+          "sec-fetch-site": "cross-site",
+        },
+      }) as any
+    );
+
+    expect(res.status).toBe(403);
+    // The guard runs first, so nothing was spent on a request we refused.
+    expect(generateTextCalled).toBe(false);
+    expect(countAiUsageCalled).toBe(false);
   });
 });

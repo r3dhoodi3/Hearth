@@ -1,4 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// hash.ts is "server-only" (it reads RISK_HASH_SALT), and that module does not
+// resolve outside a Next build, so it is stubbed the same way
+// src/lib/checkoutReservation.test.ts and src/lib/risk/decisionCache.test.ts
+// stub it.
+vi.mock("server-only", () => ({}));
+
 import { riskHash, riskSaltIsConfigured, SALT_VERSION } from "./hash";
 
 // The three properties the whole scheme rests on:

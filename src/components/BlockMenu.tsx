@@ -89,9 +89,9 @@ export default function BlockMenu({
 
   if (blocked) {
     return (
-      <p className="text-xs text-stone-500 dark:text-stone-400">
+      <p className="text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
         Blocked.{" "}
-        <Link href={manageHref} className="underline hover:text-stone-600 dark:hover:text-stone-300">
+        <Link href={manageHref} className="underline hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:hover:text-stone-300">
           Manage blocked accounts
         </Link>
       </p>
@@ -100,7 +100,10 @@ export default function BlockMenu({
 
   if (confirming) {
     return (
-      <div className="text-xs">
+      // Phone only: this whole panel is the consent copy for a block, and
+      // 12px is too small to read before agreeing to it. Hit areas here are
+      // already 44px.
+      <div className="text-xs max-sm:text-sm">
         <p className="text-stone-700 dark:text-stone-300">
           Block {personLabel}? They will not be able to message you or apply to
           jobs you post from now on, and you will not be shown to each other

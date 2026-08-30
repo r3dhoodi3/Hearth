@@ -50,20 +50,17 @@ describe("daily budgets", () => {
     );
   });
 
-  it("puts the trial between free and paid on both budgets", () => {
-    // A trial that matched Plus would hand the full ceiling to any account
-    // with a spare inbox (trials are free to start and free to start again);
-    // one that matched free would demo nothing.
-    expect(constant("ASK_DAILY_TRIAL")).toBe(8);
-    expect(constant("ASK_DAILY_TRIAL")).toBeGreaterThan(
+  it("gives the trial the paid ceiling on both budgets", () => {
+    // The trial rides on the weekly plan, and weekly, monthly, and annual
+    // include exactly the same things - so a trial day is a paid day. Written
+    // as aliases in aiUsage.ts, not as repeated digits, so the two cannot
+    // drift; the check is that the alias is still an alias.
+    expect(aiUsage).toContain("export const ASK_DAILY_TRIAL = ASK_DAILY_PLUS;");
+    expect(aiUsage).toContain(
+      "export const DAILY_LIMIT_TRIAL = DAILY_LIMIT_PLUS;"
+    );
+    expect(constant("ASK_DAILY_PLUS")).toBeGreaterThan(
       constant("ASK_DAILY_FREE")
-    );
-    expect(constant("ASK_DAILY_TRIAL")).toBeLessThan(constant("ASK_DAILY_PLUS"));
-    expect(constant("DAILY_LIMIT_TRIAL")).toBeGreaterThan(
-      constant("DAILY_LIMIT_FREE")
-    );
-    expect(constant("DAILY_LIMIT_TRIAL")).toBeLessThan(
-      constant("DAILY_LIMIT_PLUS")
     );
   });
 
@@ -516,9 +513,13 @@ describe("the pro chat refunds what it never answered", () => {
     // so a pro shed by the hourly ceiling, or a model call that threw, quietly
     // spent one of their daily allowance for nothing.
     //
-    expect(aiUsage).toContain("export async function refundAiUsage");
+    // Through refundAskUsage now, not refundAiUsage: the pro copilot moved off
+    // the tool budget onto the chat's own bucket (see "the pro copilot is
+    // metered like the homeowner chat" below), so the question it hands back
+    // has to come out of the counter it was charged in.
+    expect(aiUsage).toContain("export async function refundAskUsage");
     const shed = proAskRoute.indexOf("overAiGlobalHourlyLimit()");
-    const refundAfterShed = proAskRoute.indexOf("refundAiUsage(", shed);
+    const refundAfterShed = proAskRoute.indexOf("refundAskUsage(", shed);
     expect(refundAfterShed).toBeGreaterThan(shed);
     // Everything after the stream opens refunds through one idempotent helper,
     // so two failures on the way out cannot hand back two questions for one
@@ -611,12 +612,11 @@ describe("the early-abort refund is metered", () => {
   });
 });
 
-// Which allowance a caller gets is a three-way answer, not a boolean: free,
-// on the trial, or paying. hasPlus() collapses the last two, which is right
-// for "may they use this" and wrong for "how much may they spend" - a trial
-// costs nothing to start and nothing to start again from a fresh email. These
-// are the pure resolvers the counters run on, so the three-way decision is
-// testable without a database.
+// Which allowance a caller gets is a three-way answer in shape, even though
+// the trial and paid ceilings are now the same number: free, on the trial, or
+// paying. The resolvers stay three-way so a future split costs one line rather
+// than a rewrite. These are the pure resolvers the counters run on, so the
+// decision is testable without a database.
 describe("which daily allowance a tier gets", () => {
   it("gives the chat three numbers, not two", async () => {
     const { askDailyLimitFor, ASK_DAILY_FREE, ASK_DAILY_TRIAL, ASK_DAILY_PLUS } =
@@ -638,15 +638,16 @@ describe("which daily allowance a tier gets", () => {
     expect(toolDailyLimitFor("paid")).toBe(DAILY_LIMIT_PLUS);
   });
 
-  it("never hands a trial the paid ceiling", async () => {
+  it("hands a trial the same ceiling as a paid plan, and more than free", async () => {
+    // The trial rides on the weekly plan, and the three paid cadences include
+    // exactly the same things, so a trial day resolves to a paid day on both
+    // budgets. Free stays a taste.
     const { askDailyLimitFor, toolDailyLimitFor } = await import("./aiUsage");
-    expect(askDailyLimitFor("trialing")).toBeLessThan(askDailyLimitFor("paid"));
+    expect(askDailyLimitFor("trialing")).toBe(askDailyLimitFor("paid"));
     expect(askDailyLimitFor("trialing")).toBeGreaterThan(
       askDailyLimitFor("free")
     );
-    expect(toolDailyLimitFor("trialing")).toBeLessThan(
-      toolDailyLimitFor("paid")
-    );
+    expect(toolDailyLimitFor("trialing")).toBe(toolDailyLimitFor("paid"));
     expect(toolDailyLimitFor("trialing")).toBeGreaterThan(
       toolDailyLimitFor("free")
     );
@@ -661,5 +662,63 @@ describe("which daily allowance a tier gets", () => {
     expect(toAiTier("trialing")).toBe("trialing");
     expect(toAiTier("free")).toBe("free");
     expect(toAiTier("paid")).toBe("paid");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The pro copilot's allowance.
+// ---------------------------------------------------------------------------
+// It used to run on countAiUsage, i.e. the TOOL budget: 25 questions a day for
+// a free pro against a free homeowner's 3, on the same paid model. It is now
+// metered exactly like the homeowner chat, with its own ceiling for members.
+describe("the pro copilot is metered like the homeowner chat", () => {
+  it("keeps a free pro on the same taste a free homeowner gets", async () => {
+    const { askDailyLimitFor, ASK_DAILY_FREE } = await import("./aiUsage");
+    expect(askDailyLimitFor("free", "pro")).toBe(ASK_DAILY_FREE);
+  });
+
+  it("gives a paying Pro member, and a Pro trial, ASK_DAILY_PRO", async () => {
+    const { askDailyLimitFor, ASK_DAILY_PRO } = await import("./aiUsage");
+    expect(askDailyLimitFor("paid", "pro")).toBe(ASK_DAILY_PRO);
+    // Parity between trial and paid, the same rule the homeowner trial follows.
+    expect(askDailyLimitFor("trialing", "pro")).toBe(ASK_DAILY_PRO);
+  });
+
+  it("is a few more than Plus, and far less than the tool budget", () => {
+    expect(constant("ASK_DAILY_PRO")).toBe(20);
+    expect(constant("ASK_DAILY_PRO")).toBeGreaterThan(constant("ASK_DAILY_PLUS"));
+    expect(constant("ASK_DAILY_PRO")).toBeLessThan(constant("DAILY_LIMIT_PLUS"));
+  });
+
+  it("leaves the homeowner ceilings exactly as they were", async () => {
+    const { askDailyLimitFor, ASK_DAILY_FREE, ASK_DAILY_PLUS } = await import(
+      "./aiUsage"
+    );
+    expect(askDailyLimitFor("free")).toBe(ASK_DAILY_FREE);
+    expect(askDailyLimitFor("paid")).toBe(ASK_DAILY_PLUS);
+  });
+
+  it("counts the two chats in separate buckets", () => {
+    // One person can hold both sides. Sharing a bucket would mean three
+    // homeowner questions used up a Pro member's copilot for the day.
+    expect(aiUsage).toContain('`ask-day:pro:${userId}`');
+    expect(aiUsage).toContain('`ask-day:${userId}`');
+  });
+
+  it("has the pro route count and refund through the chat bucket", () => {
+    expect(proAskRoute).toContain("countAskUsage(");
+    expect(proAskRoute).toContain('"pro"');
+    expect(proAskRoute).not.toContain("countAiUsage(");
+    expect(proAskRoute).not.toContain("refundAiUsage(");
+    // The window that was charged is threaded into every refund, so a request
+    // spanning midnight refunds the row it was charged in.
+    expect(proAskRoute).toContain('refundAskUsage(authUser.id, windowStart, "pro")');
+  });
+
+  it("never prints the pro number in the copy", () => {
+    // Limits are described, not counted, everywhere a pro can see them.
+    const messages = proAskRoute.slice(proAskRoute.indexOf("if (overLimit)"));
+    expect(messages).toContain("Hearth Pro raises your daily limit");
+    expect(messages.slice(0, 1200)).not.toMatch(/\b20\b/);
   });
 });

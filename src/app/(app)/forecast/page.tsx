@@ -16,6 +16,7 @@ import {
 } from "@/lib/constants";
 import AskHearthPlanButton from "./AskHearthPlanButton";
 import { Lock } from "lucide-react";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString()}`;
@@ -131,6 +132,7 @@ export default async function ForecastPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Cost forecast" }]} />
       <header className="mb-1">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           Cost forecast

@@ -16,12 +16,23 @@ import {
 import { PRO_PLAN } from "@/lib/constants";
 import { billingTermsText } from "@/lib/billingTerms";
 import {
+  checkoutIdempotencyBucket,
+  checkoutIdempotencyKey,
+  IDEMPOTENCY_BUCKET_MS,
+} from "@/lib/checkoutIdempotency";
+import { PRO_RESERVATION_REF } from "@/lib/promoClaimRef";
+import {
+  markReservationSession,
+  reclaimCheckoutReservation,
+} from "@/lib/checkoutReservation";
+import {
   checkoutCadence,
   subscriptionCheckoutData,
 } from "@/lib/checkoutSubscriptionData";
 import { setFlash } from "@/lib/flash";
 import { trialDecision, RISK_BLOCK_MESSAGE } from "@/lib/risk/decision";
 import { recordRequestSignals } from "@/lib/risk/signals";
+import { trackServerEvent } from "@/lib/trackServer";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -278,23 +289,41 @@ export async function startProCheckoutAction(formData: FormData) {
   // shown, which is exactly what ROSCA and the California Automatic Renewal
   // Law forbid. Everything below stays in place (and stays correct) for the
   // day the trial is switched off; it is not dead-lettered.
+  //
+  // A ROW THAT ALREADY EXISTS IS NOT ALWAYS A SPENT OFFER, which is the
+  // homeowner side's live bug in the same shape (see startPlusCheckoutAction
+  // and checkoutReservation.ts). A reservation held by a checkout the pro
+  // opened and backed out of sits in the ledger until Stripe expires the
+  // session, up to 24 hours later - and until then every retry both loses the
+  // offer AND changes the request body under an unchanged idempotency key,
+  // which Stripe refuses outright. So a lost claim now asks Stripe what became
+  // of the session that holds it: resume it, take it over if it is dead, or
+  // stand down. Standing down is the fail-closed answer, so two tabs at once
+  // still produce exactly one intro.
   let discounts: Array<{ coupon: string }> | undefined;
   let claimedIntro = false;
-  if (
-    !freeTrial &&
-    plan === "pro_monthly" &&
-    !existing &&
-    !(await hasClaimedPromo("pro_intro_monthly"))
-  ) {
+  // An open Stripe Checkout to send the pro back to. Acted on after the
+  // try/catch: redirect() throws, and the catch would swallow it.
+  let resumeUrl: string | null = null;
+  const introOffered = !freeTrial && plan === "pro_monthly" && !existing;
+  // Still the cheap ledger pre-check, just no longer a hard skip: when it says
+  // a claim exists, the row may still be a reservation this pro can have back,
+  // so the reclaim path runs and only the RPC is skipped.
+  const alreadyClaimed = introOffered
+    ? await hasClaimedPromo("pro_intro_monthly")
+    : true;
+  if (introOffered) {
     const coupon = await proIntroCouponId();
     if (coupon) {
       const admin = createAdminClient();
       try {
-        const { data, error } = await admin.rpc("claim_promo", {
-          p_user: user.id,
-          p_key: "pro_intro_monthly",
-          p_ref: "pro_checkout_reservation",
-        });
+        const { data, error } = alreadyClaimed
+          ? { data: false as boolean | null, error: null }
+          : await admin.rpc("claim_promo", {
+              p_user: user.id,
+              p_key: "pro_intro_monthly",
+              p_ref: PRO_RESERVATION_REF,
+            });
         if (error) {
           console.error(
             "claim_promo reservation failed - no intro discount:",
@@ -303,10 +332,23 @@ export async function startProCheckoutAction(formData: FormData) {
         } else if (data === true) {
           claimedIntro = true;
           discounts = [{ coupon }];
+        } else {
+          // A concurrent checkout, an abandoned one, or a spent claim: only the
+          // first two can be given back, and only reclaimCheckoutReservation
+          // can tell them apart.
+          const outcome = await reclaimCheckoutReservation(admin, {
+            userId: user.id,
+            promoKey: "pro_intro_monthly",
+            reservationRef: PRO_RESERVATION_REF,
+            plan,
+          });
+          if (outcome.kind === "resume") {
+            resumeUrl = outcome.url;
+          } else if (outcome.kind === "reclaimed") {
+            claimedIntro = true;
+            discounts = [{ coupon }];
+          }
         }
-        // data === false: a concurrent checkout already won the reservation
-        // for this user. Fall through to full price - do NOT attach the
-        // coupon, and do NOT touch promo_claims (it's the other attempt's).
       } catch (err) {
         console.error(
           "claim_promo reservation threw - no intro discount:",
@@ -315,6 +357,9 @@ export async function startProCheckoutAction(formData: FormData) {
       }
     }
   }
+  // Back to the checkout they already opened: same offer, same terms, and
+  // nothing new for Stripe to object to.
+  if (resumeUrl) redirect(resumeUrl);
 
   // Consent record, mirroring startPlusCheckoutAction: the exact disclosure
   // text the buyer saw, stored on the Stripe session so California's
@@ -346,8 +391,7 @@ export async function startProCheckoutAction(formData: FormData) {
   // in-app cancel button, pointing at it. The trial makes that worse than it
   // used to be, since the charge lands three days later rather than visibly at
   // checkout.
-  const idempotencyBucket = Math.floor(Date.now() / (5 * 60 * 1000));
-  const idempotencyKey = `pro-checkout:${user.id}:${plan}:${idempotencyBucket}`;
+  const idempotencyBucket = checkoutIdempotencyBucket();
 
   // consent_at has to come from the bucket start, not a fresh Date: Stripe
   // treats a replayed idempotency key carrying a DIFFERENT body as a conflict
@@ -355,15 +399,30 @@ export async function startProCheckoutAction(formData: FormData) {
   // landing in the same bucket. This lands within 5 minutes of "now", which is
   // all the billing-terms acknowledgment it records needs.
   //
-  // Everything else in the body below is already stable across a replay while
-  // the trial is on: `discounts` is always undefined and `intro_reserved`
-  // always "false" (see the intro-coupon gate above). If that coupon is ever
-  // switched back on, two racing submits would differ on both fields - only
-  // one can win claim_promo - and the loser would get a Stripe idempotency
-  // error instead of a session. That is the correct outcome for a duplicate
-  // attempt, and the catch below already declines to release a reservation the
-  // loser never held, but it surfaces as an error rather than a redirect.
-  const consentAt = new Date(idempotencyBucket * 5 * 60 * 1000).toISOString();
+  // The rest of the body used to be excused on the grounds that it is stable
+  // while the trial is on: `discounts` always undefined, `intro_reserved`
+  // always "false". That excuse is what cost the homeowner side a working
+  // checkout - the moment the offer could differ between two clicks, Stripe
+  // started refusing the replayed key instead of creating a session. So the
+  // varying inputs go into the key here too, before the coupon is ever
+  // switched back on.
+  const consentAt = new Date(
+    idempotencyBucket * IDEMPOTENCY_BUCKET_MS
+  ).toISOString();
+  const idempotencyKey = checkoutIdempotencyKey({
+    prefix: "pro-checkout",
+    userId: user.id,
+    plan,
+    bucket: idempotencyBucket,
+    varying: {
+      freeTrial,
+      coupon: discounts?.[0]?.coupon ?? "none",
+      customer: customerId ?? "new",
+      price: priceId ?? "inline",
+      consentTerms,
+      consentAt,
+    },
+  });
 
   let session: Awaited<ReturnType<typeof stripe.checkout.sessions.create>>;
   try {
@@ -445,6 +504,23 @@ export async function startProCheckoutAction(formData: FormData) {
     await setFlash("We couldn't start checkout. Please try again.", "error");
     redirect("/pro/plus");
   }
+
+  // Record which session holds the reservation, so a pro who backs out of this
+  // checkout can be given the offer back on their next click instead of losing
+  // it (and the checkout) to their own dead reservation.
+  if (claimedIntro) {
+    await markReservationSession(createAdminClient(), {
+      userId: user.id,
+      promoKey: "pro_intro_monthly",
+      reservationRef: PRO_RESERVATION_REF,
+      sessionId: session.id,
+    });
+  }
+
+  // Funnel analytics (docs/ANALYTICS.md), right before handing off to Stripe:
+  // the session exists at this point, so this only fires for a checkout that
+  // actually reached Stripe, not one refused by an earlier guard above.
+  await trackServerEvent(user.id, "pro_checkout_started", { plan });
 
   if (session.url) redirect(session.url);
   redirect("/pro/plus");

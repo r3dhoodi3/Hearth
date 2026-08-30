@@ -220,7 +220,9 @@ export default function ReviewButton({
                     onMouseLeave={() => setHover(0)}
                     onClick={() => setRating(n)}
                     aria-label={`${n} star${n > 1 ? "s" : ""}`}
-                    className={`text-3xl leading-none transition ${
+                    // Phone only: five ~30px stars with no padding, and a
+                    // mis-tap posts the wrong public rating.
+                    className={`text-3xl leading-none transition max-sm:inline-flex max-sm:h-11 max-sm:min-w-11 max-sm:items-center max-sm:justify-center ${
                       (hover || rating) >= n ? "text-amber-400" : "text-stone-300 dark:text-stone-600"
                     }`}
                   >

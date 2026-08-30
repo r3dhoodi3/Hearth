@@ -14,7 +14,9 @@ import {
   PRO_PLAN,
   PRO_DEPOSIT_BOOST_PTS,
   COLD_START_FREE_ALERTS,
+  PRO_LEADS_HREF,
 } from "@/lib/constants";
+import { FREE_PRO_DRAFTS } from "@/lib/freeAiTaste";
 import {
   manageProBillingAction,
   cancelProMembershipAction,
@@ -76,9 +78,26 @@ const PERKS: Array<{ icon: LucideIcon; title: string; body: string }> = [
   },
 ];
 
+// The ?reason= banners. Mirrors the homeowner /plus page: a plain statement of
+// what was used up or what is behind the wall, no urgency and no invented
+// numbers, so the pitch is specific to the door the pro just tapped. Keys are
+// set by the callers: /pro/tools and /api/pro-tools ("tools"), /pro/ask
+// ("ask"), the leads board's perk pitch ("leads"), the pro Home nudge
+// ("nudge"), the feedback card ("feedback") and the setup checklist's logo
+// step ("logo").
+const REASON_COPY: Record<string, string> = {
+  tools: `You've used your ${FREE_PRO_DRAFTS} free drafts. Hearth Pro includes unlimited drafts: estimates, invoices, follow-ups, review responses, and overdue reminders.`,
+  ask: "Hearth Pro raises your daily limit on Ask Hearth, so you can keep asking on the days you actually need it.",
+  leads: `Membership never changes which jobs you can see or apply to. What it changes is the money around them: $10 of lead credit every month and +${PRO_DEPOSIT_BOOST_PTS}% on every deposit.`,
+  nudge: `Hearth Pro: +${PRO_DEPOSIT_BOOST_PTS}% bonus on every deposit and $10 of lead credit every month, once your membership is paid.`,
+  feedback:
+    "Thanks for the feedback. Hearth Pro is the paid side of the app: the AI back office, win-rate analytics, a richer public page, and credit on every deposit.",
+  logo: "Your logo, work photos, and an about section are part of Hearth Pro, so your public page looks like your business rather than a listing.",
+};
+
 export default async function ProPlusPage(
   props: {
-    searchParams: Promise<{ welcome?: string }>;
+    searchParams: Promise<{ welcome?: string; reason?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -172,8 +191,12 @@ export default async function ProPlusPage(
           )}
         </div>
         <div className="flex flex-col items-center gap-3">
-          <Link href="/pro" className="btn-primary">
-            Back to my leads
+          {/* "Find jobs" rather than "Back to my leads": after the pro Home /
+              Leads split this button goes to the board, and naming the ACTION
+              is what a pro who just paid is here to do. Through
+              PRO_LEADS_HREF so it follows the board wherever it lives. */}
+          <Link href={PRO_LEADS_HREF} className="btn-primary">
+            Find jobs
           </Link>
           <p className="text-xs text-stone-500 dark:text-stone-400">
             If a perk still looks off, give it a minute to sync, then refresh.
@@ -392,11 +415,25 @@ export default async function ProPlusPage(
     : null;
   const trialEligible = !sub && (risk?.allowTrial ?? true);
 
+  // The specific pitch for whatever door sent them here, at the top, exactly
+  // like the homeowner /plus page's ?reason= banners. One entry per key, so a
+  // pro who tapped a Pro chip on a tile reads about THAT thing rather than the
+  // general page. An unknown or absent key renders nothing at all.
+  const reasonCopy = REASON_COPY[searchParams.reason ?? ""] ?? null;
+
   return (
     // Wider than the other branches of this page: the pricing block below is
     // three real columns (no membership, Yearly, Monthly), and max-w-2xl
     // squeezes them to the point of wrapping every price line.
     <div className="mx-auto max-w-3xl space-y-8">
+      {reasonCopy && (
+        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-500/30 dark:bg-hearth-500/15">
+          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+            {reasonCopy}
+          </p>
+        </div>
+      )}
+
       <div className="text-center">
         <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">
           Run your business, not your admin

@@ -75,14 +75,9 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
     btnRef.current?.focus();
   }
 
-  // PHONE ONLY, and first in the list. On a phone the floating Ask Hearth
-  // pill is not rendered at all (see AskHearthDock's hideOnPhone), so the
-  // assistant's only entry point was a pinned row inside Messages - which a
-  // tester never found. Desktop keeps the pill on every screen and so keeps
-  // this sheet's list exactly as it was: adding a second door next to a
-  // permanently visible one is clutter, not discovery.
-  const askLink = { href: "/ask", label: "Ask Hearth" };
-
+  // An "Ask Hearth" row used to lead this group on phones. Ask Hearth lives
+  // in one place now, the Messages tab (the pinned row at the top of /chats),
+  // so this sheet lists tools and nothing else.
   const homeLinks = [
     { href: "/walkthrough", label: "Walk your home" },
     { href: "/home-details", label: "Home details" },
@@ -267,14 +262,16 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                   the z-index ordering above is ever undone. */}
               <div className="space-y-5 p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)]">
                 <div>
-                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 max-sm:text-xs dark:text-stone-400">
                     Emergency
                   </p>
                   <div className="grid grid-cols-3 gap-2">
                     <Link
                       href="/emergency"
                       onClick={closeAndRefocus}
-                      className="flex min-h-[64px] flex-col items-center justify-center rounded-xl border border-red-200 bg-red-50 px-2 py-3 text-center text-xs font-medium text-red-600 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-400"
+                      // Phone only: 13px, not 14px. Three columns at 390px
+                      // start wrapping the longer tile names above that.
+                      className="flex min-h-[64px] flex-col items-center justify-center rounded-xl border border-red-200 bg-red-50 px-2 py-3 text-center text-xs font-medium text-red-600 max-sm:text-[13px] dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-400"
                     >
                       Emergency
                     </Link>
@@ -282,16 +279,16 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                 </div>
 
                 <div>
-                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 max-sm:text-xs dark:text-stone-400">
                     Your home
                   </p>
                   <div className="grid grid-cols-3 gap-2">
-                    {[askLink, ...homeLinks].map((l) => (
+                    {homeLinks.map((l) => (
                       <Link
                         key={l.href}
                         href={l.href}
                         onClick={closeAndRefocus}
-                        className="flex min-h-[64px] flex-col items-center justify-center rounded-xl border border-stone-200 bg-stone-50 px-2 py-3 text-center text-xs font-medium text-stone-700 hover:border-bark-300 hover:bg-bark-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
+                        className="flex min-h-[64px] flex-col items-center justify-center rounded-xl border border-stone-200 bg-stone-50 px-2 py-3 text-center text-xs font-medium text-stone-700 hover:border-bark-300 hover:bg-bark-50 max-sm:text-[13px] dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
                       >
                         {l.label}
                       </Link>
@@ -300,7 +297,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                 </div>
 
                 <div>
-                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500 max-sm:text-xs dark:text-stone-400">
                     Plus tools
                   </p>
                   <div className="grid grid-cols-3 gap-2">
@@ -309,7 +306,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                         key={l.href}
                         href={l.href}
                         onClick={closeAndRefocus}
-                        className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-3 text-center text-xs font-medium ${
+                        className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl border px-2 py-3 text-center text-xs font-medium max-sm:text-[13px] ${
                           hasPlus
                             ? "border-stone-200 bg-stone-50 text-stone-700 hover:border-bark-300 hover:bg-bark-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
                             : "border-stone-200 bg-stone-50 text-stone-500 hover:border-bark-300 hover:bg-bark-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400"
@@ -319,7 +316,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                         {!hasPlus && (
                           <>
                             {/* Matches the dashboard's Plus chip. */}
-                            <span className="rounded bg-bark-100 px-1.5 text-[10px] font-medium text-bark-700 dark:bg-bark-700 dark:text-stone-300">
+                            <span className="rounded bg-bark-100 px-1.5 text-[11px] font-medium text-bark-700 dark:bg-bark-700 dark:text-stone-300">
                               Plus
                             </span>
                             <span className="sr-only">(requires Hearth Plus)</span>

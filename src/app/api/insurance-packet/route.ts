@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
 import { getPlusTier } from "@/lib/subscription";
 import { countAiUsage, refundAiUsage } from "@/lib/aiUsage";
@@ -56,7 +57,13 @@ function fmtDate(d: string): string {
   return mon ? `${mon} ${Number(m[3])}, ${m[1]}` : d;
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  // CSRF, second lock. The session cookie is SameSite=Lax and this body is
+  // JSON, so a cross-site page cannot get a signed-in request here today;
+  // this refuses one outright rather than depending on those defaults.
+  // src/lib/csrf.ts only rejects on positive cross-site evidence.
+  const crossSite = sameOriginGuard(req);
+  if (crossSite) return crossSite;
   // Require a signed-in user before touching the paid model.
   const supabase = await createClient();
   const {
@@ -68,7 +75,8 @@ export async function POST() {
 
   // Plus-only, no free taste here: the renewal reminder and the state
   // context line are the free part. The tier (not the boolean) so the daily
-  // ceiling below can give a trial its own, smaller budget - see PlusTier in
+  // ceiling below resolves per tier: a trial gets the paid budget today, and
+  // the three-way shape is what lets that change in one line - see PlusTier in
   // src/lib/subscription.ts.
   const tier = await getPlusTier();
   const isPlus = tier !== "free";

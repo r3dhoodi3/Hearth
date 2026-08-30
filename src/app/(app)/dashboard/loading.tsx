@@ -17,17 +17,21 @@ export default function Loading() {
           <SkeletonLine width="w-2/3" />
           <SkeletonLine width="w-1/3" />
         </div>
-        <div className="card space-y-2">
+        {/* Phone: only the health score tile is real down here. Open jobs,
+            Home value, and Energy this season are all max-sm:hidden on the
+            page, so placeholders for them would be three cards that vanish
+            the moment the page arrives. Desktop still gets all four. */}
+        <div className="card space-y-2 max-sm:hidden">
           <SkeletonLine width="w-20" />
           <Skeleton className="h-6 w-24" />
           <SkeletonLine width="w-3/4" />
         </div>
-        <div className="card space-y-2">
+        <div className="card space-y-2 max-sm:hidden">
           <SkeletonLine width="w-20" />
           <Skeleton className="h-6 w-24" />
           <SkeletonLine width="w-3/4" />
         </div>
-        <div className="card space-y-2">
+        <div className="card space-y-2 max-sm:hidden">
           <SkeletonLine width="w-28" />
           <Skeleton className="h-6 w-24" />
           <SkeletonLine width="w-3/4" />

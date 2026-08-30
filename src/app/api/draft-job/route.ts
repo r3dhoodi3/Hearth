@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
 import { getPlusTier } from "@/lib/subscription";
 import { countAiUsage, overToolBurst, refundAiUsage } from "@/lib/aiUsage";
@@ -57,6 +58,13 @@ type JobDraft = {
 };
 
 export async function POST(req: NextRequest) {
+  // CSRF, second lock. The session cookie is SameSite=Lax and this body is
+  // JSON, so a cross-site page cannot get a signed-in request here today;
+  // this refuses one outright rather than depending on those defaults.
+  // src/lib/csrf.ts only rejects on positive cross-site evidence.
+  const crossSite = sameOriginGuard(req);
+  if (crossSite) return crossSite;
+
   // Authenticated feature: gating here (not just middleware) stops anonymous
   // abuse of the paid vision API, same as /api/confirm-system.
   const supabase = await createClient();

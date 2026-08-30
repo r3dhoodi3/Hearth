@@ -160,7 +160,10 @@ export default function DepositForm({
             </span>
           )}
         </div>
-        <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+        {/* 11px is under the readable floor on a phone, and this line
+            states the deposit minimum and the bonus rule. 14px below sm, the
+            original size from sm up. */}
+        <p className="mt-1 text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
           Any amount from $5.{" "}
           {boostPts > 0
             ? `Every deposit earns +${boostPts}% as a Pro member, tiers stack on top`

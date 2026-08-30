@@ -63,6 +63,7 @@ const HASH_TAB: Record<string, TabKey> = {
 export default function ProfileTabs({
   contractor,
   member,
+  smsConsent,
   trialEligible,
   projects,
   checkrEnabled,
@@ -73,6 +74,10 @@ export default function ProfileTabs({
 }: {
   contractor: Contractor;
   member: boolean;
+  // Current TCPA SMS consent for this ACCOUNT (users.sms_consent), not the
+  // company row. Read on the server in page.tsx and passed straight through to
+  // the profile form's checkbox.
+  smsConsent: boolean;
   // Whether the upgrade prompts below may lead with the free trial. Resolved
   // on the server (see page.tsx): only a pro who has never held a membership
   // gets one, and this component has no way to check that itself.
@@ -155,7 +160,7 @@ export default function ProfileTabs({
 
       {tab === "public" ? (
         <div className="space-y-6">
-          <PublicProfileForm contractor={contractor} />
+          <PublicProfileForm contractor={contractor} smsConsent={smsConsent} />
           {checkrEnabled && (
             <BackgroundCheckCard
               contractor={contractor}

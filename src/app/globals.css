@@ -19,9 +19,9 @@ body {
 
 /* Below sm, both the homeowner and pro shells (Nav.tsx / ProNav.tsx, mirrored)
    add a fixed bottom tab bar for primary navigation. A few floating
-   bottom-right widgets - the Ask Hearth dock (AskHearthDock.tsx), the new
-   message toast (NewMessageNotifier.tsx), and the lead chat dock
-   (ChatDock.tsx) - would otherwise sit on top of that bar's rightmost tab.
+   bottom-right widgets - the new message toast (NewMessageNotifier.tsx) and
+   the lead chat dock (ChatDock.tsx); the Ask Hearth dock was removed on
+   2026-08-29 - would otherwise sit on top of that bar's rightmost tab.
    Nudge them up by the tab bar's height instead of overlapping it. Scoped to
    the exact Tailwind class combination each widget's outer wrapper uses
    (fixed + bottom-4 + right-4 + z-40/z-50), which no other fixed element in
@@ -33,6 +33,68 @@ body {
     /* Tab bar content is 3rem tall (min-h-[48px]) plus its own
        safe-area-inset-bottom padding on notched phones, plus a small gap. */
     bottom: calc(3.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* PHONE CHAT PANEL (PhoneChatFrame.tsx + useVisualViewport.ts).
+
+   iOS Safari never shrinks 100dvh for the software keyboard; it shrinks
+   window.visualViewport and then scrolls the document to "reveal" the focused
+   field, which shoved the composer, the feed and the tab bar around until what
+   you were typing was off screen. Below sm the chat box therefore stops being
+   a tall block in the page flow and becomes a fixed panel: top under the
+   sticky header, bottom at the top of the keyboard (or at the tab bar when
+   there is no keyboard), height straight off the visual viewport. The messages
+   scroll inside it, the composer is the last flex child, and neither can be
+   pushed off screen because the panel never extends past what the screen is
+   actually showing.
+
+   The 3.5rem fallbacks only ever apply to the single paint before the hook's
+   first measurement lands: it is the tab bar's real height (see the note
+   above) and roughly a header's.
+
+   Selectors are `body .hearth-chat-frame` so they outrank the Tailwind
+   utilities on the same element (rounded-xl, border, p-3, h-[...]) without
+   editing the four pages' desktop classes, which stay exactly as they were. */
+@media (max-width: 639.98px) {
+  body .hearth-chat-frame {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--hearth-chat-top, 3.5rem);
+    height: calc(
+      var(--hearth-vvh, 100dvh) - var(--hearth-chat-top, 3.5rem) -
+        var(--hearth-chat-bottom, 3.5rem)
+    );
+    /* Above page content, below both shells' chrome (the tab bars are z-30,
+       the headers z-30 and z-40), which this panel is sized to sit between
+       rather than cover. */
+    z-index: 20;
+    border-radius: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    /* The composer's own bottom gap. The tab bar underneath already covers
+       the home indicator, so the safe-area inset is only added back for the
+       part of it the tab bar does not already cover (none, in practice, which
+       is the point: no double gap under the composer). */
+    padding-bottom: calc(
+      0.75rem +
+        max(0px, env(safe-area-inset-bottom) - var(--hearth-chat-bottom, 3.5rem))
+    );
+  }
+  /* Keyboard up: no inset at all. The keyboard is drawn over the home
+     indicator, so padding for it would just be a strip of dead space between
+     what you are typing and the keys. */
+  body.hearth-kb-open .hearth-chat-frame {
+    padding-bottom: 0.75rem;
+  }
+  /* iMessage shows no tab bar while you are typing, and here it would sit on
+     top of the keyboard anyway. Toggled by useChatViewport rather than by
+     editing Nav.tsx / ProNav.tsx, so the two shells keep one definition of
+     their own tab bar. */
+  body.hearth-kb-open nav.fixed.bottom-0 {
+    display: none;
   }
 }
 

@@ -4,6 +4,7 @@ import { getActiveProperty } from "@/lib/property";
 import { labelFor, SYSTEM_TYPES, ISSUE_CATEGORIES } from "@/lib/constants";
 import AskHearth from "@/components/AskHearth";
 import { FileText, Bell, Search, type LucideIcon } from "lucide-react";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 // Pages the search can jump to, each with a few keywords so a homeowner does
 // not have to know the exact page name.
@@ -124,6 +125,9 @@ export default async function SearchPage(
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      {/* Static label regardless of the query - the breadcrumb answers "how
+          did I get here", not "what did I search for". */}
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Search" }]} />
       <div className="space-y-3">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           {q ? `Results for "${q}"` : "Search"}

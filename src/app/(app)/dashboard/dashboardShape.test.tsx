@@ -31,7 +31,13 @@ vi.mock("next/navigation", () => ({
 // Mutable fixture the Supabase stub below reads home_systems from. Hoisted so
 // it exists before page.tsx (and therefore the mocked module) is imported;
 // most tests want an empty home, the "Your systems" ones fill it in.
-const fixtures = vi.hoisted(() => ({ systems: [] as Record<string, unknown>[] }));
+const fixtures = vi.hoisted(() => ({
+  systems: [] as Record<string, unknown>[],
+  // maintenance_tasks. Empty for most tests (no plan built yet); the
+  // maintenance-plan CTA tests fill it with a real plan-schedule title so
+  // hasOpenPlan flips true.
+  tasks: [] as Record<string, unknown>[],
+}));
 
 vi.mock("@/lib/subscription", () => ({
   hasPlus: vi.fn(async () => true),
@@ -99,7 +105,9 @@ vi.mock("@/lib/supabase/server", () => ({
           ? [openIssue]
           : table === "home_systems"
             ? fixtures.systems
-            : []
+            : table === "maintenance_tasks"
+              ? fixtures.tasks
+              : []
       ),
   })),
 }));
@@ -145,6 +153,9 @@ vi.mock("../value/ValueAutoFetch", () => ({
 }));
 
 import HomePage from "./page";
+// Real helper, not a stub: the page decides "a plan exists" by matching open
+// task titles against this set, so the fixture has to use a title from it.
+import { planTitles } from "@/lib/maintenancePlan";
 
 async function renderDashboard(searchParams: Record<string, string> = {}) {
   const element = await HomePage({
@@ -219,29 +230,41 @@ describe("Hearth's briefing rows", () => {
   });
 });
 
-// A phone has no floating Ask Hearth pill (AskHearthDock is desktop-only), and
-// the assistant otherwise lives as a pinned row inside Messages, which a tester
-// never found. The dashboard now carries a door to it, above every number.
+// Ask Hearth has one entry point now, the pinned row at the top of the Messages
+// tab. The dashboard used to carry a phone-only door to it as well; scattering
+// doors is what made the assistant read as the whole product.
 describe("Ask Hearth entry point", () => {
-  it("renders a phone-only Ask Hearth card that clears 44px", async () => {
-    const { getByTestId } = await renderDashboard();
-    const card = getByTestId("ask-hearth-card");
-    expect(card.getAttribute("href")).toBe("/ask");
-    expect(card.classList.contains("sm:hidden")).toBe(true);
-    expect(card.classList.contains("min-h-11")).toBe(true);
-    expect(card.textContent).toContain("Ask Hearth anything about your home");
+  it("carries no Ask Hearth door of its own", async () => {
+    const { queryByTestId, container } = await renderDashboard();
+    expect(queryByTestId("ask-hearth-card")).toBeNull();
+    const askLinks = Array.from(container.querySelectorAll("a")).filter(
+      (a) => a.getAttribute("href") === "/ask"
+    );
+    expect(askLinks).toHaveLength(0);
   });
+});
 
-  it("sits above the stat grid, not buried under it", async () => {
-    const { getByTestId, container } = await renderDashboard();
-    const card = getByTestId("ask-hearth-card");
+// Phone: the stats grid is the Home Health Score and nothing else. Open jobs,
+// Home value, and Energy this season each duplicate somewhere one tap away and
+// made the home page a long scroll on a 390px screen. All three are still in
+// the DOM for desktop, behind max-sm:hidden.
+describe("Stat cards on a phone", () => {
+  it("hides the energy card below sm and keeps the health score", async () => {
+    const { container } = await renderDashboard();
+    const energy = Array.from(container.querySelectorAll("p")).find(
+      (p) => p.textContent === "Energy this season"
+    );
+    expect(energy).toBeTruthy();
+    expect(energy!.closest("div.card")!.classList.contains("max-sm:hidden")).toBe(
+      true
+    );
     const score = Array.from(container.querySelectorAll("p")).find(
       (p) => p.textContent === "Home Health Score"
     );
     expect(score).toBeTruthy();
-    expect(
-      card.compareDocumentPosition(score!) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    expect(score!.closest("div.card-hero")!.className).not.toContain(
+      "max-sm:hidden"
+    );
   });
 });
 
@@ -297,21 +320,58 @@ describe("Your systems on a phone", () => {
 });
 
 describe("This month task disclosure", () => {
-  it("is collapsed by default", async () => {
+  // The owner's rule: open on the first visit and on the thousandth, and only
+  // closed if the reader closed it themselves. So the server render is now
+  // unconditionally open, and the remembered close is applied on the client by
+  // RememberedDetails (see its own test for that half).
+  it("is open by default on every visit", async () => {
     const { getByTestId } = await renderDashboard();
     const details = getByTestId("this-month-tasks");
-    expect(details).not.toHaveAttribute("open");
+    expect(details).toHaveAttribute("open");
   });
 
-  it("starts expanded with ?plan=open", async () => {
+  it("stays open with ?plan=open", async () => {
     const { getByTestId } = await renderDashboard({ plan: "open" });
     const details = getByTestId("this-month-tasks");
     expect(details).toHaveAttribute("open");
   });
 
-  it("starts expanded on a first visit (?welcome=1)", async () => {
+  it("stays open on a first visit (?welcome=1)", async () => {
     const { getByTestId } = await renderDashboard({ welcome: "1" });
     const details = getByTestId("this-month-tasks");
     expect(details).toHaveAttribute("open");
+  });
+});
+
+describe("Maintenance plan CTA", () => {
+  // The owner's complaint: pressing "Get my maintenance plan" made the button
+  // disappear, so there was nothing to press again and no way to top the plan
+  // up later. A member with a plan now keeps a real button in the same spot.
+  const planTitle = [...planTitles()][0];
+
+  afterEach(() => {
+    fixtures.tasks = [];
+  });
+
+  it("offers the build button while no plan exists", async () => {
+    fixtures.tasks = [];
+    const { getByRole, queryByRole } = await renderDashboard();
+    expect(getByRole("button", { name: "Build my plan" })).toBeInTheDocument();
+    expect(
+      queryByRole("button", { name: "Update my maintenance plan" })
+    ).toBeNull();
+  });
+
+  it("keeps a button in the same spot once the plan exists", async () => {
+    fixtures.tasks = [
+      { id: "t-1", title: planTitle, status: "open", due_date: null },
+    ];
+    const { getByRole } = await renderDashboard();
+    // "View my plan" is still the primary, and the action that builds the plan
+    // comes back as a secondary rather than vanishing.
+    expect(getByRole("link", { name: "View my plan" })).toBeInTheDocument();
+    expect(
+      getByRole("button", { name: "Update my maintenance plan" })
+    ).toBeInTheDocument();
   });
 });

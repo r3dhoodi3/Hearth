@@ -1,14 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
-import {
-  SYSTEM_TYPES,
-  ISSUE_CATEGORIES,
-  labelFor,
-  categoryForSystem,
-} from "@/lib/constants";
+import { SYSTEM_TYPES, categoryForSystem } from "@/lib/constants";
 import { DEFAULT_LIFESPANS, assessSystem } from "@/lib/health";
-import AskHearth from "@/components/AskHearth";
 import LearnGuides, { type GuideData } from "./LearnGuides";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 const STAGE_LABEL: Record<string, string> = {
   healthy: "Healthy",
@@ -170,10 +165,8 @@ export default async function LearnPage() {
   const supabase = await createClient();
   const property = await getActiveProperty();
 
-  // First instance of each system type they own, for inline status; plus their
-  // most recent open issue, to seed a personal starter question.
+  // First instance of each system type they own, for inline status.
   const byType = new Map<string, any>();
-  let openIssueCategory: string | null = null;
   // Most recent open issue per category, so a pure age-estimate can be told
   // apart from a system with a real reported problem (mirrors SystemRow's
   // isPureAgeEstimate below).
@@ -190,7 +183,6 @@ export default async function LearnPage() {
     ]);
     for (const s of systems ?? [])
       if (!byType.has(s.system_type)) byType.set(s.system_type, s);
-    if (issues && issues.length) openIssueCategory = issues[0].category;
     for (const i of issues ?? [])
       if (!openIssueByCat.has(i.category)) openIssueByCat.set(i.category, i);
   }
@@ -199,41 +191,15 @@ export default async function LearnPage() {
   const owned = SYSTEM_TYPES.filter((t) => byType.has(t.value));
   const types = owned.length ? owned : SYSTEM_TYPES;
 
-  // Starter questions seeded from THEIR systems - aging ones ask about lifespan,
-  // the rest about maintenance. An open issue takes top billing.
-  const suggestions: string[] = [];
-  for (const t of owned.slice(0, 3)) {
-    const stage = assessSystem(byType.get(t.value)).stage;
-    // Keep all-caps acronyms like HVAC uppercase; lowercase normal words so the
-    // question reads naturally ("Is my roof...", not "Is my Roof...").
-    const label =
-      t.label === t.label.toUpperCase() ? t.label : t.label.toLowerCase();
-    suggestions.push(
-      stage === "due" || stage === "aging"
-        ? `Is my ${label} near the end of its life?`
-        : `How do I maintain my ${label}?`
-    );
-  }
-  if (openIssueCategory) {
-    suggestions.unshift(
-      `What should I do about my open ${labelFor(
-        ISSUE_CATEGORIES,
-        openIssueCategory
-      ).toLowerCase()} issue?`
-    );
-  }
-  if (suggestions.length === 0)
-    suggestions.push("How do I keep my home in good shape?");
-  if (suggestions.length < 4)
-    suggestions.push("What should I focus on this season?");
+  // An Ask Hearth box used to sit at the top of this page, seeded with starter
+  // questions built from the owner's own systems. Both are gone: Ask Hearth
+  // lives in the Messages tab now, and Learn is the guides and nothing else.
 
   // Flatten each system into plain guide data for the client-side search,
   // filter, and accordion component.
   const guides: GuideData[] = types.map((t) => {
     const instance = byType.get(t.value);
     const h = instance ? assessSystem(instance) : null;
-    const aging = h?.stage === "due" || h?.stage === "aging";
-    const label = t.label.toLowerCase();
     // A "due" status with no walkthrough confirmation, no owner-entered
     // condition, and no reported issue is only an age-based guess, not a
     // confirmed problem, so it shouldn't read as scary-red (same softening as
@@ -263,23 +229,18 @@ export default async function LearnPage() {
           : undefined,
       age: h?.age ?? null,
       tips: LEARN[t.value] ?? [],
-      askQuestion: aging
-        ? `My ${label} is getting older. What should I be doing, and is it near replacement?`
-        : `How should I maintain my ${label}?`,
     };
   });
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Learn" }]} />
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Learn</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Ask anything about your home and get an answer based on your actual
-          systems. Or search, filter, and browse the basics below.
+          Search, filter, and browse the basics for the systems in your home.
         </p>
       </div>
-
-      <AskHearth suggestions={suggestions} />
 
       <div>
         <h2 className="text-sm font-semibold text-stone-700 dark:text-stone-300">

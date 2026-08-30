@@ -25,6 +25,13 @@ import {
   shouldShowMeter,
   type AskLink,
 } from "@/lib/askLimits";
+import {
+  askLockKey,
+  clearAskLock,
+  readAskLock,
+  writeAskLock,
+} from "@/lib/askLock";
+import { useAutoGrow, useIsPhone } from "@/lib/useVisualViewport";
 
 export type Msg = {
   role: "user" | "assistant";
@@ -639,11 +646,11 @@ const DEFAULT_DISCLAIMER =
   "Hearth's cost figures are ballpark estimates. Confirm with a local pro before you commit.";
 
 // `fill` = take the full height of its container (the Messages pane); otherwise
-// it renders as a compact card (Home / Learn). `suggestions` are starter
-// questions shown as chips until the owner asks something. `greeting` is an
-// optional personalized opener (e.g. referencing their systems/issues).
-// `initialQuestion` is a question handed to a freshly mounted instance (the
-// dock opening in response to "hearth:ask-question"); it is submitted once.
+// it renders as a compact card (/search). `suggestions` are starter questions
+// shown as chips until the owner asks something. `greeting` is an optional
+// personalized opener (e.g. referencing their systems/issues).
+// `initialQuestion` is a question handed to a freshly mounted instance (a ?q=
+// on /ask or /chats); it is submitted once.
 export default function AskHearth({
   fill = false,
   suggestions,
@@ -720,7 +727,7 @@ export default function AskHearth({
   const [photoLocked, setPhotoLocked] = useState(false);
   // What the server said about this viewer's plan the LAST time it answered
   // them: "unknown" until a reply has ever arrived on this device, "trial"
-  // for a Plus trial member (own smaller daily allowance, photos included),
+  // for a Plus trial member (the paid daily allowance, photos included),
   // "free" for the uncapped-in-name-only free tier, "plus" for a paid member.
   const [knownPlan, setKnownPlan] = useState<
     "unknown" | "free" | "trial" | "plus"
@@ -730,8 +737,18 @@ export default function AskHearth({
   // element in two layouts). Read only to answer "is the reader still at the
   // bottom?" while an answer streams in.
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The composer, in its two shapes. Desktop keeps the single-line input it
+  // has always had; below sm it is an auto-growing textarea instead (Return
+  // adds a line, Send sends), so a long question stays readable rather than
+  // scrolling out of a one-line field. Only one is mounted at a time, so the
+  // other ref is always null - see focusComposer.
   const inputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const submitRef = useRef<(t: string) => void>(() => {});
+  // Which of the two the markup renders. False on the server and on the first
+  // client render, so hydration matches and desktop never sees the textarea.
+  const isPhone = useIsPhone();
+  useAutoGrow(composerRef, input, isPhone);
   // Synchronous "a question is already in flight" latch. See submit().
   const sendingRef = useRef(false);
   // WHICH CONVERSATION A STREAM IN FLIGHT BELONGS TO.
@@ -777,6 +794,10 @@ export default function AskHearth({
   const storageKey = userId ? `${STORAGE_KEY}:${userId}` : STORAGE_KEY;
   const retentionKey = userId ? `${RETENTION_KEY}:${userId}` : RETENTION_KEY;
   const planKey = userId ? `${DEFAULT_PLAN_KEY}:${userId}` : DEFAULT_PLAN_KEY;
+  // Where "you are out of questions until the window rolls over" is written
+  // down. Keyed off STORAGE_KEY so the homeowner chat and the pro copilot keep
+  // separate locks on one device, the same way they keep separate histories.
+  const limitKey = askLockKey(STORAGE_KEY, userId);
 
   // Resolve the signed-in user once, and migrate any legacy shared-key chat to
   // the per-user key (then remove the legacy key so the next account on this
@@ -859,6 +880,16 @@ export default function AskHearth({
       } catch {
         /* ignore */
       }
+      // TODAY'S ALLOWANCE, IF IT IS ALREADY SPENT. The lock used to live only
+      // in component state, so leaving this screen and coming back handed back
+      // an open composer that refused everything typed into it. The stored
+      // lock expires with the server's own 24 hour window (see askLock.ts), so
+      // this can only ever re-show a bar the server would show anyway.
+      const lock = readAskLock(limitKey);
+      if (lock) {
+        setFreeLimit(lock.limit);
+        setFreeLeft(0);
+      }
     }
     function onSync(e: Event) {
       // Ignore updates for a different key (e.g. another instance already on
@@ -900,7 +931,7 @@ export default function AskHearth({
       window.removeEventListener("storage", onStorage);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey, retentionKey, planKey]);
+  }, [storageKey, retentionKey, planKey, limitKey]);
 
   // Set the conversation everywhere it is read from: React state for the
   // render, and the ref the send handler builds its optimistic append off.
@@ -999,6 +1030,31 @@ export default function AskHearth({
     endRef.current?.scrollIntoView({ block: "nearest" });
   }, [messages, loading]);
 
+  // Focus whichever composer is mounted at this width.
+  function focusComposer() {
+    (composerRef.current ?? inputRef.current)?.focus();
+  }
+
+  // The keyboard opening shrinks the panel under the feed, which leaves the
+  // newest message hidden behind the keys. Follow it down once the keyboard
+  // has finished animating in. Same courtesy as the effect above: a reader who
+  // has deliberately scrolled up to re-read something is left where they are.
+  const focusScrollRef = useRef<number | undefined>(undefined);
+  function onComposerFocus() {
+    window.clearTimeout(focusScrollRef.current);
+    focusScrollRef.current = window.setTimeout(() => {
+      const box = scrollRef.current;
+      if (
+        box &&
+        box.scrollHeight - box.scrollTop - box.clientHeight > STICK_TO_BOTTOM_PX
+      ) {
+        return;
+      }
+      endRef.current?.scrollIntoView({ block: "nearest" });
+    }, 350);
+  }
+  useEffect(() => () => window.clearTimeout(focusScrollRef.current), []);
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
     submit(input.trim());
@@ -1032,6 +1088,12 @@ export default function AskHearth({
       // askTier is the only field that tells them apart, so it decides which
       // plan gets remembered rather than the two both landing on "free".
       rememberPlan(data.askTier === "trialing" ? "trial" : "free");
+      // Write the lock down, or lift it. Coming back to a spent allowance has
+      // to look the same as running into it did (see readAskLock on mount);
+      // anything above zero - including the +1 the server hands back when its
+      // own model call failed - means the bar comes off again.
+      if (data.freeRemaining === 0) writeAskLock(limitKey, data.freeLimit);
+      else if (typeof data.freeRemaining === "number") clearAskLock(limitKey);
     } else if (ok) {
       setFreeLeft(null);
       setFreeLimit(null);
@@ -1040,6 +1102,9 @@ export default function AskHearth({
       // hint under the composer never greets a paying member with a pitch
       // for something they already bought.
       rememberPlan("plus");
+      // A member has no daily bar to be behind, so any lock left over from a
+      // free day is stale.
+      clearAskLock(limitKey);
     }
   }
 
@@ -1376,11 +1441,13 @@ export default function AskHearth({
   }
   submitRef.current = submit;
 
-  // Answer questions fired from elsewhere in the app (Learn's "Maintenance
-  // basics" cards, the forecast plan button). Every mounted instance listens;
-  // the first one to see the event claims it via a flag on the event object
-  // (listeners run synchronously in registration order), so when two instances
-  // exist (Learn's inline box + the dock) exactly one submits.
+  // Answer a question fired from elsewhere in the app as a window event. No
+  // sender is left today (the floating dock is gone, Learn's ask buttons with
+  // it, and the forecast plan button navigates to /ask?q= or the Messages ask
+  // pane instead), so this is a hook for any future in-page sender. Every
+  // mounted instance listens and the first one to see the event claims it via
+  // a flag on the event object (listeners run synchronously in registration
+  // order), so two mounted panes can never both answer it.
   useEffect(() => {
     function onAsk(e: Event) {
       if ((e as any).__hearthHandled) return;
@@ -1518,8 +1585,10 @@ export default function AskHearth({
   // the meter above takes over and says something truer: the actual count
   // left today), and only for "free" - a trial member already gets 8 a day
   // and photos, and this hint's pitch for Plus makes no sense to someone
-  // already on the trial. The numbers match ASK_DAILY_FREE and ASK_DAILY_PLUS
-  // in src/lib/aiUsage.ts, which is server-only and cannot be imported here.
+  // already on the trial. The free number matches ASK_DAILY_FREE in
+  // src/lib/aiUsage.ts, which is server-only and cannot be imported here; the
+  // Plus side is deliberately unnumbered ("more"), so it cannot go stale and
+  // does not read as a cap.
   const showFreeHint =
     endpoint === "/api/ask" &&
     !hasAsked &&
@@ -1670,7 +1739,9 @@ export default function AskHearth({
                   type="button"
                   onClick={() => submit(opt)}
                   disabled={loading || atFreeLimit || !userReady}
-                  className="rounded-full border border-bark-500 bg-white px-3 py-2 text-xs font-medium text-bark-700 hover:bg-bark-50 disabled:opacity-50 dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+                  // Phone only: these chips are how you answer a follow-up
+                  // question, and 32px was under the touch floor.
+                  className="rounded-full border border-bark-500 bg-white px-3 py-2 text-xs font-medium text-bark-700 hover:bg-bark-50 disabled:opacity-50 max-sm:min-h-11 max-sm:text-sm dark:border-bark-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
                 >
                   {opt}
                 </button>
@@ -1678,8 +1749,8 @@ export default function AskHearth({
             {/* Always let them type their own answer instead of picking. */}
             <button
               type="button"
-              onClick={() => inputRef.current?.focus()}
-              className="rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-500 hover:bg-stone-50 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400 dark:hover:bg-stone-600"
+              onClick={focusComposer}
+              className="rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-500 hover:bg-stone-50 max-sm:min-h-11 max-sm:text-sm dark:border-white/10 dark:bg-stone-700 dark:text-stone-400 dark:hover:bg-stone-600"
             >
               Other (type)
             </button>
@@ -1751,7 +1822,8 @@ export default function AskHearth({
           <button
             type="button"
             onClick={() => setPendingImage(null)}
-            className="text-xs text-stone-500 hover:text-red-600 dark:text-stone-400 dark:hover:text-red-400"
+            // Phone only: 16px tall before.
+            className="text-xs text-stone-500 hover:text-red-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-stone-400 dark:hover:text-red-400"
           >
             Remove
           </button>
@@ -1768,7 +1840,7 @@ export default function AskHearth({
           any upload) or by the server's own locked reply (unknown plan,
           after one). */}
       {photoLocked && !atFreeLimit && (
-        <p className="mb-2 text-xs text-stone-500 dark:text-stone-400">
+        <p className="mb-2 text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
           {/* The pro copilot gates photos on Hearth PRO, not Plus (see
               src/app/api/pro-ask/route.ts), and it shares this component. The
               link itself already comes from the server's own locked reply, so
@@ -1778,7 +1850,9 @@ export default function AskHearth({
             : "Photos need Hearth Pro."}{" "}
           <Link
             href={plusLink.href}
-            className="font-medium text-bark-700 underline dark:text-stone-300"
+            // Phone only: padding grows an inline link to a 44px touch area
+            // without changing the line box, so the sentence does not reflow.
+            className="font-medium text-bark-700 underline max-sm:py-3 dark:text-stone-300"
           >
             {plusLink.label}
           </Link>
@@ -1832,7 +1906,7 @@ export default function AskHearth({
               aria-label="Attach a photo, requires Hearth Plus"
               title="Attach a photo (Hearth Plus)"
               onClick={() => setPhotoLocked(true)}
-              className="flex items-center gap-1 rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
+              className="flex items-center gap-1 rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 max-sm:min-h-11 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
             >
               {photoIcon}
               {/* Matches the dashboard's Plus chip (see ToolsMenu.tsx). The
@@ -1848,7 +1922,7 @@ export default function AskHearth({
           ) : (
             <label
               title="Attach a photo"
-              className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
+              className="flex cursor-pointer items-center rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 max-sm:min-h-11 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
             >
               {photoIcon}
               <span className="sr-only">Attach a photo</span>
@@ -1871,16 +1945,38 @@ export default function AskHearth({
               setInput((prev) => (prev ? `${prev} ${t}` : t))
             }
           />
-          <input
-            ref={inputRef}
-            className="input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            // Short enough to fit a 390px phone: the old "Ask, speak, or attach
-            // a photo…" was clipped mid-word there, and the mic and camera
-            // buttons sitting right next to the field already say the rest.
-            placeholder="Ask anything"
-          />
+          {/* PHONE: an auto-growing textarea, iMessage style. Return adds a
+              line and only Send sends, so a long question is written and READ
+              before it goes, instead of being fired off by the Return key or
+              scrolled out of a one-line field. Grows to MAX_COMPOSER_ROWS and
+              scrolls after that (see the grow effect). `.input` is already
+              text-base below sm, which is what stops iOS zooming the page on
+              focus.
+              DESKTOP: the same single-line <input> as before, byte for byte,
+              so Enter still sends and the row still measures the same. Only
+              one of the two is ever mounted, so only one ever holds a ref. */}
+          {isPhone ? (
+            <textarea
+              ref={composerRef}
+              rows={1}
+              className="input resize-none"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onFocus={onComposerFocus}
+              placeholder="Ask anything"
+            />
+          ) : (
+            <input
+              ref={inputRef}
+              className="input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              // Short enough to fit a 390px phone: the old "Ask, speak, or attach
+              // a photo…" was clipped mid-word there, and the mic and camera
+              // buttons sitting right next to the field already say the rest.
+              placeholder="Ask anything"
+            />
+          )}
           {/* `!userReady` is a sub-second gate on a freshly loaded page: until
               the signed-in user resolves, this chat is still reading the
               LEGACY storage key and does not yet know which account's saved
@@ -1918,7 +2014,7 @@ export default function AskHearth({
           line, then it hands over to the meter for good. */}
       {showFreeHint && (
         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-          3 free questions a day. Plus gives you 15 and photo answers.
+          3 free questions a day. Plus gives you more, plus photo answers.
         </p>
       )}
       <AiNotice detail={disclaimer} size="xxs" className="mt-1" />
@@ -1984,7 +2080,8 @@ export default function AskHearth({
               // streaming abandons the answer (see generationRef), which is
               // right but reads as a bug if it happens by accident.
               disabled={loading}
-              className="text-sm font-medium text-stone-500 hover:text-red-600 disabled:opacity-50 disabled:hover:text-stone-500 dark:text-stone-400 dark:hover:text-red-400"
+              // Phone only: ~20px tall before.
+              className="text-sm font-medium text-stone-500 hover:text-red-600 disabled:opacity-50 disabled:hover:text-stone-500 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400 dark:hover:text-red-400"
             >
               Clear conversation
             </button>
@@ -2017,7 +2114,7 @@ export default function AskHearth({
             // is too easy to hit by accident and too hard to hit on purpose.
             // A button centers its own label, so min-h alone does it. Reset at
             // sm so the desktop dock header is unchanged.
-            className="min-h-10 px-2 text-xs text-stone-500 hover:text-stone-700 disabled:opacity-50 disabled:hover:text-stone-500 dark:text-stone-400 dark:hover:text-stone-300 sm:min-h-0 sm:px-0"
+            className="min-h-11 px-2 text-xs text-stone-500 hover:text-stone-700 disabled:opacity-50 disabled:hover:text-stone-500 max-sm:text-sm dark:text-stone-400 dark:hover:text-stone-300 sm:min-h-0 sm:px-0"
           >
             Clear
           </button>
@@ -2034,7 +2131,11 @@ export default function AskHearth({
         <div ref={endRef} />
       </div>
 
-      <div className="mt-2">{composer}</div>
+      {/* shrink-0: the composer is the one thing on this screen that must
+          never be squeezed. The feed above it is flex-1 and gives up its own
+          height instead, which is what keeps the field above the keyboard on a
+          phone. */}
+      <div className="mt-2 shrink-0">{composer}</div>
 
       <Lightbox
         src={lightboxSrc}

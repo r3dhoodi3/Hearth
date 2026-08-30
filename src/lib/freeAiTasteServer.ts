@@ -3,6 +3,7 @@ import { isMissingSchemaError } from "@/lib/dbErrors";
 import {
   FREE_TASTE_COLUMN,
   FREE_TASTE_LIMIT,
+  FREE_PRO_DRAFTS,
   type FreeAiFeature,
 } from "@/lib/freeAiTaste";
 
@@ -160,5 +161,116 @@ export async function refundFreeTaste(
     if (error) throw error;
   } catch (err) {
     console.error(`refund_free_ai_taste failed for ${feature}:`, err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The pro side's back-office taste (migration 0145)
+// ---------------------------------------------------------------------------
+// Same three functions as above, one level up: the counter lives on the
+// CONTRACTOR row (contractors.free_tool_drafts_used) rather than on a user,
+// because the business is what has a membership and a wallet. See the block in
+// src/lib/freeAiTaste.ts for the rest of the reasoning, and the header of this
+// file for the claim-up-front / refund-on-failure ordering, which is identical.
+
+// Whether this process has already said 0145 is missing. One line per process,
+// not one per request, for the same reason as warnMissingMigrationOnce above.
+let warnedMissingProMigration = false;
+
+function warnMissingProMigrationOnce(err: unknown): void {
+  if (warnedMissingProMigration) return;
+  warnedMissingProMigration = true;
+  console.warn(
+    "free pro back-office drafts are NOT being metered: claim_pro_free_taste is missing, so migration 0145 is not applied to this database. " +
+      "Failing OPEN until it is. Paste supabase/PASTE-ME-live-2026-08-29-pro-free-drafts.sql to close the gate.",
+    err
+  );
+}
+
+// How many free drafts this contractor has left, for the meter only. Null for
+// a Pro member (no meter is shown at all) and null when the counter cannot be
+// read, in which case the UI shows nothing rather than a guess.
+export async function proDraftsLeft(
+  contractorId: string,
+  isMember: boolean
+): Promise<number | null> {
+  if (isMember) return null;
+  try {
+    const admin = createAdminClient();
+    // Cast: free_tool_drafts_used is migration 0145 and predates the next
+    // regeneration of src/lib/database.types.ts, the same convention every
+    // other post-0029 column uses here.
+    const { data, error } = await (admin as any)
+      .from("contractors")
+      .select("free_tool_drafts_used")
+      .eq("id", contractorId)
+      .maybeSingle();
+    if (error || !data) return null;
+    const used = Number(data.free_tool_drafts_used ?? 0);
+    if (!Number.isFinite(used)) return null;
+    return Math.max(0, FREE_PRO_DRAFTS - used);
+  } catch {
+    return null;
+  }
+}
+
+// Spend one draft, atomically, or report that this contractor is out.
+//
+// `allowed` is what the route gates on. `claimed` says whether a counter
+// actually moved, so the caller knows whether there is anything to refund; a
+// member and a fail-open both come back allowed with claimed false.
+export async function claimProDraft(
+  contractorId: string,
+  isMember: boolean
+): Promise<{ allowed: boolean; claimed: boolean }> {
+  // Members never touch the counter.
+  if (isMember) return { allowed: true, claimed: false };
+
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await (admin as any).rpc("claim_pro_free_taste", {
+      p_contractor: contractorId,
+      p_limit: FREE_PRO_DRAFTS,
+    });
+    if (error) throw error;
+    if (data === true) return { allowed: true, claimed: true };
+    return { allowed: false, claimed: false };
+  } catch (err) {
+    // The ONE fail-open: the function/column is not on this database yet. See
+    // the header for why this single case fails open and everything else does
+    // not - and note the direction here is the gentler one, since the back
+    // office was members-only before 0145, so a fail-open hands out drafts
+    // that were never free rather than taking something away.
+    if (isMissingSchemaError(err as { code?: string; message?: string })) {
+      // Fails CLOSED after all (changed 2026-08-30 by the pre-push review):
+      // failing open here handed every free contractor account the full Plus
+      // ceiling of extended-thinking calls until 0145 was pasted, which is a
+      // real bill. Members were already let through above, so this branch
+      // only ever costs a free pro their two drafts until the paste lands,
+      // which is exactly the pre-0145 behaviour (members-only back office).
+      warnMissingProMigrationOnce(err);
+      return { allowed: false, claimed: false };
+    }
+    console.error("claim_pro_free_taste failed - failing CLOSED:", err);
+    return { allowed: false, claimed: false };
+  }
+}
+
+// Hand a claimed draft back. Best effort, exactly like refundFreeTaste: it
+// never throws and never blocks the response. A no-op when nothing was
+// claimed.
+export async function refundProDraft(
+  contractorId: string,
+  claimed: boolean
+): Promise<void> {
+  if (!claimed) return;
+  try {
+    const admin = createAdminClient();
+    const { error } = await (admin as any).rpc("refund_pro_free_taste", {
+      p_contractor: contractorId,
+    });
+    if (error) throw error;
+  } catch (err) {
+    console.error("refund_pro_free_taste failed:", err);
   }
 }

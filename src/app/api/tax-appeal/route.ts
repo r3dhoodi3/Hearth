@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
 import { getPlusTier } from "@/lib/subscription";
 import { countAiUsage, refundAiUsage } from "@/lib/aiUsage";
@@ -20,7 +21,13 @@ export const runtime = "nodejs";
 //         feed the model made-up numbers under Hearth's letterhead tone)
 // Output: { letter } | { letter: null, reason: "no_key" | "rate_limited" | "failed" }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  // CSRF, second lock. The session cookie is SameSite=Lax and this body is
+  // JSON, so a cross-site page cannot get a signed-in request here today;
+  // this refuses one outright rather than depending on those defaults.
+  // src/lib/csrf.ts only rejects on positive cross-site evidence.
+  const crossSite = sameOriginGuard(req);
+  if (crossSite) return crossSite;
   // Require a signed-in user before touching the paid model.
   const supabase = await createClient();
   const {

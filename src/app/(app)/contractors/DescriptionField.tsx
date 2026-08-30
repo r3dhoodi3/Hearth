@@ -146,7 +146,8 @@ export default function DescriptionField({
             disabled={drafting || handTyped}
             aria-hidden={handTyped}
             tabIndex={handTyped ? -1 : 0}
-            className={`shrink-0 text-xs font-medium text-bark-700 hover:underline disabled:opacity-60 dark:text-stone-300 ${
+            // Phone only: 16px tall before.
+            className={`shrink-0 text-xs font-medium text-bark-700 hover:underline disabled:opacity-60 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-stone-300 ${
               handTyped ? "invisible pointer-events-none" : ""
             }`}
           >
@@ -195,7 +196,7 @@ export default function DescriptionField({
               type="button"
               onClick={draftFromPhoto}
               disabled={drafting}
-              className="mt-1 text-xs font-medium text-bark-700 hover:underline disabled:opacity-60 dark:text-stone-300"
+              className="mt-1 text-xs font-medium text-bark-700 hover:underline disabled:opacity-60 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-stone-300"
             >
               {drafting ? "Trying again…" : "Try again"}
             </button>

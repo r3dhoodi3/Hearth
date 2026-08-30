@@ -4,32 +4,7 @@ import { getCurrentContractor, getSides } from "@/lib/contractor";
 import Logo from "@/components/Logo";
 import ProNav from "@/components/ProNav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
-import AskHearthDock from "@/components/AskHearthDock";
 import AppGuideMount from "@/components/AppGuideMount";
-import { proGreeting } from "@/lib/proGreeting";
-
-// The dock's opening line comes from src/lib/proGreeting.ts, shared with the
-// full-screen /pro/ask page so the two entry points open with the same words.
-// Rendered inside a Suspense boundary below so the open_jobs_for_me RPC never
-// blocks the rest of the shell from streaming - like the homeowner side's
-// proactive greeting, this only feeds the dock's opening line, and the dock
-// stays closed (so unread by the user) until clicked.
-async function ProAskHearthDock({ contractorName }: { contractorName: string }) {
-  const greeting = await proGreeting(contractorName);
-
-  return (
-    <AskHearthDock
-      endpoint="/api/pro-ask"
-      storageKeyBase="hearth_pro_ask_chat"
-      retentionKeyBase="hearth_pro_ask_retention"
-      headingTitle="Ask Hearth for Pros"
-      headingSubtitle="Your business copilot"
-      greeting={greeting}
-      hideOnPhone
-      phoneAskHref="/pro/ask"
-    />
-  );
-}
 
 // Pro shell. Auth is enforced by middleware; company-setup is enforced per-page
 // (so /pro/onboarding itself doesn't get caught in a redirect loop).
@@ -89,11 +64,16 @@ export default async function ProLayout({
     <div className="min-h-screen">
       <ProNav company={contractor.name} hasHome={sides.hasHome} />
       {/* Extra bottom padding on phones keeps content clear of the fixed
-          Ask Hearth dock. */}
+          bottom tab bar. */}
       <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 sm:pb-8">
         {children}
       </main>
-      <footer className="mx-auto max-w-5xl px-6 pb-8 text-center text-xs text-stone-500 dark:text-stone-400">
+      {/* The footer sits outside <main>, so main's pb-24 does not cover it and
+          on phones "Need a hand? Help" landed under the fixed bottom tab bar
+          (3.5rem of content plus the safe-area inset, see ProNav's nav
+          classes). Clear the bar plus a 1rem gap, phones only: the bar is
+          sm:hidden, so sm and up keep exactly today's pb-8. */}
+      <footer className="mx-auto max-w-5xl px-6 pb-8 text-center text-xs text-stone-500 max-sm:pb-[calc(3.5rem_+_env(safe-area-inset-bottom)_+_1rem)] dark:text-stone-400">
         Need a hand?{" "}
         <Link
           href="/pro/help"
@@ -102,16 +82,11 @@ export default async function ProLayout({
           Help
         </Link>
       </footer>
-      {/* Desktop only, via the dock's own hideOnPhone. The pro shell carries an
-          "Ask" tab in its phone bottom nav (ProNav.tsx) pointing at /pro/ask,
-          so the floating pill would be a second entry point on a 390px screen -
-          and it was the one that landed on top of the content (the /pro/tools
-          cards, the /pro/profile fields, a client's notes). The dock still
-          mounts on a phone, hidden, so an inline "ask about this" link can be
-          forwarded to /pro/ask with the question prefilled. */}
-      <Suspense fallback={null}>
-        <ProAskHearthDock contractorName={contractor.name} />
-      </Suspense>
+      {/* The floating copilot dock used to mount here on every pro screen. It
+          is gone on purpose: the copilot lives in Messages now (the pinned Ask
+          Hearth row at the top of /pro/chats, and /pro/ask behind it), so a
+          pill floating over every other page was a second door to the same
+          room - and on a phone it landed on top of the content. */}
       <NewMessageNotifier role="contractor" />
       {/* First sign-in only, the pro set of cards. Inside this branch on
           purpose: the bare no-company shell above is somebody still setting up
