@@ -5,7 +5,104 @@
 
 ---
 
-## LATEST (2026-08-30 night): security + bug remediation wave
+## LATEST (2026-08-30 late night): interactive UX + feature wave
+
+Read this first. It covers the whole overnight of 2026-08-30 (two waves) and what is still owed.
+
+### Goals
+Landen asked, in order: (1) run a big security + bug audit and fix everything (agents),
+(2) push when green and smoke-test Vercel, then a run of live product requests: make a
+"feel-good" share feature, PWA/TestFlight install steps, fix a blank-screen on the installed
+PWA, add a "credit-back when a pro loses a bid" flow, decide the refund %, fix confusing
+wording, make share cards share a real image not a link, turn the "Try Pro" prompt into a
+full-screen paywall, permanently dismiss a repeating "confirm your home" popup, and fix phone
+text getting cut off.
+
+### Current state
+Live: **main `472e34d`, deployed + smoke-tested green** (health ok, db ok, version 472e34d,
+public pages 200, wins-card share route public). Live DB: **still through 0150** until the
+SQL below is pasted. Gate on every push: tsc 0, eslint 0, vitest 245 files / 3201 passed,
+isolated build 0. Commits tonight: `7acac7e` (security wave), `45bf94f` (Home Wins), `350766d`
+(wins-card middleware fix), `472e34d` (UX wave). Push permission was a one-night exception.
+
+### THE ONE OWNER ACTION THAT IS STILL BLOCKING DB-SIDE FIXES
+**Paste `supabase/PASTE-ME-live-2026-08-30-night.sql` into the Supabase SQL editor.** It holds
+migration 0151 (household member cap, is_pro_member active-only, system-message forgery lock,
+contractors public-text CHECK, expire_bonus revoke, messages delete policy, properties unique
+index). It has a PRECHECK that refuses a double-run and a heads-up query for any home already
+over the 4-member cap. Until pasted, those DB protections are NOT live (the code is).
+
+### Files touched (both waves)
+Security wave: ~59 files (payments/webhook, chat, dashboard, pro onboarding/profile/CRM,
+onboarding/auth, AI metering, subscription) + migration 0151 + PASTE-ME. UX wave: dashboard
+(ReminderItem, WalkthroughNudge, page), pro billing (BillingView, ActivityList, page), pro
+layout, leads/LeadsBoard, pros/page, pro-ask route, guaranteeCopy, reviewPrompt, ProTrialNudge,
+share components (HomeWinsShare, pro/WinShareButton, pro/ReviewShareRow), plus new Home Wins
+files (lib/homeWins, api/wins-card, HomeWinsShare) and the middleware allowlist.
+
+### What changed / What worked
+- SECURITY (7acac7e): closed a CRITICAL deposit-chargeback-freeze hole, deposit velocity cap,
+  pro double-sub/unreachable-customer, Plus-blocked-from-Pro, household DB cap, trial-discount,
+  system-message forgery, Ask assistant-turn injection, free-user Plus mislabel, duplicate
+  homes, double-submit latches, Next.js 15.5.24 (AVIF RCE). 16-agent audit -> 7 workers -> 3
+  verifiers. No cross-tenant breach or auth bypass found.
+- HOME WINS (45bf94f + 350766d): new positive-only shareable card (years on Hearth, systems in
+  great shape, tasks handled; encouraging starter for new homes; NO score, NO dollar figure).
+  Public OG card /api/wins-card/[code], privacy-verified (first name + counts only, no
+  address/value). Dismissible dashboard card. Removable in ~4 files. Middleware fix made the
+  share route publicly fetchable (it was 307ing to signin - caught by smoke test).
+- UX WAVE (472e34d):
+  - Lead-credit WORDING was actually WRONG (root cause of Landen's confusion): copy + the Ask
+    Hearth Pro AI prompt still described the pre-0107 rule ("only first bid, then a lost bid is
+    a lost fee, license required"). Rewrote every instance to the true rule: every lost bid gets
+    100% back as credit (not cash), no limit, 60 days. Copy only, no logic change.
+  - "Try Pro 3 days" -> full-screen takeover paywall (X, wordmark, "3 Day Free Trial", plan
+    cards + Save% badge, Start-free-trial CTA, auto-renew + Privacy/Terms, NO reviews). Mounted
+    once in the pro shell, gated by the ReviewPrompt smart-timing algorithm, excluded from home
+    pages AND the pro Home tab (/pro exact), never stacks with the review prompt.
+  - Share cards now share the REAL image (navigator.share files) with link + download fallback:
+    Home Wins, pro win card, pro review card.
+  - "Confirm your home" (WalkthroughNudge) now dismisses PERMANENTLY (was reappearing after 14d).
+  - Phone: dashboard task titles WRAP and show in full instead of clipping to a few chars.
+
+### What failed / was caught
+- The SQL PASTE-ME had a self-aborting precheck (would have applied NOTHING on a fresh DB) -
+  caught by a verifier, fixed. LOW-55 (expire_bonus) was a false finding (0020 already did it).
+- 6 regression must-fixes in the security workers' output (mobile zoom no-op, dedup missing
+  unit, wrong cap message, CRM legacy-note orphan, label drift, cap heads-up) - all fixed.
+- The Home Wins share route was behind auth (307 to signin) - caught by smoke test, fixed.
+- The pro paywall was first mounted billing-page-only (would rarely fire) - moved to the shell.
+- The installed-PWA blank screen Landen hit was a transient first-load/cold-start (start_url
+  redirects to signin); it resolved on retry. NOT fixed in code yet - see offer below.
+- Not verifiable without a device/live keys: real iOS behavior, real Stripe/push/Twilio, 0151
+  on a real DB.
+
+### Next steps (OWNER)
+1. Paste the SQL (above). 2. Everything on the older owner list still stands (VAPID +
+   RISK_ENFORCE env, Supabase Auth settings, Stripe live prices, RLS audit + backups, delete
+   test accounts). 3. Try the app from your Home Screen icon (add-to-home-screen is the biggest
+   "feels like an app" lever). 4. TestFlight later (you have an Apple Developer account) via a
+   Capacitor wrapper.
+
+### Notes / decisions / open offers
+- REFUND POLICY: KEEP 100%-always (decided, research-backed: it is the opposite of the #1
+  lead-gen complaint, and the 3-applicant cap already prevents over-bidding). Future levers, NOT
+  now: shorten credit expiry to 30-45d for breakage; a Pro-membership-tied version (members keep
+  100%, free tier less) as a subscription driver.
+- The credit-back-on-loss feature ALREADY EXISTED (migration 0107) + already notifies losers.
+  OPEN OFFER, not built: add "apply_credit_back" to PUSH_NOTIFICATION_KINDS (one line) so the
+  loser also gets a phone push. Also an OPEN OFFER: code-fix the PWA start_url so the blank
+  screen can never recur (point the launch URL at a non-redirecting page).
+- App-feel punch list (researched, NOT built): kill the gray tap-highlight flash, add a pressed
+  state to the bottom tab bar, tame the overscroll bounce. All cheap CSS, mobile-scoped. See
+  [[hearth-app-feel-brief]].
+- Research memos from tonight (in the session scratchpad, not the repo): share-card ideas,
+  app-feel audit, home-tracking data sources (RentCast + Photon + Open-Meteo + CPSC), lead
+  refund policy.
+
+---
+
+## (2026-08-30 night): security + bug remediation wave
 
 ### Goals
 Landen's ask: run a big audit (10 bug agents + 3 money hackers + 3 security researchers),
