@@ -1,31 +1,23 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
-import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 import { buildProStats } from "@/lib/proStats";
 import { computeResponseTimeMinutes } from "@/lib/responseTime";
-import AccountPanel from "@/components/pro/AccountPanel";
-import PushSettingsCard from "@/components/PushSettingsCard";
-import WinShareButton from "@/components/pro/WinShareButton";
-import ReviewShareRow from "@/components/pro/ReviewShareRow";
+// The body is one client component. That is a streaming fix, not a behaviour
+// change: this page is long, so as server markup its Flight row ran past
+// React Flight's 3200-byte defer budget and chopped the "Jobs won" section
+// into a row of its own (one deferral, measured live 2026-08-30). See the long
+// comment at the top of BusinessView.tsx.
+import BusinessView from "./BusinessView";
 import {
   labelFor,
   JOB_CATEGORIES,
   GHOST_PROTECTION_DAYS,
-  COLD_START_FREE_ALERTS,
-  PRO_LEADS_HREF,
 } from "@/lib/constants";
-import { Lock } from "lucide-react";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
-function dollars(cents: number | string | null) {
-  const v = Number(cents ?? 0);
-  return `$${((Number.isFinite(v) ? v : 0) / 100).toFixed(2)}`;
-}
 
 // Friendly pipeline labels, matching the leads board.
 const STATUS_LABEL: Record<string, string> = {
@@ -213,137 +205,30 @@ export default async function ProBusinessPage() {
       })();
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">My Business</h1>
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Your numbers, your wallet, and everything in flight.
-        </p>
-        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-          Homeowners overwhelmingly pick from the pros who apply first. Fast
-          applications win jobs.
-        </p>
-        {(timeToApplyStat || showApplySpeedNudge) && (
-          <div className="mt-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-white/10 dark:bg-stone-800">
-            {timeToApplyStat && (
-              <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
-                {timeToApplyStat}
-              </p>
-            )}
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              Jobs usually go to whoever applies first.
-            </p>
-            {showApplySpeedNudge && (
-              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                {COLD_START_FREE_ALERTS || isPro ? (
-                  "You already get instant alerts the moment a matching job posts, open Hearth as soon as one comes in to keep that edge."
-                ) : trialEligible ? (
-                  <>
-                    <Link href="/pro/plus" className="font-medium underline">
-                      {proCtaLabel(true)}
-                    </Link>{" "}
-                    and turn on instant job alerts, so you see new jobs the
-                    moment they post. {proTrialSubline()}
-                  </>
-                ) : (
-                  <>
-                    Turn on instant job alerts with a{" "}
-                    <Link
-                      href="/pro/plus"
-                      className="font-medium underline"
-                    >
-                      Hearth Pro membership
-                    </Link>{" "}
-                    so you see new jobs the moment they post.
-                  </>
-                )}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* The three numbers a lead-buying business runs on. */}
-      <section className="grid gap-4 sm:grid-cols-3">
-        <div className="card">
-          <p className="stat-label">Win rate</p>
-          <p className="stat-number mt-1 text-2xl">
-            {winRate !== null ? `${winRate}%` : "-"}
-          </p>
-          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            {winRate !== null
-              ? `${wonCount} won of ${appliedCount} applications`
-              : "Shows after 3 applications"}
-          </p>
-        </div>
-        <div className="card">
-          <p className="stat-label">Spent on applications</p>
-          <p className="stat-number mt-1 text-2xl">
-            {dollars(spentCents)}
-          </p>
-          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            Refunded automatically when a homeowner never replies (ghost
-            protection)
-          </p>
-        </div>
-        <div className="card">
-          <p className="stat-label">Cost per job won</p>
-          <p className="stat-number mt-1 text-2xl">
-            {costPerWin !== null ? dollars(costPerWin) : "-"}
-          </p>
-          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            {costPerWin !== null
-              ? "Total spend divided by wins"
-              : "Shows after your first win"}
-          </p>
-        </div>
-      </section>
-
-      {/* Wallet snapshot - the full ledger lives on Billing. */}
-      <section className="card-hero flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="stat-label">Wallet</p>
-          <p className="stat-number mt-1 text-4xl">
-            {dollars(cash + bonus)}
-          </p>
-          <p className="text-xs text-stone-500 dark:text-stone-400 [font-variant-numeric:tabular-nums]">
-            {dollars(cash)} cash · {dollars(bonus)} bonus credit
-          </p>
-        </div>
-        <Link href="/pro/billing" className="btn-secondary shrink-0 text-sm">
-          Add funds
-        </Link>
-      </section>
-
-      {/* Phone notifications. Top level rather than inside the collapsed
-          Account panel below, and here rather than on a notification settings
-          page, because the pro side has no such page: /pro/business is where a
-          contractor's own settings live. This is the only control that reaches
-          a pro with the app closed, and speed to lead is the whole pro-side
-          product, so burying it one disclosure triangle down would cost the
-          feature most of its point. Renders nothing at all when the deployment
-          has no VAPID keys or the browser cannot do push. */}
-      <PushSettingsCard side="pro" />
-
-      {/* Account: referral code and the license/insurance compliance
-          calendar, folded into one collapsed-by-default panel. The code is
-          the pro's public slug when the 0043 migration has run, else the
-          first 8 chars of their id (both resolve at onboarding); the
-          compliance dates come off migration 0051 columns (insurance_expires
-          itself is the older 0033 column). */}
-      <AccountPanel
-        referralCode={
+    <BusinessView
+      timeToApplyStat={timeToApplyStat}
+      showApplySpeedNudge={showApplySpeedNudge}
+      isPro={isPro}
+      trialEligible={trialEligible}
+      winRate={winRate}
+      wonCount={wonCount}
+      appliedCount={appliedCount}
+      spentCents={spentCents}
+      costPerWin={costPerWin}
+      cashCents={cash}
+      bonusCents={bonus}
+      account={{
+        referralCode:
           ((contractor as any).slug as string | null | undefined) ||
-          contractor.id.slice(0, 8)
-        }
-        license={{
+          contractor.id.slice(0, 8),
+        license: {
           expires: contractor.license_expires ?? null,
           docPath: contractor.license_doc_path ?? null,
-        }}
+        },
         // The number and its CSLB result (0037/0055/0125), read off the same
         // columns /pro/profile renders from so the two screens can never
         // disagree about whether a license is on file.
-        verification={{
+        verification: {
           number: contractor.license_number ?? null,
           status: contractor.license_verified_status ?? "unverified",
           verifiedAt: contractor.license_verified_at ?? null,
@@ -358,429 +243,51 @@ export default async function ProBusinessPage() {
           // this to tell "nobody has checked it yet" apart from "nothing
           // will ever check it automatically".
           cslbEligible,
-        }}
-        insurance={{
+        },
+        insurance: {
           expires: (contractor as any).insurance_expires ?? null,
           docPath: contractor.insurance_doc_path ?? null,
-        }}
-      />
-
-      {/* Insights: the Pro membership's deeper analytics, computed entirely
-          from the application rows fetched above. Non-members see the frame
-          with masked tiles and one real number as a teaser. */}
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Insights{" "}
-            <span className="chip ml-1 bg-hearth-100 align-middle text-hearth-800 dark:bg-hearth-900 dark:text-hearth-200">
-              Pro
-            </span>
-          </h2>
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            Where your application budget is actually earning its keep.
-          </p>
-        </div>
-
-        {stats ? (
-          <div className="space-y-4">
-            {/* Headline tiles: the three numbers that say whether buying
-                leads is working. */}
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="card">
-                <p className="stat-label">All-time win rate</p>
-                <p className="stat-number mt-1 text-2xl">
-                  {stats.winRatePercent !== null
-                    ? `${stats.winRatePercent}%`
-                    : "-"}
-                </p>
-                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  {stats.winRatePercent !== null
-                    ? `${stats.wins} won of ${stats.liveApplications} paid applications`
-                    : "Apply to a job to start tracking"}
-                </p>
-              </div>
-              <div className="card">
-                <p className="stat-label">Jobs won</p>
-                <p className="stat-number mt-1 text-2xl">
-                  {stats.wins}
-                </p>
-                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  {stats.wins > 0
-                    ? `out of ${stats.liveApplications} paid applications`
-                    : "No wins yet"}
-                </p>
-              </div>
-              <div className="card">
-                <p className="stat-label">Fees spent</p>
-                <p className="stat-number mt-1 text-2xl">
-                  {dollars(stats.feesSpentCents)}
-                </p>
-                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  On leads, net of ghost-protection credits
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              {stats.daysSinceLastApplication !== null
-                ? `Last application ${
-                    stats.daysSinceLastApplication === 0
-                      ? "today"
-                      : `${stats.daysSinceLastApplication} day${
-                          stats.daysSinceLastApplication === 1 ? "" : "s"
-                        } ago`
-                  }`
-                : "No applications yet"}
-              {" · "}
-              {stats.daysSinceLastWin !== null
-                ? `last win ${
-                    stats.daysSinceLastWin === 0
-                      ? "today"
-                      : `${stats.daysSinceLastWin} day${
-                          stats.daysSinceLastWin === 1 ? "" : "s"
-                        } ago`
-                  }`
-                : "no wins yet"}
-            </p>
-
-            {/* Where the wins come from, category by category. */}
-            {stats.categories.length > 0 && (
-              <div className="card overflow-x-auto">
-                <p className="mb-2 text-sm font-medium text-stone-500 dark:text-stone-400">
-                  By category
-                </p>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-stone-500 dark:text-stone-400">
-                      <th className="pb-2 pr-3 font-medium">Category</th>
-                      <th className="pb-2 pr-3 text-right font-medium">
-                        Apps
-                      </th>
-                      <th className="pb-2 pr-3 text-right font-medium">
-                        Wins
-                      </th>
-                      <th className="pb-2 pr-3 text-right font-medium">
-                        Win rate
-                      </th>
-                      <th className="pb-2 text-right font-medium">Avg fee</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100 dark:divide-white/10">
-                    {stats.categories.map((c) => (
-                      <tr key={c.category}>
-                        <td className="py-2 pr-3 font-medium text-stone-900 dark:text-stone-100">
-                          {labelFor(JOB_CATEGORIES, c.category)}
-                        </td>
-                        <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
-                          {c.applications}
-                        </td>
-                        <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
-                          {c.wins}
-                        </td>
-                        <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
-                          {c.winRatePercent !== null
-                            ? `${c.winRatePercent}%`
-                            : "-"}
-                        </td>
-                        <td className="py-2 text-right text-stone-600 dark:text-stone-300">
-                          {c.avgFeeCents !== null
-                            ? dollars(c.avgFeeCents)
-                            : "-"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Six-month rhythm: applications in, wins out. */}
-            <div className="card space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-stone-500 dark:text-stone-400">
-                  Last 6 months
-                </p>
-                {/* 12px below sm, not 14px: this legend sits inside a
-                    width-bound chart where 14px overlaps the bars. It is the
-                    one place on the pro side that stops at 12px, and it is
-                    still a 20% lift from 10px. */}
-                <p className="flex items-center gap-3 text-[10px] text-stone-500 max-sm:text-xs dark:text-stone-400">
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-sm bg-hearth-500 dark:bg-hearth-400" />
-                    Applications
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-sm bg-stone-300 dark:bg-stone-500" />
-                    Wins
-                  </span>
-                </p>
-              </div>
-              <div className="overflow-x-auto pb-1">
-                <div className="flex items-end gap-2 border-b border-stone-200 dark:border-white/10">
-                  {stats.trend.map((m, i) => {
-                    const appHeight =
-                      m.applications > 0
-                        ? Math.max(
-                            6,
-                            Math.round((m.applications / trendMax) * 96)
-                          )
-                        : 3;
-                    const winHeight =
-                      m.wins > 0
-                        ? Math.max(6, Math.round((m.wins / trendMax) * 96))
-                        : 3;
-                    const isCurrent = i === stats.trend.length - 1;
-                    return (
-                      <div
-                        key={m.key}
-                        title={`${m.label}: ${m.applications} application${
-                          m.applications === 1 ? "" : "s"
-                        }, ${m.wins} won`}
-                        className="flex min-w-[2.5rem] flex-col items-center gap-1 transition hover:opacity-90"
-                      >
-                        <span className="text-[10px] text-stone-500 max-sm:text-xs dark:text-stone-400">
-                          {m.applications > 0 ? m.applications : ""}
-                        </span>
-                        <div className="flex items-end gap-0.5">
-                          <div
-                            className={`w-3 rounded-t-md ${
-                              m.applications > 0
-                                ? isCurrent
-                                  ? "bg-hearth-600 dark:bg-hearth-500"
-                                  : "bg-hearth-400 dark:bg-hearth-500/60"
-                                : "bg-stone-100 dark:bg-stone-700"
-                            }`}
-                            style={{ height: `${appHeight}px` }}
-                          />
-                          <div
-                            className={`w-3 rounded-t-md ${
-                              m.wins > 0 ? "bg-stone-300 dark:bg-stone-500" : "bg-stone-100 dark:bg-stone-700"
-                            }`}
-                            style={{ height: `${winHeight}px` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-1 flex gap-2">
-                  {stats.trend.map((m) => (
-                    <span
-                      key={m.key}
-                      className="min-w-[2.5rem] text-center text-[10px] text-stone-500 max-sm:text-xs dark:text-stone-400"
-                    >
-                      {m.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Teaser. The old version masked "All-time win rate" and "Fees
-                spent" - both of which are printed in full, unmasked, in the
-                three stat cards at the top of this same page, so the lock was
-                over a door with no wall. What Insights actually adds is the
-                per-CATEGORY split, so that is what gets teased: the pro's own
-                trades by name, with the two numbers they cannot see yet. */}
-            {teaserCategories.length > 0 && (
-              <div className="card overflow-x-auto">
-                <p className="mb-2 text-sm font-medium text-stone-500 dark:text-stone-400">
-                  Which of your trades actually pays? Included with Hearth Pro.
-                </p>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-stone-500 dark:text-stone-400">
-                      <th className="pb-2 pr-3 font-medium">Category</th>
-                      <th className="pb-2 pr-3 text-right font-medium">Apps</th>
-                      <th className="pb-2 pr-3 text-right font-medium">
-                        Win rate
-                      </th>
-                      <th className="pb-2 text-right font-medium">Avg fee</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100 dark:divide-white/10">
-                    {teaserCategories.map((c) => (
-                      <tr key={c.category}>
-                        <td className="py-2 pr-3 font-medium text-stone-900 dark:text-stone-100">
-                          {labelFor(JOB_CATEGORIES, c.category)}
-                        </td>
-                        <td className="py-2 pr-3 text-right text-stone-600 dark:text-stone-300">
-                          {c.applications}
-                        </td>
-                        {/* Placeholder glyphs, not the real figure under a
-                            blur. Decorative, so hidden from screen readers. */}
-                        <td
-                          aria-hidden="true"
-                          className="select-none py-2 pr-3 text-right text-stone-300 blur-[3px] dark:text-stone-600"
-                        >
-                          --%
-                        </td>
-                        <td
-                          aria-hidden="true"
-                          className="select-none py-2 text-right text-stone-300 blur-[3px] dark:text-stone-600"
-                        >
-                          $--
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <p className="mt-2 flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-                  <span aria-hidden="true" className="icon-chip">
-                    <Lock className="h-5 w-5" />
-                  </span>
-                  Win rate and average fee per category
-                </p>
-              </div>
-            )}
-            <p className="text-sm text-stone-500 dark:text-stone-400">
-              {spentCents > 0
-                ? `You've spent ${dollars(spentCents)} on application fees - Insights shows which categories are earning it back. `
-                : "Insights shows which categories earn your application fees back, and which ones quietly drain them. "}
-              <Link
-                href="/pro/plus"
-                className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
-              >
-                {trialEligible
-                  ? `${proCtaLabel(true)} and unlock Insights`
-                  : "Unlock Insights with Hearth Pro"}
-              </Link>
-              .{trialEligible ? ` ${proTrialSubline()}` : ""}
-            </p>
-          </div>
-        )}
-      </section>
-
-      {/* In flight: applications waiting on a homeowner, with the credit clock. */}
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Pending applications{" "}
-            <span className="text-stone-500 dark:text-stone-400">({pendingApps.length})</span>
-          </h2>
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            Ghost protection: if the homeowner never responds, your fee comes
-            back automatically as wallet credit.
-          </p>
-        </div>
-        {pendingApps.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
-            Nothing in flight.{" "}
-            <Link
-              href={PRO_LEADS_HREF}
-              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
-            >
-              Browse open jobs
-            </Link>{" "}
-            and apply while they&apos;re fresh: new postings close best.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {pendingApps.map((a) => {
-              const daysLeft = refundDaysLeft(a.applied_at);
-              return (
-                <li
-                  key={a.application_id}
-                  className="card flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <span className="flex items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                      {labelFor(JOB_CATEGORIES, a.category)}
-                    </span>
-                    {a.issue_description && (
-                      <p className="text-sm text-stone-500 dark:text-stone-400">
-                        {a.issue_description}
-                      </p>
-                    )}
-                  </div>
-                  <span className="shrink-0 text-right text-xs text-stone-500 dark:text-stone-400">
-                    {daysLeft === 0
-                      ? "Fee comes back as credit today if no response"
-                      : `Fee comes back as credit in ${daysLeft} day${
-                          daysLeft === 1 ? "" : "s"
-                        } if no response`}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      {/* Recent wins - the payoff column. Share-worthy reviews fold in here
-          too (id="share-reviews" is where the new-review notification
-          links), rather than opening a whole new section for them. */}
-      <section id="share-reviews" className="space-y-3">
-        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-          Jobs won <span className="text-stone-500 dark:text-stone-400">({won.length})</span>
-        </h2>
-        {won.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
-            No wins yet. Specific, fast replies are what turn applications into
-            jobs: the{" "}
-            <Link
-              href="/pro/playbook"
-              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
-            >
-              Playbook
-            </Link>{" "}
-            has the short version.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {won.map((l) => (
-              <li
-                key={l.id}
-                className="card flex flex-wrap items-center justify-between gap-3"
-              >
-                <span className="flex min-w-0 items-center gap-2 font-medium text-stone-900 dark:text-stone-100">
-                  {labelFor(JOB_CATEGORIES, l.category)}
-                </span>
-                <span className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs text-stone-500 dark:text-stone-400">
-                    {STATUS_LABEL[l.status] ?? l.status} ·{" "}
-                    {new Date(l.created_at).toLocaleDateString()}
-                  </span>
-                  {/* This recent-leads query isn't filtered to won rows, so
-                      the button only shows for one that actually is: paid,
-                      or accepted / closed in the pipeline. */}
-                  {(l.paid || l.status === "accepted" || l.status === "closed") && (
-                    <WinShareButton leadId={l.id} businessName={contractor.name} />
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {/* Share your reviews: every 4 or 5 star review gets a ready-made
-            card + caption. Same >= 4 star floor as review-card's own 404
-            check, so nothing offered here can 404 when clicked. */}
-        {shareableReviews.length > 0 && (
-          <div className="border-t border-stone-100 pt-4 dark:border-white/10">
-            <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-              Share your reviews
-            </h3>
-            <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-              Turn a great review into a share card and a ready-to-post
-              caption.
-            </p>
-            <ul className="mt-2 space-y-2">
-              {shareableReviews.map((r) => (
-                <ReviewShareRow
-                  key={r.id}
-                  reviewId={r.id}
-                  rating={r.rating}
-                  comment={r.comment}
-                  profileUrl={profileUrl}
-                />
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
-    </div>
+        },
+      }}
+      stats={stats}
+      trendMax={trendMax}
+      teaserCategories={teaserCategories}
+      // The ghost-protection countdown reads the clock, so it is resolved
+      // here rather than in the client component: a browser one minute past
+      // midnight would otherwise render a different number than SSR did.
+      pendingApps={pendingApps.map((a) => {
+        const daysLeft = refundDaysLeft(a.applied_at);
+        return {
+          applicationId: a.application_id as string,
+          categoryLabel: labelFor(JOB_CATEGORIES, a.category),
+          description: a.issue_description ?? null,
+          refundLine:
+            daysLeft === 0
+              ? "Fee comes back as credit today if no response"
+              : `Fee comes back as credit in ${daysLeft} day${
+                  daysLeft === 1 ? "" : "s"
+                } if no response`,
+        };
+      })}
+      // Same rule for the won date: toLocaleDateString reads the runtime's
+      // locale and time zone, so it stays on this side.
+      wonJobs={won.map((l) => ({
+        id: l.id as string,
+        categoryLabel: labelFor(JOB_CATEGORIES, l.category),
+        metaLine: `${STATUS_LABEL[l.status] ?? l.status} · ${new Date(
+          l.created_at
+        ).toLocaleDateString()}`,
+        shareable: Boolean(
+          l.paid || l.status === "accepted" || l.status === "closed"
+        ),
+      }))}
+      businessName={contractor.name}
+      shareableReviews={shareableReviews.map((r: any) => ({
+        id: r.id as string,
+        rating: r.rating as number,
+        comment: (r.comment ?? null) as string | null,
+      }))}
+      profileUrl={profileUrl}
+    />
   );
 }

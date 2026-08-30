@@ -1,20 +1,8 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import {
-  ClipboardList,
-  TrendingUp,
-  BookOpen,
-  MessageCircle,
-  Search,
-} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
-import {
-  PRO_LEADS_HREF,
-  PRO_DEPOSIT_BOOST_PTS,
-  isMajorCategory,
-} from "@/lib/constants";
+import { isMajorCategory } from "@/lib/constants";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { getOpenJobsForMe } from "@/lib/greeting";
 import {
@@ -30,20 +18,14 @@ import {
 } from "@/lib/proHome";
 import { countAwaitingReply } from "@/lib/proHomeServer";
 import { buildProStats } from "@/lib/proStats";
-import {
-  FEEDBACK_CARD_TITLE,
-  FEEDBACK_LOCKED_NOTE,
-  feedbackCreditDollars,
-} from "@/lib/proFeedback";
 import { readFeedbackState, grantFeedbackCredit } from "@/lib/proFeedbackServer";
-import SetupChecklist from "@/components/pro/SetupChecklist";
-import ProChip from "@/components/pro/ProChip";
-import ProNudge from "@/components/pro/ProNudge";
-import LiveUnreadBadge from "@/components/LiveUnreadBadge";
-import LeadsRealtime from "./LeadsRealtime";
-import ChatDrawer from "@/components/ChatDrawer";
-import ClearOnboardingDraft from "./ClearOnboardingDraft";
-import DirectRequestCard from "./DirectRequestCard";
+// The body is one client component. That is a streaming fix, not a behaviour
+// change: DBG3's SetupChecklist fix took this page from eight nested stream
+// holes to one, but the page's own Flight row still deferred the entire
+// two-column lower half (one deferral, measured live 2026-08-30) because the
+// greeting and the tile rows above it had already spent the 3200-byte budget.
+// See the long comment at the top of HomeView.tsx.
+import HomeView from "./HomeView";
 import { postedAgo } from "@/lib/proLeadCard";
 
 // The pro HOME tab.
@@ -234,377 +216,51 @@ export default async function ProHome() {
     awaitingReply,
     directRequests: directRequests.length,
   });
-
   return (
-    <div className="space-y-6">
-      {/* The board's realtime subscription and the chat drawer both belong to
-          the shell rather than to the board: a new job should light the tab
-          bar while the pro is sitting on Home. */}
-      <LeadsRealtime contractorId={contractor.id} />
-      <ChatDrawer role="contractor" />
-      {/* Reaching this page means a contractors row exists, which is the only
-          honest proof the signup wizard's save actually landed - so this is
-          where its localStorage draft finally gets dropped. Renders nothing. */}
-      <ClearOnboardingDraft userId={contractor.user_id ?? ""} />
-
-      {/* ---- Greeting: who you are and what is waiting ---- */}
-      <div>
-        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-          {greeting}
-        </h1>
-        {/* Never a slogan: this sentence is built from counts, and says
-            "Nothing waiting on you right now." when there are none. */}
-        <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
-          {subtitle}
-        </p>
-        {expiring.length > 0 && (
-          // Renewal countdown, only inside 45 days. Hidden the rest of the
-          // year, which is almost always.
-          <div className="mt-3 flex flex-wrap gap-2">
-            {expiring.map((c) => (
-              <Link
-                key={c.label}
-                href={c.href}
-                className={`chip inline-flex min-h-11 items-center border ${
-                  c.overdue
-                    ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-300"
-                    : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
-                }`}
-              >
-                {c.label}
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ---- Quick actions: the two things a pro opens the app to do ---- */}
-      <div className="grid grid-cols-2 gap-2 sm:gap-4">
-        <Link
-          href={PRO_LEADS_HREF}
-          className="btn-primary flex items-center justify-center gap-2"
-        >
-          <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Find jobs
-        </Link>
-        <Link
-          href="/pro/chats"
-          className="btn-secondary flex items-center justify-center gap-2"
-        >
-          <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Messages
-          {/* The same badge the Messages tab carries, from the same source, so
-              the two can never disagree. */}
-          <LiveUnreadBadge role="contractor" />
-        </Link>
-      </div>
-
-      {/* ---- Three tools, the pro twin of the homeowner dashboard's row ----
-          Same classes, same grid, same tile shape. Titles shorten below sm so
-          three fit across at 390px without wrapping to three lines.
-          `chip` says what a non-member sees before tapping, never after:
-          "pro" is the hearth-accent gate for a tile that is truly member-only
-          (the insights trend on /pro/business), "free" is the green two-free-
-          drafts tag for the back office (0145 gave every contractor two free
-          drafts before it gates, so a "Pro" chip there overstated the door),
-          and null (the playbook, free for everyone) wears nothing. */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        {[
-          {
-            href: "/pro/tools",
-            icon: ClipboardList,
-            title: "Write an estimate",
-            shortTitle: "Estimate",
-            line: "Drafts your paperwork",
-            chip: "free" as const,
-          },
-          {
-            href: "/pro/business",
-            icon: TrendingUp,
-            title: "Your numbers",
-            shortTitle: "Numbers",
-            line: "Win rate and spend",
-            chip: "pro" as const,
-          },
-          {
-            href: "/pro/playbook",
-            icon: BookOpen,
-            title: "Playbook",
-            shortTitle: "Playbook",
-            line: "How to win more",
-            chip: null,
-          },
-        ].map((t) => (
-          <Link key={t.title} href={t.href} className="card-link p-3 text-center">
-            <p className="icon-chip">
-              <t.icon className="h-5 w-5" aria-hidden="true" />
-            </p>
-            <p className="mt-1.5 text-xs font-medium text-stone-900 dark:text-stone-100 sm:text-sm">
-              <span className="sm:hidden">{t.shortTitle}</span>
-              <span className="hidden sm:inline">{t.title}</span>
-            </p>
-            {!member && t.chip === "pro" && (
-              <p className="mt-0.5 flex flex-wrap justify-center gap-1">
-                <ProChip />
-              </p>
-            )}
-            {/* Static, not the live free_tool_drafts_used count: reading that
-                counter costs its own query (src/lib/freeAiTasteServer.ts's
-                proDraftsLeft, an admin-client round trip this already-lean
-                Home render does not otherwise make), and this tile's job is
-                just to say the door opens for free at all. /pro/tools shows
-                the exact number left once a pro is actually there. */}
-            {!member && t.chip === "free" && (
-              <p className="mt-0.5 flex flex-wrap justify-center gap-1">
-                <ProChip tone="free" label="Free to try" />
-              </p>
-            )}
-            <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-              {t.line}
-            </p>
-          </Link>
-        ))}
-      </div>
-
-      {/* Everything below sits in two columns from sm up and one on a phone.
-          Nothing fancy: the same blocks, side by side where there is room. */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* ---- Asked for you: the exclusive stuff, first ---- */}
-        {directRequests.length > 0 && (
-          <section className="space-y-3 sm:col-span-2">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-                  Asked for you{" "}
-                  <span className="text-stone-500 dark:text-stone-400">
-                    ({directRequests.length})
-                  </span>
-                </h2>
-                <p className="text-sm text-stone-500 dark:text-stone-400">
-                  A homeowner reached out to you directly. Only you can see
-                  these.
-                </p>
-              </div>
-              {directRequests.length > DIRECT_PREVIEW && (
-                <Link
-                  href={PRO_LEADS_HREF}
-                  className="text-sm font-medium text-hearth-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
-                >
-                  See all
-                </Link>
-              )}
-            </div>
-            <ul className="space-y-3">
-              {/* The same card the Leads board renders, not a second copy of
-                  it: see src/app/pro/DirectRequestCard.tsx. */}
-              {directRequests.slice(0, DIRECT_PREVIEW).map((d) => (
-                <DirectRequestCard
-                  key={d.id}
-                  d={d}
-                  balance={balance}
-                  hasPaidMajor={hasPaidMajor}
-                  // Resolved here, not in the card: the card is a client
-                  // component now (streaming fix, see its header comment) and
-                  // this line reads the clock, so it has to be settled on the
-                  // server or hydration could disagree with SSR.
-                  postedAgoLabel={postedAgo(d.created_at)}
-                />
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* ---- Today's numbers ---- */}
-        <section className="space-y-3 sm:col-span-2">
-          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Today
-          </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Link
-              href="/pro/billing"
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
-            >
-              <p className="stat-label">Wallet</p>
-              <p className="stat-number mt-1 text-2xl text-stone-900 dark:text-stone-100">
-                ${balance.toFixed(2)}
-              </p>
-            </Link>
-            <Link
-              href={PRO_LEADS_HREF}
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
-            >
-              <p className="stat-label">Open jobs</p>
-              <p className="stat-number mt-1 text-2xl text-stone-900 dark:text-stone-100">
-                {open.length}
-              </p>
-            </Link>
-            <Link
-              href="/pro/crm"
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
-            >
-              <p className="stat-label">Active jobs</p>
-              <p className="stat-number mt-1 text-2xl text-stone-900 dark:text-stone-100">
-                {activeCount}
-              </p>
-            </Link>
-            {/* Win rate needs enough applications to mean anything; below
-                three it says how many are in flight instead of printing a
-                percentage off one or two rolls of the dice. Same floor the
-                leads board's results hero uses. */}
-            <Link
-              href="/pro/business"
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
-            >
-              <p className="stat-label">
-                {appliedCount >= 3 ? "Win rate" : "Applications"}
-              </p>
-              <p className="stat-number mt-1 text-2xl text-stone-900 dark:text-stone-100">
-                {appliedCount >= 3
-                  ? `${Math.round((wonCount / appliedCount) * 100)}%`
-                  : appliedCount}
-              </p>
-            </Link>
-          </div>
-        </section>
-
-        {/* ---- The trend that already exists on the Business page ---- */}
-        <section className="card space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-              Last 6 months
-            </h2>
-            {!member && <ProChip />}
-          </div>
-          {stats ? (
-            <>
-              <p className="text-sm text-stone-600 dark:text-stone-300">
-                {/* The same two counts /pro/business charts, summed over the
-                    same six-month window, from the same buildProStats call.
-                    One sentence here, the chart there. */}
-                {stats.trend.reduce((n, m) => n + m.applications, 0)}{" "}
-                application
-                {stats.trend.reduce((n, m) => n + m.applications, 0) === 1
-                  ? ""
-                  : "s"}
-                , {stats.trend.reduce((n, m) => n + m.wins, 0)} won.
-              </p>
-              <Link
-                href="/pro/business"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
-              >
-                See the breakdown
-              </Link>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-stone-600 dark:text-stone-300">
-                Which of your trades actually pays, month by month, and what
-                each win really costs you.
-              </p>
-              <Link
-                href="/pro/plus?reason=leads"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
-              >
-                See Hearth Pro
-              </Link>
-            </>
-          )}
-        </section>
-
-        {/* ---- Feedback credit ---- */}
-        <section className="card space-y-2">
-          {feedbackClaimed ? (
-            <>
-              <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                Thanks
-              </h2>
-              <p className="text-sm text-stone-600 dark:text-stone-300">
-                {feedbackCreditDollars()} in lead credit was added to your
-                wallet.
-              </p>
-              <Link
-                href="/pro/billing"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
-              >
-                See it in your wallet
-              </Link>
-            </>
-          ) : feedback.sent ? (
-            <>
-              <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                Thanks for the feedback
-              </h2>
-              {/* Sent, not yet earned: say exactly what unlocks it rather than
-                  leaving a promise hanging. The grant runs on its own the next
-                  time this page loads after they qualify. */}
-              <p className="text-sm text-stone-600 dark:text-stone-300">
-                Your {feedbackCreditDollars()} unlocks once your license is
-                confirmed or you place your first lead.
-              </p>
-            </>
-          ) : (
-            <>
-              <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                {FEEDBACK_CARD_TITLE}
-              </h2>
-              <p className="text-sm text-stone-600 dark:text-stone-300">
-                Two questions, about a minute. We read every one.
-              </p>
-              {!established && (
-                <p className="text-sm text-stone-500 dark:text-stone-400">
-                  {FEEDBACK_LOCKED_NOTE}
-                </p>
-              )}
-              <Link
-                href="/pro/feedback"
-                className="btn-secondary mt-1 inline-block text-sm"
-              >
-                Tell us
-              </Link>
-            </>
-          )}
-        </section>
-
-        {/* ---- Membership nudge: established non-members only ---- */}
-        {showNudge && (
-          <div className="sm:col-span-2">
-            <ProNudge
-              userId={contractor.user_id ?? ""}
-              trialEligible={nudgeTrialEligible}
-              depositBoostPts={PRO_DEPOSIT_BOOST_PTS}
-              // $10 a cycle, mirroring grant_membership_credit in the Stripe
-              // webhook. Kept next to the perk copy on /pro/plus.
-              monthlyCreditDollars={10}
-            />
-          </div>
-        )}
-
-        {/* ---- Latest: what actually happened, newest first ---- */}
-        {latestRows.length > 0 && (
-          <section className="card space-y-2 sm:col-span-2">
-            <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-              Latest
-            </h2>
-            <ul className="space-y-1">
-              {latestRows.map((r: any) => (
-                <li key={r.id}>
-                  <Link
-                    href={typeof r.url === "string" && r.url ? r.url : "/pro"}
-                    className="flex min-h-11 items-center text-sm text-stone-600 hover:text-stone-900 dark:text-stone-300 dark:hover:text-stone-100"
-                  >
-                    {r.title}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* ---- Setup checklist, until it is done ---- */}
-        <div className="sm:col-span-2">
-          <SetupChecklist items={setupItems} />
-        </div>
-      </div>
-    </div>
+    <HomeView
+      contractorId={contractor.id}
+      userId={contractor.user_id ?? ""}
+      greeting={greeting}
+      subtitle={subtitle}
+      expiring={expiring}
+      member={member}
+      // Only the preview slice crosses, with each card's clock-dependent
+      // posted-ago line already resolved here: the card is a client component
+      // (streaming fix, see its header comment) and that line reads the clock,
+      // so it has to be settled on the server or hydration could disagree with
+      // SSR.
+      directRequests={directRequests.slice(0, DIRECT_PREVIEW).map((d) => ({
+        id: d.id as string,
+        row: d,
+        postedAgoLabel: postedAgo(d.created_at),
+      }))}
+      directRequestCount={directRequests.length}
+      showSeeAll={directRequests.length > DIRECT_PREVIEW}
+      balance={balance}
+      hasPaidMajor={hasPaidMajor}
+      openCount={open.length}
+      activeCount={activeCount}
+      appliedCount={appliedCount}
+      wonCount={wonCount}
+      trend={
+        stats
+          ? {
+              applications: stats.trend.reduce((n, m) => n + m.applications, 0),
+              wins: stats.trend.reduce((n, m) => n + m.wins, 0),
+            }
+          : null
+      }
+      feedbackClaimed={feedbackClaimed}
+      feedbackSent={feedback.sent}
+      established={established}
+      showNudge={showNudge}
+      nudgeTrialEligible={nudgeTrialEligible}
+      latestRows={latestRows.map((r: any) => ({
+        id: r.id as string,
+        title: r.title as string,
+        href: typeof r.url === "string" && r.url ? r.url : "/pro",
+      }))}
+      setupItems={setupItems}
+    />
   );
 }

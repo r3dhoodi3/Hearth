@@ -12,14 +12,94 @@
 // matches the React #418 / "$RS ... parentNode" hydration failure reported on /pro/plus.
 //
 // As a client module this whole perks block becomes ONE client reference in the parent
-// page's Flight payload, with plain-data props (title/body strings; icon is a small,
-// already-rendered leaf element, not a raw component reference - a bare function cannot
-// cross the server/client boundary as a prop) - so there is nothing left at the tail of
+// page's Flight payload, with plain-data props - so there is nothing left at the tail of
 // the row for Flight to defer. No interactivity here; this is a streaming-shape fix.
+//
+// 2026-08-30 follow-up: the icons used to cross the boundary as already-rendered leaf
+// ELEMENTS (`icon: <p.icon className="h-5 w-5" />`), which put six elements back inside
+// this component's props. Deep in a props object is still inside the page's Flight row,
+// so once the row passed 3200 bytes the LAST perk's icon was deferred on its own -
+// measured live as `"icon":"$L32"` on /pro/plus. The icon is a NAME now and this module
+// renders it, so the props carry nothing but strings. The rendered markup is unchanged:
+// the two class strings below are the two the page used to pre-render, picked by the
+// same `variant` that already decided the layout.
 
-import type { ReactNode } from "react";
+import { Gift, DollarSign, Bot, Globe, BarChart3, Zap } from "lucide-react";
+import { PRO_DEPOSIT_BOOST_PTS, COLD_START_FREE_ALERTS } from "@/lib/constants";
 
-export type Perk = { title: string; body: string; icon?: ReactNode };
+// The icons the perk lineup uses, by name. A bare component reference cannot cross the
+// server/client boundary as a prop, and a pre-rendered element re-introduces the very
+// deferral this file exists to remove, so the name is the only thing that travels.
+const ICONS = {
+  gift: Gift,
+  dollar: DollarSign,
+  bot: Bot,
+  globe: Globe,
+  chart: BarChart3,
+  zap: Zap,
+} as const;
+
+export type PerkIcon = keyof typeof ICONS;
+
+export type Perk = { title: string; body: string; icon?: PerkIcon };
+
+// The perk lineup, used by every branch of /pro/plus. Membership is perks
+// only: it never changes which jobs a pro can see or apply to. Ordered
+// exclusive economics first (credit, deposit boost, AI back office); alerts sit
+// last while COLD_START_FREE_ALERTS makes them free for everyone.
+//
+// It lives in this client module rather than in the page for the same
+// streaming reason as everything else in this file: the strings are what cross
+// the boundary, so the one array can be shared by all three layouts without a
+// single element landing in the page's Flight row. Nothing here reads the
+// clock, a request, or the locale.
+export const PERKS: Perk[] = [
+  {
+    icon: "gift",
+    title: "$10 lead credit every month",
+    // Mirrors grant_membership_credit in the Stripe webhook: monthly grants
+    // are $10 with a 60-day expiry, yearly is $120 up front with a 400-day
+    // expiry (it outlives the year). Keep this copy in sync with those terms.
+    body: "Each monthly billing cycle drops $10 of bonus lead credit into your wallet, good for 60 days from the day it lands. On the yearly plan the whole $120 lands up front and stays spendable for your entire year.",
+  },
+  {
+    icon: "dollar",
+    title: `+${PRO_DEPOSIT_BOOST_PTS}% on every deposit`,
+    body: `Every wallet deposit earns an extra ${PRO_DEPOSIT_BOOST_PTS} percentage points of bonus credit, on top of the regular tier bonus.`,
+  },
+  {
+    icon: "bot",
+    title: "AI back office",
+    // /api/pro-tools ships five tools (estimate, invoice, followup,
+    // review_response, overdue); list all five here so this perk isn't
+    // undersold. The 250 mirrors DAILY_LIMIT_PLUS in src/lib/aiUsage.ts: the
+    // shared per-user daily cap on every AI route. Keep both in sync.
+    body: "Draft estimates, invoices, follow-up messages, review responses, and overdue-invoice reminders in seconds, up to 250 drafts a day, so evenings go back to being evenings.",
+  },
+  {
+    icon: "globe",
+    title: "A richer public page",
+    body: "Every pro already gets a public page with their services, reviews, and contact info. Pro adds your logo, work photos, and an about section so it looks fully yours. Send one link instead of ten screenshots.",
+  },
+  {
+    icon: "chart",
+    title: "Win-rate analytics",
+    body: "See which jobs you win, what each lead really costs, and where your money works hardest.",
+  },
+  {
+    icon: "zap",
+    title: "Instant job alerts",
+    // COLD START: while COLD_START_FREE_ALERTS is on, every pro gets these
+    // alerts, so the perk says so honestly - and says that it is temporary,
+    // which "included right now" left the reader to guess at. The
+    // parenthetical drops when the flag flips back to members-only.
+    body:
+      "The moment a job posts in your trades and area, it hits your email and your phone. Be the first name the homeowner sees." +
+      (COLD_START_FREE_ALERTS
+        ? " (Free for every pro during launch - after launch, instant alerts are members-only.)"
+        : ""),
+  },
+];
 
 export default function PerksList({
   perks,
@@ -31,12 +111,24 @@ export default function PerksList({
   // "welcome", a green checkmark (no icon prop needed) for "member".
   variant: "grid" | "welcome" | "member";
 }) {
+  // The two sizes the page used to pre-render, kept exactly: the card layout's
+  // icon and the bullet list's smaller, top-aligned one.
+  const iconFor = (name: PerkIcon | undefined, cardSize: boolean) => {
+    if (!name) return null;
+    const Icon = ICONS[name];
+    return cardSize ? (
+      <Icon className="h-5 w-5" aria-hidden="true" />
+    ) : (
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+    );
+  };
+
   if (variant === "grid") {
     return (
       <section className="grid gap-4 sm:grid-cols-2">
         {perks.map((p) => (
           <div key={p.title} className="card">
-            <div className="icon-chip">{p.icon}</div>
+            <div className="icon-chip">{iconFor(p.icon, true)}</div>
             <h2 className="mt-2 font-semibold text-stone-900 dark:text-stone-100">
               {p.title}
             </h2>
@@ -63,7 +155,7 @@ export default function PerksList({
           {variant === "member" ? (
             <span className="mt-0.5 font-bold text-green-600 dark:text-green-400">✓</span>
           ) : (
-            p.icon
+            iconFor(p.icon, false)
           )}
           <span>
             <span className="font-medium text-stone-900 dark:text-stone-100">

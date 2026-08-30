@@ -15,6 +15,9 @@ function src(rel: string): string {
 }
 
 const page = src("./page.tsx");
+// The whole body moved into this client component for streaming reasons (see
+// the last describe in this file), so every markup assertion reads it now.
+const view = src("./HomeView.tsx");
 const loading = src("./loading.tsx");
 const dashboard = src("../(app)/dashboard/page.tsx");
 
@@ -34,29 +37,29 @@ describe("pro home: greeting", () => {
   });
 
   it("never prints a slogan: the h1 is the greeting", () => {
-    expect(page).toContain("{greeting}");
-    expect(page).not.toContain(">Your leads</h1>");
+    expect(view).toContain("{greeting}");
+    expect(view).not.toContain(">Your leads</h1>");
   });
 });
 
 describe("pro home: quick actions", () => {
   it("leads with Find jobs (primary) and Messages", () => {
-    const find = page.indexOf("Find jobs");
-    const messages = page.indexOf('href="/pro/chats"');
+    const find = view.indexOf("Find jobs");
+    const messages = view.indexOf('href="/pro/chats"');
     expect(find).toBeGreaterThan(-1);
     expect(messages).toBeGreaterThan(find);
-    expect(page).toContain("href={PRO_LEADS_HREF}");
+    expect(view).toContain("href={PRO_LEADS_HREF}");
     // Never a hard-coded "/pro/leads": the constant is the one place it flips.
-    expect(page).not.toContain('href="/pro/leads"');
+    expect(view).not.toContain('href="/pro/leads"');
   });
 
   it("carries the same unread badge the Messages tab does", () => {
     // Same component, same source, so the two counts cannot disagree.
-    expect(page).toContain('<LiveUnreadBadge role="contractor" />');
+    expect(view).toContain('<LiveUnreadBadge role="contractor" />');
   });
 
   it("is two columns on a phone", () => {
-    expect(page).toContain('className="grid grid-cols-2 gap-2 sm:gap-4"');
+    expect(view).toContain('className="grid grid-cols-2 gap-2 sm:gap-4"');
   });
 });
 
@@ -64,23 +67,23 @@ describe("pro home: three tool tiles (E8)", () => {
   it("uses the homeowner dashboard's tile row, class for class", () => {
     // Copied deliberately: the two home screens should feel like one app.
     expect(dashboard).toContain('className="grid grid-cols-3 gap-2 sm:gap-4"');
-    expect(page).toContain('className="grid grid-cols-3 gap-2 sm:gap-4"');
+    expect(view).toContain('className="grid grid-cols-3 gap-2 sm:gap-4"');
     expect(dashboard).toContain('className="card-link p-3 text-center"');
-    expect(page).toContain('className="card-link p-3 text-center"');
-    expect(page).toContain('<p className="icon-chip">');
+    expect(view).toContain('className="card-link p-3 text-center"');
+    expect(view).toContain('<p className="icon-chip">');
   });
 
   it("points at the three pro tools that already exist", () => {
-    expect(page).toContain('href: "/pro/tools"');
-    expect(page).toContain('href: "/pro/business"');
-    expect(page).toContain('href: "/pro/playbook"');
+    expect(view).toContain('href: "/pro/tools"');
+    expect(view).toContain('href: "/pro/business"');
+    expect(view).toContain('href: "/pro/playbook"');
   });
 
   it("shortens the titles below sm so three fit at 390px", () => {
-    expect(page).toContain('shortTitle: "Estimate"');
-    expect(page).toContain('shortTitle: "Numbers"');
-    expect(page).toContain("<span className=\"sm:hidden\">{t.shortTitle}</span>");
-    expect(page).toContain(
+    expect(view).toContain('shortTitle: "Estimate"');
+    expect(view).toContain('shortTitle: "Numbers"');
+    expect(view).toContain("<span className=\"sm:hidden\">{t.shortTitle}</span>");
+    expect(view).toContain(
       '<span className="hidden sm:inline">{t.title}</span>'
     );
   });
@@ -89,16 +92,16 @@ describe("pro home: three tool tiles (E8)", () => {
     // The insights trend on /pro/business is really member-only, so it keeps
     // the hearth-accent "Pro" chip. The playbook is free for every pro, so it
     // wears nothing: a chip on an open door is a lie.
-    expect(page).toContain('{!member && t.chip === "pro" && (');
-    expect(page).toContain('title: "Playbook"');
-    const playbookBlock = page.slice(
-      page.indexOf('href: "/pro/playbook"'),
-      page.indexOf('href: "/pro/playbook"') + 300
+    expect(view).toContain('{!member && t.chip === "pro" && (');
+    expect(view).toContain('title: "Playbook"');
+    const playbookBlock = view.slice(
+      view.indexOf('href: "/pro/playbook"'),
+      view.indexOf('href: "/pro/playbook"') + 300
     );
     expect(playbookBlock).toContain("chip: null");
-    const businessBlock = page.slice(
-      page.indexOf('href: "/pro/business"'),
-      page.indexOf('href: "/pro/business"') + 300
+    const businessBlock = view.slice(
+      view.indexOf('href: "/pro/business"'),
+      view.indexOf('href: "/pro/business"') + 300
     );
     expect(businessBlock).toContain('chip: "pro" as const');
   });
@@ -108,14 +111,14 @@ describe("pro home: three tool tiles (E8)", () => {
     // hearth-accent "Pro" chip used to overstate the door. It reads
     // "Free to try" instead, in ProChip's tone="free" styling, and is static
     // rather than a live drafts-left count (see the comment beside it in
-    // page.tsx for why a query was not worth adding to this render).
-    const estimateBlock = page.slice(
-      page.indexOf('href: "/pro/tools"'),
-      page.indexOf('href: "/pro/tools"') + 300
+    // HomeView.tsx for why a query was not worth adding to this render).
+    const estimateBlock = view.slice(
+      view.indexOf('href: "/pro/tools"'),
+      view.indexOf('href: "/pro/tools"') + 300
     );
     expect(estimateBlock).toContain('chip: "free" as const');
-    expect(page).toContain('{!member && t.chip === "free" && (');
-    expect(page).toContain('<ProChip tone="free" label="Free to try" />');
+    expect(view).toContain('{!member && t.chip === "free" && (');
+    expect(view).toContain('<ProChip tone="free" label="Free to try" />');
   });
 });
 
@@ -123,40 +126,39 @@ describe("pro home: the blocks below", () => {
   it("previews at most two direct requests and links to the rest", () => {
     expect(page).toContain("const DIRECT_PREVIEW = 2;");
     expect(page).toContain("directRequests.slice(0, DIRECT_PREVIEW)");
-    expect(page).toContain("See all");
+    expect(view).toContain("See all");
   });
 
   it("renders the SAME direct-request card the leads board does", () => {
-    // One component, not a second copy that would drift. On the Leads tab it
-    // is rendered from LeadsBoard, the client component the whole board moved
-    // into on 2026-08-30 (a streaming fix - see LeadsBoard.tsx), not from the
-    // page module itself.
-    expect(page).toContain("<DirectRequestCard");
+    // One component, not a second copy that would drift. Both tabs render it
+    // from a client component now (a streaming fix - see LeadsBoard.tsx and
+    // HomeView.tsx), not from the page module itself.
+    expect(view).toContain("<DirectRequestCard");
     expect(src("./leads/LeadsBoard.tsx")).toContain("<DirectRequestCard");
   });
 
   it("shows wallet, open jobs, active jobs, and win rate, each linked", () => {
-    expect(page).toContain(">Wallet</p>");
-    expect(page).toContain(">Open jobs</p>");
-    expect(page).toContain(">Active jobs</p>");
-    expect(page).toContain('"Win rate" : "Applications"');
+    expect(view).toContain(">Wallet</p>");
+    expect(view).toContain(">Open jobs</p>");
+    expect(view).toContain(">Active jobs</p>");
+    expect(view).toContain('"Win rate" : "Applications"');
     // Win rate needs a real sample before it means anything.
-    expect(page).toContain("appliedCount >= 3");
+    expect(view).toContain("appliedCount >= 3");
   });
 
   it("reuses the Business page's own trend numbers, members only", () => {
     expect(page).toContain("buildProStats(apps, new Date())");
     expect(page).toContain("const stats = member ?");
-    expect(page).toContain('href="/pro/business"');
+    expect(view).toContain('href="/pro/business"');
   });
 
   it("keeps the setup checklist, built by the shared builder", () => {
     expect(page).toContain("buildSetupItems({");
-    expect(page).toContain("<SetupChecklist items={setupItems} />");
+    expect(view).toContain("<SetupChecklist items={setupItems} />");
   });
 
   it("hides the Latest block rather than inventing one", () => {
-    expect(page).toContain("latestRows.length > 0 &&");
+    expect(view).toContain("latestRows.length > 0 &&");
   });
 });
 
@@ -177,6 +179,7 @@ describe("pro home: paywall concepts (E9)", () => {
     // App Store 1.1.7 / 3.2.2 and Play policy forbid paying for ratings; this
     // pays for a private product note and must never read as the other thing.
     expect(page.toLowerCase()).not.toContain("rating");
+    expect(view.toLowerCase()).not.toContain("rating");
   });
 });
 
@@ -185,5 +188,40 @@ describe("pro home: loading skeleton", () => {
     expect(loading).toContain('className="grid grid-cols-2 gap-2 sm:gap-4"');
     expect(loading).toContain('className="grid grid-cols-3 gap-2 sm:gap-4"');
     expect(loading).not.toContain("Your leads");
+  });
+});
+
+// The rest of the DBG3 regression. Making SetupChecklist a client component
+// took the served /pro from eight nested <template id="P:n"> holes to one, but
+// it did not take the page row's DEFERRALS to zero: measured live on
+// 2026-08-30 the row still cut the entire two-column lower half of the page
+// into a row of its own, because the greeting and the two tile rows above it
+// had already spent React Flight's 3200-byte budget. A unit test cannot see a
+// stream, so these assert the properties that keep the shape.
+describe("pro home renders one client element (DBG3 follow-up)", () => {
+  it('HomeView carries the "use client" directive', () => {
+    // Comments may precede a directive prologue; statements may not.
+    const firstStatement = view
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("//"))[0];
+    expect(firstStatement).toBe('"use client";');
+  });
+
+  it("leaves no markup in the server page", () => {
+    expect(page).toContain("<HomeView");
+    for (const tag of ["<div", "<section", "<h1", "<h2", "<p ", "<ul", "<Link"]) {
+      expect(page, tag).not.toContain(tag);
+    }
+  });
+
+  it("resolves the clock-dependent strings on the server", () => {
+    // The greeting reads the hour and each direct request's posted-ago line
+    // reads the clock; both stay in the page so SSR and hydration agree.
+    expect(page).toContain("greetingForHour(new Date().getHours())");
+    expect(page).toContain("postedAgo(d.created_at)");
+    expect(view).not.toContain("new Date(");
+    expect(view).not.toContain("postedAgo(");
   });
 });

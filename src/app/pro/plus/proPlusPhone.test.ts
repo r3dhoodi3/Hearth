@@ -18,6 +18,10 @@ const page = src("./page.tsx");
 const toggle = src("./ProPlanToggle.tsx");
 const homeownerToggle = src("../../(app)/plus/PlanToggle.tsx");
 const perksList = src("./PerksList.tsx");
+// All four render branches moved into this client module for streaming reasons
+// (see the last describe in this file and the header comment on the file
+// itself), so every markup assertion below reads it rather than the page.
+const screens = src("./PlusScreens.tsx");
 
 describe("pro plus: the phone disclosure, matching the homeowner page", () => {
   it("folds the itemized terms behind a 'Billing terms' details on phones only", () => {
@@ -90,19 +94,19 @@ describe("pro plus: phone text sizes", () => {
 // max-sm:order-N with sm:order-N on each moved child, not a rendered tree.
 describe("pro plus: phone leads with the offer, not the perks (CEO pass item B)", () => {
   it("swaps space-y for flex+gap so children can reorder without duplicating ProPlanToggle", () => {
-    expect(page).toContain(
+    expect(screens).toContain(
       '<div className="mx-auto flex max-w-3xl flex-col gap-8">'
     );
     // Exactly one ProPlanToggle in this branch - the reorder is a CSS order
     // change, never a second copy of the form.
-    expect(page.match(/<ProPlanToggle trialEligible={trialEligible} \/>/g)?.length).toBe(1);
+    expect(screens.match(/<ProPlanToggle trialEligible={trialEligible} \/>/g)?.length).toBe(1);
   });
 
   it("puts the offer directly under the H1 in the markup, with sm:order-6 restoring its old visual spot on desktop", () => {
-    expect(page).toContain('<div className="max-sm:order-3 sm:order-6">');
-    const h1 = page.indexOf("Run your business, not your admin");
-    const offer = page.indexOf('<div className="max-sm:order-3 sm:order-6">');
-    const perks = page.indexOf('<div className="max-sm:order-6 sm:order-4">');
+    expect(screens).toContain('<div className="max-sm:order-3 sm:order-6">');
+    const h1 = screens.indexOf("Run your business, not your admin");
+    const offer = screens.indexOf('<div className="max-sm:order-3 sm:order-6">');
+    const perks = screens.indexOf('<div className="max-sm:order-6 sm:order-4">');
     expect(h1).toBeGreaterThan(-1);
     // Markup order is the phone order: the offer now sits right after the H1,
     // ahead of the banner and the perks that used to precede it in the JSX.
@@ -114,18 +118,18 @@ describe("pro plus: phone leads with the offer, not the perks (CEO pass item B)"
   });
 
   it("shrinks the never-changes banner to one line on a phone, keeps the full sentence on desktop", () => {
-    expect(page).toContain(
+    expect(screens).toContain(
       "max-sm:order-4 max-sm:p-2 max-sm:text-xs sm:order-3 sm:p-4 sm:text-sm"
     );
-    expect(page).toContain('<span className="sm:hidden">');
-    expect(page).toContain('<span className="hidden sm:inline">');
+    expect(screens).toContain('<span className="sm:hidden">');
+    expect(screens).toContain('<span className="hidden sm:inline">');
     // The phone span drops the reinforcing second sentence; the desktop span
     // keeps both, word for word as before.
-    expect(page).toContain("stays open to every pro, pay per application, member or not.");
+    expect(screens).toContain("stays open to every pro, pay per application, member or not.");
   });
 
   it("puts the perk cards after the offer on a phone, back in their old spot on desktop", () => {
-    expect(page).toContain('<div className="max-sm:order-6 sm:order-4">');
+    expect(screens).toContain('<div className="max-sm:order-6 sm:order-4">');
   });
 });
 
@@ -144,16 +148,16 @@ describe("pro plus: phone leads with the offer, not the perks (CEO pass item B)"
 // with plain-data props instead of many server elements for Flight to defer.
 describe("pro plus: perks no longer sit at the tail as inline server elements (DBG3)", () => {
   it("renders PERKS through the client PerksList component in every branch", () => {
-    expect(page).toContain('import PerksList from "./PerksList";');
-    // PERKS_CARD / PERKS_LIST still build with PERKS.map (plain objects, not
-    // JSX); what must be gone is a render branch mapping PERKS into JSX
-    // inline. jsx-a11y/no-danger aside, the reliable signal is that no branch
-    // still opens a <li> or <div> per perk directly in this file.
-    expect(page).not.toContain("{PERKS.map((p) => (");
+    expect(screens).toContain('import PerksList, { PERKS } from "./PerksList";');
+    // What must be gone is a render branch mapping PERKS into JSX inline.
+    expect(screens).not.toContain("{PERKS.map((p) => (");
     // All three render branches (welcome, member, pitch) use it.
-    expect(page).toContain('<PerksList perks={PERKS_LIST} variant="welcome" />');
-    expect(page).toContain('<PerksList perks={PERKS_LIST} variant="member" />');
-    expect(page).toContain('<PerksList perks={PERKS_CARD} variant="grid" />');
+    expect(screens).toContain('<PerksList perks={PERKS} variant="welcome" />');
+    expect(screens).toContain('<PerksList perks={PERKS} variant="member" />');
+    expect(screens).toContain('<PerksList perks={PERKS} variant="grid" />');
+    // The server page renders no perk markup at all any more (the name
+    // survives only in the comment that records why).
+    expect(page).not.toContain("<PerksList");
   });
 
   it("keeps PerksList a client module with plain-data props, no raw icon references", () => {
@@ -163,10 +167,19 @@ describe("pro plus: perks no longer sit at the tail as inline server elements (D
       .map((l) => l.trim())
       .filter((l) => l.length > 0 && !l.startsWith("//"))[0];
     expect(firstStatement).toBe('"use client";');
-    // The icon crosses the boundary pre-rendered (a ReactNode leaf), never as
-    // a bare LucideIcon function reference - that would fail to serialize.
-    expect(page).toContain("icon: <p.icon");
+    // The icon crosses as a NAME, never as a bare LucideIcon function
+    // reference (unserializable) and never as a pre-rendered element (which
+    // put six elements back inside this component's props - the last one was
+    // measured deferred as `"icon":"$L32"` on live).
+    expect(perksList).toContain("export type PerkIcon = keyof typeof ICONS;");
+    expect(perksList).toContain("icon?: PerkIcon");
+    expect(screens).not.toContain("icon: <");
     expect(perksList).not.toContain("import type { LucideIcon }");
+    // Both pre-rendered sizes survive, now picked inside this module.
+    expect(perksList).toContain('<Icon className="h-5 w-5" aria-hidden="true" />');
+    expect(perksList).toContain(
+      '<Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />'
+    );
   });
 
   it("preserves every class the three original inline blocks used", () => {
@@ -271,7 +284,7 @@ describe("pro plus: ?reason= banners", () => {
 
   it("renders nothing for an unknown or absent reason", () => {
     expect(page).toContain('REASON_COPY[searchParams.reason ?? ""] ?? null');
-    expect(page).toContain("{reasonCopy && (");
+    expect(screens).toContain("{reasonCopy && (");
   });
 
   it("quotes the free-draft count from the constant, never a typed number", () => {
@@ -279,10 +292,52 @@ describe("pro plus: ?reason= banners", () => {
   });
 
   it("sends the buyer to the board after checkout, not back to a stale label", () => {
-    expect(page).toContain("<Link href={PRO_LEADS_HREF} className=\"btn-primary\">");
-    expect(page).toContain("Find jobs");
+    expect(screens).toContain("<Link href={PRO_LEADS_HREF} className=\"btn-primary\">");
+    expect(screens).toContain("Find jobs");
     // The old label survives only in the comment that records why it changed;
     // what must be gone is the hard-coded "/pro" primary button.
-    expect(page).not.toContain('<Link href="/pro" className="btn-primary">');
+    expect(screens).not.toContain('<Link href="/pro" className="btn-primary">');
+  });
+});
+
+// The other half of the DBG3 regression, found on live on 2026-08-30: even
+// after PerksList moved out, the pitch branch's page row still carried two
+// deferrals - the last perk icon (fixed in PerksList, above) and the closing
+// "Questions about billing?" line, which sat past the budget with nothing but
+// server markup around it. A unit test cannot see a stream, so these assert
+// the properties that keep the shape.
+describe("pro plus keeps every branch in one client component (DBG3 follow-up)", () => {
+  it("PlusScreens carries the \"use client\" directive", () => {
+    const firstStatement = screens
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("//"))[0];
+    expect(firstStatement).toBe('"use client";');
+  });
+
+  it("leaves no page markup in the server page: every branch returns one element", () => {
+    for (const tag of ["<div", "<p ", "<h1", "<form", "<Link", "<section", "<ul"]) {
+      expect(page, tag).not.toContain(tag);
+    }
+    for (const el of ["<PlusWelcome", "<PlusMember", "<PlusPastDue", "<PlusPitch"]) {
+      expect(page, el).toContain(el);
+    }
+  });
+
+  it("formats every date on the server, so hydration cannot disagree", () => {
+    // toLocaleDateString reads the runtime's locale and time zone. It stays in
+    // the page; PlusScreens receives finished strings.
+    expect(page).toContain("toLocaleDateString()");
+    expect(screens).not.toContain("toLocaleDateString");
+    expect(screens).toContain("periodSuffix: string;");
+    expect(screens).toContain("cancelsAtLabel: string | null;");
+  });
+
+  it("passes the three billing server actions down as props", () => {
+    for (const a of ["manageAction=", "resumeAction=", "cancelAction="]) {
+      expect(page, a).toContain(a);
+    }
+    expect(screens).toContain("type FormAction = () => Promise<void>;");
   });
 });
