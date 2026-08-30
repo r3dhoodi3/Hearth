@@ -9,6 +9,7 @@ import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { isCheckrConfigured } from "@/lib/checkr";
 import ProfileTabs from "./ProfileTabs";
 import type { ProProject, ProProjectPhoto } from "./ProjectsCard";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 export default async function ProProfilePage() {
   const contractor = await getCurrentContractor();
@@ -92,6 +93,19 @@ export default async function ProProfilePage() {
 
   return (
     <div className="mx-auto max-w-4xl">
+      {/* This was a pro-side page with no trail; one route holds all four
+          tabs (public/page/projects/security), so the crumb names the route
+          itself rather than whichever tab happens to be open. Label matches
+          the ProNav profile menu entry verbatim ("Edit business profile") so
+          the two never disagree. Rendered here, server-side, above the
+          client ProfileTabs component - not inside it - so it is always in
+          the served HTML regardless of which tab is selected client-side. */}
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/pro" },
+          { label: "Edit business profile" },
+        ]}
+      />
       <ProfileTabs
         contractor={contractor}
         member={member}

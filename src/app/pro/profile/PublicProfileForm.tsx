@@ -352,8 +352,11 @@ export default function PublicProfileForm({
                   {/* license_verified_status (0037/0055): a real CSLB check now
                       backs 'verified' and 'failed'. Never claim "Verified"
                       beyond what was actually confirmed. */}
+                  {/* 10px carries meaning (verified/failed/pending), so on a
+                      phone it steps up to 14px (max-sm:text-sm) instead of
+                      the old 12px; desktop is unchanged. */}
                   {hasLicense && verifyStatus === "verified" && (
-                    <span className="inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700 max-sm:text-xs dark:bg-green-950/40 dark:text-green-200">
+                    <span className="inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700 max-sm:text-sm dark:bg-green-950/40 dark:text-green-200">
                       <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 6L9 17l-5-5" />
                       </svg>
@@ -361,13 +364,13 @@ export default function PublicProfileForm({
                     </span>
                   )}
                   {hasLicense && verifyStatus === "failed" && (
-                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 max-sm:text-xs dark:bg-red-950/40 dark:text-red-200">
+                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 max-sm:text-sm dark:bg-red-950/40 dark:text-red-200">
                       Not confirmed
                     </span>
                   )}
                   {hasLicense &&
                     (verifyStatus === "pending" || verifyStatus === "unverified") && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 max-sm:text-xs dark:bg-amber-500/15 dark:text-amber-300">
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 max-sm:text-sm dark:bg-amber-500/15 dark:text-amber-300">
                         Verification pending
                       </span>
                     )}

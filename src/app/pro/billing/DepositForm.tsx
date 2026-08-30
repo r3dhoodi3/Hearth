@@ -96,8 +96,10 @@ export default function DepositForm({
       <input type="hidden" name="amount" value={num} />
 
       {/* The terms come BEFORE any amount is picked: a pro should know
-          deposits don't come back before choosing how much to put in. */}
-      <p className="text-xs text-stone-500 dark:text-stone-400">
+          deposits don't come back before choosing how much to put in.
+          12px is under the readable floor on a phone; max-sm:text-sm
+          matches the minimum-deposit line below it. */}
+      <p className="text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
         Deposits are non-refundable and can only be spent on leads. Bonus credit
         is promotional, has no cash value, and expires 60 days after it&apos;s
         added. Lead prices vary by service.

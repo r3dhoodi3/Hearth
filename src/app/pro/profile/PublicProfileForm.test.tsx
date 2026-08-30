@@ -113,6 +113,58 @@ describe("PublicProfileForm phone tap targets", () => {
   });
 });
 
+// CEO pass D3: the license status badges carry meaning (verified / not
+// confirmed / pending), so on a phone they step up to 14px instead of the
+// old 12px. Desktop (base text-[10px], no max-sm prefix reaches it) is
+// unchanged.
+describe("PublicProfileForm license status badges on a phone", () => {
+  it("License verified: 14px on a phone, 10px above sm", () => {
+    render(
+      <PublicProfileForm
+        contractor={{
+          ...CONTRACTOR,
+          license_number: "12345",
+          license_verified_status: "verified",
+        }}
+      />
+    );
+    const badge = screen.getByText("License verified").closest("span");
+    expect(badge?.className).toContain("text-[10px]");
+    expect(badge?.className).toContain("max-sm:text-sm");
+    expect(badge?.className).not.toContain("max-sm:text-xs");
+  });
+
+  it("Not confirmed: 14px on a phone, 10px above sm", () => {
+    render(
+      <PublicProfileForm
+        contractor={{
+          ...CONTRACTOR,
+          license_number: "12345",
+          license_verified_status: "failed",
+        }}
+      />
+    );
+    const badge = screen.getByText("Not confirmed");
+    expect(badge.className).toContain("text-[10px]");
+    expect(badge.className).toContain("max-sm:text-sm");
+  });
+
+  it("Verification pending: 14px on a phone, 10px above sm", () => {
+    render(
+      <PublicProfileForm
+        contractor={{
+          ...CONTRACTOR,
+          license_number: "12345",
+          license_verified_status: "pending",
+        }}
+      />
+    );
+    const badge = screen.getByText("Verification pending");
+    expect(badge.className).toContain("text-[10px]");
+    expect(badge.className).toContain("max-sm:text-sm");
+  });
+});
+
 describe("PublicProfileForm owner name", () => {
   // D8 / migration 0141: the business name is the company, owner_name is the
   // person a homeowner ends up talking to. Every pro who signed up before the

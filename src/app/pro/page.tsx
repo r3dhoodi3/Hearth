@@ -300,11 +300,13 @@ export default async function ProHome() {
 
       {/* ---- Three tools, the pro twin of the homeowner dashboard's row ----
           Same classes, same grid, same tile shape. Titles shorten below sm so
-          three fit across at 390px without wrapping to three lines. The Pro
-          chip goes only on tiles that are actually gated: the back office is
-          two free drafts then members-only, and the insights trend on
-          /pro/business is members-only. The playbook is free for everyone, so
-          it wears nothing. */}
+          three fit across at 390px without wrapping to three lines.
+          `chip` says what a non-member sees before tapping, never after:
+          "pro" is the hearth-accent gate for a tile that is truly member-only
+          (the insights trend on /pro/business), "free" is the green two-free-
+          drafts tag for the back office (0145 gave every contractor two free
+          drafts before it gates, so a "Pro" chip there overstated the door),
+          and null (the playbook, free for everyone) wears nothing. */}
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {[
           {
@@ -313,7 +315,7 @@ export default async function ProHome() {
             title: "Write an estimate",
             shortTitle: "Estimate",
             line: "Drafts your paperwork",
-            gated: true,
+            chip: "free" as const,
           },
           {
             href: "/pro/business",
@@ -321,7 +323,7 @@ export default async function ProHome() {
             title: "Your numbers",
             shortTitle: "Numbers",
             line: "Win rate and spend",
-            gated: true,
+            chip: "pro" as const,
           },
           {
             href: "/pro/playbook",
@@ -329,7 +331,7 @@ export default async function ProHome() {
             title: "Playbook",
             shortTitle: "Playbook",
             line: "How to win more",
-            gated: false,
+            chip: null,
           },
         ].map((t) => (
           <Link key={t.title} href={t.href} className="card-link p-3 text-center">
@@ -340,9 +342,20 @@ export default async function ProHome() {
               <span className="sm:hidden">{t.shortTitle}</span>
               <span className="hidden sm:inline">{t.title}</span>
             </p>
-            {!member && t.gated && (
+            {!member && t.chip === "pro" && (
               <p className="mt-0.5 flex flex-wrap justify-center gap-1">
                 <ProChip />
+              </p>
+            )}
+            {/* Static, not the live free_tool_drafts_used count: reading that
+                counter costs its own query (src/lib/freeAiTasteServer.ts's
+                proDraftsLeft, an admin-client round trip this already-lean
+                Home render does not otherwise make), and this tile's job is
+                just to say the door opens for free at all. /pro/tools shows
+                the exact number left once a pro is actually there. */}
+            {!member && t.chip === "free" && (
+              <p className="mt-0.5 flex flex-wrap justify-center gap-1">
+                <ProChip tone="free" label="Free to try" />
               </p>
             )}
             <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">

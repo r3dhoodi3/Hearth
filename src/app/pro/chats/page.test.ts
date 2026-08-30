@@ -49,3 +49,17 @@ describe("pro Messages: Find clients row", () => {
     expect(page).not.toContain("page, and when a homeowner picks you");
   });
 });
+
+describe("pro Messages: unread pill on a phone", () => {
+  // CEO pass D3: the "New" pill carries meaning (unread), so on a phone it
+  // steps up to 14px instead of the old 12px. Desktop (base text-[10px]) is
+  // unchanged.
+  it("is 14px on a phone, 10px above sm", () => {
+    expect(page).toContain(
+      'text-[10px] font-semibold uppercase tracking-wide text-white max-sm:text-sm'
+    );
+    expect(page).not.toContain(
+      'text-[10px] font-semibold uppercase tracking-wide text-white max-sm:text-xs'
+    );
+  });
+});

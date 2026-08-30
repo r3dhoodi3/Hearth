@@ -22,8 +22,6 @@ import ApplyJobButton from "../ApplyJobButton";
 import DirectRequestCard from "../DirectRequestCard";
 import JobStatusSelect from "../JobStatusSelect";
 import JobPhotoStrip from "../JobPhotoStrip";
-import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist";
-import { buildSetupItems } from "@/lib/proHome";
 import ClearOnboardingDraft from "../ClearOnboardingDraft";
 // The pure card helpers now live in one shared module: the "Asked for you"
 // card renders on the Home tab too (a two-item preview), so it and its helpers
@@ -43,7 +41,6 @@ import {
   GHOST_PROTECTION_GUARANTEE,
   FIRST_APPLICATION_GUARANTEE,
   CREDIT_NOT_CASH_LINE,
-  FIRST_APPLICATION_NEEDS_LICENSE,
 } from "@/lib/guaranteeCopy";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
@@ -55,7 +52,6 @@ import {
   closedLeadIdSet,
   bonusAvailableCents,
   photoUrlsByLead,
-  totalSpentCents,
 } from "@/lib/proDashboard";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -180,8 +176,11 @@ export default async function ProDashboard(
   const walletReads = walletQueryPlan(wallet, rawBonusCents);
 
   // SECOND ROUND TRIP: everything that needed a result from the first batch.
-  // None of these six depend on each other, so they all go out together.
-  const [closedRows, relationshipConflicts, photoRows, grants, appRows, txnRows] =
+  // None of these four depend on each other, so they all go out together.
+  // (The applications/transactions reads behind the old "Your results" card
+  // moved out with it on 2026-08-30 - that card lived on Home now anyway, so
+  // this page no longer pays for the query.)
+  const [closedRows, relationshipConflicts, photoRows, grants] =
     await Promise.all([
       // Advisory signal only (see migration 0092's RESIDUAL note): apply_to_lead
       // has no awareness of owner_closed_at, so open_jobs_for_me - a DB function,
@@ -240,25 +239,6 @@ export default async function ProDashboard(
             return (data ?? []) as any[];
           })()
         : Promise.resolve([] as any[]),
-      // "Your results" card: how the pro's applications have paid off so far.
-      walletReads.applications
-        ? (async () => {
-            const { data } = await (supabase as any)
-              .from("lead_applications")
-              .select("status")
-              .eq("contractor_id", contractor.id);
-            return (data ?? []) as any[];
-          })()
-        : Promise.resolve([] as any[]),
-      walletReads.transactions
-        ? (async () => {
-            const { data } = await (supabase as any)
-              .from("wallet_transactions")
-              .select("type, cash_delta_cents, bonus_delta_cents")
-              .eq("wallet_id", wallet.id);
-            return (data ?? []) as any[];
-          })()
-        : Promise.resolve([] as any[]),
     ]);
 
   const closedIds = closedLeadIdSet(closedRows);
@@ -293,10 +273,6 @@ export default async function ProDashboard(
   const pendingApps = apps.filter((a) => a.status === "applied");
   const declinedApps = apps.filter((a) => a.status === "declined");
 
-  const activeCount = assigned.filter(
-    (l) => l.status !== "closed" && l.status !== "lost"
-  ).length;
-
   // Spendable bonus is what apply_to_lead (migration 0058) actually honors:
   // only bonus backed by live, unexpired grants. The raw wallet counter can
   // overstate that for up to a day, because an expired grant lingers in the
@@ -312,37 +288,11 @@ export default async function ProDashboard(
   const balance = balanceCents / 100;
   const lowBalance = balanceCents < 5000;
 
-  // The logo is a Pro-member cosmetic (savePublicPageAction re-checks
-  // membership server-side), so for a non-member the checklist's "Upload your
-  // logo" step is a door that does not open. Only worth a membership lookup
-  // when the logo is actually missing; hasProPlan reads the per-request cached
-  // subscription row, so this shares one query with the later call below.
-  const canUploadLogo = Boolean((contractor as any).logo_url)
-    ? true
-    : await hasProPlan();
-
-  // Built in src/lib/proHome.ts so the Home tab renders the identical
-  // checklist without a second copy of these rules.
-  const setupItems: SetupItem[] = buildSetupItems({
-    contractor,
-    balanceCents,
-    applicationCount: apps.length,
-    canUploadLogo,
-  });
-
-  // "Your results" card: how the pro's applications have paid off so far.
-  const appliedCount = appRows.length;
-  const wonCount = appRows.filter((a: any) => a.status === "chosen").length;
-
-  const spent = totalSpentCents(txnRows) / 100;
-
   // Only the empty-state card needs membership status (to hide the Pro-alerts
   // suggestion from members), so skip the lookup when the board has jobs. This
   // one stays sequential on purpose: it depends on the board AFTER the
   // closed-job filter above, and on the common path (jobs on the board) it
-  // never runs at all. When the setup checklist above already asked (a pro
-  // with no logo on file), hasProPlan reads the same request-cached
-  // subscription rows, so this costs nothing extra either.
+  // never runs at all.
   const isProMember = open.length === 0 ? await hasProPlan() : false;
   // Whether that same suggestion may lead with the free trial. Guarded exactly
   // like isProMember, plus the flag: while COLD_START_FREE_ALERTS is on the
@@ -359,20 +309,14 @@ export default async function ProDashboard(
       <LeadsRealtime contractorId={contractor.id} />
       <ChatDrawer role="contractor" />
 
-      {/* The one true page heading; the sections below step down to h2.
-          The "See open jobs" button that used to sit here is gone: the board it
-          jumped to is on this very page, so on the Leads tab it was a link to
-          itself. Finding work is now the Home tab's primary quick action, which
-          is the screen a pro actually lands on. "Clients" stays as the quiet
-          companion for the pro who is already here. Full width on a phone, a
-          plain button beside the heading from sm up (.btn is already 44px
-          tall). */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Your leads</h1>
-        <Link href="/pro/crm" className="btn-secondary max-sm:w-full max-sm:text-center">
-          Clients
-        </Link>
-      </div>
+      {/* The one true page heading. The Leads tab IS the board now (2026-08-30):
+          the setup checklist, the "Your results" text wall, the active-jobs /
+          wallet stat cards, and the "Clients" button all moved to Home (or, for
+          Clients, its own tab) so a pro does not scroll past a second copy of
+          the same chrome to reach an open job. What is left below is the board
+          itself: the low-funds line when it applies, Asked for you, Open jobs,
+          Your jobs, and Applications. */}
+      <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Your leads</h1>
 
       {/* Reaching this page means a contractors row exists, which is the only
           honest proof the signup wizard's save actually landed - so this is
@@ -387,83 +331,18 @@ export default async function ProDashboard(
           now, the Messages tab: the pinned row at the top of /pro/chats, same
           rule as the homeowner side. */}
 
-      <SetupChecklist items={setupItems} />
-
+      {/* One compact line, not a card: the only banner this page still carries
+          on its own, so it stays a single sentence rather than the old
+          card-plus-button block. */}
       {lowBalance && (
-        <div className="card flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/15">
-          <p className="text-sm text-amber-800 dark:text-amber-300">
-            You&apos;re low on funds. Add funds to keep applying, and deposits of
-            $200+ earn bonus credit.
-          </p>
-          <Link href="/pro/billing" className="btn-primary shrink-0">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
+          Low on funds.{" "}
+          <Link href="/pro/billing" className="font-medium underline">
             Add funds
-          </Link>
-        </div>
+          </Link>{" "}
+          to keep applying.
+        </p>
       )}
-
-      {/* Hero treatment only once there are results to celebrate; before the
-          first application this is just a quiet pointer. */}
-      <section
-        className={`space-y-1 ${appliedCount === 0 ? "card" : "card-hero"}`}
-      >
-        <p className="stat-label">Your results</p>
-        {appliedCount === 0 ? (
-          <>
-            <p className="text-sm text-stone-600 dark:text-stone-400">
-              You haven&apos;t applied to a job yet. Apply to an open job below to
-              start winning work.
-            </p>
-            {apps.length === 0 && (
-              // The canonical guarantee sentence: the 60 days mirrors the
-              // bonus-grant expiry in migration 0044.
-              <p className="text-xs text-stone-500 dark:text-stone-400">
-                {contractor.license_number
-                  ? null
-                  : `${FIRST_APPLICATION_NEEDS_LICENSE} `}
-                {FIRST_APPLICATION_GUARANTEE} {CREDIT_NOT_CASH_LINE} The credit
-                is spendable on any lead and expires after 60 days.
-              </p>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-              You&apos;ve won {wonCount} job{wonCount === 1 ? "" : "s"} from{" "}
-              {appliedCount} application{appliedCount === 1 ? "" : "s"}.
-            </p>
-            <p className="text-sm text-stone-500 dark:text-stone-400">
-              Total spent on applications:{" "}
-              <span className="[font-variant-numeric:tabular-nums]">
-                ${spent.toFixed(2)}
-              </span>
-              .
-              {appliedCount >= 3 &&
-                ` Win rate: ${Math.round((wonCount / appliedCount) * 100)}%.`}
-            </p>
-          </>
-        )}
-      </section>
-
-      {/* Two stats only: the Open jobs section right below already shows its
-          own count, so a third card would just repeat it. */}
-      <section className="grid gap-4 sm:grid-cols-2">
-        <div className="card">
-          <p className="stat-label">Active jobs</p>
-          <p className="stat-number mt-1 text-4xl text-stone-900 dark:text-stone-100">
-            {activeCount}
-          </p>
-        </div>
-        <Link
-          href="/pro/billing"
-          className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
-        >
-          <p className="stat-label">Wallet balance</p>
-          <p className="stat-number mt-1 text-4xl text-stone-900 dark:text-stone-100">
-            ${balance.toFixed(2)}
-          </p>
-          <p className="mt-1 text-xs font-medium text-hearth-700 dark:text-hearth-300">Add funds →</p>
-        </Link>
-      </section>
 
       {/* ---- Asked for you: a homeowner reached out to this pro directly ----
           Sits above the open board because it is exclusive: only this pro can

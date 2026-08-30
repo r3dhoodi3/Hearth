@@ -18,6 +18,7 @@ import DepositForm from "./DepositForm";
 import FadingBanner from "@/components/FadingBanner";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
 import ProTrialNudge from "@/components/pro/ProTrialNudge";
+import Breadcrumbs from "@/components/Breadcrumbs";
 
 function dollars(cents: number | string | null) {
   const v = Number(cents ?? 0);
@@ -149,6 +150,12 @@ export default async function ProBillingPage(props: {
 
   return (
     <div className="space-y-8">
+      {/* This was a pro-side page with no trail; the ProNav profile menu
+          label ("Billing") is reused verbatim so the crumb and the menu
+          never disagree. */}
+      <Breadcrumbs
+        items={[{ label: "Home", href: "/pro" }, { label: "Billing" }]}
+      />
       {/* First visit to billing, then every tenth after it: a pro standing at
           the wallet is the one moment the trial is actually relevant. Renders
           nothing at all for a member, or for a pro who already used the trial

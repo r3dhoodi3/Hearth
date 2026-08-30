@@ -5,12 +5,30 @@
 //
 // It marks a door, it never blocks one. Nothing a pro owns (their leads, their
 // jobs, their money, their messages) ever wears this.
-export default function ProChip({ className = "" }: { className?: string }) {
+//
+// tone="free" (2026-08-30): a second, green-toned reading for a door that is
+// NOT actually member-only, such as the Estimate tile once every contractor
+// got two free drafts (0145) - the hearth-accent "Pro" tone would claim a gate
+// that no longer exists there, which is exactly the lie CEO pass item C asked
+// to stop telling. Same shape, different color and (usually) different label.
+export default function ProChip({
+  className = "",
+  label = "Pro",
+  tone = "pro",
+}: {
+  className?: string;
+  label?: string;
+  tone?: "pro" | "free";
+}) {
   return (
     <span
-      className={`chip bg-hearth-100 text-hearth-700 dark:bg-hearth-700 dark:text-stone-300 ${className}`}
+      className={`chip ${
+        tone === "free"
+          ? "border border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300"
+          : "bg-hearth-100 text-hearth-700 dark:bg-hearth-700 dark:text-stone-300"
+      } ${className}`}
     >
-      Pro
+      {label}
     </span>
   );
 }

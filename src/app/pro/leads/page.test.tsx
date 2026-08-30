@@ -145,26 +145,12 @@ describe("pro leads: heading row", () => {
     );
   });
 
-  it("keeps Clients beside the heading as the quiet companion", () => {
-    const heading = page.indexOf(">Your leads</h1>");
-    const clients = page.indexOf('<Link href="/pro/crm"');
-    expect(heading).toBeGreaterThan(-1);
-    expect(clients).toBeGreaterThan(heading);
-    expect(clients).toBeLessThan(page.indexOf("<SetupChecklist"));
-  });
-
   it("routes the sort links through PRO_LEADS_HREF, never a literal /pro", () => {
     // The board lives at /pro/leads now, so a hard-coded "/pro" on a sort tap
     // would bounce the pro onto the Home screen.
     expect(page).toContain("PRO_LEADS_HREF");
     expect(page).toContain("? PRO_LEADS_HREF");
     expect(page).toContain("`${PRO_LEADS_HREF}?sort=${o.value}`");
-  });
-
-  it("still builds its setup checklist from the shared builder", () => {
-    // Home renders the identical checklist; one builder, no second copy of
-    // the rules.
-    expect(page).toContain("buildSetupItems({");
   });
 
   it("tracks lead_viewed with a count, after the closed-job sweep and before the sort", () => {
@@ -180,5 +166,62 @@ describe("pro leads: heading row", () => {
     expect(closedSweep).toBeGreaterThan(-1);
     expect(tracked).toBeGreaterThan(closedSweep);
     expect(tracked).toBeLessThan(sort);
+  });
+});
+
+// CEO pass item A (2026-08-30): the Leads tab used to render the Home-era
+// chrome above the board (setup checklist, "Your results" text wall, the
+// active-jobs/wallet stat cards, a "Clients" button beside the heading) -
+// all of it now lives on Home (or, for Clients, its own tab), so a pro no
+// longer scrolls past a second copy of the same chrome to reach an open job.
+describe("pro leads: board only, chrome removed", () => {
+  it("drops the setup checklist and its builder call", () => {
+    expect(page).not.toContain("SetupChecklist");
+    expect(page).not.toContain("buildSetupItems(");
+  });
+
+  it("drops the 'Your results' card and its computed counts", () => {
+    // The phrase itself still appears in this page's own comments, recording
+    // where the card used to live and why - what must be gone is the actual
+    // stat-label markup and the counts it displayed.
+    expect(page).not.toContain('<p className="stat-label">Your results</p>');
+    expect(page).not.toContain("appliedCount");
+    expect(page).not.toContain("wonCount");
+    expect(page).not.toContain("totalSpentCents");
+  });
+
+  it("drops the Active jobs / Wallet balance stat cards", () => {
+    expect(page).not.toContain(">Active jobs</p>");
+    expect(page).not.toContain(">Wallet balance</p>");
+  });
+
+  it("drops the Clients button from beside the heading", () => {
+    expect(page).not.toContain('<Link href="/pro/crm"');
+    expect(page).not.toContain(">Clients</Link>");
+  });
+
+  it("shrinks the low-funds banner to one compact line instead of a card with a button", () => {
+    expect(page).not.toContain("earn bonus credit");
+    expect(page).not.toContain("<Link href=\"/pro/billing\" className=\"btn-primary shrink-0\">");
+    expect(page).toContain("Low on funds.");
+    expect(page).toContain("to keep applying.");
+  });
+
+  it("keeps every section the board itself needs", () => {
+    expect(page).toContain("<LeadsRealtime contractorId={contractor.id} />");
+    expect(page).toContain('<section id="open-jobs"');
+    expect(page).toContain("Asked for you");
+    expect(page).toContain("Your jobs <span");
+    expect(page).toContain("Pending applications");
+    expect(page).toContain("Not selected");
+    expect(page).toContain("<ApplyJobButton");
+  });
+
+  it("no longer fetches the applications/transactions rows the results card needed", () => {
+    expect(page).not.toContain('.from("lead_applications")');
+    expect(page).not.toContain('.from("wallet_transactions")');
+    // The grants read (spendable-bonus cap) is still needed for the Apply
+    // button's canAfford math, so walletQueryPlan itself stays.
+    expect(page).toContain("walletQueryPlan(");
   });
 });

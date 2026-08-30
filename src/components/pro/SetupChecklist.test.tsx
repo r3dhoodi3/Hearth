@@ -60,6 +60,24 @@ describe("SetupChecklist", () => {
       "/pro/profile#reviews"
     );
   });
+
+  // CEO pass D3: the checkmark marker carries meaning (done vs. not), so on a
+  // phone it steps up to 14px like the license badges, not the old 12px.
+  // Desktop (no max-sm prefix reaches it) stays the original 11px.
+  it("steps the marker up to 14px on a phone, unchanged above sm", () => {
+    // A checklist with every countable step done renders nothing at all (see
+    // the test above), so this needs one open item to keep the card - and its
+    // marker - on screen.
+    const { container } = render(
+      <SetupChecklist
+        items={[item({ label: "a", done: true }), item({ label: "b" })]}
+      />
+    );
+    const marker = container.querySelector("span[aria-hidden]");
+    expect(marker?.className).toContain("text-[11px]");
+    expect(marker?.className).toContain("max-sm:text-sm");
+    expect(marker?.className).not.toContain("max-sm:text-xs");
+  });
 });
 
 // The regression this file exists for. See the long comment at the top of

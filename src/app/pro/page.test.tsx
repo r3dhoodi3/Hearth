@@ -85,17 +85,37 @@ describe("pro home: three tool tiles (E8)", () => {
     );
   });
 
-  it("chips only the tiles that are really gated", () => {
-    // The back office (two free drafts, then members-only) and the insights
-    // trend are gated. The playbook is free for every pro, so it wears
-    // nothing: a chip on an open door is a lie.
-    expect(page).toContain("{!member && t.gated && (");
+  it("chips the tiles honestly: 'Pro' only where the door is truly member-only", () => {
+    // The insights trend on /pro/business is really member-only, so it keeps
+    // the hearth-accent "Pro" chip. The playbook is free for every pro, so it
+    // wears nothing: a chip on an open door is a lie.
+    expect(page).toContain('{!member && t.chip === "pro" && (');
     expect(page).toContain('title: "Playbook"');
     const playbookBlock = page.slice(
       page.indexOf('href: "/pro/playbook"'),
       page.indexOf('href: "/pro/playbook"') + 300
     );
-    expect(playbookBlock).toContain("gated: false");
+    expect(playbookBlock).toContain("chip: null");
+    const businessBlock = page.slice(
+      page.indexOf('href: "/pro/business"'),
+      page.indexOf('href: "/pro/business"') + 300
+    );
+    expect(businessBlock).toContain('chip: "pro" as const');
+  });
+
+  it("swaps the Estimate tile's chip for a green 'Free to try' tag (0145: two free drafts, not member-only)", () => {
+    // Every contractor gets two free drafts before /pro/tools gates, so the
+    // hearth-accent "Pro" chip used to overstate the door. It reads
+    // "Free to try" instead, in ProChip's tone="free" styling, and is static
+    // rather than a live drafts-left count (see the comment beside it in
+    // page.tsx for why a query was not worth adding to this render).
+    const estimateBlock = page.slice(
+      page.indexOf('href: "/pro/tools"'),
+      page.indexOf('href: "/pro/tools"') + 300
+    );
+    expect(estimateBlock).toContain('chip: "free" as const');
+    expect(page).toContain('{!member && t.chip === "free" && (');
+    expect(page).toContain('<ProChip tone="free" label="Free to try" />');
   });
 });
 

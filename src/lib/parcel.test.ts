@@ -781,3 +781,36 @@ describe("parcel.ts caching", () => {
     expect(total).toBeLessThan(attempt * 2);
   });
 });
+
+// CEO pass D4 (persona H4): lookupParcelAction only floored the street field
+// (MIN_ADDRESS_LENGTH) before spending it on a billed RentCast call and,
+// on a miss, a geocoder call - there was no ceiling, so a crafted post could
+// hand an arbitrarily long string to an outbound request URL. Scoped to just
+// lookupParcelAction, the same slicing trick "the onboarding refusal gates"
+// above uses, so claimPropertyAction's own (pre-existing) cappedField call on
+// address_line1 can't stand in for the one being checked here.
+describe("lookupParcelAction caps the street field before any outbound call", () => {
+  const onboarding = src("../app/onboarding/actions.ts");
+  const lookup = onboarding.slice(
+    onboarding.indexOf("export async function lookupParcelAction"),
+    onboarding.indexOf("export async function claimPropertyAction")
+  );
+
+  it("slices street to MAX_ADDRESS_LENGTH once, right after the floor check", () => {
+    expect(lookup).toContain(
+      "const cappedStreet = street.trim().slice(0, MAX_ADDRESS_LENGTH);"
+    );
+  });
+
+  it("spends the capped value on both outbound calls, not the raw field", () => {
+    // The RentCast call (lookupParcel) and the geocoder fallback
+    // (verifyAddressExists) are the two calls this action can make; neither
+    // may read the uncapped `street` directly.
+    expect(lookup).toContain("await lookupParcel(\n      cappedStreet,");
+    expect(lookup).toContain(
+      "await verifyAddressExists(cappedStreet, zip.trim());"
+    );
+    expect(lookup).not.toContain("lookupParcel(\n      street.trim(),");
+    expect(lookup).not.toContain("verifyAddressExists(street.trim(),");
+  });
+});

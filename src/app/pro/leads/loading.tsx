@@ -3,33 +3,18 @@ import { Skeleton, SkeletonLine } from "@/components/Skeleton";
 // Mirrors pro/leads/page.tsx, the leads board. (/pro is the Home tab now and
 // keeps its own skeleton at pro/loading.tsx.) The pro shell's <main> already
 // provides the max-w-5xl container, so this paints the page's own stack: the
-// "Your leads" heading, the results card, the two-up stat tiles (active jobs /
-// wallet), the Open jobs section with a few job cards, and the Your jobs
-// section.
+// "Your leads" heading, the Open jobs section with a few job cards, and the
+// Your jobs section.
+//
+// The setup checklist, the "Your results" card, and the two stat tiles moved
+// off this page on 2026-08-30 (CEO pass item A: they live on Home now), so
+// their skeleton rows came off with them - painting them here would promise
+// content the real render no longer has.
 export default function Loading() {
   return (
     <div className="space-y-8" aria-hidden="true">
       {/* Page heading: "Your leads" */}
       <Skeleton className="h-7 w-40" />
-
-      {/* Your results card */}
-      <div className="card space-y-2">
-        <Skeleton className="h-3 w-24" />
-        <SkeletonLine width="w-3/4" />
-        <SkeletonLine width="w-1/2" />
-      </div>
-
-      {/* Two stat tiles: active jobs, wallet balance */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="card space-y-2">
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="h-9 w-16" />
-        </div>
-        <div className="card space-y-2">
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="h-9 w-24" />
-        </div>
-      </div>
 
       {/* Open jobs */}
       <div className="space-y-3">

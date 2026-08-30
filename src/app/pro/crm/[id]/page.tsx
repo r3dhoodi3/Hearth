@@ -5,6 +5,7 @@ import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import SubmitButton from "@/components/SubmitButton";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import {
   updateClientDetailsAction,
   deleteClientAction,
@@ -72,13 +73,17 @@ export default async function ClientDetailPage(
   return (
     <div className="space-y-8">
       <div>
-        <Link
-          href="/pro/crm"
-          className="text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
-        >
-          Back to clients
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-stone-900 dark:text-stone-100">
+        {/* Replaces the old plain single-link way back with the shared
+            trail (Home > Clients > name), same 44px phone tap target as
+            every other breadcrumb link. */}
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/pro" },
+            { label: "Clients", href: "/pro/crm" },
+            { label: client.client_name },
+          ]}
+        />
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
           {client.client_name}
         </h1>
       </div>

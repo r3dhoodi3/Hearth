@@ -229,6 +229,11 @@ export async function lookupParcelAction(
       error: "Enter your home's street address to continue.",
     };
   }
+  // Capped before it reaches the RentCast call below, same ceiling
+  // claimPropertyAction enforces on address_line1: a server action takes
+  // whatever it is handed, and an uncapped street here would let a crafted
+  // post pay for an outbound request URL of unbounded length (persona H4).
+  const cappedStreet = street.trim().slice(0, MAX_ADDRESS_LENGTH);
   if (!/^\d{5}(-\d{4})?$/.test(zip.trim())) {
     return { ok: false, error: "Enter a valid 5-digit ZIP code." };
   }
@@ -296,7 +301,7 @@ export async function lookupParcelAction(
   // that legitimately needs them loses access.
   const { owner_names, owner_type, owner_occupied, ...publicFacts } =
     await lookupParcel(
-      street.trim(),
+      cappedStreet,
       zip.trim(),
       // Capped here as well as on the claim: a server action takes whatever
       // it is handed, and this value reaches an outbound request URL.
@@ -332,7 +337,7 @@ export async function lookupParcelAction(
   // refuses. Conflating "we couldn't check" with "this does not exist" is the
   // 2026-08-24 outage, and it is not getting repeated with a new vendor.
   if (publicFacts.source !== "rentcast") {
-    const verdict = await verifyAddressExists(street.trim(), zip.trim());
+    const verdict = await verifyAddressExists(cappedStreet, zip.trim());
     if (verdict === "no_match") {
       return { ok: false, error: ADDRESS_NOT_FOUND_MESSAGE, notFound: true };
     }

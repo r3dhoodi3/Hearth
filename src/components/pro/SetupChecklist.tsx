@@ -93,9 +93,11 @@ export default function SetupChecklist({ items }: { items: SetupItem[] }) {
               }`}
             >
               <span
-                // Phones get a 24px circle with 12px digits; sm and up
+                // Phones get a 24px circle with 14px digits (the checkmark
+                // carries meaning - done vs. not - so it gets the same
+                // readable-floor bump as the other status badges); sm and up
                 // keeps the original 20px / 11px marker exactly.
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold max-sm:h-6 max-sm:w-6 max-sm:text-xs ${
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold max-sm:h-6 max-sm:w-6 max-sm:text-sm ${
                   item.done
                     ? "border-green-200 bg-green-50 text-green-600 dark:border-green-900 dark:bg-green-950/40 dark:text-green-400"
                     : "border-stone-200 bg-white text-transparent dark:border-white/10 dark:bg-stone-800"

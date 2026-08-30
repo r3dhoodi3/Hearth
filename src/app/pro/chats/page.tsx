@@ -229,7 +229,10 @@ export default async function ProChatsPage(props: {
                         {l.homeowner_name || "Homeowner"}
                       </span>
                       {unread ? (
-                        <span className="shrink-0 rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white max-sm:text-xs">
+                        // 10px reads fine at a desk but is under the readable
+                        // floor on a phone; max-sm:text-sm brings it to 14px
+                        // there, same convention as the license badges.
+                        <span className="shrink-0 rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white max-sm:text-sm">
                           New
                         </span>
                       ) : (

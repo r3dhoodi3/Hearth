@@ -23,6 +23,7 @@ import {
   resumeProMembershipAction,
 } from "./actions";
 import ProPlanToggle from "./ProPlanToggle";
+import PerksList from "./PerksList";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
 
@@ -78,6 +79,22 @@ const PERKS: Array<{ icon: LucideIcon; title: string; body: string }> = [
   },
 ];
 
+// Pre-rendered once per icon size, at module scope: the perk icons cross into
+// PerksList (a client module, see its header comment) as already-rendered
+// leaf elements rather than raw component references, since a bare function
+// cannot cross the server/client boundary as a prop. Two sizes because the
+// card layout and the bullet-list layout always used different ones.
+const PERKS_CARD = PERKS.map((p) => ({
+  title: p.title,
+  body: p.body,
+  icon: <p.icon className="h-5 w-5" aria-hidden="true" />,
+}));
+const PERKS_LIST = PERKS.map((p) => ({
+  title: p.title,
+  body: p.body,
+  icon: <p.icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />,
+}));
+
 // The ?reason= banners. Mirrors the homeowner /plus page: a plain statement of
 // what was used up or what is behind the wall, no urgency and no invented
 // numbers, so the pitch is specific to the door the pro just tapped. Keys are
@@ -122,17 +139,11 @@ export default async function ProPlusPage(
             your toolbox:
           </p>
         </div>
-        <ul className="mx-auto max-w-md space-y-2 text-left">
-          {PERKS.map((p) => (
-            <li key={p.title} className="flex items-start gap-2 text-sm text-stone-700 dark:text-stone-300">
-              <p.icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>
-                <span className="font-medium text-stone-900 dark:text-stone-100">{p.title}.</span>{" "}
-                {p.body}
-              </span>
-            </li>
-          ))}
-        </ul>
+        {/* Streaming fix, not a layout change: see PerksList.tsx's header
+            comment and scratchpad/debug-DBG3.md - this block used to be
+            PERKS.map() rendered inline here, at the tail of a long Server
+            Component row. */}
+        <PerksList perks={PERKS_LIST} variant="welcome" />
         {/* The two perks with money attached are perks of a PAID cycle: the
             Stripe webhook grants the wallet credit off the first real invoice
             (not the $0 one a trial start finalizes) and applies the deposit
@@ -301,20 +312,9 @@ export default async function ProPlusPage(
           <p className="mb-3 text-sm font-semibold text-stone-900 dark:text-stone-100">
             Your member perks
           </p>
-          <ul className="space-y-2">
-            {PERKS.map((p) => (
-              <li
-                key={p.title}
-                className="flex items-start gap-2 text-sm text-stone-700 dark:text-stone-300"
-              >
-                <span className="mt-0.5 font-bold text-green-600 dark:text-green-400">✓</span>
-                <span>
-                  <span className="font-medium text-stone-900 dark:text-stone-100">{p.title}.</span>{" "}
-                  {p.body}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {/* Streaming fix, not a layout change: see PerksList.tsx's header
+              comment and scratchpad/debug-DBG3.md. */}
+          <PerksList perks={PERKS_LIST} variant="member" />
           {/* Every perk above carries a green check, which is true for all but
               two while the trial runs: the wallet credit needs a paid invoice
               and the deposit match needs an "active" row (see creditDepositSession
@@ -425,16 +425,28 @@ export default async function ProPlusPage(
     // Wider than the other branches of this page: the pricing block below is
     // three real columns (no membership, Yearly, Monthly), and max-w-2xl
     // squeezes them to the point of wrapping every price line.
-    <div className="mx-auto max-w-3xl space-y-8">
+    //
+    // PHONE ORDER (2026-08-30, CEO pass item B). On a phone this page used to
+    // read hero -> "never changes" banner -> six perk cards -> the trial
+    // button, so the offer itself sat below a screen or two of preamble - the
+    // same "leads with perks, not the offer" problem the homeowner /plus page
+    // had. flex+order reorders the SAME children per breakpoint rather than
+    // rendering two copies of ProPlanToggle (a client component with its own
+    // forms and radio group; a second copy would double both). gap-8 replaces
+    // space-y-8 because the space-y selector keys off DOM adjacency, which
+    // does not track the visual order the `order-*` classes create. Every
+    // child carries both a max-sm: and an sm: order so desktop keeps today's
+    // exact order and phone gets the new one.
+    <div className="mx-auto flex max-w-3xl flex-col gap-8">
       {reasonCopy && (
-        <div className="card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-500/30 dark:bg-hearth-500/15">
+        <div className="order-1 card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-500/30 dark:bg-hearth-500/15">
           <p className="text-sm text-hearth-800 dark:text-hearth-200">
             {reasonCopy}
           </p>
         </div>
       )}
 
-      <div className="text-center">
+      <div className="order-2 text-center">
         <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">
           Run your business, not your admin
         </h1>
@@ -454,23 +466,26 @@ export default async function ProPlusPage(
             clutter, matching the homeowner /plus page's own PlanToggle. */}
       </div>
 
-      {/* The straight answer, up front: membership never touches lead access. */}
-      <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-center text-sm text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300">
-        Membership never changes which jobs you can see or apply to. Every job
-        stays open to every pro, pay per application, member or not.
+      {/* The offer itself, directly under the H1 on a phone: max-sm:order-3
+          puts it right after the heading, before any of the preamble below.
+          Desktop keeps its old spot, sm:order-6. */}
+      <div className="max-sm:order-3 sm:order-6">
+        <ProPlanToggle trialEligible={trialEligible} />
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2">
-        {PERKS.map((p) => (
-          <div key={p.title} className="card">
-            <div className="icon-chip">
-              <p.icon className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <h2 className="mt-2 font-semibold text-stone-900 dark:text-stone-100">{p.title}</h2>
-            <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{p.body}</p>
-          </div>
-        ))}
-      </section>
+      {/* The straight answer, up front on desktop; on a phone this shrinks to
+          one short line and moves under the button (max-sm:order-4, right
+          after the ProPlanToggle block above) instead of standing between the
+          H1 and the offer. */}
+      <div className="rounded-xl border border-stone-200 bg-stone-50 text-center text-stone-600 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 max-sm:order-4 max-sm:p-2 max-sm:text-xs sm:order-3 sm:p-4 sm:text-sm">
+        <span className="sm:hidden">
+          Membership never changes which jobs you can see or apply to.
+        </span>
+        <span className="hidden sm:inline">
+          Membership never changes which jobs you can see or apply to. Every job
+          stays open to every pro, pay per application, member or not.
+        </span>
+      </div>
 
       {/* The perks grid above leads with the two perks that money is attached
           to, but on the free trial those two are held back: the wallet credit
@@ -481,7 +496,7 @@ export default async function ProPlusPage(
           returning member (trialEligible false) starts paying right away, so
           their perks are on from day one and they don't see this. */}
       {trialEligible && (
-        <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+        <p className="order-5 text-center text-xs text-stone-500 dark:text-stone-400">
           Two of these start when your free trial converts and your first
           payment goes through: your first $10 of lead credit, and your{" "}
           +{PRO_DEPOSIT_BOOST_PTS}% deposit match. During the trial, deposits
@@ -489,9 +504,16 @@ export default async function ProPlusPage(
         </p>
       )}
 
-      <ProPlanToggle trialEligible={trialEligible} />
+      {/* Streaming fix, not a layout change: see PerksList.tsx's header
+          comment and scratchpad/debug-DBG3.md - this used to be PERKS.map()
+          rendered inline here, six description-heavy cards sitting near the
+          tail of this branch's Server Component row. Perk cards go LAST on a
+          phone (max-sm:order-6): the offer above already made its case. */}
+      <div className="max-sm:order-6 sm:order-4">
+        <PerksList perks={PERKS_CARD} variant="grid" />
+      </div>
 
-      <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+      <p className="order-7 text-center text-xs text-stone-500 dark:text-stone-400">
         Questions about billing?{" "}
         <Link href="/pro/billing" className="hover:underline">
           Visit billing
