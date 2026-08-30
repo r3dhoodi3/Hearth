@@ -1013,7 +1013,7 @@ export async function closeJobAction(formData: FormData) {
           // close: nobody was chosen, so the fee comes back as wallet credit
           // on the usual 7-day schedule.
           const creditLine =
-            " If you paid to apply, that fee comes back to your wallet as credit on the usual 7-day schedule.";
+            " If you paid to apply, that fee comes back to your wallet as credit, not cash, on the usual 7-day schedule.";
           const body = reason
             ? `They closed it without choosing anyone: ${reason}.${creditLine}`
             : `They closed it without choosing anyone.${creditLine}`;
@@ -1166,7 +1166,7 @@ export async function chooseApplicantAction(formData: FormData) {
               userId,
               kind: "apply_credit_back",
               title: "Your fee came back as credit",
-              body: `The homeowner went with another pro this time. Your ${feeLabel} apply fee is back in your wallet as credit, good for ${BONUS_EXPIRY_DAYS} days.`,
+              body: `The homeowner picked another pro. Your ${feeLabel} fee is back in your wallet as credit, not cash: spend it on your next lead within ${BONUS_EXPIRY_DAYS} days.`,
               url: PRO_LEADS_HREF,
               email: contact?.email ?? null,
               phone: contact?.phone ?? null,

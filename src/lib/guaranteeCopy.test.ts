@@ -42,10 +42,10 @@ describe("ghost protection: never a bare refund, always credit-to-wallet", () =>
     const firstAppHtml = renderToStaticMarkup(
       createElement("span", null, firstApplicationGuaranteeRich())
     );
-    expect(firstAppHtml).toContain("<strong>you get that one back as credit too</strong>");
     expect(firstAppHtml).toContain(
-      "<strong>only on your very first paid application</strong>"
+      "<strong>you get 100% of that fee back too, every time, no limit</strong>"
     );
+    expect(firstAppHtml).toContain("<strong>not cash</strong>");
 
     const creditLineHtml = renderToStaticMarkup(
       createElement("span", null, creditNotCashLineRich())

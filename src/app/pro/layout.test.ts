@@ -86,7 +86,9 @@ describe("pro shell back-office href", () => {
     expect(layoutCode).toContain(
       'import { getCurrentContractor, getSides, isEstablishedPro } from "@/lib/contractor"'
     );
-    expect(layoutCode).toContain('import { hasProPlan } from "@/lib/subscription"');
+    expect(layoutCode).toContain(
+      'import { hasProPlan, getProSubscription } from "@/lib/subscription"'
+    );
     expect(layoutCode).toContain('import { proDraftsLeft } from "@/lib/freeAiTasteServer"');
     expect(layoutCode).toContain("const member = await hasProPlan();");
     // The two reads after the membership check run as one wave (speed wave
@@ -105,5 +107,34 @@ describe("pro shell back-office href", () => {
       'const backOfficeHref = canUseBackOffice ? "/pro/tools" : "/pro/plus?reason=tools";'
     );
     expect(layoutCode).toContain("backOfficeHref={backOfficeHref}");
+  });
+});
+
+// The Pro trial takeover (src/components/pro/ProTrialNudge.tsx) is mounted
+// exactly once, in this shell, so its smart-timing clock can run across every
+// /pro/* page instead of only ever ticking while a pro happens to be sitting
+// on /pro/billing (moved 2026-08-30). These are source-shape guards, same
+// reasoning as the rest of this file: a real render needs a Supabase-backed
+// contractor.
+describe("pro shell mounts the trial takeover exactly once", () => {
+  const billingViewSource = readFileSync(
+    join(process.cwd(), "src/app/pro/billing/BillingView.tsx"),
+    "utf8"
+  );
+
+  it("imports and mounts it here, with a real account id and the same eligibility rule billing used", () => {
+    expect(layoutCode).toContain(
+      'import ProTrialNudge from "@/components/pro/ProTrialNudge"'
+    );
+    expect(layoutCode).toContain(
+      "const trialEligible = !member && !proSub;"
+    );
+    expect(layoutCode).toContain(
+      "<ProTrialNudge eligible={trialEligible} userId={contractor.user_id ?? null} />"
+    );
+  });
+
+  it("is not also mounted on the billing page any more", () => {
+    expect(billingViewSource).not.toContain("ProTrialNudge");
   });
 });

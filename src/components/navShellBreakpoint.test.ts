@@ -99,15 +99,22 @@ describe("everything that clears the tab bar moved to lg with it", () => {
     expect(globalsCss).not.toContain("@media (max-width: 639px)");
   });
 
-  it("lifts the toast stack, the review prompt and the trial nudge at lg", () => {
+  it("lifts the toast stack and the review prompt at lg", () => {
     expect(toastSrc).toContain(
       "max-lg:bottom-[calc(3.5rem_+_env(safe-area-inset-bottom)_+_0.5rem)]"
     );
     expect(toastSrc).not.toContain("max-sm:bottom-[");
     expect(reviewPromptSrc).toContain("lg:bottom-4");
     expect(reviewPromptSrc).not.toContain("sm:bottom-4");
-    expect(proTrialNudgeSrc).toContain("lg:bottom-6");
-    expect(proTrialNudgeSrc).not.toContain("sm:bottom-6");
+  });
+
+  it("renders the trial prompt as a full-screen takeover, not a bar-anchored card", () => {
+    // The trial nudge used to be a bottom card lifted above the tab bar like
+    // the toast stack and the review prompt (2026-08-30 and earlier). It is
+    // now a full-screen "3 Day Free Trial" paywall (fixed inset-0), so there
+    // is no bottom offset left to keep in sync with the bar at all.
+    expect(proTrialNudgeSrc).toContain("fixed inset-0");
+    expect(proTrialNudgeSrc).not.toMatch(/bottom-6/);
   });
 
   it("leaves the phone chat frame on the phone breakpoint", () => {

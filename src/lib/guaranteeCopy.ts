@@ -2,9 +2,10 @@ import { createElement, type ReactNode } from "react";
 import { GHOST_PROTECTION_DAYS } from "@/lib/constants";
 
 // The two credit-back promises, as one canonical sentence each. They are two
-// DIFFERENT credits and must never blur into one guarantee: ghost protection
-// is unlimited and repeats every time, the first-application guarantee is a
-// one-time credit gated on a license.
+// DIFFERENT triggers and must never blur into one guarantee: ghost protection
+// fires when the homeowner never responds, FIRST_APPLICATION_GUARANTEE fires
+// when the homeowner responds but picks someone else. Both are unlimited and
+// repeat every time.
 //
 // These live here rather than on any one page because the same promise is
 // made in five places (the /pros marketing page, the /pro board, the "not
@@ -12,11 +13,24 @@ import { GHOST_PROTECTION_DAYS } from "@/lib/constants";
 // drifts between those places is a legal problem, not a copy problem, so
 // every surface renders these strings verbatim.
 //
-// Source of truth for the rules: migration 0044
-// (supabase/migrations/0044_first_apply_guarantee.sql). The
-// first-application credit is once per contractor ever, on their first paid
-// application only, and only when a license number is on file whose
-// verification has not failed. Change 0044 and this file together.
+// Source of truth for the rules: migration 0107
+// (supabase/migrations/0107_apply_credit_back.sql), which recreates
+// choose_applicant() so EVERY non-chosen applicant with a live, paid fee gets
+// 100% of it back as credit, every time, no license required. This
+// superseded the older, narrower migration 0044 rule (once per contractor
+// ever, first paid application only, license-gated), which 0107's own header
+// spells out: "a second or third applicant who lost simply forfeited their
+// fee [under 0044]. This makes losing a pick cost the pro nothing [as of
+// 0107]." 0044's function still runs as a narrow backstop for a job that
+// dies unresolved without ever being picked (closed, expired, or stale 30+
+// days) - see the daily cron at
+// src/app/api/cron/first-apply-guarantee/route.ts - but it is no longer the
+// rule that governs an ordinary "homeowner picked someone else" loss, so this
+// file's exported name (kept for the many existing call sites) no longer
+// literally matches what its string says. FIRST_APPLICATION_GUARANTEE below
+// intentionally states the current, universal 0107 rule, not the legacy
+// first-application-only one. Change 0107 (or, for the narrow stale-job
+// backstop, 0044) and this file together.
 
 // Says "lead credit" and "(not cash)" in the sentence itself, not just in the
 // separate CREDIT_NOT_CASH_LINE below: a pro who reads this line alone (some
@@ -25,7 +39,7 @@ import { GHOST_PROTECTION_DAYS } from "@/lib/constants";
 export const GHOST_PROTECTION_GUARANTEE = `If the homeowner never responds within ${GHOST_PROTECTION_DAYS} days, you always get the fee back to your wallet as lead credit (not cash), every time, no limit.`;
 
 export const FIRST_APPLICATION_GUARANTEE =
-  "If they do respond but pick someone else, you get that one back as credit too, but only on your very first paid application and only if you have a license number on file that has not failed our check. After that, a lost bid is a lost fee.";
+  "If they do respond but pick someone else, you get 100% of that fee back too, every time, no limit. It lands in your wallet as credit, not cash, and is good for 60 days.";
 
 export const CREDIT_NOT_CASH_LINE =
   "Either way it is Hearth credit in your wallet, not money back to your card.";
@@ -109,8 +123,8 @@ export function ghostProtectionGuaranteeRich(): ReactNode {
 
 export function firstApplicationGuaranteeRich(): ReactNode {
   return boldPhrases(FIRST_APPLICATION_GUARANTEE, [
-    "you get that one back as credit too",
-    "only on your very first paid application",
+    "you get 100% of that fee back too, every time, no limit",
+    "not cash",
   ]);
 }
 

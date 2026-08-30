@@ -21,12 +21,12 @@
 // and the page's own row becomes a single client reference with plain data.
 //
 // Nothing here is newly interactive and nothing is newly computed on the
-// client. Breadcrumbs, ProTrialNudge, DepositForm, FadingBanner,
-// ProUpgradeCta and ActivityList were already components of their own; the
-// rest is static markup rendered from props. Everything that reads the clock
-// or the locale - each activity row's timestamp, the dollar strings - is still
-// resolved on the server and arrives as a finished string, so hydration cannot
-// disagree with SSR about it.
+// client. Breadcrumbs, DepositForm, FadingBanner, ProUpgradeCta and
+// ActivityList were already components of their own; the rest is static
+// markup rendered from props. Everything that reads the clock or the locale -
+// each activity row's timestamp, the dollar strings - is still resolved on
+// the server and arrives as a finished string, so hydration cannot disagree
+// with SSR about it.
 
 import Link from "next/link";
 import { PRO_DEPOSIT_BOOST_PTS } from "@/lib/constants";
@@ -35,13 +35,11 @@ import DepositForm from "./DepositForm";
 import ActivityList, { type ActivityRow } from "./ActivityList";
 import FadingBanner from "@/components/FadingBanner";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
-import ProTrialNudge from "@/components/pro/ProTrialNudge";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
 export type DepositTier = { min_cents: number; max_cents: number | null; bonus_pct: number };
 
 export default function BillingView({
-  userId,
   trialEligible,
   proMember,
   boostActive,
@@ -55,7 +53,6 @@ export default function BillingView({
   canceled,
   activity,
 }: {
-  userId: string | null;
   trialEligible: boolean;
   proMember: boolean;
   /** True only for a paid, "active" membership: the trial does not earn it. */
@@ -85,13 +82,6 @@ export default function BillingView({
       <Breadcrumbs
         items={[{ label: "Home", href: "/pro" }, { label: "Billing" }]}
       />
-      {/* First visit to billing, then every tenth after it: a pro standing at
-          the wallet is the one moment the trial is actually relevant. Renders
-          nothing at all for a member, or for a pro who already used the trial
-          (trialEligible is the same "no pro-side subscriptions row at all"
-          signal the upgrade card below uses, since that row outlives a
-          cancellation). The visit counting is per user in localStorage. */}
-      <ProTrialNudge eligible={trialEligible} userId={userId} />
 
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Billing</h1>
@@ -106,9 +96,9 @@ export default function BillingView({
             tier list lives on the help page linked below. */}
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           You pay per lead you apply to, and you see the exact price before you
-          apply. Ghost protection and the first-application guarantee can
-          return some of that as wallet credit; see Activity below for how each
-          one works.{" "}
+          apply. Ghost protection, and losing the pick to another pro, can
+          both send that fee back as wallet credit; see Activity below for how
+          each one works.{" "}
           <Link
             href="/pro/help#lead-pricing"
             className="font-medium text-hearth-700 underline dark:text-hearth-300"

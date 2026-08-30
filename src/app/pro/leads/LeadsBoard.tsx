@@ -371,9 +371,9 @@ export default function LeadsBoard({
                 <li className="flex items-start gap-2 text-stone-600 dark:text-stone-400">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
                   <span>
-                    Not chosen on your first application? The fee comes back
-                    on its own as wallet credit, spendable on any lead, and it
-                    expires after 60 days.{" "}
+                    Not chosen? The fee comes back on its own as wallet
+                    credit, not cash, spendable on any lead, and it expires
+                    after 60 days.{" "}
                     <Link
                       href="/pro/billing"
                       className="font-medium text-hearth-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
@@ -784,13 +784,12 @@ export default function LeadsBoard({
             Not selected{" "}
             <span className="text-stone-500 dark:text-stone-400">({declinedApps.length})</span>
           </h2>
-          {/* The 0044 credit-back promise, stated where the loss lands. It is
-              the narrow one-time guarantee, not a blanket "not chosen" refund,
-              so it is rendered from the canonical sentence. */}
+          {/* The 0107 credit-back promise, stated where the loss lands: every
+              applicant here gets their fee back as credit, not just a
+              first-timer, so it is rendered from the canonical sentence. */}
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            {firstApplicationGuaranteeRich()} {creditNotCashLineRich()} The
-            credit lands on its own and is good for 60 days. Check your
-            billing page for it.
+            {firstApplicationGuaranteeRich()} {creditNotCashLineRich()} Check
+            your billing page for it.
           </p>
           <ul className="space-y-2">
             {declinedApps.map((a) => (

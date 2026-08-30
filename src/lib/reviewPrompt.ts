@@ -572,3 +572,142 @@ export function requestNativeReview(now: number = Date.now()): void {
   recordNativeReviewCall(now);
   void requestPlatformReview();
 }
+
+// ---------------------------------------------------------------------------
+// The Pro trial takeover's own gate (src/components/pro/ProTrialNudge.tsx)
+// ---------------------------------------------------------------------------
+//
+// A SECOND CONSUMER of this file's timing machinery, not a second copy of it.
+// The full-screen "3 Day Free Trial" takeover reuses isFirstSession,
+// advanceActiveTime/createActiveTimeState/noteActivity/setActiveTimeVisibility,
+// readSessionActiveMs/writeSessionActiveMs and getReviewSessionPlan exactly as
+// written above - including the SAME sessionStorage keys, so a tab that has
+// already banked active minutes (or already drawn its ask-session dice) for
+// the review prompt hands the trial takeover that same clock and that same
+// roll rather than starting over. That is what makes this "the same
+// smart-timing algorithm as the review prompt": not a parallel copy, the same
+// draw.
+
+// A page the takeover must never appear on. Deliberately its own list, not an
+// edit to REVIEW_PROMPT_EXCLUDED_PATHS: that array is read by isExcludedPath,
+// which ReviewPrompt.tsx already calls, so folding the home/landing pages into
+// it would change what the review card itself skips on. The takeover needs a
+// strictly bigger set - everything the review prompt already avoids, plus the
+// home and marketing pages it must never interrupt - so it gets its own array
+// and its own segment-aware matcher, copied from isExcludedPath's rule rather
+// than shared with it.
+export const PRO_TRIAL_EXCLUDED_PATHS = [
+  ...REVIEW_PROMPT_EXCLUDED_PATHS,
+  // The homeowner landing page and the pro landing page: two of the actual
+  // "home pages" the owner named.
+  "/",
+  "/pros",
+  // The rest of the public funnel a signed-out visitor (or a pro who has not
+  // finished onboarding yet) can land on. A full-screen paywall has no place
+  // in front of any of these either.
+  "/pricing",
+  "/get-started",
+  "/join",
+  "/welcome",
+  "/contractor-signup",
+  "/homeowner-signup",
+] as const;
+
+// The contractor's own Home tab (ProNav's "Home" link, and the shell's
+// breadcrumb root) is the THIRD "home page" the owner meant, and it is a
+// route the takeover is actually mounted under - unlike everything in
+// PRO_TRIAL_EXCLUDED_PATHS above, which today a signed-in pro never even
+// reaches. It gets its OWN, exact-match-only list rather than joining the
+// array above: PRO_TRIAL_EXCLUDED_PATHS's matcher excludes an entry AND
+// everything beneath it (path.startsWith(p + "/")), and "/pro" is the parent
+// segment of every real pro page there is - /pro/leads, /pro/billing,
+// /pro/chats, all of it. Folding "/pro" into that list would have excluded
+// the entire pro app, not just the Home tab.
+const PRO_TRIAL_EXACT_EXCLUDED_PATHS = ["/pro"] as const;
+
+// Matched segment-wise, exactly like isExcludedPath above (kept as a separate
+// copy so a future edit to one matcher cannot silently change the other).
+export function isProTrialExcludedPath(pathname: string): boolean {
+  const path = pathname.split(/[?#]/)[0];
+  if (PRO_TRIAL_EXACT_EXCLUDED_PATHS.some((p) => path === p)) return true;
+  return PRO_TRIAL_EXCLUDED_PATHS.some(
+    (p) => path === p || path.startsWith(p + "/")
+  );
+}
+
+// The takeover's OWN "already asked this session" flag. Kept separate from
+// SESSION_ASKED_KEY (the review card's) on purpose: the two are different
+// offers with different content, and conflating them would mean whichever one
+// happened to fire first this session silently suppressed the other forever,
+// rather than the two of them taking turns claiming the session slot below.
+const SESSION_TRIAL_ASKED_KEY = "hearth_pro_trial_asked";
+
+export function wasTrialPromptAskedThisSession(storage?: Storage): boolean {
+  return readFlag(SESSION_TRIAL_ASKED_KEY, storage);
+}
+export function markTrialPromptAskedThisSession(storage?: Storage): void {
+  writeFlag(SESSION_TRIAL_ASKED_KEY, true, storage);
+}
+
+// THE STACKING GUARD. True once ANY floating ask - the review card's "ask"
+// step, its "confirm" follow-up, a pending return from the App Store, or this
+// takeover - has already claimed this session, so a second one can tell there
+// is already something up (or already answered) and stay quiet instead of
+// rendering on top of it. wasPromptAskedThisSession, wasFollowUpAskedThisSession
+// and isAwaitingStoreReturn are ReviewPrompt.tsx's own gates; they are only
+// ever READ here, never written to on the review card's behalf, so nothing
+// about what they mean to ReviewPrompt.tsx changes by a second file reading
+// them.
+export function isAnyFloatingPromptClaimedThisSession(
+  storage?: Storage
+): boolean {
+  return (
+    wasPromptAskedThisSession(storage) ||
+    wasFollowUpAskedThisSession(storage) ||
+    isAwaitingStoreReturn(storage) ||
+    wasTrialPromptAskedThisSession(storage)
+  );
+}
+
+// Claims the session for the takeover the moment it opens: its own flag, AND
+// the review card's SESSION_ASKED_KEY, so "Enjoying Hearth?" cannot open on
+// top of it later in the same app open. The reverse direction needs no extra
+// code - isAnyFloatingPromptClaimedThisSession above already reads
+// wasPromptAskedThisSession(), so a review card that appeared FIRST already
+// keeps the takeover from opening at all.
+export function claimFloatingPromptSlotForTrial(storage?: Storage): void {
+  markTrialPromptAskedThisSession(storage);
+  markPromptAskedThisSession(storage);
+}
+
+// Pure, synchronous, and testable on its own, exactly like
+// isEligibleForReviewPrompt above.
+export function isEligibleForProTrialPrompt(opts: {
+  pathname: string;
+  // Computed once per mount the same way ReviewPrompt computes it: true only
+  // for this browser's very first app open.
+  isFirstSession: boolean;
+  // The server-verified gate: a contractor who is not a Pro member and has
+  // not already spent their trial. Decided entirely outside this function -
+  // it never guesses at membership on its own.
+  eligible: boolean;
+  // This app open was drawn as an ask session (getReviewSessionPlan).
+  askSession: boolean;
+  activeMs: number;
+  thresholdMs: number;
+  msSinceActivity: number;
+  // The takeover already appeared in this app open.
+  askedThisSession: boolean;
+  // The stacking guard: some other floating ask already has this session.
+  anyOtherPromptActive: boolean;
+}): boolean {
+  if (isProTrialExcludedPath(opts.pathname)) return false;
+  if (opts.isFirstSession) return false;
+  if (!opts.eligible) return false;
+  if (opts.askedThisSession) return false;
+  if (opts.anyOtherPromptActive) return false;
+  if (!opts.askSession) return false;
+  if (opts.activeMs < opts.thresholdMs) return false;
+  if (opts.msSinceActivity > REVIEW_RECENT_ACTIVITY_MS) return false;
+  return true;
+}

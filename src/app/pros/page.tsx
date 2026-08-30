@@ -292,7 +292,7 @@ export default async function ProsLanding(props: {
       </section>
 
       <div className="mx-auto max-w-3xl px-6">
-      {/* Ghost protection and the first-application guarantee get top
+      {/* Ghost protection and the credit-back-on-loss guarantee get top
           billing, side by side: they are the two promises no lead-platform
           competitor keeps. */}
       <div className="mt-14 grid gap-4 sm:grid-cols-2">
@@ -307,7 +307,7 @@ export default async function ProsLanding(props: {
         </section>
         <section className="rounded-2xl border border-bark-100 bg-bark-50 p-6 text-center shadow-sm dark:border-bark-700 dark:bg-bark-700/20">
           <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-            Your very first application is protected too.
+            Lose the pick, keep your money. Every time.
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-400">
             {FIRST_APPLICATION_GUARANTEE}

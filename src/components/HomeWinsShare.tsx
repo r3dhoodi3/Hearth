@@ -4,10 +4,21 @@
 //
 // A small, dismissible "Share your home wins" card for the dashboard. Shows the
 // homeowner their own positive wins (computed server-side by
-// src/lib/homeWins.ts and passed in), then lets them share them: native share
-// of their referral invite link (so the share and the acquisition attribution
-// use ONE code), a copy fallback, and a "Download image" of the public wins
-// card (src/app/api/wins-card/[code]/route.tsx), mirroring WinShareButton.
+// src/lib/homeWins.ts and passed in), then lets them share them: the public
+// wins card image (src/app/api/wins-card/[code]/route.tsx) is fetched and
+// shared as an actual FILE through the Web Share API where the platform
+// accepts files (iMessage, Instagram, Photos, etc), so the recipient gets the
+// real picture instead of a bare link. Falls back to a link-only native
+// share, then to copying the caption and link, then to showing them as
+// selectable text - and a "Download image" of the same card stays available
+// no matter which of those paths runs. The referral link (?ref=CODE) rides
+// along in every path so the share and the acquisition attribution always
+// use the SAME code.
+//
+// The file-share attempt mirrors ReviewButton.tsx's CR4#2 photo share
+// exactly: gate on navigator.canShare being a function before ever fetching
+// bytes, build a File from the fetched Blob, and only hand it to
+// navigator.share once canShare({ files }) itself says yes.
 //
 // Reuses the exact clipboard/share/localStorage patterns already proven in
 // InviteNeighbor.tsx and ReviewShareRow.tsx. No reward is promised anywhere.
@@ -72,18 +83,38 @@ export default function HomeWinsShare({
       : path;
   }
 
+  const cardUrl = `/api/wins-card/${code}`;
+
   async function handleShare() {
     setPending(true);
     try {
       const url = inviteUrl();
-      const shareData = {
-        title: "Hearth",
-        text: homeWinsCaption(wins),
-        url,
-      };
+      const caption = homeWinsCaption(wins);
       if (typeof navigator !== "undefined" && navigator.share) {
+        // Try sharing the actual card image as a FILE first - a picture
+        // beats a bare link here. Gated on navigator.canShare being a
+        // function so a browser that would silently drop an unsupported
+        // `files` field falls through to the link share below instead of
+        // the share sheet quietly opening with no image in it.
+        if (typeof navigator.canShare === "function") {
+          try {
+            const res = await fetch(cardUrl);
+            const blob = await res.blob();
+            const file = new File([blob], "hearth-home-wins.png", {
+              type: blob.type || "image/png",
+            });
+            if (navigator.canShare({ files: [file] })) {
+              await navigator.share({ files: [file], text: caption, url });
+              return;
+            }
+          } catch {
+            // Fetching or attaching the card image failed (network, an
+            // unsupported type) - fall through to the ordinary link share
+            // rather than failing the whole share over a missing image.
+          }
+        }
         try {
-          await navigator.share(shareData);
+          await navigator.share({ title: "Hearth", text: caption, url });
           return;
         } catch (err) {
           // Closing the share sheet is a choice, not a failure.
@@ -94,7 +125,7 @@ export default function HomeWinsShare({
       // usable result. Falls back to showing the text if the clipboard is
       // blocked (permissions, insecure origin).
       try {
-        await navigator.clipboard.writeText(`${homeWinsCaption(wins)} ${url}`);
+        await navigator.clipboard.writeText(`${caption} ${url}`);
         setShareState("copied");
         setTimeout(() => setShareState("idle"), 2000);
       } catch {
@@ -111,8 +142,6 @@ export default function HomeWinsShare({
   }
 
   if (hidden) return null;
-
-  const cardUrl = `/api/wins-card/${code}`;
 
   return (
     <div className="card p-6">

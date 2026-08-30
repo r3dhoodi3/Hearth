@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { getCurrentContractor, getSides, isEstablishedPro } from "@/lib/contractor";
-import { hasProPlan } from "@/lib/subscription";
+import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { proDraftsLeft } from "@/lib/freeAiTasteServer";
 import { getUserProfile } from "@/lib/user";
 import Logo from "@/components/Logo";
 import ProNav from "@/components/ProNav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AppGuideMount from "@/components/AppGuideMount";
+import ProTrialNudge from "@/components/pro/ProTrialNudge";
 
 // Pro shell. Auth is enforced by middleware; company-setup is enforced per-page
 // (so /pro/onboarding itself doesn't get caught in a redirect loop).
@@ -87,21 +88,33 @@ export default async function ProLayout({
   // open here the same way isEstablishedPro does, so an outage never looks
   // like a sale.
   //
-  // The two reads after the membership check do not depend on each other
-  // (proDraftsLeft is a plain counter read with no side effects), so they run
-  // as one wave: the shell used to stack them serially on every pro route
-  // (speed wave P2, 2026-08-30). A non-established pro's draftsLeft is read
-  // and then ignored, exactly as before, because `established` still gates it.
+  // The reads after the membership check do not depend on each other
+  // (proDraftsLeft is a plain counter read with no side effects, and
+  // getProSubscription() shares getSubscriptionRows()'s per-request cache()
+  // with the hasProPlan() call just above - so this is a cache hit, not a
+  // second round trip), so they run as one wave: the shell used to stack the
+  // first two serially on every pro route (speed wave P2, 2026-08-30). A
+  // non-established pro's draftsLeft is read and then ignored, exactly as
+  // before, because `established` still gates it.
   const member = await hasProPlan();
-  const [establishedRead, draftsRead] = await Promise.all([
+  const [establishedRead, draftsRead, proSub] = await Promise.all([
     member ? Promise.resolve(true) : isEstablishedPro(contractor.id),
     proDraftsLeft(contractor.id, member),
+    getProSubscription(),
   ]);
   const established = member || establishedRead;
   const draftsLeft = established ? draftsRead : null;
   const canUseBackOffice =
     member || (established && (draftsLeft === null || draftsLeft > 0));
   const backOfficeHref = canUseBackOffice ? "/pro/tools" : "/pro/plus?reason=tools";
+
+  // Whether this contractor may still start a first-time Hearth Pro free
+  // trial: the same "no live and no leftover Pro-side subscriptions row"
+  // signal src/app/pro/billing/page.tsx used to compute (trialEligible there,
+  // now moved here since ProTrialNudge is mounted once, in the shell, rather
+  // than once per page). The row survives a cancellation, so a pro who
+  // churned and came back is never offered a trial they will not get.
+  const trialEligible = !member && !proSub;
 
   return (
     <div className="min-h-screen">
@@ -132,6 +145,22 @@ export default async function ProLayout({
           pill floating over every other page was a second door to the same
           room - and on a phone it landed on top of the content. */}
       <NewMessageNotifier role="contractor" />
+      {/* Mounted once, here, for the whole pro shell (moved off the billing
+          page 2026-08-30): a full-screen "3 Day Free Trial" takeover that
+          decides FOR ITSELF whether to appear, on the same smart-timing
+          algorithm as ReviewPrompt.tsx (not the first app open, a
+          randomly-drawn "ask" session, 15 to 20 minutes of genuine active use
+          in this tab) - see src/lib/reviewPrompt.ts. A billing-page-only
+          mount paired with that timing gate would almost never fire, since
+          nobody sits on the billing page that long; a shell-level mount lets
+          the clock run across every /pro/* page instead. Renders nothing for
+          a member, for a pro who already used the trial, or on the pro Home
+          tab and every other excluded page (isProTrialExcludedPath). Inside
+          this branch on purpose, same reasoning as AppGuideMount just below:
+          the bare no-company shell above is somebody still setting up their
+          business, and a paywall takeover has no place in the middle of
+          that. */}
+      <ProTrialNudge eligible={trialEligible} userId={contractor.user_id ?? null} />
       {/* First sign-in only, the pro set of cards. Inside this branch on
           purpose: the bare no-company shell above is somebody still setting up
           their business, and a tour of leads and reviews there would be a

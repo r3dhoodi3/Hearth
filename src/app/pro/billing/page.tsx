@@ -136,7 +136,6 @@ export default async function ProBillingPage(props: {
 
   return (
     <BillingView
-      userId={contractor.user_id ?? null}
       trialEligible={trialEligible}
       proMember={proMember}
       boostActive={boostActive}

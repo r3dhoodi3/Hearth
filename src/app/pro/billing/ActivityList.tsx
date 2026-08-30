@@ -101,8 +101,8 @@ export default function ActivityList({ rows }: { rows: ActivityRow[] }) {
       {rows.length > 0 && (
         <p className="text-xs text-stone-500 dark:text-stone-400">
           Ghost protection: {GHOST_PROTECTION_GUARANTEE} If they come back and
-          choose you after that, the same fee is re-charged. Separately, the
-          first-application guarantee: {FIRST_APPLICATION_GUARANTEE}{" "}
+          choose you after that, the same fee is re-charged. Separately, if
+          the homeowner picks someone else: {FIRST_APPLICATION_GUARANTEE}{" "}
           {CREDIT_NOT_CASH_LINE}
         </p>
       )}

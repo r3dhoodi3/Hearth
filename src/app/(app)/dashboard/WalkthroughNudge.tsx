@@ -5,23 +5,24 @@ import Link from "next/link";
 import { Footprints, X } from "lucide-react";
 
 const DISMISS_KEY = "hearth_walkthrough_nudge_dismissed_at";
-const REAPPEAR_MS = 14 * 24 * 60 * 60 * 1000;
 
 // Prominent, dismissible nudge toward /walkthrough for confirming
-// onboarding-estimated system details. Dismiss is stored client-side only
-// (no schema change): a timestamp in localStorage, so the card stays hidden
-// for 14 days then quietly comes back if systems are still unconfirmed.
+// onboarding-estimated system details. Dismiss is PERMANENT (per browser):
+// once the homeowner closes it, it never comes back on that device. Stored
+// client-side only (no schema change) as a single value in localStorage - any
+// stored value means "dismissed for good", so anyone who closed it under the
+// old 14-day-reappear behavior stays dismissed too. It still only shows in the
+// first place when there are unconfirmed systems (count > 0), and confirming
+// them drops the count to 0 on its own.
 export default function WalkthroughNudge({ count }: { count: number }) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (count <= 0) return;
     try {
-      const raw = localStorage.getItem(DISMISS_KEY);
-      const dismissedAt = raw ? Number(raw) : NaN;
-      if (!Number.isNaN(dismissedAt) && Date.now() - dismissedAt < REAPPEAR_MS) {
-        return;
-      }
+      // Any stored value = the homeowner dismissed it before, so never show
+      // it again on this browser.
+      if (localStorage.getItem(DISMISS_KEY)) return;
     } catch {
       // localStorage unavailable - just show the card.
     }

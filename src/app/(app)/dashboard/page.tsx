@@ -1123,13 +1123,17 @@ export default async function HomePage(
                     {warranties.map((w) => (
                       <li
                         key={w.id}
-                        className="flex items-center justify-between gap-3 py-1.5 first:pt-0"
+                        className="flex items-start justify-between gap-3 py-1.5 first:pt-0"
                       >
-                        <span className="flex min-w-0 items-center gap-2 text-sm text-stone-800 dark:text-stone-200">
+                        <span className="flex min-w-0 items-start gap-2 text-sm text-stone-800 dark:text-stone-200">
                           <span>
                             <FileText className="h-4 w-4" aria-hidden="true" />
                           </span>
-                          <span className="truncate">{w.title ?? "Home document"}</span>
+                          {/* Full document title, wrapped instead of clipped
+                              - same fix as the task rows above: min-w-0 lets
+                              it shrink to wrap, break-words stops a single
+                              long word from overflowing. */}
+                          <span className="min-w-0 break-words">{w.title ?? "Home document"}</span>
                         </span>
                         <span
                           className={`chip shrink-0 text-sm ${

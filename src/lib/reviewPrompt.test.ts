@@ -834,3 +834,200 @@ describe("feedback actions: rate limits, idempotent inserts, honest signals", ()
     expect(actions).toMatch(/getReviewPromptSignals failed[\s\S]{0,600}return null;/);
   });
 });
+
+// The Pro trial takeover (src/components/pro/ProTrialNudge.tsx) reuses this
+// file's timing machinery rather than duplicating it. These cover the bits it
+// adds on top: its own excluded pages, its own eligibility gate, and the
+// stacking guard that keeps it and the review card from ever being on screen
+// together.
+describe("isProTrialExcludedPath: home pages and the review prompt's own list", () => {
+  it("excludes both actual home pages", async () => {
+    const { isProTrialExcludedPath } = await import("./reviewPrompt");
+    expect(isProTrialExcludedPath("/")).toBe(true);
+    expect(isProTrialExcludedPath("/pros")).toBe(true);
+  });
+
+  it("excludes the rest of the public funnel", async () => {
+    const { isProTrialExcludedPath } = await import("./reviewPrompt");
+    for (const p of ["/pricing", "/get-started", "/join", "/welcome"]) {
+      expect(isProTrialExcludedPath(p), p).toBe(true);
+    }
+  });
+
+  it("inherits every path the review prompt already excludes", async () => {
+    const { isProTrialExcludedPath, REVIEW_PROMPT_EXCLUDED_PATHS } =
+      await import("./reviewPrompt");
+    for (const p of REVIEW_PROMPT_EXCLUDED_PATHS) {
+      expect(isProTrialExcludedPath(p), p).toBe(true);
+    }
+  });
+
+  it("matches segment-wise, like isExcludedPath: /prospect is not /pros", async () => {
+    const { isProTrialExcludedPath } = await import("./reviewPrompt");
+    expect(isProTrialExcludedPath("/prospect")).toBe(false);
+    expect(isProTrialExcludedPath("/pros/anything")).toBe(true);
+    expect(isProTrialExcludedPath("/?ref=ad")).toBe(true);
+  });
+
+  it("leaves an ordinary pro page alone", async () => {
+    const { isProTrialExcludedPath } = await import("./reviewPrompt");
+    expect(isProTrialExcludedPath("/pro/billing")).toBe(false);
+  });
+
+  it("excludes the contractor's own Home tab, exactly", async () => {
+    const { isProTrialExcludedPath } = await import("./reviewPrompt");
+    expect(isProTrialExcludedPath("/pro")).toBe(true);
+    expect(isProTrialExcludedPath("/pro?welcome=1")).toBe(true);
+  });
+
+  it("does NOT exclude the rest of the pro app just because it starts with /pro", async () => {
+    const { isProTrialExcludedPath } = await import("./reviewPrompt");
+    for (const p of ["/pro/leads", "/pro/billing", "/pro/chats", "/pro/plus"]) {
+      expect(isProTrialExcludedPath(p), p).toBe(false);
+    }
+  });
+
+  it("does NOT add the home pages to the review prompt's own list", async () => {
+    // The guard against changing what ReviewPrompt.tsx itself excludes: this
+    // takeover's list must be strictly additive, never a mutation of
+    // REVIEW_PROMPT_EXCLUDED_PATHS.
+    const { REVIEW_PROMPT_EXCLUDED_PATHS } = await import("./reviewPrompt");
+    expect(REVIEW_PROMPT_EXCLUDED_PATHS as readonly string[]).not.toContain("/");
+    expect(REVIEW_PROMPT_EXCLUDED_PATHS as readonly string[]).not.toContain(
+      "/pros"
+    );
+  });
+});
+
+describe("isEligibleForProTrialPrompt", () => {
+  const base = {
+    pathname: "/pro/billing",
+    isFirstSession: false,
+    eligible: true,
+    askSession: true,
+    activeMs: 16 * 60 * 1000,
+    thresholdMs: 15 * 60 * 1000,
+    msSinceActivity: 2000,
+    askedThisSession: false,
+    anyOtherPromptActive: false,
+  };
+
+  it("passes when every gate is open", async () => {
+    const { isEligibleForProTrialPrompt } = await import("./reviewPrompt");
+    expect(isEligibleForProTrialPrompt(base)).toBe(true);
+  });
+
+  it("refuses on an excluded (home) page", async () => {
+    const { isEligibleForProTrialPrompt } = await import("./reviewPrompt");
+    expect(
+      isEligibleForProTrialPrompt({ ...base, pathname: "/" })
+    ).toBe(false);
+  });
+
+  it("refuses on the very first session", async () => {
+    const { isEligibleForProTrialPrompt } = await import("./reviewPrompt");
+    expect(
+      isEligibleForProTrialPrompt({ ...base, isFirstSession: true })
+    ).toBe(false);
+  });
+
+  it("refuses a contractor the server did not mark eligible", async () => {
+    const { isEligibleForProTrialPrompt } = await import("./reviewPrompt");
+    expect(isEligibleForProTrialPrompt({ ...base, eligible: false })).toBe(
+      false
+    );
+  });
+
+  it("refuses a second ask in the same session", async () => {
+    const { isEligibleForProTrialPrompt } = await import("./reviewPrompt");
+    expect(
+      isEligibleForProTrialPrompt({ ...base, askedThisSession: true })
+    ).toBe(false);
+  });
+
+  it("refuses to stack on top of another floating prompt", async () => {
+    const { isEligibleForProTrialPrompt } = await import("./reviewPrompt");
+    expect(
+      isEligibleForProTrialPrompt({ ...base, anyOtherPromptActive: true })
+    ).toBe(false);
+  });
+
+  it("refuses a session the random pool did not draw", async () => {
+    const { isEligibleForProTrialPrompt } = await import("./reviewPrompt");
+    expect(isEligibleForProTrialPrompt({ ...base, askSession: false })).toBe(
+      false
+    );
+  });
+
+  it("refuses before the drawn active-time threshold", async () => {
+    const { isEligibleForProTrialPrompt } = await import("./reviewPrompt");
+    expect(
+      isEligibleForProTrialPrompt({ ...base, activeMs: 10 * 60 * 1000 })
+    ).toBe(false);
+  });
+
+  it("refuses when nobody has touched the screen recently", async () => {
+    const { isEligibleForProTrialPrompt } = await import("./reviewPrompt");
+    expect(
+      isEligibleForProTrialPrompt({ ...base, msSinceActivity: 90 * 1000 })
+    ).toBe(false);
+  });
+});
+
+describe("the stacking guard: the trial takeover and the review card share one session slot", () => {
+  it("is unclaimed until one of the two asks", async () => {
+    const { isAnyFloatingPromptClaimedThisSession } = await import(
+      "./reviewPrompt"
+    );
+    expect(isAnyFloatingPromptClaimedThisSession(fakeStorage())).toBe(false);
+  });
+
+  it("reads as claimed once the review card's own flag is set", async () => {
+    const { isAnyFloatingPromptClaimedThisSession, markPromptAskedThisSession } =
+      await import("./reviewPrompt");
+    const storage = fakeStorage();
+    markPromptAskedThisSession(storage);
+    expect(isAnyFloatingPromptClaimedThisSession(storage)).toBe(true);
+  });
+
+  it("reads as claimed once the trial takeover's own flag is set", async () => {
+    const {
+      isAnyFloatingPromptClaimedThisSession,
+      markTrialPromptAskedThisSession,
+      wasTrialPromptAskedThisSession,
+    } = await import("./reviewPrompt");
+    const storage = fakeStorage();
+    expect(wasTrialPromptAskedThisSession(storage)).toBe(false);
+    markTrialPromptAskedThisSession(storage);
+    expect(wasTrialPromptAskedThisSession(storage)).toBe(true);
+    expect(isAnyFloatingPromptClaimedThisSession(storage)).toBe(true);
+  });
+
+  it("claiming for the trial also claims the review card's flag, so it cannot open afterward", async () => {
+    const {
+      claimFloatingPromptSlotForTrial,
+      wasPromptAskedThisSession,
+      wasTrialPromptAskedThisSession,
+    } = await import("./reviewPrompt");
+    const storage = fakeStorage();
+    expect(wasPromptAskedThisSession(storage)).toBe(false);
+    claimFloatingPromptSlotForTrial(storage);
+    expect(wasTrialPromptAskedThisSession(storage)).toBe(true);
+    expect(wasPromptAskedThisSession(storage)).toBe(true);
+  });
+
+  it("also reads a pending store-return or a follow-up ask as claimed", async () => {
+    const {
+      isAnyFloatingPromptClaimedThisSession,
+      markFollowUpAskedThisSession,
+      setAwaitingStoreReturn,
+    } = await import("./reviewPrompt");
+    const returning = fakeStorage();
+    setAwaitingStoreReturn(true, returning);
+    expect(isAnyFloatingPromptClaimedThisSession(returning)).toBe(true);
+
+    const followedUp = fakeStorage();
+    markFollowUpAskedThisSession(followedUp);
+    expect(isAnyFloatingPromptClaimedThisSession(followedUp)).toBe(true);
+  });
+});

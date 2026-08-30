@@ -169,9 +169,12 @@ export default function ReminderItem({
   return (
     <li className="list-none">
       <div
-        // max-sm:py-0.5 with the min-h-11 button below keeps the phone row at
-        // about 48px instead of growing it to 64px.
-        className={`flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 transition-colors max-sm:py-0.5 ${
+        // Row height is no longer pinned to a single line: the title below
+        // wraps instead of truncating, so the row grows with it. items-start
+        // (rather than items-center) keeps the checkbox and the chip/delete
+        // button pinned to the top of the row when the title wraps to 2-3
+        // lines, instead of floating dead-center against a tall block of text.
+        className={`flex items-start justify-between gap-3 rounded-lg px-2 py-2.5 transition-colors max-sm:py-0.5 ${
           done ? "bg-stone-50/60 dark:bg-stone-700/40" : "hover:bg-stone-50 dark:hover:bg-stone-700/40"
         }`}
       >
@@ -186,7 +189,9 @@ export default function ReminderItem({
           aria-label={due ? `${title}, due ${formatDue(due)}` : title}
           // Phone only: the button was only as tall as its text (~20px) in a
           // 40px row. Marking a task done is the most repeated action here.
-          className="flex min-w-0 flex-1 items-center gap-3 text-left max-sm:min-h-11"
+          // items-start so the checkbox sits by the title's first line rather
+          // than centering against a wrapped multi-line title.
+          className="flex min-w-0 flex-1 items-start gap-3 text-left max-sm:min-h-11"
         >
           <span
             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] max-sm:h-6 max-sm:w-6 max-sm:text-xs ${
@@ -197,15 +202,22 @@ export default function ReminderItem({
           >
             ✓
           </span>
+          {/* Full title, wrapped across lines instead of clipped to one with
+              an ellipsis - the owner needs to read the whole task, not a
+              fragment. min-w-0 lets this flex child shrink below its content
+              width so it actually wraps instead of pushing the chip/delete
+              button out of the row; break-words catches a single long word
+              (e.g. a long product name) that would otherwise force
+              horizontal overflow. */}
           <span
-            className={`min-w-0 truncate text-sm ${
+            className={`min-w-0 break-words text-sm ${
               done ? "text-stone-500 line-through dark:text-stone-400" : "text-stone-800 dark:text-stone-200"
             }`}
           >
             {title}
           </span>
         </button>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-start gap-2">
           {chip && (
             <span
               className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${chip.className}`}
