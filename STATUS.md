@@ -19,7 +19,7 @@ Live site: https://gethearth.vercel.app. Code: all on `main`, pushed through the
 
 ## YOUR morning list (in order; nothing below works until 1 and 2 are done)
 
-1. Supabase SQL editor, in this order, each file has verify queries at the bottom:
+1. DONE 2026-08-29: all of the below was applied live in one paste via `supabase/PASTE-ME-ALL-PENDING-2026-08-29.sql` (PRECHECK guard + 0129-0140). Live DB is through 0140. Original per-file sources, kept for reference:
    `supabase/PRECHECK-2026-08-26.sql` (all queries must return 0 rows) ->
    `supabase/COMBINED-2026-08-26-migrations-0129-0132.sql` ->
    `supabase/PASTE-ME-live-2026-08-27-app-feedback.sql` (0133) ->
@@ -30,7 +30,7 @@ Live site: https://gethearth.vercel.app. Code: all on `main`, pushed through the
    `supabase/PASTE-ME-live-2026-08-28-users-column-lock.sql` (0139) ->
    `supabase/PASTE-ME-live-2026-08-28-blocks-direct-requests.sql` (0140, after 0139).
    Until 0129 is applied, NO new contractor can finish onboarding on live except with Huntington Beach and/or Fountain Valley (the old constraint). Every pro tester hit this.
-2. Vercel > hearth > Settings > Environment Variables (Production + Preview), values from `C:\Users\lande\hearth\.env.local`: `STRIPE_SECRET_KEY` (edit), `ANTHROPIC_API_KEY` (add; it is NOT set on Vercel at all, which is why Ask Hearth is down on live), `RISK_HASH_SALT` (add; last line of .env.local, never rotate). Then Redeploy.
+2. DONE 2026-08-29: `ANTHROPIC_API_KEY`, `RISK_HASH_SALT`, `STRIPE_SECRET_KEY` (test mode) set as team SHARED env vars linked to hearth, old project-level Stripe key deleted, redeployed. (`npx vercel env ls` does not list shared vars; check the dashboard Shared tab.) Original instructions: Vercel > hearth > Settings > Environment Variables (Production + Preview), values from `C:\Users\lande\hearth\.env.local`: `STRIPE_SECRET_KEY` (edit), `ANTHROPIC_API_KEY` (add; it is NOT set on Vercel at all, which is why Ask Hearth is down on live), `RISK_HASH_SALT` (add; last line of .env.local, never rotate). Then Redeploy.
 3. Supabase > Authentication > Sign In / Providers > Email: turn "Confirm email" back ON (I asked you to turn it off for the testers).
 4. Stripe dashboard: set the public business name to "Hearth" (checkout showed "Landen Chu"); enable the webhook events `invoice.payment_failed` and `customer.subscription.trial_will_end` on the endpoint.
 5. Delete the test accounts when done (SQL, service role):
