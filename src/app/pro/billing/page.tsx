@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentContractor } from "@/lib/contractor";
 import { createClient } from "@/lib/supabase/server";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { variantForUser } from "@/lib/paywallExperiment";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 // The body is one client component. That is a streaming fix, not a behaviour
 // change: moving Activity out fixed the middle of the page, but the page's own
@@ -95,7 +96,10 @@ export default async function ProBillingPage(props: {
         .order("min_cents", { ascending: true }),
     ]);
 
-  const trialEligible = !proMember && !proSub;
+  // The paywall experiment's "hard" arm takes the same trial-less copy branch
+  // a lapsed member gets (src/lib/paywallExperiment.ts).
+  const trialEligible =
+    !proMember && !proSub && variantForUser(contractor.user_id ?? null) === "soft";
 
   // The deposit match is the one perk that does NOT switch on during the free
   // trial. The Stripe webhook grants it only against an "active" row (see the

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { X } from "lucide-react";
 import type { ActionResult } from "@/lib/actionResult";
 import { getMyInviteCodeAction } from "./inviteActions";
 import InlineSpinner from "@/components/InlineSpinner";
@@ -10,51 +11,42 @@ import InlineSpinner from "@/components/InlineSpinner";
 // (which routes to the leave_review RPC). Prefills when a review already exists.
 //
 // The form is submitted programmatically (not a plain <form action>) so the
-// modal only closes, and the share follow-up only appears, once
+// modal only closes, and the invite follow-up only appears, once
 // saveReviewAction actually returns ok(): a failed rating (bad RPC, network
 // hiccup) keeps the modal open with the picked stars and typed comment
 // intact, and shows the error inline instead of closing optimistically.
 //
-// After a fresh submit of 4 or 5 stars, a "Share your pro" follow-up appears
-// underneath: word of mouth is how most homeowners find a pro, and the moment
-// right after a good review is the highest-intent moment to ask. No reward is
-// ever offered here (FTC-clean): just the pro's own public page.
+// Exactly ONE follow-up appears after a successful submit (owner ask,
+// 2026-08-30: two stacked prompts after one review was too much): a CENTERED
+// "Invite a neighbor" modal card with the homeowner's OWN Hearth invite link
+// (their lazy referral code, migration 0099 - see inviteActions.ts). It shares
+// Hearth itself, not the pro, and is honest neighbor-to-neighbor sharing with
+// no reward, credit, or wallet of any kind. The code is fetched lazily so the
+// modal only appears if a link can actually be produced, it shows at most once
+// per submission, and dismissing it (X, scrim tap, Escape, or "Not now") is
+// final. No native store-review prompt fires from this path either: that ask
+// stays on its own moments (plan_built, job_hired), never on a review submit.
 //
-// CR4#2: when the job had a before/after photo attached (photoUrl, resolved
-// server-side in page.tsx from the lead's issue photos), that share tries a
-// FILE share first - a picture beats a bare link here - falling back to the
-// same link-only share the moment a browser can't accept files, or has no
-// photo to offer at all.
-//
-// A SECOND follow-up appears after ANY successful submit (the peak-satisfaction
-// moment): a "Invite a neighbor" panel with the homeowner's OWN Hearth invite
-// link (their lazy referral code, migration 0099 - see inviteActions.ts). This
-// one shares Hearth itself, not the pro, and is honest neighbor-to-neighbor
-// sharing with no reward, credit, or wallet of any kind. It's fetched lazily
-// so it only appears if a link can actually be produced, is dismissible, shows
-// at most once per submission, and never blocks the review flow.
+// The earlier SECOND follow-up, a "Share your pro" panel with an optional
+// before/after photo share (CR4#2), was removed from this flow with that same
+// owner ask. The proProfilePath, categoryLabel and photoUrl props stay in the
+// type (accepted, unused) so page.tsx and its photo plumbing keep compiling
+// untouched, and so a future share surface can pick them straight back up.
 export default function ReviewButton({
   leadId,
   contractorName,
   action,
   existing,
-  proProfilePath,
-  categoryLabel,
-  photoUrl,
 }: {
   leadId: string;
   contractorName: string;
   action: (formData: FormData) => Promise<ActionResult>;
   existing?: { rating: number; comment: string | null } | null;
-  // The pro's public page PATH (e.g. "/p/<id>"). The full URL is built here
-  // on the client from window.location.origin, the same way PublicPageCard
-  // does: a server-side env fallback could bake "localhost:3000" into a
-  // production share sheet if the env var were ever unset.
+  // Retained for the call site (see the header comment): the removed pro-share
+  // panel was the only consumer of these three, and dropping them from the
+  // type would force churn in page.tsx for no behavior change.
   proProfilePath: string;
   categoryLabel: string;
-  // The job's first attached photo (imgSrc()'d /api/img path), when it has
-  // one. Undefined/null on every existing caller until it's threaded
-  // through: the photo share is additive, never required.
   photoUrl?: string | null;
 }) {
   const [open, setOpen] = useState(false);
@@ -62,28 +54,27 @@ export default function ReviewButton({
   const [hover, setHover] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Set on a fresh submit of >= 4 stars; drives the share follow-up below.
-  // Component state only, cleared by "Not now": no table, no persistence.
-  const [justRatedHigh, setJustRatedHigh] = useState(false);
-  const [shareState, setShareState] = useState<"idle" | "copied" | "show-link">(
-    "idle"
-  );
-  // Set on ANY fresh submit; drives the "Invite a neighbor" panel below. The
-  // code is fetched lazily once (getMyInviteCodeAction) - null means no link
-  // could be made (feature not live, etc.), so the panel simply never shows.
+  // Set on ANY fresh successful submit; arms the "Invite a neighbor" modal.
+  // The code is fetched lazily once (getMyInviteCodeAction) - null means no
+  // link could be made (feature not live, etc.), so the modal never shows.
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [inviteDismissed, setInviteDismissed] = useState(false);
   const [inviteShareState, setInviteShareState] = useState<
     "idle" | "copied" | "show-link"
   >("idle");
-  const [sharePending, setSharePending] = useState(false);
   const [inviteSharePending, setInviteSharePending] = useState(false);
+  const inviteCardRef = useRef<HTMLDivElement>(null);
+  const inviteHeadingId = useId();
 
-  // Lazily pull the homeowner's own invite code the moment the panel is armed,
+  // The one condition the whole modal hangs off: armed by a successful submit,
+  // real link in hand, not yet dismissed.
+  const inviteOpen = justSubmitted && !!inviteCode && !inviteDismissed;
+
+  // Lazily pull the homeowner's own invite code the moment the modal is armed,
   // so the link is ready synchronously when they tap Share (some browsers void
   // navigator.share if it isn't called straight from the user gesture). A null
-  // result just leaves the panel hidden.
+  // result just leaves the modal hidden.
   useEffect(() => {
     if (!justSubmitted || inviteCode) return;
     let active = true;
@@ -92,12 +83,31 @@ export default function ReviewButton({
         if (active) setInviteCode(code);
       })
       .catch(() => {
-        // Silent: no link, no panel. Never disturb the review flow.
+        // Silent: no link, no modal. Never disturb the review flow.
       });
     return () => {
       active = false;
     };
   }, [justSubmitted, inviteCode]);
+
+  // Escape closes, and body scroll is locked while the invite modal is open,
+  // the same dialog manners as ProTrialNudge's takeover. Focus moves into the
+  // card the moment it opens, so a keyboard or screen reader user lands on the
+  // offer instead of wherever the page behind it happened to be.
+  useEffect(() => {
+    if (!inviteOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    inviteCardRef.current?.focus();
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setInviteDismissed(true);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [inviteOpen]);
 
   function inviteUrl(): string {
     const path = `/homeowner-signup?ref=${inviteCode}`;
@@ -119,9 +129,13 @@ export default function ReviewButton({
       if (typeof navigator !== "undefined" && navigator.share) {
         try {
           await navigator.share(shareData);
+          // The share sheet actually went out: the modal's job is done, so it
+          // closes rather than sitting behind the returning share sheet.
+          setInviteDismissed(true);
           return;
         } catch (err) {
           // The user closing the share sheet is a decision, not a failure.
+          // The modal stays up so they can copy the link or close it instead.
           if (err instanceof Error && err.name === "AbortError") return;
           // A real failure falls through to copying the link.
         }
@@ -131,66 +145,12 @@ export default function ReviewButton({
         setInviteShareState("copied");
         setTimeout(() => setInviteShareState("idle"), 2000);
       } catch {
+        // Clipboard unavailable too (permissions, insecure origin): show the
+        // link as selectable text so there is always SOME way to grab it.
         setInviteShareState("show-link");
       }
     } finally {
       setInviteSharePending(false);
-    }
-  }
-
-  async function handleShare() {
-    setSharePending(true);
-    try {
-      const url = `${window.location.origin}${proProfilePath}`;
-      const text = `${contractorName} did great work. Here's their Hearth page:`;
-      if (typeof navigator !== "undefined" && navigator.share) {
-        // A photo was attached to this job: try sharing it as a FILE first,
-        // since a before/after picture is the whole point (CR4#2). Gated on
-        // navigator.canShare so a browser that would silently drop an
-        // unsupported `files` field falls through to the link share below
-        // instead of the share sheet quietly opening with no photo in it.
-        if (photoUrl && typeof navigator.canShare === "function") {
-          try {
-            const res = await fetch(photoUrl);
-            const blob = await res.blob();
-            const file = new File([blob], "hearth-photo.jpg", {
-              type: blob.type || "image/jpeg",
-            });
-            if (navigator.canShare({ files: [file] })) {
-              await navigator.share({
-                title: `${contractorName} on Hearth`,
-                text,
-                files: [file],
-              });
-              return;
-            }
-          } catch {
-            // Fetching or attaching the photo failed (CORS, network, an
-            // unsupported type) - fall through to the ordinary link share
-            // rather than failing the whole share over a missing picture.
-          }
-        }
-        try {
-          await navigator.share({ title: `${contractorName} on Hearth`, text, url });
-          return;
-        } catch (err) {
-          // The user closing the share sheet is a decision, not a failure:
-          // do not copy the link behind their back.
-          if (err instanceof Error && err.name === "AbortError") return;
-          // A real failure falls through to copying the link.
-        }
-      }
-      try {
-        await navigator.clipboard.writeText(url);
-        setShareState("copied");
-        setTimeout(() => setShareState("idle"), 2000);
-      } catch {
-        // Clipboard unavailable too (permissions, insecure origin): show the
-        // link as selectable text so there is always SOME way to grab it.
-        setShareState("show-link");
-      }
-    } finally {
-      setSharePending(false);
     }
   }
 
@@ -223,10 +183,9 @@ export default function ReviewButton({
                   const res = await action(new FormData(e.currentTarget));
                   if (res.ok) {
                     setOpen(false);
-                    if (rating >= 4) setJustRatedHigh(true);
-                    // Arm the neighbor-invite panel on every successful submit,
-                    // not just high ratings: sharing Hearth with a neighbor
-                    // isn't about the pro's rating.
+                    // Arm the neighbor-invite modal on every successful
+                    // submit, whatever the rating: sharing Hearth with a
+                    // neighbor isn't about the pro's stars.
                     setJustSubmitted(true);
                   } else {
                     setError(res.error);
@@ -301,73 +260,65 @@ export default function ReviewButton({
         </div>
       )}
 
-      {justRatedHigh && (
-        <div className="mt-2 w-full basis-full rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-700">
-          <p className="text-sm text-stone-700 dark:text-stone-300">
-            Know a neighbor who needs a good {categoryLabel.toLowerCase()} pro?
-            Share {contractorName}.
-          </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={handleShare}
-              disabled={sharePending}
-              className="btn-primary text-sm inline-flex items-center justify-center gap-1.5"
-            >
-              {sharePending && <InlineSpinner />}
-              {shareState === "copied"
-                ? "Link copied"
-                : photoUrl
-                ? "Share photo"
-                : "Share"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setJustRatedHigh(false)}
-              className="btn-secondary text-sm"
-            >
-              Not now
-            </button>
-          </div>
-          {shareState === "show-link" && (
-            <p className="mt-2 select-all break-all text-xs text-stone-500 dark:text-stone-400">
-              {typeof window !== "undefined"
-                ? `${window.location.origin}${proProfilePath}`
-                : proProfilePath}
-            </p>
-          )}
-        </div>
-      )}
-
-      {justSubmitted && inviteCode && !inviteDismissed && (
-        <div className="mt-2 w-full basis-full rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-700">
-          <p className="text-sm text-stone-700 dark:text-stone-300">
-            Know a neighbor who could use a hand with their place? Share your
-            invite link.
-          </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={handleInviteShare}
-              disabled={inviteSharePending}
-              className="btn-primary text-sm inline-flex items-center justify-center gap-1.5"
-            >
-              {inviteSharePending && <InlineSpinner />}
-              {inviteShareState === "copied" ? "Link copied" : "Share invite"}
-            </button>
+      {inviteOpen && (
+        // Centered modal, not a corner toast: dark scrim over the whole page,
+        // card in the middle. A tap that lands on the scrim itself closes it;
+        // one that bubbles up from inside the card never does.
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setInviteDismissed(true);
+          }}
+        >
+          <div
+            ref={inviteCardRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={inviteHeadingId}
+            tabIndex={-1}
+            className="relative w-[92%] max-w-sm rounded-2xl bg-white p-6 shadow-pop outline-none dark:bg-stone-800"
+          >
             <button
               type="button"
               onClick={() => setInviteDismissed(true)}
-              className="btn-secondary text-sm"
+              aria-label="Close"
+              className="absolute right-1 top-1 inline-flex h-11 w-11 items-center justify-center rounded-full text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
             >
-              Not now
+              <X className="h-5 w-5" aria-hidden="true" />
             </button>
-          </div>
-          {inviteShareState === "show-link" && (
-            <p className="mt-2 select-all break-all text-xs text-stone-500 dark:text-stone-400">
-              {inviteUrl()}
+            <h2
+              id={inviteHeadingId}
+              className="pr-10 text-lg font-semibold text-stone-900 dark:text-stone-100"
+            >
+              Know a neighbor who could use a hand with their place?
+            </h2>
+            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+              Share your invite link.
             </p>
-          )}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={handleInviteShare}
+                disabled={inviteSharePending}
+                className="btn-primary inline-flex min-h-11 flex-1 items-center justify-center gap-1.5"
+              >
+                {inviteSharePending && <InlineSpinner />}
+                {inviteShareState === "copied" ? "Link copied" : "Share invite"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setInviteDismissed(true)}
+                className="btn-secondary min-h-11 flex-1"
+              >
+                Not now
+              </button>
+            </div>
+            {inviteShareState === "show-link" && (
+              <p className="mt-2 select-all break-all text-xs text-stone-500 dark:text-stone-400">
+                {inviteUrl()}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </>

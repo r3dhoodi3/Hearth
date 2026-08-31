@@ -69,8 +69,12 @@ describe("pro CRM: the pipeline is unchanged", () => {
     expect(view).toContain("PLANNED_CRM_FEATURES");
     expect(view).toContain("What&apos;s coming");
     expect(view).toContain("planned, not in the app yet");
-    // The trial is only offered to a pro with no pro-side subscriptions row.
-    expect(page).toContain("hasProSubscriptionRow={Boolean(proSub)}");
+    // The trial is only offered to a pro with no pro-side subscriptions row,
+    // AND only on the paywall experiment's "soft" arm: the "hard" arm reads as
+    // "no trial on offer" through the same prop (src/lib/paywallExperiment.ts).
+    expect(page).toMatch(
+      /hasProSubscriptionRow=\{\s*Boolean\(proSub\) \|\|\s*variantForUser\(contractor\.user_id \?\? null\) === "hard"\s*\}/
+    );
     expect(view).toContain('? "See Hearth Pro"');
   });
 });

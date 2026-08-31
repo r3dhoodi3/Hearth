@@ -23,8 +23,13 @@ const view = src("./ChatsView.tsx");
 describe("pro Messages: Find clients row", () => {
   it("pins the row directly under the Ask Hearth row", () => {
     const ask = view.indexOf("<AskHearthRow");
-    const find = view.indexOf("Find clients");
-    const firstConvo = view.indexOf("{rows.map(");
+    // Anchored past the Ask Hearth row: the Active tab's empty-state copy
+    // ("... Find clients to start one ...") also carries the phrase, earlier
+    // in the file, and it is not the row this test is about.
+    const find = view.indexOf("Find clients", ask);
+    // The conversation rows are split into Active / Closed for ChatListTabs
+    // now; the Active list is the first one rendered.
+    const firstConvo = view.indexOf("{activeChats.map(");
     expect(ask).toBeGreaterThan(-1);
     expect(find).toBeGreaterThan(ask);
     expect(find).toBeLessThan(firstConvo);
@@ -34,11 +39,13 @@ describe("pro Messages: Find clients row", () => {
     // Worker E moves the board to /pro/leads; PRO_LEADS_HREF is the one place
     // that flips when it does.
     expect(view).toContain("PRO_LEADS_HREF");
-    expect(view).toContain("<Link\n            href={PRO_LEADS_HREF}");
+    expect(view).toContain("href={PRO_LEADS_HREF}");
   });
 
   it("looks like the other rows: icon chip, title, subtitle, chevron, 44px", () => {
-    const row = view.slice(view.indexOf("Find clients") - 900, view.indexOf("Find clients") + 900);
+    // Same anchor as above: the pinned row, not the empty-state sentence.
+    const at = view.indexOf("Find clients", view.indexOf("<AskHearthRow"));
+    const row = view.slice(at - 900, at + 900);
     expect(row).toContain("min-h-11");
     expect(row).toContain("<Briefcase");
     expect(row).toContain("<ChevronRight");
@@ -46,7 +53,7 @@ describe("pro Messages: Find clients row", () => {
   });
 
   it("makes the empty state point at that row instead of repeating a link", () => {
-    expect(view).toContain("No conversations yet. Find clients to start one:");
+    expect(view).toContain("No open conversations yet. Find clients to start one:");
     // The old empty state carried its own inline "Leads" link, which is what
     // the pinned row above replaces.
     expect(view).not.toContain("page, and when a homeowner picks you");

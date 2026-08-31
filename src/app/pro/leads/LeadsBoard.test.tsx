@@ -48,6 +48,8 @@ function job(
     spots: 0,
     full: false,
     conflict: null,
+    bigJob: false,
+    insuranceRequired: false,
     feeCents,
     canAfford: true,
     billingHref: "/pro/billing",
@@ -66,6 +68,7 @@ function boardProps(jobs: OpenJobVM[]) {
     directRequests: [],
     balance: 100,
     hasPaidMajor: false,
+    insuranceCurrent: true,
     openJobs: jobs,
     sort: "new",
     hasApplied: false,
@@ -84,6 +87,7 @@ function renderBoard(sort: string) {
       directRequests={[]}
       balance={100}
       hasPaidMajor={false}
+      insuranceCurrent={true}
       openJobs={openJobs}
       sort={sort}
       hasApplied={false}
@@ -175,6 +179,7 @@ describe("LeadsBoard: member vs aging discount labels (0149)", () => {
         directRequests={[]}
         balance={100}
         hasPaidMajor={false}
+        insuranceCurrent={true}
         openJobs={[job("m", 4500, 10, { discountKind: "member" })]}
         sort="new"
         hasApplied={false}
@@ -199,6 +204,7 @@ describe("LeadsBoard: member vs aging discount labels (0149)", () => {
         directRequests={[]}
         balance={100}
         hasPaidMajor={false}
+        insuranceCurrent={true}
         openJobs={[
           {
             ...job("a", 3400, 30, { discountKind: "aging" }),
@@ -225,6 +231,7 @@ describe("LeadsBoard: member vs aging discount labels (0149)", () => {
         directRequests={[]}
         balance={100}
         hasPaidMajor={false}
+        insuranceCurrent={true}
         openJobs={[job("q", 4500, 0, { memberQuoteStr: "$40.50" })]}
         sort="new"
         hasApplied={false}
@@ -246,6 +253,7 @@ describe("LeadsBoard: member vs aging discount labels (0149)", () => {
         directRequests={[]}
         balance={100}
         hasPaidMajor={false}
+        insuranceCurrent={true}
         openJobs={[job("n", 4500, 30, { discountKind: "aging", memberQuoteStr: null })]}
         sort="new"
         hasApplied={false}

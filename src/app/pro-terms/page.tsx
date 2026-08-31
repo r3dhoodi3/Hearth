@@ -89,6 +89,26 @@ export default function ProTermsPage() {
             license lapses, is suspended or revoked, or if required insurance
             lapses.
           </p>
+          {/* TODO(legal): have counsel review the insurance and venue clause wording below - the liability-insurance duty (bodily injury and property damage), the proof-of-insurance gate on big-ticket jobs, and the venue / no-supervision / sole-responsibility statement. */}
+          <p className="mt-3 leading-relaxed">
+            You also agree to carry appropriate liability insurance covering
+            bodily injury and property damage for the work you perform through
+            Hearth, and to keep it current for as long as you take jobs here.
+            For big-ticket jobs (for example roofing, structural, or
+            remodeling work), Hearth requires current proof of insurance on
+            file in your account before you can apply for or accept the job,
+            and may withhold access to those jobs while yours is missing or
+            lapsed.
+          </p>
+          <p className="mt-3 leading-relaxed">
+            Hearth is a venue that connects homeowners with independent
+            businesses. Hearth does not perform, supervise, or guarantee the
+            work, and you are solely responsible for the work you perform,
+            including any injury or property damage arising from it. Keeping
+            a document on file with Hearth is record-keeping, not an
+            endorsement: it doesn&apos;t make Hearth your insurer, and it
+            doesn&apos;t shift responsibility for your work to Hearth.
+          </p>
           <p className="mt-3 leading-relaxed">
             Where Hearth shows your license as verified, that means we checked
             the license number against the CSLB public registry at that point

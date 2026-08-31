@@ -8,6 +8,7 @@ import ProNav from "@/components/ProNav";
 import NewMessageNotifier from "@/components/NewMessageNotifier";
 import AppGuideMount from "@/components/AppGuideMount";
 import ProTrialNudge from "@/components/pro/ProTrialNudge";
+import { variantForUser } from "@/lib/paywallExperiment";
 
 // Pro shell. Auth is enforced by middleware; company-setup is enforced per-page
 // (so /pro/onboarding itself doesn't get caught in a redirect loop).
@@ -116,6 +117,14 @@ export default async function ProLayout({
   // churned and came back is never offered a trial they will not get.
   const trialEligible = !member && !proSub;
 
+  // The paywall experiment's arm for this account (src/lib/paywallExperiment.ts).
+  // It does NOT change who the takeover appears for - `trialEligible` above
+  // still decides that, so members and past subscribers are untouched - it
+  // only decides whether the takeover leads with the free trial ("soft") or
+  // with the plain membership pitch and charged-today terms ("hard").
+  // startProCheckoutAction applies the same variant server-side.
+  const paywallVariant = variantForUser(contractor.user_id ?? null);
+
   return (
     <div className="min-h-screen">
       <ProNav company={contractor.name} hasHome={sides.hasHome} backOfficeHref={backOfficeHref} />
@@ -160,7 +169,7 @@ export default async function ProLayout({
           the bare no-company shell above is somebody still setting up their
           business, and a paywall takeover has no place in the middle of
           that. */}
-      <ProTrialNudge eligible={trialEligible} userId={contractor.user_id ?? null} />
+      <ProTrialNudge eligible={trialEligible} userId={contractor.user_id ?? null} variant={paywallVariant} />
       {/* First sign-in only, the pro set of cards. Inside this branch on
           purpose: the bare no-company shell above is somebody still setting up
           their business, and a tour of leads and reviews there would be a

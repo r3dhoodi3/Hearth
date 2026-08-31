@@ -43,6 +43,10 @@ const CLIENT_ALLOWED_EVENTS = new Set([
   // account by src/components/AhaEventReporter.tsx. See src/lib/trackAhaEvents.ts.
   "aha_home_score", // dashboard/page.tsx
   "aha_first_lead", // pro/leads/LeadsBoard.tsx
+  // The pro full-screen paywall takeover, once per open, carrying the
+  // soft/hard paywall-experiment arm (src/components/pro/ProTrialNudge.tsx,
+  // src/lib/paywallExperiment.ts). Props are one enum value, nothing else.
+  "pro_takeover_seen", // pro/ProTrialNudge.tsx
 ]);
 
 // Sink for src/lib/analytics.ts's track(). Inserts into app_events with the

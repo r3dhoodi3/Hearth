@@ -1,4 +1,8 @@
 import { PRO_LEADS_HREF } from "@/lib/constants";
+import {
+  hasCurrentInsurance,
+  INSURANCE_UPLOAD_HREF,
+} from "@/lib/insuranceGate";
 import type { SetupItem } from "@/components/pro/SetupChecklist";
 
 // Shared loaders for the pro side's two tabs. The pro screen split into Home
@@ -63,6 +67,19 @@ export function buildSetupItems(input: {
       href: "/pro/profile",
       linkLabel: licenseFailed ? "Fix license" : "Add license",
       optional: licenseAwaitingCheck,
+    },
+    // Big-job rule (migration 0153), stated on day one instead of at the
+    // first refused apply: major-tier jobs (roof, structural, remodeling)
+    // need current proof of insurance on file. Done when the compliance
+    // calendar holds an unexpired date, the same predicate the apply gate
+    // enforces (src/lib/insuranceGate.ts). Sits right after the license so
+    // the two compliance steps read as one group.
+    {
+      label: "Put proof of insurance on file",
+      hint: "Big jobs (roof, structural, remodeling) need current insurance on file before you can apply.",
+      done: hasCurrentInsurance(contractor.insurance_expires),
+      href: INSURANCE_UPLOAD_HREF,
+      linkLabel: "Add insurance",
     },
     // Plain outbound links only (0110). Done as soon as either is on file; no
     // reason to require both. Pros with review links get more quotes accepted,

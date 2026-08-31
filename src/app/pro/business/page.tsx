@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { variantForUser } from "@/lib/paywallExperiment";
 import { buildProStats } from "@/lib/proStats";
 import { computeResponseTimeMinutes } from "@/lib/responseTime";
 // The body is one client component. That is a streaming fix, not a behaviour
@@ -128,7 +129,10 @@ export default async function ProBusinessPage() {
   ]);
 
   // Only a pro who has never held a membership will actually get the trial.
-  const trialEligible = !isPro && !proSub;
+  // The paywall experiment's "hard" arm takes the same trial-less copy branch
+  // (src/lib/paywallExperiment.ts).
+  const trialEligible =
+    !isPro && !proSub && variantForUser(contractor.user_id ?? null) === "soft";
 
   const apps = (myApps ?? []) as any[];
   const won = (wonData ?? []) as any[];

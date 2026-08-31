@@ -6,6 +6,7 @@ import {
 } from "@/lib/contractor";
 import { getPasswordStatus, providerLabel } from "@/lib/auth";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { variantForUser } from "@/lib/paywallExperiment";
 import { isCheckrConfigured } from "@/lib/checkr";
 import ProfileTabs from "./ProfileTabs";
 import type { ProProject, ProProjectPhoto } from "./ProjectsCard";
@@ -24,8 +25,13 @@ export default async function ProProfilePage() {
   // with the free trial. Only a pro with no pro-side subscriptions row will
   // actually get one (the row survives a cancellation), so this is resolved on
   // the server and passed down: the tab cards are client components and must
-  // not guess. Free to ask for, hasProPlan() read the same cached rows.
-  const trialEligible = !member && !(await getProSubscription());
+  // not guess. Free to ask for, hasProPlan() read the same cached rows. The
+  // paywall experiment's "hard" arm takes the same trial-less copy branch
+  // (src/lib/paywallExperiment.ts).
+  const trialEligible =
+    !member &&
+    !(await getProSubscription()) &&
+    variantForUser(contractor.user_id ?? null) === "soft";
 
   // The pro's project portfolio (0045) with photos, for the Projects tab.
   // Cast: the 0045 tables aren't in the generated types (database.types.ts is

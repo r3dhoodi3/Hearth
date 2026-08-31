@@ -50,12 +50,22 @@ import {
 const MINUTE = 60 * 1000;
 const USER = "pro-1";
 
-function renderNudge(eligible = true, userId: string | null = USER) {
-  return render(<ProTrialNudge eligible={eligible} userId={userId} />);
+function renderNudge(
+  eligible = true,
+  userId: string | null = USER,
+  variant: "soft" | "hard" = "soft"
+) {
+  return render(
+    <ProTrialNudge eligible={eligible} userId={userId} variant={variant} />
+  );
 }
 
-async function mountAndSettle(eligible = true, userId: string | null = USER) {
-  const result = renderNudge(eligible, userId);
+async function mountAndSettle(
+  eligible = true,
+  userId: string | null = USER,
+  variant: "soft" | "hard" = "soft"
+) {
+  const result = renderNudge(eligible, userId, variant);
   await act(async () => {
     await vi.advanceTimersByTimeAsync(3000);
   });
@@ -289,3 +299,58 @@ describe("ProTrialNudge: the full-screen takeover", () => {
     await open();
   });
 });
+
+// The soft-vs-hard paywall experiment (src/lib/paywallExperiment.ts): "hard"
+// keeps the identical takeover - same timing, same plans, same checkout - but
+// drops every mention of a trial, so its charged-from-day-one checkout is
+// never contradicted by the copy above the button.
+describe("ProTrialNudge: the paywall experiment's hard arm", () => {
+  async function openHard() {
+    await mountAndSettle(true, USER, "hard");
+    await spendTimeInApp(20 * MINUTE);
+    expect(dialog()).toBeInTheDocument();
+  }
+
+  it("still opens for a never-subscribed pro: hard hides the trial, not the paywall", async () => {
+    await openHard();
+  });
+
+  it("shows the plan pitch headline and no trial language anywhere", async () => {
+    await openHard();
+    expect(
+      screen.getByRole("heading", { name: "Run your business, not your admin" })
+    ).toBeInTheDocument();
+    const text = dialog()!.textContent ?? "";
+    expect(text).not.toMatch(/free trial/i);
+    expect(text).not.toMatch(/days? free/i);
+    expect(text).not.toMatch(/free for \d/i);
+    // The disclosure takes the charged-today branch, so the price is stated
+    // as billed from day one.
+    expect(text).toMatch(/charged today/i);
+  });
+
+  it("labels the button as a purchase, and it still posts the selected plan", async () => {
+    await openHard();
+    expect(
+      screen.queryByRole("button", { name: /free trial/i })
+    ).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Get Hearth Pro" }));
+    });
+    expect(mockStartCheckout).toHaveBeenCalledTimes(1);
+    const posted = mockStartCheckout.mock.calls[0][0] as FormData;
+    expect(posted.get("plan")).toBe("yearly");
+  });
+
+  it("soft still leads with the trial (the default arm is unchanged)", async () => {
+    await mountAndSettle(true, USER, "soft");
+    await spendTimeInApp(20 * MINUTE);
+    expect(
+      screen.getByRole("heading", { name: "3 Day Free Trial" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Start.*free trial/i })
+    ).toBeInTheDocument();
+  });
+});
+

@@ -33,6 +33,7 @@ import { setFlash } from "@/lib/flash";
 import { trialDecision, RISK_BLOCK_MESSAGE } from "@/lib/risk/decision";
 import { recordRequestSignals } from "@/lib/risk/signals";
 import { trackServerEvent } from "@/lib/trackServer";
+import { variantForUser } from "@/lib/paywallExperiment";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -305,7 +306,15 @@ export async function startProCheckoutAction(formData: FormData) {
   // unreadable counter must never be a way to get a second one. And when the
   // claim is LOST, reclaimCheckoutReservation answers what a bare row cannot:
   // resume the open session, take over a dead one, or stand down (fail closed).
-  const wantsTrial = (await isProTrialEligible()) && risk.allowTrial;
+  // The paywall experiment (src/lib/paywallExperiment.ts) is one more AND in
+  // the same place, enforced server-side: a "hard"-variant pro gets no trial
+  // even from a hand-crafted request, because the variant is a pure hash of
+  // the verified user id and this line is what feeds the Stripe trial.
+  // Eligibility, risk, and the reservation flow are untouched; "hard" is
+  // simply one more reason the trial does not apply, and /pro/plus gates its
+  // copy on the same variant so screen and charge agree.
+  const paywallVariant = variantForUser(user.id);
+  const wantsTrial = (await isProTrialEligible()) && risk.allowTrial && paywallVariant === "soft";
   let freeTrial = false;
   let claimedTrial = false;
   // An open Stripe Checkout to send the pro back to. Acted on after the block
@@ -419,7 +428,15 @@ export async function startProCheckoutAction(formData: FormData) {
   // charged today at full price, never handed the intro coupon instead. Today
   // the trial is always on for eligible buyers, so this stays equal to the old
   // `!freeTrial` for every non-racing checkout.
-  const introOffered = !wantsTrial && plan === "pro_monthly" && !existing;
+  //
+  // The paywall experiment's "soft" check sits here too, on purpose. Without
+  // it, putting an account on the "hard" arm would flip !wantsTrial true and
+  // WAKE the dormant intro coupon for every brand-new monthly pro on that arm,
+  // handing them a $9.99 first month. The hard arm is "full price from day
+  // one, no offer of any kind" - both because that is the thing being measured
+  // against the trial, and because the consent record above the coupon path
+  // still quotes trial copy the buyer would not be getting.
+  const introOffered = !wantsTrial && paywallVariant === "soft" && plan === "pro_monthly" && !existing;
   // Still the cheap ledger pre-check, just no longer a hard skip: when it says
   // a claim exists, the row may still be a reservation this pro can have back,
   // so the reclaim path runs and only the RPC is skipped.
@@ -701,8 +718,13 @@ export async function startProCheckoutAction(formData: FormData) {
 
   // Funnel analytics (docs/ANALYTICS.md), right before handing off to Stripe:
   // the session exists at this point, so this only fires for a checkout that
-  // actually reached Stripe, not one refused by an earlier guard above.
-  await trackServerEvent(user.id, "pro_checkout_started", { plan });
+  // actually reached Stripe, not one refused by an earlier guard above. The
+  // paywall-experiment variant rides along so soft and hard conversion can be
+  // compared later.
+  await trackServerEvent(user.id, "pro_checkout_started", {
+    plan,
+    variant: paywallVariant,
+  });
 
   if (session.url) redirect(session.url);
   redirect("/pro/plus");

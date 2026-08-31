@@ -40,6 +40,7 @@ import {
   introFeeFor,
 } from "@/lib/proLeadCard";
 import { bestLeadDiscount } from "@/lib/leadPricing";
+import { hasCurrentInsurance } from "@/lib/insuranceGate";
 import { normalizeLeadSort } from "@/lib/leadSort";
 import { trackServerEvent } from "@/lib/trackServer";
 import { hasProPlan, hasActivePaidProPlan, getProSubscription } from "@/lib/subscription";
@@ -142,6 +143,16 @@ export default async function ProDashboard(
   // the DB re-derives this under the wallet lock at charge time.
   const hasPaidMajor = apps.some(
     (a) => Number(a.fee_cents ?? 0) > 0 && isMajorCategory(a.category)
+  );
+
+  // Big-job insurance gate (migration 0153): does this pro have a current
+  // certificate of insurance on file? Read once off the contractor row the
+  // page already holds; major-tier cards below show the requirement (and
+  // withhold the apply button when it is not met) so a pro learns about it
+  // BEFORE typing a message or confirming a charge. The server action and
+  // the SQL both re-check, so this is honesty, not the enforcement.
+  const insuranceCurrent = hasCurrentInsurance(
+    ((contractor as any).insurance_expires as string | null) ?? null
   );
 
   // Won/lost jobs sink to the bottom; active ones stay on top (newest first,
@@ -356,6 +367,10 @@ export default async function ProDashboard(
         ? labelFor(BUDGET_RANGES, j.budget_range)
         : null;
     const timingLabel = j.timing ? labelFor(TIMING_OPTIONS, j.timing) : null;
+    // Big-job insurance gate (0153): major-tier cards say so up front, and a
+    // pro without current insurance gets the requirement instead of a pay
+    // button that would only be refused server-side.
+    const bigJob = isMajorCategory(j.category ?? "");
     return {
       id: j.id,
       categoryLabel: labelFor(JOB_CATEGORIES, j.category),
@@ -389,6 +404,8 @@ export default async function ProDashboard(
             homeownerName: conflict.homeownerName || "Homeowner",
           }
         : null,
+      bigJob,
+      insuranceRequired: bigJob && !insuranceCurrent,
       feeCents: Math.round(fee * 100),
       canAfford: balance >= fee,
       billingHref: `/pro/billing?need=${Math.max(0, fee - balance).toFixed(
@@ -457,6 +474,7 @@ export default async function ProDashboard(
         directRequests={directItems}
         balance={balance}
         hasPaidMajor={hasPaidMajor}
+        insuranceCurrent={insuranceCurrent}
         openJobs={openJobVms}
         sort={sort}
         hasApplied={apps.length > 0}

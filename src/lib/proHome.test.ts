@@ -191,14 +191,37 @@ describe("buildSetupItems", () => {
   });
 
   it("marks the logo optional for a non-member and points at the pitch", () => {
+    // Found by label, not index: the insurance step (0153) sits between the
+    // license and this one now, and a positional pick broke once already.
     const logo = buildSetupItems({
       contractor: base,
       balanceCents: 0,
       applicationCount: 0,
       canUploadLogo: false,
-    })[3];
-    expect(logo.optional).toBe(true);
-    expect(logo.href).toBe("/pro/plus?reason=logo");
+    }).find((i) => i.label.startsWith("Upload your logo"));
+    expect(logo?.optional).toBe(true);
+    expect(logo?.href).toBe("/pro/plus?reason=logo");
+  });
+
+  // Migration 0153: big-ticket jobs need current insurance on file, and the
+  // checklist is where a new pro should learn that, not the first refused
+  // apply.
+  it("adds the insurance step, done only while the stored date is unexpired", () => {
+    const insurance = (expires: string | null) =>
+      buildSetupItems({
+        contractor: { ...base, insurance_expires: expires },
+        balanceCents: 0,
+        applicationCount: 0,
+        canUploadLogo: true,
+      }).find((i) => i.label === "Put proof of insurance on file");
+
+    const none = insurance(null);
+    expect(none?.done).toBe(false);
+    expect(none?.href).toBe("/pro/business");
+    expect(none?.hint).toContain("Big jobs");
+
+    expect(insurance("2099-01-01")?.done).toBe(true);
+    expect(insurance("2001-01-01")?.done).toBe(false);
   });
 
   it("ticks the wallet step off any positive balance", () => {

@@ -14,6 +14,8 @@ import MarkChatSeen from "@/components/MarkChatSeen";
 import MarkChatsSeen from "@/components/MarkChatsSeen";
 import AskHearth from "@/components/AskHearth";
 import AskHearthRow from "@/components/AskHearthRow";
+import ChatListTabs from "@/components/ChatListTabs";
+import { isTerminalLeadStatus } from "@/app/pro/leadStatusLabel";
 import PhoneChatFrame from "@/components/PhoneChatFrame";
 import { getUser } from "@/lib/auth";
 import { getProactiveGreeting } from "@/lib/greeting";
@@ -108,9 +110,12 @@ export default async function HomeownerChatsPage(
   // and an ambiguous embed makes PostgREST answer 300/PGRST201 with no rows -
   // which this page would have rendered as "no conversations". See
   // src/lib/leadJoin.ts.
+  // `status` joined the column list for the Active / Closed tabs: the split
+  // uses isTerminalLeadStatus (src/app/pro/leadStatusLabel.ts), the same
+  // closed/lost classification the pro pipeline reads.
   const { data: leads, error: leadsError } = await supabase
     .from("contractor_leads")
-    .select(`id, category, contractor_id, created_at, ${leadContractorEmbed("name")}`)
+    .select(`id, category, contractor_id, status, created_at, ${leadContractorEmbed("name")}`)
     .eq("property_id", property.id)
     .not("contractor_id", "is", null)
     .order("created_at", { ascending: false });
@@ -201,8 +206,10 @@ export default async function HomeownerChatsPage(
     needsCrossHomeLookup
       ? supabase
           .from("contractor_leads")
-          // Same FK hint as the main leads read above (src/lib/leadJoin.ts).
-          .select(`id, category, contractor_id, created_at, ${leadContractorEmbed("name")}`)
+          // Same FK hint as the main leads read above (src/lib/leadJoin.ts),
+          // and the same `status` column so a cross-home lead can still pick
+          // the right Active / Closed tab to start on.
+          .select(`id, category, contractor_id, status, created_at, ${leadContractorEmbed("name")}`)
           // needsCrossHomeLookup already guarantees searchParams.lead is
           // truthy (Boolean(searchParams.lead) is part of that condition).
           .eq("id", searchParams.lead as string)
@@ -298,6 +305,14 @@ export default async function HomeownerChatsPage(
   // once ?lead= is in the URL. Desktop (md+) always shows both.
   const threadOpenOnMobile = Boolean(searchParams.lead);
 
+  // Active / Closed split for the list tabs. The classification is the shared
+  // closed/lost set from src/app/pro/leadStatusLabel.ts, the same one the pro
+  // pipeline (JobStatusSelect, LeadsBoard) is built on, so the two inboxes and
+  // the pipeline can never disagree about which jobs are finished. Both halves
+  // keep the recency order the sort above produced.
+  const activeConvos = convos.filter((l) => !isTerminalLeadStatus(l.status));
+  const closedConvos = convos.filter((l) => isTerminalLeadStatus(l.status));
+
   // The selected thread already has a pro assigned (accepted or closed; the
   // convos query above only includes leads with contractor_id set), so a
   // review is allowed here per leave_review() (0017) regardless of whether the
@@ -310,6 +325,72 @@ export default async function HomeownerChatsPage(
         .eq("lead_id", selected.id)
         .maybeSingle()
     : { data: null };
+
+  // One conversation row, unchanged markup, shared by both tabs. Factored out
+  // so the Active and Closed lists handed to ChatListTabs cannot diverge.
+  const renderConvoRow = (l: any) => {
+    const last = lastByLead.get(l.id);
+    const isActive = selected?.id === l.id;
+    const unread = isUnread(l.id);
+    return (
+      <li key={l.id}>
+        <Link
+          href={`/chats?lead=${l.id}`}
+          className={`block border-l-4 px-4 py-3 transition ${
+            isActive
+              ? "border-bark-600 bg-bark-50 dark:bg-bark-700/40"
+              : unread
+                ? "border-bark-500 bg-bark-50/60 hover:bg-bark-50 dark:bg-bark-700/30 dark:hover:bg-bark-700/40"
+                : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={`truncate ${
+                unread
+                  ? "font-bold text-stone-900 dark:text-stone-100"
+                  : "font-medium text-stone-900 dark:text-stone-100"
+              }`}
+            >
+              {nameOf(l)}
+            </span>
+            {unread ? (
+              <span className="shrink-0 rounded-full bg-bark-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                New
+              </span>
+            ) : (
+              <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
+                {labelFor(JOB_CATEGORIES, l.category)}
+              </span>
+            )}
+          </div>
+          <p
+            className={`truncate text-xs ${
+              unread ? "font-medium text-stone-800 dark:text-stone-200" : "text-stone-500 dark:text-stone-400"
+            }`}
+          >
+            {/* plainPreview (@/lib/previewText): one line, with markdown and
+                any machine-readable [[TAG]] action block taken out. A message
+                body that reduces to nothing falls back to the job category,
+                same as a thread with no messages at all. */}
+            {last
+              ? `${last.sender_role === "homeowner" ? "You: " : ""}${
+                  last.body.startsWith("[img]")
+                    ? "Photo"
+                    : plainPreview(last.body) ||
+                      labelFor(JOB_CATEGORIES, l.category)
+                }`
+              : labelFor(JOB_CATEGORIES, l.category)}
+          </p>
+          {quoteByLead.has(l.id) && (
+            <span className="mt-1 inline-block rounded-full bg-bark-50 px-2 py-0.5 text-[10px] font-semibold text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
+              Quote {formatUSDCents(quoteByLead.get(l.id)!)}
+            </span>
+          )}
+        </Link>
+      </li>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -377,93 +458,43 @@ export default async function HomeownerChatsPage(
       )}
 
       <div className="grid gap-4 md:grid-cols-[280px_1fr]">
-        {/* ---- Conversation list (hidden on phones while a thread is open) ---- */}
-        <ul
-          className={`${
-            threadOpenOnMobile ? "hidden md:block" : ""
-          } max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)] md:max-h-none`}
-        >
-          {/* Pinned assistant, always first. On a phone this is the only way
-              in (the bottom bar is back to four tabs and the floating pill is
-              desktop-only), so it opens the full-screen /ask view. Desktop
-              keeps selecting the in-page pane below instead, so the two-pane
-              inbox doesn't disappear under someone who just wanted a
-              question answered. */}
-          <AskHearthRow
-            href="/ask"
-            desktopHref="/chats?lead=ask-hearth"
-            subtitle="Your home assistant"
-            storageKeyBase="hearth_ask_chat"
-            retentionKeyBase="hearth_ask_retention"
-            userId={user?.id ?? null}
-            active={askSelected}
-          />
-
-          {convos.map((l) => {
-              const last = lastByLead.get(l.id);
-              const isActive = selected?.id === l.id;
-              const unread = isUnread(l.id);
-              return (
-                <li key={l.id}>
-                  <Link
-                    href={`/chats?lead=${l.id}`}
-                    className={`block border-l-4 px-4 py-3 transition ${
-                      isActive
-                        ? "border-bark-600 bg-bark-50 dark:bg-bark-700/40"
-                        : unread
-                          ? "border-bark-500 bg-bark-50/60 hover:bg-bark-50 dark:bg-bark-700/30 dark:hover:bg-bark-700/40"
-                          : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`truncate ${
-                          unread
-                            ? "font-bold text-stone-900 dark:text-stone-100"
-                            : "font-medium text-stone-900 dark:text-stone-100"
-                        }`}
-                      >
-                        {nameOf(l)}
-                      </span>
-                      {unread ? (
-                        <span className="shrink-0 rounded-full bg-bark-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                          New
-                        </span>
-                      ) : (
-                        <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
-                          {labelFor(JOB_CATEGORIES, l.category)}
-                        </span>
-                      )}
-                    </div>
-                    <p
-                      className={`truncate text-xs ${
-                        unread ? "font-medium text-stone-800 dark:text-stone-200" : "text-stone-500 dark:text-stone-400"
-                      }`}
-                    >
-                      {/* plainPreview (@/lib/previewText): one line, with
-                          markdown and any machine-readable [[TAG]] action
-                          block taken out. A message body that reduces to
-                          nothing falls back to the job category, same as a
-                          thread with no messages at all. */}
-                      {last
-                        ? `${last.sender_role === "homeowner" ? "You: " : ""}${
-                            last.body.startsWith("[img]")
-                              ? "Photo"
-                              : plainPreview(last.body) ||
-                                labelFor(JOB_CATEGORIES, l.category)
-                          }`
-                        : labelFor(JOB_CATEGORIES, l.category)}
-                    </p>
-                    {quoteByLead.has(l.id) && (
-                      <span className="mt-1 inline-block rounded-full bg-bark-50 px-2 py-0.5 text-[10px] font-semibold text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
-                        Quote {formatUSDCents(quoteByLead.get(l.id)!)}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+        {/* ---- Conversation list (hidden on phones while a thread is open) ----
+            The Active / Closed switch and the <ul> shell live in ChatListTabs
+            (shared with the pro inbox's ChatsView.tsx); this page still renders
+            every row itself and hands them over already split. */}
+        <ChatListTabs
+          hiddenOnMobile={threadOpenOnMobile}
+          // Deep-linking into a finished conversation starts the list on
+          // Closed so the open thread is visible and highlighted beside it.
+          initialTab={
+            selected && isTerminalLeadStatus((selected as any).status)
+              ? "closed"
+              : "active"
+          }
+          activeCount={activeConvos.length}
+          closedCount={closedConvos.length}
+          activeEmpty="No open conversations yet. Pick a pro for a job and your chat starts here."
+          closedEmpty="Nothing here yet. Finished conversations land here."
+          pinned={
+            /* Pinned assistant, always first and on both tabs. On a phone this
+               is the only way in (the bottom bar is back to four tabs and the
+               floating pill is desktop-only), so it opens the full-screen /ask
+               view. Desktop keeps selecting the in-page pane below instead, so
+               the two-pane inbox doesn't disappear under someone who just
+               wanted a question answered. */
+            <AskHearthRow
+              href="/ask"
+              desktopHref="/chats?lead=ask-hearth"
+              subtitle="Your home assistant"
+              storageKeyBase="hearth_ask_chat"
+              retentionKeyBase="hearth_ask_retention"
+              userId={user?.id ?? null}
+              active={askSelected}
+            />
+          }
+          activeRows={activeConvos.map(renderConvoRow)}
+          closedRows={closedConvos.map(renderConvoRow)}
+        />
 
           {/* ---- Open thread (the only pane on phones once one is picked) ---- */}
           {askSelected ? (

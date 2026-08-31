@@ -77,9 +77,14 @@ describe("pro help keeps the content it always had", () => {
     expect(view).toContain("<ShowAppGuideButton tone=\"pro\" />");
   });
 
-  it("hides the feedback card once the credit is claimed", () => {
-    expect(view).toContain("{!feedbackClaimed && (");
-    expect(view).toContain("{FEEDBACK_CARD_TITLE}");
+  it("keeps the bug-report card after the credit is claimed, without re-promising the $5", () => {
+    // Reports are welcome forever (migration 0152); only the money was
+    // once-ever. So the card stays, and its claimed-side copy is the honest
+    // repeat note rather than the offer headline.
+    expect(view).not.toContain("{!feedbackClaimed && (");
+    expect(view).toContain('{feedbackClaimed ? "Found a bug?" : FEEDBACK_CARD_TITLE}');
+    expect(view).toContain("FEEDBACK_REPEAT_NOTE");
+    expect(view).toContain('href="/pro/feedback"');
   });
 });
 

@@ -134,4 +134,36 @@ describe("HomeAlerts", () => {
     fireEvent.click(screen.getByRole("button", { name: /show 2 more/i }));
     expect(screen.getByText("Recall 4")).toBeInTheDocument();
   });
+
+  // The same control must close what it opened: the button used to disappear
+  // once expanded, leaving no way back to the compact three-alert view.
+  it("collapses again when the same button is clicked a second time", async () => {
+    const alerts = Array.from({ length: 5 }, (_, i) => ({
+      kind: "recall" as const,
+      title: `Recall ${i}`,
+      detail: "detail",
+    }));
+    fetchHomeAlerts.mockResolvedValue({
+      weather: [],
+      recalls: alerts,
+      current: null,
+      hasLocation: true,
+    });
+    render(<HomeAlerts propertyId="p1" />);
+    await screen.findByText("Recall 0");
+
+    const button = screen.getByRole("button", { name: /show 2 more/i });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(button);
+    expect(screen.getByText("Recall 4")).toBeInTheDocument();
+    // Still the same element, now reading "Show fewer" and marked expanded.
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(button).toHaveTextContent("Show fewer");
+
+    fireEvent.click(button);
+    expect(screen.queryByText("Recall 4")).toBeNull();
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    expect(button).toHaveTextContent("Show 2 more");
+  });
 });

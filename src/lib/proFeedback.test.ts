@@ -7,6 +7,9 @@ import {
   FEEDBACK_MAX_MESSAGE,
   FEEDBACK_PROMO_KEY,
   FEEDBACK_CARD_TITLE,
+  FEEDBACK_DEAL_NOTE,
+  FEEDBACK_REPEAT_NOTE,
+  FEEDBACK_THANKS_NOTE,
   FEEDBACK_ERROR_COPY,
   feedbackCreditDollars,
   validateFeedback,
@@ -40,6 +43,25 @@ describe("pro feedback credit: the shape of the offer", () => {
     expect(feedbackCreditDollars()).toBe("$5");
     expect(FEEDBACK_PROMO_KEY).toBe("pro_feedback_credit");
     expect(FEEDBACK_CARD_TITLE).toContain("$5 in lead credit");
+  });
+
+  it("states the money rule honestly and never promises pay for later reports", () => {
+    // First report pays instantly; later reports are read by a person and MAY
+    // earn a discretionary thank-you. "will" would be a promise the code does
+    // not keep, so it must not appear in either sentence about later reports.
+    expect(FEEDBACK_DEAL_NOTE).toContain("first report earns the $5");
+    expect(FEEDBACK_DEAL_NOTE).toContain("do not pay on their own");
+    expect(FEEDBACK_DEAL_NOTE).toContain("at our discretion");
+    expect(FEEDBACK_REPEAT_NOTE).toContain("already earned the $5");
+    expect(FEEDBACK_REPEAT_NOTE).toContain("at our discretion");
+    for (const note of [FEEDBACK_DEAL_NOTE, FEEDBACK_REPEAT_NOTE]) {
+      expect(note).not.toMatch(/will earn|will pay|will get/);
+    }
+  });
+
+  it("keeps the later-report confirmation quiet about money", () => {
+    expect(FEEDBACK_THANKS_NOTE).not.toContain("$");
+    expect(FEEDBACK_THANKS_NOTE.toLowerCase()).not.toContain("credit");
   });
 });
 
@@ -81,6 +103,7 @@ describe("validateFeedback", () => {
       "message_short",
       "message_long",
       "already",
+      "rate_limited",
       "failed",
     ] as const) {
       expect(FEEDBACK_ERROR_COPY[key].length).toBeGreaterThan(10);
@@ -180,5 +203,49 @@ describe("grant_feedback_credit (migration 0144)", () => {
     // ...and the function body must not mention it at all.
     const fn = code.slice(code.indexOf("create or replace function"));
     expect(fn).not.toContain("app_feedback");
+  });
+});
+
+describe("repeat reports (migration 0152)", () => {
+  // 0152 lifts the one-row-per-business cap so later bug reports can be
+  // stored. It must do ONLY that: the money's once-ever gate lives in
+  // promo_claims (0144, above) and no statement here may go near it.
+  const sql = readFileSync(
+    fileURLToPath(
+      new URL(
+        "../../supabase/migrations/0152_pro_feedback_repeat_reports.sql",
+        import.meta.url
+      )
+    ),
+    "utf8"
+  );
+
+  it("drops every unique constraint on pro_feedback, found by shape", () => {
+    expect(sql).toContain("and contype = 'u'");
+    expect(sql).toContain(
+      "'alter table public.pro_feedback drop constraint %I'"
+    );
+  });
+
+  it("replaces the lookup index the unique one doubled as", () => {
+    expect(sql).toContain(
+      "create index if not exists pro_feedback_contractor_idx"
+    );
+    expect(sql).toContain("on public.pro_feedback (contractor_id);");
+  });
+
+  it("moves no money and touches no money table", () => {
+    // The table COMMENT is allowed to NAME the money gate, the same way
+    // 0144's comments name app_feedback: that is documentation. What must not
+    // exist is a statement that reads, writes, or reshapes money, or that
+    // redefines the grant function.
+    const code = stripComments(sql);
+    expect(code).not.toMatch(
+      /(from|into|update|join|alter\s+table|delete\s+from)\s+(public\.)?(promo_claims|wallets|bonus_grants|wallet_transactions)/i
+    );
+    expect(code).not.toContain("create or replace function");
+    expect(code).not.toMatch(
+      /(from|into|update|join)\s+(public\.)?app_feedback/i
+    );
   });
 });

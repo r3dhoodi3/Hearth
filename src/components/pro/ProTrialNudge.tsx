@@ -9,6 +9,8 @@ import { startProCheckoutAction } from "@/app/pro/plus/actions";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
 import InlineSpinner from "@/components/InlineSpinner";
 import Logo from "@/components/Logo";
+import { track } from "@/lib/analytics";
+import type { PaywallVariant } from "@/lib/paywallExperiment";
 import {
   PRO_PLAN,
   formatUsd,
@@ -130,9 +132,18 @@ function CheckoutButton({ label }: { label: string }) {
 export default function ProTrialNudge({
   eligible,
   userId,
+  variant = "soft",
 }: {
   eligible: boolean;
   userId: string | null;
+  // The paywall experiment's arm for this account, decided on the server
+  // (src/lib/paywallExperiment.ts, wired in src/app/pro/layout.tsx). "soft"
+  // is the takeover as designed, headlined by the free trial. "hard" keeps
+  // the identical layout and timing but drops every mention of a trial: the
+  // headline becomes the plan pitch, the button says what it charges, and the
+  // disclosure takes the charged-today branch. `eligible` still gates WHO can
+  // see it either way, so members and past subscribers are unaffected.
+  variant?: PaywallVariant;
 }) {
   const pathname = usePathname();
   const headingId = useId();
@@ -184,6 +195,11 @@ export default function ProTrialNudge({
     claimFloatingPromptSlotForTrial();
     openRef.current = true;
     setOpen(true);
+    // One render event per open, with the experiment arm: this takeover is a
+    // paywall surface, so its views are part of the soft-vs-hard denominator.
+    // Fire-and-forget through the client sink (docs/ANALYTICS.md); the event
+    // name is on /api/track's allowlist.
+    track("pro_takeover_seen", { variant });
   }
 
   useEffect(() => {
@@ -290,12 +306,18 @@ export default function ProTrialNudge({
 
   if (!open) return null;
 
-  const introEligible = true; // gated on `eligible` above; this pro really gets the trial
+  // "soft" really gets the trial (gated on `eligible` above); "hard" is the
+  // experiment's no-trial arm, so the disclosure takes the charged-today
+  // branch and no line below may mention free days.
+  const introEligible = variant === "soft";
   const planLabel = plan === "yearly" ? "pro_yearly" : "pro_monthly";
-  const priceLine =
-    plan === "yearly"
+  const priceLine = introEligible
+    ? plan === "yearly"
       ? `${PRO_PLAN.trialDays} days free, then ${YEARLY_PRICE} for the year.`
-      : `${PRO_PLAN.trialDays} days free, then ${MONTHLY_PRICE} a month.`;
+      : `${PRO_PLAN.trialDays} days free, then ${MONTHLY_PRICE} a month.`
+    : plan === "yearly"
+      ? `${YEARLY_PRICE} for the year, charged today.`
+      : `${MONTHLY_PRICE} a month, charged today.`;
 
   return (
     // Full-screen takeover, not a card: fixed inset-0, above every other
@@ -336,11 +358,16 @@ export default function ProTrialNudge({
             id={headingId}
             className="mt-3 text-3xl font-bold text-stone-900 dark:text-stone-100"
           >
-            {PRO_PLAN.trialDays} Day Free Trial
+            {/* Soft leads with the trial; hard leads with the same plan pitch
+                /pro/plus uses, so the two arms differ only in the offer. */}
+            {introEligible
+              ? `${PRO_PLAN.trialDays} Day Free Trial`
+              : "Run your business, not your admin"}
           </h1>
           <p className="mt-2 text-sm text-stone-600 dark:text-stone-300">
-            Every Pro perk, free for {PRO_PLAN.trialDays} days. Cancel any
-            time before it ends and you pay nothing.
+            {introEligible
+              ? `Every Pro perk, free for ${PRO_PLAN.trialDays} days. Cancel any time before it ends and you pay nothing.`
+              : "Every Pro perk, one membership. Cancel anytime and keep it through the time you paid for."}
           </p>
         </div>
 
@@ -417,7 +444,11 @@ export default function ProTrialNudge({
             </p>
             <AutoRenewalTerms plan={planLabel} introEligible={introEligible} />
             <CheckoutButton
-              label={`Start ${PRO_PLAN.trialDays}-day free trial`}
+              label={
+                introEligible
+                  ? `Start ${PRO_PLAN.trialDays}-day free trial`
+                  : "Get Hearth Pro"
+              }
             />
           </form>
           <p className="text-center text-xs text-stone-500 dark:text-stone-400">

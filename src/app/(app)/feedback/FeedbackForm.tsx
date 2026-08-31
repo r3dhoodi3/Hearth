@@ -4,14 +4,19 @@ import { useState } from "react";
 import SubmitButton from "@/components/SubmitButton";
 import { submitFeedbackAction } from "./actions";
 
-// The private form the "Not really" button on the review prompt (see
-// src/components/ReviewPrompt.tsx) routes to instead of the app store. Never
-// linked from anywhere public - this goes straight into app_feedback
-// (migration 0133), which nobody but the service role can read back, ever.
+// The homeowner side's bug-report page. Two doors lead here: the "Found a
+// bug?" card on /account/help, and the "Not really" button on the review
+// prompt (see src/components/ReviewPrompt.tsx), which routes here instead of
+// the app store - so the copy welcomes both a broken button and a plain
+// gripe. Everything goes straight into app_feedback (migration 0133), which
+// nobody but the service role can read back, ever.
+//
+// NO credit language here, on purpose: Hearth has no homeowner wallet or
+// credit to pay a bounty out of (the $5 first-report credit is a pro-side
+// thing, src/lib/proFeedback.ts), so promising one would be a bug of its own.
 //
 // Split out of page.tsx so the page itself can be a server component and read
-// the signed-in account's email for the prefill below. Everything here is the
-// same markup and state it had as the page.
+// the signed-in account's email for the prefill below.
 export default function FeedbackForm({ defaultEmail }: { defaultEmail: string }) {
   // Off by default: most people who land here just want to say what's wrong,
   // not hand over their email. The input only exists in the DOM once this is
@@ -23,17 +28,19 @@ export default function FeedbackForm({ defaultEmail }: { defaultEmail: string })
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-          Feedback
+          Report a bug
         </h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Tell us what would make it better. This goes straight to us, not to
-          the store.
+          A button that does nothing, a number that is wrong, a page that will
+          not load: tell us here. Ideas and complaints count too. This goes
+          straight to us, not to the store, and a real person reads every
+          report.
         </p>
       </div>
 
       <form action={submitFeedbackAction} className="card p-6">
         <label className="label" htmlFor="message">
-          What could be better?
+          What happened, or what could be better?
         </label>
         <textarea
           id="message"
@@ -41,7 +48,7 @@ export default function FeedbackForm({ defaultEmail }: { defaultEmail: string })
           rows={5}
           required
           className="input"
-          placeholder="Tell us what's not working, or what you wish Hearth did."
+          placeholder="What broke, where it happened, and what you expected instead."
         />
 
         {/* min-h-11: the whole row is the tap target, at least 44px tall. */}

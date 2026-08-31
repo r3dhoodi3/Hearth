@@ -128,8 +128,14 @@ function FindingBody({ f }: { f: Finding }) {
 // the analysis had just completed.
 export default function QuoteAnalyzer({
   freeTaste = false,
+  plusTrialCopy = true,
 }: {
   freeTaste?: boolean;
+  // Whether the post-result Plus upsell may mention the 3 free days. False for
+  // an account on the paywall experiment's "hard" arm (decided server-side in
+  // quote-check/page.tsx via src/lib/paywallExperiment.ts), whose checkout
+  // charges from day one and must not be promised a trial here.
+  plusTrialCopy?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>("photo");
   const [preview, setPreview] = useState<string | null>(null);
@@ -988,9 +994,11 @@ export default function QuoteAnalyzer({
         <div className="card space-y-3 border-bark-100 bg-bark-50 text-center dark:border-bark-700 dark:bg-bark-700/40">
           <p className="text-sm text-bark-700 dark:text-stone-300">
             {/* The free days come with every cadence now, so this no longer
-                sends a reader to the weekly plan to get them. */}
-            That was your free check. Get every quote checked with Hearth Plus,
-            $4.99/mo, and your first 3 days are free.
+                sends a reader to the weekly plan to get them. The trial clause
+                drops entirely on the paywall experiment's "hard" arm. */}
+            {plusTrialCopy
+              ? "That was your free check. Get every quote checked with Hearth Plus, $4.99/mo, and your first 3 days are free."
+              : "That was your free check. Get every quote checked with Hearth Plus, $4.99/mo."}
           </p>
           <Link href="/plus?reason=quote" className="btn-primary inline-block">
             Get Hearth Plus

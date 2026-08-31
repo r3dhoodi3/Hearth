@@ -62,14 +62,20 @@ export type Perk = { title: string; body: string; icon?: PerkIcon };
 export const PERKS: Perk[] = [
   {
     icon: "percent",
-    title: `${PRO_LEAD_DISCOUNT_PCT}% off every lead fee`,
+    // "apply fee", not "every lead fee": the discount applies to board
+    // applications only (apply_to_lead, 0149). Direct-request unlocks carry
+    // no member discount (0104), and a free trial does not qualify
+    // (is_pro_member is active-only since 0151), so the old unqualified
+    // "every lead fee" headline overstated on both counts. The 2026-08-30
+    // monetization audit flagged it; stated honestly now.
+    title: `${PRO_LEAD_DISCOUNT_PCT}% off apply fees`,
     // Owner's words: "it does NOT stack with the 15-30%. More incentive to
     // buy." Stated here exactly that plainly, first in the list: it is the
     // most direct incentive to subscribe, priced against the same fee a
     // non-member pays on the leads board. Mirrors apply_to_lead's
     // pro_lead_fee_cents (migration 0149) and bestLeadDiscount in
     // src/lib/leadPricing.ts.
-    body: `Every lead's apply fee drops ${PRO_LEAD_DISCOUNT_PCT}% while you're a member. It never stacks with a listing's own aging markdown (15-30% off unclaimed jobs) - you always get whichever discount is bigger, never both added together.`,
+    body: `Every board application's fee drops ${PRO_LEAD_DISCOUNT_PCT}% while your membership is active (the free trial does not count yet, and direct-request unlocks are not discounted). It never stacks with a listing's own aging markdown (15-30% off unclaimed jobs) - you always get whichever discount is bigger, never both added together.`,
   },
   {
     icon: "gift",

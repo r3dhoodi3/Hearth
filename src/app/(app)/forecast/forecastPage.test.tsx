@@ -100,6 +100,16 @@ vi.mock("@/lib/supabase/server", () => ({
         : table === "properties"
           ? chain(null, { repair_reserve_cents: fixtures.reserveCents })
           : chain([]),
+    // The free branch reads the user id once for the paywall-experiment
+    // variant on the unlock card's sub-line (src/lib/paywallExperiment.ts).
+    // A fixed id keeps the rendered variant deterministic for these tests;
+    // the sub-line's exact wording is asserted nowhere here, only that the
+    // card renders, so either arm satisfies the suite.
+    auth: {
+      getUser: async () => ({
+        data: { user: { id: "00000000-0000-4000-8000-000000000001" } },
+      }),
+    },
   })),
 }));
 
@@ -111,6 +121,13 @@ vi.mock("./actions", () => ({
 }));
 
 import ForecastPage from "./page";
+import { buildForecast } from "@/lib/forecast";
+
+// Mirror of the page's own money() formatter, so the free-render assertions
+// compare against exactly the strings the member view would print.
+function money(n: number): string {
+  return `$${Math.round(n).toLocaleString()}`;
+}
 
 async function renderForecast(over: Partial<typeof fixtures> = {}) {
   fixtures.plus = over.plus ?? true;
@@ -176,6 +193,16 @@ describe("forecast page, Hearth Plus member", () => {
       .toBeGreaterThan(0);
   });
 
+  it("sees the full page with no blur and no unlock card", async () => {
+    const { container } = await renderForecast();
+    expect(
+      container.querySelector('[data-testid="forecast-tease"]')
+    ).toBeNull();
+    expect(
+      screen.queryByText(/Your full breakdown is ready/)
+    ).not.toBeInTheDocument();
+  });
+
   it("offers early quotes on the highest-risk systems, prefilled and dated", async () => {
     const { container } = await renderForecast();
     expect(screen.getByTestId("quote-early-card")).toBeInTheDocument();
@@ -199,36 +226,76 @@ describe("forecast page, Hearth Plus member", () => {
 });
 
 describe("forecast page, free reader", () => {
-  it("gets the shape and one worked example, on a real system of theirs", async () => {
-    await renderForecast({ plus: false });
-    expect(screen.getByTestId("free-push-example")).toBeInTheDocument();
-    expect(
-      screen.getByText("Flush the tank and have the anode rod checked")
-    ).toBeInTheDocument();
-    // Exactly one: the taste is one example, not the whole table.
-    expect(
-      screen.queryAllByText(/pushes a \$[\d,]+ .* replacement out/)
-    ).toHaveLength(1);
+  it("keeps both real headline numbers visible above the paywall", async () => {
+    const { container } = await renderForecast({ plus: false });
+    const forecast = buildForecast(
+      systems as unknown as Parameters<typeof buildForecast>[0],
+      new Date().getFullYear(),
+      property.state,
+      10,
+      []
+    );
+    const text = container.textContent ?? "";
+    expect(text).toMatch(/plan for about\s*\$[\d,]+/);
+    expect(text).toMatch(/Set aside about \$[\d,]+\/month/);
+    // And they are the REAL figures, not banded ones.
+    expect(text).toContain(money(forecast.totalMidCost));
+    expect(text).toContain(money(forecast.monthlySetAside));
   });
 
-  it("does not get the reserve form, the rebate lines or the early-quotes card", async () => {
+  it("renders the breakdown blurred, unreadable to assistive tech, with nothing tabbable inside", async () => {
+    const { container } = await renderForecast({ plus: false });
+    const tease = container.querySelector('[data-testid="forecast-tease"]');
+    expect(tease).not.toBeNull();
+    expect(tease).toHaveAttribute("aria-hidden", "true");
+    expect(tease!.className).toContain("blur-sm");
+    expect(tease!.className).toContain("pointer-events-none");
+    expect(tease!.className).toContain("select-none");
+    // No link, form control or tabindex inside the tease: the blur must not
+    // hide something a keyboard can still reach.
+    expect(
+      tease!.querySelectorAll("a, button, input, select, textarea, [tabindex]")
+    ).toHaveLength(0);
+  });
+
+  it("shows the unlock card with the Plus CTA over the blur", async () => {
     await renderForecast({ plus: false });
-    expect(screen.queryByText("Your repair reserve")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Your full breakdown is ready/)
+    ).toBeInTheDocument();
+    const cta = screen.getByRole("link", { name: "Get Hearth Plus" });
+    expect(cta).toHaveAttribute("href", "/plus?reason=forecast");
+  });
+
+  it("never puts the exact per-system figures in the free DOM, only banded ones", async () => {
+    const { container } = await renderForecast({ plus: false });
+    const forecast = buildForecast(
+      systems as unknown as Parameters<typeof buildForecast>[0],
+      new Date().getFullYear(),
+      property.state,
+      10,
+      []
+    );
+    const text = container.textContent ?? "";
+    // The member view prints each system's exact "low - high" range; the free
+    // render must not contain a single one of those strings anywhere.
+    expect(forecast.timeline.length).toBeGreaterThan(0);
+    for (const item of forecast.timeline) {
+      expect(text).not.toContain(
+        `${money(item.costLow)} - ${money(item.costHigh)}`
+      );
+    }
+  });
+
+  it("still gets no working reserve form, plan buttons or rebate amounts", async () => {
+    await renderForecast({ plus: false });
     expect(
       screen.queryByLabelText("What you have saved so far")
     ).not.toBeInTheDocument();
-    expect(screen.queryByTestId("quote-early-card")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Up to \$[\d,]+ back:/)).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Add to my plan" })
     ).not.toBeInTheDocument();
-  });
-
-  it("still shows the honest masked timeline and the Plus CTA", async () => {
-    await renderForecast({ plus: false });
-    expect(screen.getByText("Timing and cost with Plus")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "See what Plus shows" })
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/Up to \$[\d,]+ back:/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("quote-early-card")).not.toBeInTheDocument();
   });
 });

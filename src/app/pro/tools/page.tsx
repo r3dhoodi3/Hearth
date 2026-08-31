@@ -4,6 +4,7 @@ import { ClipboardList, ReceiptText, Mail, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { variantForUser } from "@/lib/paywallExperiment";
 import { PRO_DEPOSIT_BOOST_PTS, COLD_START_FREE_ALERTS } from "@/lib/constants";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
 import { PRO_TOOLS_PAYWALL } from "@/lib/freeAiTaste";
@@ -88,8 +89,12 @@ export default async function ProToolsPage(
     // The free trial is for first-time members only, and the pro-side
     // subscriptions row survives a cancellation, so a lapsed member gets the
     // plain "See Hearth Pro" button instead of a trial they cannot have.
-    // Request-cached: hasProPlan() above already read the same rows.
-    const trialEligible = !(await getProSubscription());
+    // Request-cached: hasProPlan() above already read the same rows. The
+    // paywall experiment's "hard" arm takes the same trial-less branch
+    // (src/lib/paywallExperiment.ts).
+    const trialEligible =
+      !(await getProSubscription()) &&
+      variantForUser(contractor.user_id ?? null) === "soft";
 
     return (
       <div className="mx-auto max-w-2xl space-y-6">

@@ -3,6 +3,7 @@ import { sameOriginGuard } from "@/lib/csrf";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { variantForUser } from "@/lib/paywallExperiment";
 import {
   addAskOutputTokens,
   allowAbortRefund,
@@ -414,7 +415,12 @@ export async function POST(req: NextRequest) {
       // Trial eligibility, emitted as its own signal below. The row survives a
       // cancellation, so no Pro-side row at all is the only trial-eligible
       // state. Request-cached: getProSubscription reads the same row again.
-      isProTrialEligible = !(await getProSubscription());
+      // ANDed with the paywall experiment (src/lib/paywallExperiment.ts): a
+      // hard-variant account's checkout refuses the trial, so the copilot
+      // must never pitch free days that account cannot get.
+      isProTrialEligible =
+        !(await getProSubscription()) &&
+        variantForUser(authUser.id) === "soft";
 
       // Wallet balance, cash + bonus, if easily available. Never fatal.
       let walletLine = "";
@@ -491,7 +497,7 @@ export async function POST(req: NextRequest) {
         `${licenseLine}\n` +
         `${bgLine}\n` +
         `Pro membership: ${isProMember ? (isProTrialing ? `Hearth Pro member on their ${PRO_PLAN.trialDays}-day free trial, not yet charged` : "active Hearth Pro member") : "not a Pro member (on the free tier)"}.\n` +
-        `Free trial eligibility: ${isProTrialEligible ? "eligible for the one-time free trial (no prior Hearth Pro subscription)" : "NOT eligible for a free trial (they already have or previously had a Hearth Pro subscription)"}.\n` +
+        `Free trial eligibility: ${isProTrialEligible ? "eligible for the one-time free trial (no prior Hearth Pro subscription)" : "NOT eligible for a free trial. Never mention or offer a free trial to this pro; if they ask, say membership starts as a paid plan for their account"}.\n` +
         (walletLine ? `${walletLine}\n` : "") +
         (openLeadsLine ? `${openLeadsLine}\n` : "") +
         (openJobsDetail ? `${openJobsDetail}\n` : "") +

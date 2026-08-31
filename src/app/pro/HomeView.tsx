@@ -84,6 +84,7 @@ export default function HomeView({
   showSeeAll,
   balance,
   hasPaidMajor,
+  insuranceCurrent,
   openCount,
   activeCount,
   appliedCount,
@@ -112,6 +113,8 @@ export default function HomeView({
   showSeeAll: boolean;
   balance: number;
   hasPaidMajor: boolean;
+  /** Whether this pro has current insurance on file (0153), for the big-job gate on direct-request cards. */
+  insuranceCurrent: boolean;
   openCount: number;
   activeCount: number;
   appliedCount: number;
@@ -294,6 +297,7 @@ export default function HomeView({
                   d={d.row}
                   balance={balance}
                   hasPaidMajor={hasPaidMajor}
+                  hasCurrentInsurance={insuranceCurrent}
                   // Resolved on the server, not in the card: this line reads
                   // the clock, so it has to be settled there or hydration
                   // could disagree with SSR.
@@ -422,6 +426,14 @@ export default function HomeView({
               >
                 See it in your wallet
               </Link>
+              {/* The money was once-ever; the reports are not. Keep the door
+                  to /pro/feedback open after the credit is collected. */}
+              <Link
+                href="/pro/feedback"
+                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+              >
+                Report a bug
+              </Link>
             </>
           ) : feedbackSent ? (
             <>
@@ -435,6 +447,12 @@ export default function HomeView({
                 Your {feedbackCreditDollars()} in lead credit will be added once
                 your license is confirmed or you place your first lead.
               </p>
+              <Link
+                href="/pro/feedback"
+                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+              >
+                Report another bug
+              </Link>
             </>
           ) : (
             <>
@@ -453,7 +471,7 @@ export default function HomeView({
                 href="/pro/feedback"
                 className="btn-secondary mt-1 inline-block text-sm"
               >
-                Tell us
+                Report a bug
               </Link>
             </>
           )}

@@ -52,8 +52,31 @@ export async function readFeedbackState(
   }
 }
 
-// Store one pro's feedback. Returns "ok", "already" (the unique index on
-// contractor_id refused a second row), or "failed".
+// The spam cap on report writes, same rate_limit_hit bucket shape the
+// homeowner /feedback form and both support forms use, and the same fail-OPEN
+// posture: only an explicit `false` blocks, so a limiter outage can never
+// stop a real pro from telling us something. Five an hour, matching the
+// homeowner form: since migration 0152 a business can send any number of
+// reports, and each one is attacker-controllable text a person later reads.
+export async function proFeedbackRateLimitOk(userId: string): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const { data: allowed } = await (admin as any).rpc("rate_limit_hit", {
+      p_bucket: `pro-feedback:${userId}`,
+      p_limit: 5,
+      p_window_seconds: 3600,
+    });
+    return allowed !== false;
+  } catch {
+    return true;
+  }
+}
+
+// Store one pro's report. Returns "ok", "already", or "failed". "already" is
+// the unique index on contractor_id refusing a second row, which only exists
+// until migration 0152 is pasted live: after it, a business can send as many
+// reports as it likes and this path never fires. The money never listens to
+// row counts either way; promo_claims is its only gate.
 export async function insertProFeedback(input: {
   contractorId: string;
   userId: string;
@@ -71,8 +94,9 @@ export async function insertProFeedback(input: {
       contact_ok: input.contactOk,
     });
     if (!error) return "ok";
-    // 23505 is the unique violation on contractor_id: one note per business,
-    // which is also what makes the credit once-ever.
+    // 23505 is the unique violation on contractor_id, which migration 0152
+    // drops. Until that paste is live, a second report from the same business
+    // is refused here rather than lost silently.
     if ((error as { code?: string }).code === "23505") return "already";
     console.error("pro_feedback insert failed:", error);
     return "failed";

@@ -21,3 +21,20 @@ export const STATUS_LABEL: Record<string, string> = {
 export function leadStatusLabel(status: string): string {
   return STATUS_LABEL[status] ?? status;
 }
+
+// The statuses that mean a job is over: the pro either won it ("closed") or
+// lost it. This is the same pair every pipeline filter in the repo already
+// uses (pro/page.tsx activeCount, pro/leads/page.tsx isDone,
+// lib/activeJobConflicts.ts), and it lives next to STATUS_LABEL so the
+// vocabulary and its active/finished split cannot drift apart. Both Messages
+// inboxes read it for their Active / Closed tabs.
+export const TERMINAL_LEAD_STATUSES = ["closed", "lost"] as const;
+
+// True when a lead's conversation is finished. Anything unknown (a null from
+// an old row, a status added later) counts as active on purpose: hiding a
+// conversation is the worse failure mode.
+export function isTerminalLeadStatus(status: string | null | undefined): boolean {
+  return (
+    status != null && (TERMINAL_LEAD_STATUSES as readonly string[]).includes(status)
+  );
+}

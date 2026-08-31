@@ -9,6 +9,7 @@ import { getProperties } from "@/lib/property";
 import { FREE_TASTE_PAYWALL } from "@/lib/freeAiTaste";
 import { getUser } from "@/lib/auth";
 import { trackServerEvent } from "@/lib/trackServer";
+import { variantForUser } from "@/lib/paywallExperiment";
 import { trialDecision, TRIAL_DECISION_TTL_MS } from "@/lib/risk/decision";
 import { TRIAL_PLAN_SWITCH_MESSAGE } from "@/lib/billingTerms";
 import {
@@ -439,8 +440,16 @@ export default async function PlusPage(
           maxAgeMs: TRIAL_DECISION_TTL_MS,
         })
       : null;
+  // The paywall experiment (src/lib/paywallExperiment.ts): a "hard"-variant
+  // account sees this exact page with no trial language anywhere - the cards,
+  // the button, and the disclosure all take the same charged-today branch a
+  // trial-ineligible account already gets. startPlusCheckoutAction applies the
+  // same variant check next to its own eligibility checks, so the copy here
+  // and the charge can never disagree.
+  const paywallVariant = variantForUser(viewer?.id);
   const trialEligible =
-    (await isPlusTrialEligible()) && (risk?.allowTrial ?? true);
+    (await isPlusTrialEligible()) && (risk?.allowTrial ?? true) &&
+    paywallVariant === "soft";
 
   // Free-taste credit for the quote analyzer, read from the SAME column the
   // tool itself claims against (users.free_quote_used_at - see
@@ -487,11 +496,20 @@ export default async function PlusPage(
     "documents",
     "inspection",
   ]);
-  if (searchParams.reason && PAYWALL_REASONS.has(searchParams.reason)) {
-    await trackServerEvent(viewer?.id ?? null, "paywall_seen", {
-      reason: searchParams.reason,
-    });
-  }
+  // Fired on EVERY render of this pitch branch now, not only the ?reason=
+  // ones: the paywall experiment needs renders per variant to compare against
+  // checkouts per variant, and a bare /plus visit is a paywall render too. A
+  // visit with no recognized reason is stamped "direct" so the per-reason
+  // funnel queries keep working unchanged (they group by reason), and the
+  // variant rides on every row.
+  const paywallReason =
+    searchParams.reason && PAYWALL_REASONS.has(searchParams.reason)
+      ? searchParams.reason
+      : "direct";
+  await trackServerEvent(viewer?.id ?? null, "paywall_seen", {
+    reason: paywallReason,
+    variant: paywallVariant,
+  });
 
   return (
     // Wider than the other branches of this URL (max-w-md): the pitch is three

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentContractor } from "@/lib/contractor";
 import { getUser } from "@/lib/auth";
+import { variantForUser } from "@/lib/paywallExperiment";
+import { trackServerEvent } from "@/lib/trackServer";
 import { trialDecision, TRIAL_DECISION_TTL_MS } from "@/lib/risk/decision";
 import {
   hasProPlan,
@@ -176,13 +178,29 @@ export default async function ProPlusPage(
         maxAgeMs: TRIAL_DECISION_TTL_MS,
       })
     : null;
-  const trialEligible = !sub && (risk?.allowTrial ?? true);
+  // The paywall experiment (src/lib/paywallExperiment.ts): a "hard"-variant
+  // pro sees this exact pitch with no trial language anywhere - no trial
+  // shortcut form, a "Start my Pro membership" button, and charged-today
+  // disclosure copy, the same branch a returning member already gets.
+  // startProCheckoutAction applies the same variant check next to its own
+  // eligibility checks, so the copy here and the charge can never disagree.
+  const paywallVariant = variantForUser(viewer?.id);
+  const trialEligible = !sub && (risk?.allowTrial ?? true) && paywallVariant === "soft";
 
   // The specific pitch for whatever door sent them here, at the top, exactly
   // like the homeowner /plus page's ?reason= banners. One entry per key, so a
   // pro who tapped a Pro chip on a tile reads about THAT thing rather than the
   // general page. An unknown or absent key renders nothing at all.
   const reasonCopy = REASON_COPY[searchParams.reason ?? ""] ?? null;
+
+  // One render event per pitch view, mirroring the homeowner page's
+  // paywall_seen: renders per variant are the denominator the paywall
+  // experiment's conversion comparison divides by. The reason is only ever an
+  // allowlisted REASON_COPY key or "direct", never a raw query string.
+  await trackServerEvent(viewer?.id ?? null, "pro_paywall_seen", {
+    reason: reasonCopy && searchParams.reason ? searchParams.reason : "direct",
+    variant: paywallVariant,
+  });
 
   return <PlusPitch reasonCopy={reasonCopy} trialEligible={trialEligible} />;
 }

@@ -8,32 +8,49 @@ import {
   FEEDBACK_MIN_MESSAGE,
   FEEDBACK_MAX_MESSAGE,
   FEEDBACK_SCORE_LABELS,
+  FEEDBACK_DEAL_NOTE,
+  FEEDBACK_REPEAT_NOTE,
   FEEDBACK_LOCKED_NOTE,
-  feedbackCreditDollars,
+  FEEDBACK_CREDITED_NOTE,
+  FEEDBACK_THANKS_NOTE,
   validateFeedback,
   FEEDBACK_ERROR_COPY,
+  type FeedbackOutcome,
 } from "@/lib/proFeedback";
 
-// The two-question feedback form. Client-side because the action returns an
-// ActionResult rather than redirecting: a refused submit has to keep the note
-// the pro just typed on screen, and the success state has to say which of the
-// two things happened (credited now, or credit waiting on qualification).
+// The bug-report form. Client-side because the action returns an ActionResult
+// rather than redirecting: a refused submit has to keep the note the pro just
+// typed on screen, and the success state has to say which of the three things
+// happened (credited now, credit waiting on qualification, or a plain thanks
+// for a later report).
 export default function FeedbackForm({
   established,
+  claimed,
 }: {
   // Whether this pro's business already qualifies for the credit. Decides one
   // line of copy before the tap; the server re-checks it and is the authority.
   established: boolean;
+  // Whether the $5 was already collected. Decides whether the deal or the
+  // no-more-automatic-pay note shows above the form; the server re-checks.
+  claimed: boolean;
 }) {
   const [score, setScore] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [contactOk, setContactOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<null | { granted: boolean }>(null);
+  const [done, setDone] = useState<FeedbackOutcome | null>(null);
   const [pending, startTransition] = useTransition();
 
   const trimmed = message.trim();
   const short = trimmed.length < FEEDBACK_MIN_MESSAGE;
+
+  // The deal, stated before the tap: first report pays instantly (established),
+  // pays on qualification (not yet established), or already paid (claimed).
+  const dealNote = claimed
+    ? FEEDBACK_REPEAT_NOTE
+    : established
+      ? FEEDBACK_DEAL_NOTE
+      : FEEDBACK_LOCKED_NOTE;
 
   function submit() {
     setError(null);
@@ -48,7 +65,7 @@ export default function FeedbackForm({
         message: trimmed,
         contactOk,
       });
-      if (res.ok) setDone({ granted: Boolean(res.data?.granted) });
+      if (res.ok) setDone(res.data?.outcome ?? "thanks");
       else setError(res.error);
     });
   }
@@ -57,22 +74,46 @@ export default function FeedbackForm({
     return (
       <div className="card space-y-3">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-          Thank you. This helps us build the right things.
+          {done === "thanks"
+            ? FEEDBACK_THANKS_NOTE
+            : "Thank you. This helps us build the right things."}
         </h2>
         <p className="text-sm text-stone-600 dark:text-stone-300">
-          {done.granted
-            ? `${feedbackCreditDollars()} in lead credit has been added to your wallet. It is credit rather than cash, so it goes toward your lead fees.`
-            : FEEDBACK_LOCKED_NOTE}
+          {done === "credited"
+            ? FEEDBACK_CREDITED_NOTE
+            : done === "locked"
+              ? FEEDBACK_LOCKED_NOTE
+              : // A later report: warm, and quiet about money on purpose. The
+                // deal above the form already said later reports do not pay on
+                // their own.
+                "If we need more detail, and you said we could contact you, we will reach out."}
         </p>
         <div className="flex flex-wrap gap-2">
           <Link href="/pro" className="btn-primary">
             Back to Home
           </Link>
-          {done.granted && (
+          {done === "credited" && (
             <Link href="/pro/billing" className="btn-secondary">
               See my wallet
             </Link>
           )}
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              // Fresh form for the next report; the deal copy the server
+              // re-renders on a full visit is claimed-aware, and after a
+              // credited submit the honest note is the repeat one, so nobody
+              // expects a second $5.
+              setDone(null);
+              setScore(null);
+              setMessage("");
+              setContactOk(false);
+              setError(null);
+            }}
+          >
+            Report another bug
+          </button>
         </div>
       </div>
     );
@@ -80,6 +121,8 @@ export default function FeedbackForm({
 
   return (
     <div className="card space-y-5">
+      <p className="text-sm text-stone-600 dark:text-stone-300">{dealNote}</p>
+
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium text-stone-900 dark:text-stone-100">
           How is Hearth working for you?
@@ -111,7 +154,7 @@ export default function FeedbackForm({
           htmlFor="pro-feedback-message"
           className="label"
         >
-          What should we fix or build?
+          What happened, or what should we build?
         </label>
         <textarea
           id="pro-feedback-message"
@@ -119,7 +162,7 @@ export default function FeedbackForm({
           onChange={(e) => setMessage(e.target.value)}
           rows={5}
           maxLength={FEEDBACK_MAX_MESSAGE}
-          placeholder="The thing that annoys you most, or the thing you wish it did."
+          placeholder="What broke, where it happened, and what you expected instead."
           // 16px on a phone or iOS zooms the page on focus.
           className="input max-sm:text-base"
         />
@@ -145,12 +188,6 @@ export default function FeedbackForm({
           You can contact me about this.
         </span>
       </label>
-
-      {!established && (
-        <p className="text-sm text-stone-500 dark:text-stone-400">
-          {FEEDBACK_LOCKED_NOTE}
-        </p>
-      )}
 
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>

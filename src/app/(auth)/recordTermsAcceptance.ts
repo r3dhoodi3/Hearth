@@ -27,7 +27,9 @@ const UUID_RE =
 // the duplicate guard has to live here instead.
 //
 // TODO(legal): bump VERSION whenever /terms or /pro-terms changes materially.
-const VERSION = "2026-07-18";
+// 2026-08-30: /pro-terms gained the insurance duty + venue clause (big-job
+// proof-of-insurance gate, migration 0153), which is a material change.
+const VERSION = "2026-08-30";
 
 export async function recordTermsAcceptance(
   userId: string,

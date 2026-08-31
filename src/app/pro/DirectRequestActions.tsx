@@ -10,6 +10,10 @@ import {
   declineDirectRequestAction,
 } from "./actions";
 import { GHOST_PROTECTION_DAYS } from "@/lib/constants";
+import {
+  INSURANCE_REQUIRED_MESSAGE,
+  INSURANCE_UPLOAD_HREF,
+} from "@/lib/insuranceGate";
 
 // Submit button for the unlock confirm form. Needs its own component because
 // useFormStatus only reports pending state inside a descendant of the <form>
@@ -55,6 +59,7 @@ export default function DirectRequestActions({
   leadId,
   fee,
   feeCents,
+  insuranceRequired = false,
   canAfford,
   billingHref = "/pro/billing",
 }: {
@@ -65,12 +70,37 @@ export default function DirectRequestActions({
   // (e.g. the first big-ticket intro was consumed in another tab). Optional:
   // without it the action simply skips that guard.
   feeCents?: number;
+  // Big-job insurance gate (0153): true when this is a major-tier request
+  // and the pro has no current insurance on file. Swaps the unlock button
+  // for the requirement; the server action and the RPC refuse the same case.
+  insuranceRequired?: boolean;
   canAfford: boolean;
   // Billing link carrying job context (?need=&category=) so the deposit page
   // can say what the funds are for and preselect an amount that covers it.
   billingHref?: string;
 }) {
   const [confirming, setConfirming] = useState(false);
+
+  if (insuranceRequired) {
+    return (
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
+          <span>{INSURANCE_REQUIRED_MESSAGE}</span>
+          <Link
+            href={INSURANCE_UPLOAD_HREF}
+            className="font-medium underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+          >
+            Add insurance
+          </Link>
+        </div>
+        {/* Passing is free and needs no insurance, so it stays available. */}
+        <form action={declineDirectRequestAction}>
+          <input type="hidden" name="id" value={leadId} />
+          <PassButton />
+        </form>
+      </div>
+    );
+  }
 
   if (confirming) {
     return (

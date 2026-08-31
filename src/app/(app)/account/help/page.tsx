@@ -106,9 +106,9 @@ export default async function HelpPage(props: {
         <SupportForm name={name} email={email} phone={phone} sent={sent} />
       </div>
 
-      {/* Found a bug: reports go through the support form on this page, same
-          inbox as everything else - not a mailto link, which dumped people
-          into whatever desktop mail app the OS picked. No credit offer here:
+      {/* Found a bug: reports now have their own page at /feedback (the same
+          one the review prompt's "Not really" routes to), so a bug report and
+          a support question stop sharing a form. Still no credit offer here:
           Hearth has no homeowner wallet or credit to pay one out (that's a
           pro-side thing), so promising one would be a bug of its own. */}
       <div className="card">
@@ -118,12 +118,12 @@ export default async function HelpPage(props: {
         <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
           Tell us about it. We read every report and fix what we can.
         </p>
-        <a
-          href="#support-form"
+        <Link
+          href="/feedback"
           className="mt-3 inline-block text-sm font-medium text-bark-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-300"
         >
           Report a bug
-        </a>
+        </Link>
       </div>
 
       {/* Safety. Separate from the bug card above on purpose: someone being

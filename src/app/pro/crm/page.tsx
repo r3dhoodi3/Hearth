@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { variantForUser } from "@/lib/paywallExperiment";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 // The whole body is one client component. That is a streaming fix, not a
 // behaviour change: as server markup the stage tiles, the client cards, the
@@ -192,7 +193,14 @@ export default async function ProCrmPage(
         displayCount={displayClients.length}
         groups={groups}
         member={member}
-        hasProSubscriptionRow={Boolean(proSub)}
+        // "A row exists" is what makes CrmView drop the trial wording, and the
+        // paywall experiment's "hard" arm must read the same way: no trial is
+        // on offer for that account, so the teaser's CTA takes the plain
+        // "See Hearth Pro" branch (src/lib/paywallExperiment.ts).
+        hasProSubscriptionRow={
+          Boolean(proSub) ||
+          variantForUser(contractor.user_id ?? null) === "hard"
+        }
       />
     </div>
   );

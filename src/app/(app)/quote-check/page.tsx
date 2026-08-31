@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getVerifiedUser } from "@/lib/auth";
 import { hasPlus } from "@/lib/subscription";
+import { variantForUser } from "@/lib/paywallExperiment";
 import QuoteAnalyzer from "@/components/QuoteAnalyzer";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
@@ -17,6 +18,11 @@ export default async function QuoteCheckPage() {
   const plus = await hasPlus();
 
   let freeTaste = false;
+  // Whether the post-result upsell inside QuoteAnalyzer may mention the free
+  // days: false on the paywall experiment's "hard" arm, whose checkout charges
+  // from day one (src/lib/paywallExperiment.ts). Only ever read alongside
+  // freeTaste, so a Plus member's value here is irrelevant.
+  let plusTrialCopy = true;
   if (!plus) {
     const supabase = await createClient();
     // getVerifiedUser(): the same live auth-server check, shared through
@@ -24,6 +30,7 @@ export default async function QuoteCheckPage() {
     // opening a second round trip for this one row.
     const user = await getVerifiedUser();
     if (user) {
+      plusTrialCopy = variantForUser(user.id) === "soft";
       const { data: row, error } = await supabase
         .from("users")
         .select("free_quote_used_at")
@@ -63,7 +70,7 @@ export default async function QuoteCheckPage() {
         </div>
       )}
 
-      <QuoteAnalyzer freeTaste={freeTaste} />
+      <QuoteAnalyzer freeTaste={freeTaste} plusTrialCopy={plusTrialCopy} />
     </div>
   );
 }

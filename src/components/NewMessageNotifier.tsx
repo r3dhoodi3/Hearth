@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getSupabase } from "@/lib/lazySupabase";
+import { myLeadIdsForRole } from "@/lib/sideLeads";
 import { plainPreview } from "@/lib/previewText";
 import { leadContractorEmbed } from "@/lib/leadJoin";
 import PushRegistrar from "@/components/PushRegistrar";
@@ -12,9 +13,25 @@ import { markPushMoment } from "@/lib/pushPrompt";
 
 type Toast = { id: string; name: string; body: string; href: string };
 
+// Each poll scopes `messages` with `.in("lead_id", ...)`, so the id list is
+// capped the same way UnreadProvider caps its realtime filter
+// (REALTIME_LEAD_CAP, same rationale): the newest 60 conversations stay
+// covered, and no account in the app is anywhere near that many open ones.
+const LEAD_SCOPE_CAP = 60;
+
 // Mounted once per shell. Polls for incoming messages (from the other party)
-// across all your conversations and shows a bottom-right popup, anywhere in the
-// app. Only notifies about messages that arrive after the page loads.
+// across THIS side's conversations and shows a bottom-right popup, anywhere in
+// the app. Only notifies about messages that arrive after the page loads.
+//
+// Scoping: every poll resolves the side's own lead ids through the shared
+// myLeadIdsForRole helper (src/lib/sideLeads.ts) and adds
+// `.in("lead_id", ...)` to the messages query. Relying on RLS plus
+// `.neq("sender_role", role)` alone was the reported fake-toast bug: a
+// dual-role (homeowner + pro) account can read messages on BOTH sides' leads,
+// so its own outgoing business messages toasted as "Your pro" on the
+// homeowner side, and incoming homeowner-side messages toasted on the pro
+// side with wrong links - the same failure class the unread badge already
+// fixed in UnreadProvider, now funneled through the one helper.
 //
 // It also carries the two Web Push mounts (PushRegistrar, PushPrompt) and the
 // Web Vitals reporter (WebVitals), because it is the one component both
@@ -31,6 +48,9 @@ export default function NewMessageNotifier({
   const [toasts, setToasts] = useState<Toast[]>([]);
   const sinceRef = useRef<string>(new Date().toISOString());
   const seenIds = useRef<Set<string>>(new Set());
+  // Handed to myLeadIdsForRole every poll so a contractor-side account
+  // resolves auth.getUser() once per mount instead of every 45 seconds.
+  const cachedUid = useRef<{ uid: string | null }>({ uid: null });
 
   function dismiss(id: string) {
     setToasts((t) => t.filter((x) => x.id !== id));
@@ -41,17 +61,28 @@ export default function NewMessageNotifier({
 
     async function poll() {
       if (typeof document !== "undefined" && document.hidden) return;
-      // RLS limits this to messages on the user's own conversations. Kept simple
-      // (no joins) so a relationship hiccup can't silently break notifications.
       // supabase-js is fetched here, not at import time, so it stays out of
       // this route's First Load JS (see src/lib/lazySupabase.ts).
       const supabase = await getSupabase();
+      // Re-resolved on every poll rather than cached longer: the lookups are
+      // cheap, RLS-scoped queries, and refreshing each tick means a brand-new
+      // conversation starts toasting within one 45s cycle, no reload needed.
+      const leadIds = (
+        await myLeadIdsForRole(supabase, role, cachedUid.current)
+      ).slice(0, LEAD_SCOPE_CAP);
+      // No conversations on this side means nothing can toast, so the
+      // messages query is skipped outright.
+      if (!active || leadIds.length === 0) return;
+      // Kept simple (no joins) so a relationship hiccup can't silently break
+      // notifications. The lead_id scoping below, not RLS, is what keeps a
+      // dual-role account's other side out (see the header comment).
       const { data } = await supabase
         .from("messages")
         .select("id, lead_id, sender_role, body, created_at")
         .gt("created_at", sinceRef.current)
         .neq("sender_role", role)
         .neq("sender_role", "system")
+        .in("lead_id", leadIds)
         .order("created_at", { ascending: false })
         .limit(5);
 

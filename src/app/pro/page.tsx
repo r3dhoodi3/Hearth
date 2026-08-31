@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
 import { isMajorCategory } from "@/lib/constants";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { variantForUser } from "@/lib/paywallExperiment";
 import { getOpenJobsForMe } from "@/lib/greeting";
 import {
   walletQueryPlan,
@@ -16,6 +17,7 @@ import {
   greetingForHour,
   homeSubtitle,
 } from "@/lib/proHome";
+import { hasCurrentInsurance } from "@/lib/insuranceGate";
 import { countAwaitingReply } from "@/lib/proHomeServer";
 import { buildProStats } from "@/lib/proStats";
 import { readFeedbackState, grantFeedbackCredit } from "@/lib/proFeedbackServer";
@@ -165,6 +167,13 @@ export default async function ProHome() {
     (a) => Number(a.fee_cents ?? 0) > 0 && isMajorCategory(a.category)
   );
 
+  // Big-job insurance gate (0153), same read the Leads board makes: whether
+  // this pro has a current certificate of insurance on file, for the
+  // direct-request preview cards below.
+  const insuranceCurrent = hasCurrentInsurance(
+    ((contractor as any).insurance_expires as string | null) ?? null
+  );
+
   // The setup checklist, identical to the one on the board (both call
   // buildSetupItems). It hides itself once every step is done.
   const canUploadLogo = Boolean((contractor as any).logo_url) ? true : member;
@@ -205,7 +214,13 @@ export default async function ProHome() {
   // never offered free days they will not get. Only looked up when the nudge
   // will actually render.
   const showNudge = !member && established;
-  const nudgeTrialEligible = showNudge ? !(await getProSubscription()) : false;
+  // The paywall experiment: a "hard"-variant account never leads with the
+  // trial anywhere, so the nudge's CTA takes proCtaLabel's plain membership
+  // branch, exactly like a pro whose trial is already spent.
+  const nudgeTrialEligible = showNudge
+    ? !(await getProSubscription()) &&
+      variantForUser(contractor.user_id ?? null) === "soft"
+    : false;
 
   const firstName = (contractor as any).owner_name
     ? String((contractor as any).owner_name).trim().split(/\s+/)[0]
@@ -238,6 +253,7 @@ export default async function ProHome() {
       showSeeAll={directRequests.length > DIRECT_PREVIEW}
       balance={balance}
       hasPaidMajor={hasPaidMajor}
+      insuranceCurrent={insuranceCurrent}
       openCount={open.length}
       activeCount={activeCount}
       appliedCount={appliedCount}

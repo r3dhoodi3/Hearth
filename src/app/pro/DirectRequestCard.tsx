@@ -21,6 +21,7 @@ import {
   JOB_CATEGORIES,
   TIMING_OPTIONS,
   BUDGET_RANGES,
+  isMajorCategory,
 } from "@/lib/constants";
 import JobPhotoStrip from "./JobPhotoStrip";
 import DirectRequestActions from "./DirectRequestActions";
@@ -44,6 +45,7 @@ export default function DirectRequestCard({
   d,
   balance,
   hasPaidMajor,
+  hasCurrentInsurance = true,
   postedAgoLabel,
 }: {
   // The row my_direct_requests hands back: masked, contact-free fields plus a
@@ -55,6 +57,11 @@ export default function DirectRequestCard({
   // Has this pro ever paid for a big-ticket lead? Decides whether the one-time
   // intro price applies. Computed once per page from my_applications.
   hasPaidMajor: boolean;
+  // Whether this pro has current insurance on file (big-job gate, migration
+  // 0153). Defaults to true so a call site that has not been wired yet shows
+  // the unlock button and the server-side gate still refuses - never the
+  // other way around (a wrongly hidden button on a covered pro).
+  hasCurrentInsurance?: boolean;
   // postedAgo(d.created_at), resolved on the server. Null when there is no
   // usable created_at, exactly as the helper returns.
   postedAgoLabel: string | null;
@@ -234,6 +241,10 @@ export default function DirectRequestCard({
         leadId={d.id}
         fee={feeStr}
         feeCents={Math.round(fee * 100)}
+        // Big-job insurance gate (0153): a major-tier request cannot be
+        // unlocked without current insurance on file, so the actions row
+        // swaps the pay button for the requirement (Pass stays available).
+        insuranceRequired={isMajorCategory(d.category ?? "") && !hasCurrentInsurance}
         canAfford={balance >= fee}
         billingHref={`/pro/billing?need=${Math.max(0, fee - balance).toFixed(
           2

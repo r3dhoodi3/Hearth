@@ -130,7 +130,13 @@ describe("pro shell mounts the trial takeover exactly once", () => {
       "const trialEligible = !member && !proSub;"
     );
     expect(layoutCode).toContain(
-      "<ProTrialNudge eligible={trialEligible} userId={contractor.user_id ?? null} />"
+      "<ProTrialNudge eligible={trialEligible} userId={contractor.user_id ?? null} variant={paywallVariant} />"
+    );
+    // The paywall experiment's arm is decided here, server-side, from the same
+    // verified account id, and only ever changes the takeover's COPY - the
+    // eligibility line above stays the sole gate on who sees it at all.
+    expect(layoutCode).toContain(
+      "const paywallVariant = variantForUser(contractor.user_id ?? null);"
     );
   });
 

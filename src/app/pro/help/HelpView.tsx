@@ -39,7 +39,7 @@ import Link from "next/link";
 import { LEAD_TIER_FEES, MAJOR_INTRO_FEE, PRO_LEAD_DISCOUNT_PCT } from "@/lib/constants";
 import ProSupportForm from "./ProSupportForm";
 import ShowAppGuideButton from "@/components/ShowAppGuideButton";
-import { FEEDBACK_CARD_TITLE } from "@/lib/proFeedback";
+import { FEEDBACK_CARD_TITLE, FEEDBACK_REPEAT_NOTE } from "@/lib/proFeedback";
 import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 import {
   GHOST_PROTECTION_GUARANTEE,
@@ -205,23 +205,10 @@ export default function HelpView({
         </ul>
       </div>
 
-      {/* Bug bounty, small and honest. Reports go through the support form on
-          this page, same inbox as everything else - not a mailto link, which
-          dumped people into whatever desktop mail app the OS picked. */}
-      <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-stone-800">
-        <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
-          Found a bug?
-        </h2>
-        <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-          Tell us about it and get up to $15 in Hearth credit.
-        </p>
-        <a
-          href="#support-form"
-          className="mt-3 inline-block text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
-        >
-          Report a bug
-        </a>
-      </div>
+      {/* Bug reports have their own page now (/pro/feedback), where the
+          first report earns the $5 and the up-to-$15 discretionary thank-you
+          is stated honestly. The card lower on this page is the one link to
+          it, so this spot no longer carries a second copy of the offer. */}
 
       {/* Safety. Separate from the bug card above on purpose: someone being
           harassed should not have to work out whether that counts as a bug.
@@ -251,24 +238,24 @@ export default function HelpView({
         </div>
       </div>
 
-      {/* "Tell us what you think, get $5 in lead credit." A private product
-          feedback form, never a rating or a store review (see
-          src/lib/proFeedback.ts). The row disappears once this business has
-          claimed the credit, so a pro who already sent one is not asked again
-          from here. */}
-      {!feedbackClaimed && (
-        <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-stone-800">
-          <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
-            {FEEDBACK_CARD_TITLE}
-          </h2>
-          <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-            It takes about a minute: a score from 1 to 5 and a few words. We read every message.
-          </p>
-          <Link href="/pro/feedback" className="btn-secondary mt-3 inline-block">
-            Tell us
-          </Link>
-        </div>
-      )}
+      {/* "Report a bug, get $5 in lead credit." A private bug-report and
+          product-feedback page, never a rating or a store review (see
+          src/lib/proFeedback.ts). The card stays after the credit is claimed,
+          because reports are welcome forever: only the headline changes, so a
+          pro who already collected the $5 is never promised it twice. */}
+      <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-stone-800">
+        <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
+          {feedbackClaimed ? "Found a bug?" : FEEDBACK_CARD_TITLE}
+        </h2>
+        <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
+          {feedbackClaimed
+            ? FEEDBACK_REPEAT_NOTE
+            : "It takes about a minute: a score from 1 to 5 and a few words. We read every message."}
+        </p>
+        <Link href="/pro/feedback" className="btn-secondary mt-3 inline-block">
+          Report a bug
+        </Link>
+      </div>
 
       {/* The four-card guide from your first sign-in, on demand. Reopens it in
           place (a window event, no navigation) - see

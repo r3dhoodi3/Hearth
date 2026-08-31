@@ -140,8 +140,11 @@ describe("checkout wiring", () => {
 
   it("the Plus checkout gates its trial on the fail-closed predicate", () => {
     expect(plus).toContain("isPlusTrialEligible");
+    // The paywall experiment's variant is one more AND in the same expression
+    // (src/lib/paywallExperiment.ts): "hard" is one more reason the trial does
+    // not apply, and the fail-closed predicate and risk gate stay in place.
     expect(plus).toContain(
-      "trialApplies(plan, (await isPlusTrialEligible()) && risk.allowTrial)"
+      'trialApplies(plan, (await isPlusTrialEligible()) && risk.allowTrial && paywallVariant === "soft")'
     );
     // The signal it replaced must not survive alongside it.
     expect(plus).not.toContain("!existing && risk.allowTrial");

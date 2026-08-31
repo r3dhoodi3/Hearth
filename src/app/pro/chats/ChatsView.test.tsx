@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // Same rationale as ProNav.test.tsx: stub the client subsystems that have
 // nothing to do with the branch under test. LeadChat in particular opens a
-// realtime subscription and AskHearthRow reads localStorage.
-vi.mock("@/components/AskHearthRow", () => ({ default: () => <li /> }));
+// realtime subscription and AskHearthRow reads localStorage. The stub keeps
+// its visible name so the tab tests can assert the pinned row never leaves.
+vi.mock("@/components/AskHearthRow", () => ({
+  default: () => <li>Ask Hearth</li>,
+}));
 vi.mock("@/components/LeadChat", () => ({ default: () => <div /> }));
 vi.mock("@/components/PhoneChatFrame", () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -14,12 +17,33 @@ vi.mock("@/components/PhoneChatFrame", () => ({
 
 import ChatsView, {
   type ApplicationRow,
+  type ChatRow,
   type SelectedApplication,
 } from "./ChatsView";
 
 afterEach(() => {
   cleanup();
 });
+
+const activeRow: ChatRow = {
+  id: "lead-active",
+  title: "Dana Homeowner",
+  categoryLabel: "Plumbing",
+  preview: "You: On my way",
+  unread: false,
+  active: false,
+  terminal: false,
+};
+
+const closedRow: ChatRow = {
+  id: "lead-closed",
+  title: "Sam Finished",
+  categoryLabel: "Roofing",
+  preview: "Thanks again!",
+  unread: false,
+  active: false,
+  terminal: true,
+};
 
 const appRow: ApplicationRow = {
   id: "app-1",
@@ -39,6 +63,89 @@ const selectedApplication: SelectedApplication = {
   noteLine:
     "If the homeowner never responds within 7 days, you always get the fee back as credit, every time, no limit.",
 };
+
+// The Active / Closed tabs over the conversation list. Classification happens
+// on the server (ChatRow.terminal, from the shared isTerminalLeadStatus); the
+// component only has to put each row under the right tab and keep the pinned
+// rows out of the filter entirely.
+describe("pro Messages: Active / Closed tabs", () => {
+  function renderTabs(extra: Partial<Parameters<typeof ChatsView>[0]> = {}) {
+    return render(
+      <ChatsView
+        rows={[activeRow, closedRow]}
+        applicationRows={[]}
+        askUserId={null}
+        threadOpenOnMobile={false}
+        selected={null}
+        {...extra}
+      />
+    );
+  }
+
+  it("defaults to Active: ongoing rows show, finished ones do not", () => {
+    renderTabs();
+    expect(screen.getByText("Dana Homeowner")).toBeInTheDocument();
+    expect(screen.queryByText("Sam Finished")).toBeNull();
+    expect(screen.getByRole("button", { name: /Active/ })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  it("shows the finished conversation under Closed, and only there", () => {
+    renderTabs();
+    fireEvent.click(screen.getByRole("button", { name: /Closed/ }));
+    expect(screen.getByText("Sam Finished")).toBeInTheDocument();
+    expect(screen.queryByText("Dana Homeowner")).toBeNull();
+  });
+
+  it("keeps the pinned Ask Hearth and Find clients rows on both tabs", () => {
+    renderTabs();
+    expect(screen.getByText("Ask Hearth")).toBeInTheDocument();
+    expect(screen.getByText("Find clients")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Closed/ }));
+    expect(screen.getByText("Ask Hearth")).toBeInTheDocument();
+    expect(screen.getByText("Find clients")).toBeInTheDocument();
+  });
+
+  it("counts each tab off the rows it was handed", () => {
+    renderTabs();
+    expect(screen.getByRole("button", { name: "Active (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Closed (1)" })).toBeInTheDocument();
+  });
+
+  it("shows each tab's empty state in plain words", () => {
+    render(
+      <ChatsView
+        rows={[]}
+        applicationRows={[]}
+        askUserId={null}
+        threadOpenOnMobile={false}
+        selected={null}
+      />
+    );
+    expect(
+      screen.getByText(/No open conversations yet\. Find clients to start one/)
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Closed/ }));
+    expect(
+      screen.getByText("Nothing here yet. Finished conversations land here.")
+    ).toBeInTheDocument();
+  });
+
+  it("starts on Closed when the open thread is a finished one", () => {
+    renderTabs({ initialTab: "closed" });
+    expect(screen.getByText("Sam Finished")).toBeInTheDocument();
+    expect(screen.queryByText("Dana Homeowner")).toBeNull();
+  });
+
+  it("keeps the waiting applications on the Active tab only", () => {
+    renderTabs({ applicationRows: [appRow] });
+    expect(screen.getByText("Waiting on the homeowner")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Closed/ }));
+    expect(screen.queryByText("Waiting on the homeowner")).toBeNull();
+  });
+});
 
 describe("pro Messages: applications waiting on the homeowner", () => {
   it("lists them in their own section under the conversations", () => {

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentContractor } from "@/lib/contractor";
 import { getUser } from "@/lib/auth";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
+import { variantForUser } from "@/lib/paywallExperiment";
 import { readFeedbackState } from "@/lib/proFeedbackServer";
 // The body is one client component. That is a streaming fix, not a behaviour
 // change: as server markup this page's Flight row carried four deferrals past
@@ -25,10 +26,16 @@ export default async function ProHelpPage(props: {
   // Trial-first wording only for a pro who will really get the trial: the
   // pro-side subscriptions row outlives a cancellation, so a lapsed member
   // sees the plain membership line. Request-cached, same rows hasProPlan read.
-  const trialEligible = !member && !(await getProSubscription());
-  // The feedback-credit row hides itself once the credit has been claimed.
-  // Two indexed reads; fails soft to "not claimed", which only ever means the
-  // row stays on offer and the grant refuses a second time.
+  // The paywall experiment's "hard" arm takes the same trial-less copy branch
+  // (src/lib/paywallExperiment.ts).
+  const trialEligible =
+    !member &&
+    !(await getProSubscription()) &&
+    variantForUser(contractor.user_id ?? null) === "soft";
+  // Whether the one-time $5 has been collected: the bug-report card swaps its
+  // headline once it has, so the credit is never offered twice. Two indexed
+  // reads; fails soft to "not claimed", which only ever means the offer copy
+  // shows again and the grant itself refuses a second time.
   const { claimed: feedbackClaimed } = await readFeedbackState(
     contractor.id,
     contractor.user_id ?? ""

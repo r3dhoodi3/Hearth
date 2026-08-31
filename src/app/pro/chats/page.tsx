@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { isUnreadSince } from "@/lib/unread";
+import { isTerminalLeadStatus } from "../leadStatusLabel";
 import { plainPreview } from "@/lib/previewText";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import {
@@ -70,11 +71,13 @@ export default async function ProChatsPage(props: {
   //                       subtitle and jobTitle
   //   property_address  - appended to LeadChat's subtitle
   //   created_at        - the sort fallback for a thread with no messages yet
+  //   status            - the Active / Closed tab split, classified by the
+  //                       shared isTerminalLeadStatus (../leadStatusLabel.ts)
   // contractor_id is deliberately absent: it is only a filter, applied
   // server-side by PostgREST, and is never read off the row.
   const { data: leads } = await supabase
     .from("contractor_leads")
-    .select("id, homeowner_name, category, property_address, created_at")
+    .select("id, homeowner_name, category, property_address, status, created_at")
     .eq("contractor_id", contractor.id)
     .order("created_at", { ascending: false })
     // Bounded like every other list read: the newest 500 threads. Nobody
@@ -190,6 +193,10 @@ export default async function ProChatsPage(props: {
       preview,
       unread: isUnread(l.id),
       active: selected?.id === l.id,
+      // The Active / Closed tab split, from the shared closed/lost set in
+      // ../leadStatusLabel.ts so this page, JobStatusSelect and LeadsBoard
+      // all mean the same thing by "finished".
+      terminal: isTerminalLeadStatus(l.status),
     };
   });
 
@@ -298,6 +305,13 @@ export default async function ProChatsPage(props: {
           ChatsView.tsx. */}
       <ChatsView
         rows={rows}
+        // Deep-linking into a finished conversation starts the list on the
+        // Closed tab so the open thread stays visible and highlighted.
+        initialTab={
+          selected && isTerminalLeadStatus(selected.status)
+            ? "closed"
+            : "active"
+        }
         applicationRows={applicationRows}
         selectedApplication={selectedApplication}
         askUserId={contractor.user_id ?? null}

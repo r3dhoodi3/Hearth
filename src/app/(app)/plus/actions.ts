@@ -37,6 +37,7 @@ import { setFlash } from "@/lib/flash";
 import { trialDecision, RISK_BLOCK_MESSAGE } from "@/lib/risk/decision";
 import { recordRequestSignals } from "@/lib/risk/signals";
 import { trackServerEvent } from "@/lib/trackServer";
+import { variantForUser } from "@/lib/paywallExperiment";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -276,7 +277,17 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // they consent to say exactly that - billingTerms() takes the "charged today"
   // branch, so nothing on screen or in the record promises free days that are
   // not coming. /plus's own copy is gated on the same decision (page.tsx).
-  const wantsTrial = trialApplies(plan, (await isPlusTrialEligible()) && risk.allowTrial);
+  //
+  // The paywall experiment (src/lib/paywallExperiment.ts) is one more AND in
+  // the same place, enforced HERE on the server and not just in the copy: a
+  // "hard"-variant account gets no trial even from a hand-crafted request,
+  // because the variant is a pure hash of the verified user id and this line
+  // is what feeds the Stripe trial. Eligibility, risk, and the reservation
+  // flow below are untouched; "hard" is simply one more reason the trial does
+  // not apply. /plus gates its copy on the same variant, so screen and charge
+  // agree.
+  const paywallVariant = variantForUser(user.id);
+  const wantsTrial = trialApplies(plan, (await isPlusTrialEligible()) && risk.allowTrial && paywallVariant === "soft");
 
   // ONE TRIAL PER ACCOUNT, ENFORCED SYNCHRONOUSLY, HERE.
   //
@@ -526,8 +537,13 @@ export async function startPlusCheckoutAction(formData: FormData) {
 
   // Funnel analytics (docs/ANALYTICS.md), right before handing off to Stripe:
   // the session exists at this point, so this only fires for a checkout that
-  // actually reached Stripe, not one refused by an earlier guard above.
-  await trackServerEvent(user.id, "checkout_started", { plan });
+  // actually reached Stripe, not one refused by an earlier guard above. The
+  // paywall-experiment variant rides along so soft and hard conversion can be
+  // compared later.
+  await trackServerEvent(user.id, "checkout_started", {
+    plan,
+    variant: paywallVariant,
+  });
 
   if (session.url) redirect(session.url);
   redirect("/plus");

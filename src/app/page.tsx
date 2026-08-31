@@ -362,7 +362,8 @@ export default async function Home(props: {
       <div className="bg-hearth-50 dark:bg-stone-900">
         <div className="mx-auto max-w-5xl px-6 pt-6">
           {/* PHONE ONLY (sm:hidden, see PhoneLanding.tsx). Below `sm` this
-              block IS the landing page: wordmark, one line, two buttons.
+              block IS the landing page: wordmark, one line, two role doors
+              (homeowner/contractor), a quiet sign-in, three benefit lines.
               Everything below it in this file carries `max-sm:hidden` so the
               marketing page stays exactly as it was from `sm` up and is only
               ever hidden on phones, never deleted. Someone on a phone
@@ -792,11 +793,11 @@ export default async function Home(props: {
         </p>
       </footer>
 
-      {/* PHONE ONLY footer. Two links, not four: "I'm a contractor" and
-          "Emergency help" already sit in PhoneLanding a few hundred pixels
-          up this same short screen, and repeating them down here would read
-          as a mistake rather than a footer. Terms has no other phone door,
-          so it gets one. */}
+      {/* PHONE ONLY footer. Two links, not four: "I'm a contractor" (now a
+          full-width door button) and "Emergency help" already sit in
+          PhoneLanding a few hundred pixels up this same short screen, and
+          repeating them down here would read as a mistake rather than a
+          footer. Terms has no other phone door, so it gets one. */}
       <footer className="mt-16 flex items-center justify-center gap-5 text-sm text-stone-500 sm:hidden dark:text-stone-400">
         {/* min-h-11 with the text left small: py-1 alone gave these a 24px
             target. This whole footer is sm:hidden, so nothing here reaches

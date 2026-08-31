@@ -305,8 +305,10 @@ export default async function ContractorsPage(
   const appsByLead = new Map<string, any[]>();
   // The issue behind each job, if any (a lead posted straight from Issues
   // carries issue_id; one typed with no issue link has none). Feeds
-  // firstPhotoByLead below - RB wave, CR4#2: the post-review share prompt
-  // also offers a before/after photo when the job had one attached.
+  // firstPhotoByLead below - RB wave, CR4#2. ReviewButton currently accepts
+  // and ignores the photo (its "Share your pro" panel was removed 2026-08-30,
+  // owner ask: one post-review surface only), but the plumbing stays so a
+  // future share surface can offer the before/after photo again.
   const issueIds = Array.from(
     new Set(
       jobLeads.map((l) => l.issue_id).filter((id): id is string => Boolean(id))
@@ -382,7 +384,7 @@ export default async function ContractorsPage(
   // The homeowner's own invite link, fetched (and lazily generated) only
   // when it will actually be used: at least one job on this page has been
   // marked done. See PostJobDoneReferralAsk.tsx for why this is a separate,
-  // once-per-account prompt from the review flow's own share panels.
+  // once-per-account prompt from the review flow's own invite modal.
   const postJobReferralCode = closedIds.size > 0 ? await getOrCreateReferralCode() : null;
 
   // Which job card gets the full "Your job is live..." explainer, and which
@@ -953,7 +955,7 @@ export default async function ContractorsPage(
                           ReviewButton in place when the post-submit
                           revalidation flips this row from "no review" to
                           "reviewed": a shape change here would remount it and
-                          wipe the just-shown "Share your pro" card. */}
+                          wipe the just-shown "Invite a neighbor" modal. */}
                       {closedIds.has(l.id) && (
                         <div
                           className={
@@ -1261,7 +1263,7 @@ export default async function ContractorsPage(
       )}
 
       {/* MR3#12 / CR4#7: the referral ask for the moment a job actually got
-          done, separate from ReviewButton's own post-rating share panels.
+          done, separate from ReviewButton's own post-rating invite modal.
           One card for the whole page, not one per closed job - see
           postJobReferralCode above for why it's only fetched when needed. */}
       <PostJobDoneReferralAsk code={postJobReferralCode} />

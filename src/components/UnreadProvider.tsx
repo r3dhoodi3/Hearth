@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { getSupabase } from "@/lib/lazySupabase";
+import { myLeadIdsForRole } from "@/lib/sideLeads";
 
 // The browser client's type, taken from the lazy loader rather than imported
 // from supabase-js, so this module keeps no runtime dependency on it.
@@ -92,66 +93,21 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
     if (!enabled) return;
     let active = true;
     // Cached across polls in this mount so a dual-role (homeowner + pro)
-    // account isn't re-resolving auth.getUser() on every 2-minute tick.
-    let uid: string | null = null;
+    // account isn't re-resolving auth.getUser() on every 2-minute tick. The
+    // shared helper fills it on first use and reads it after that.
+    const cachedUid = { uid: null as string | null };
 
-    // The lead ids that belong to THIS side of the account. `messages` RLS
-    // (can_access_lead in 0007_messages.sql) lets a dual-role account read
-    // rows on BOTH its home's leads and its business's leads, so querying
-    // "messages" by sender_role alone - with no lead_id scoping - picked up
-    // the user's own OUTGOING business messages (sender_role: "contractor")
-    // as "unread" on their HOMEOWNER nav badge, and vice versa on the pro
-    // side. Those lead ids never get a "seen" cookie entry from the other
-    // side's /chats page, so they counted as unread permanently: a real,
-    // reported fake-notification bug for any account with both sides.
-    // Takes the client rather than closing over one: supabase-js is fetched on
-    // demand now (src/lib/lazySupabase.ts), so the caller awaits it once per
-    // poll and hands it down.
-    async function myLeadIds(supabase: Browser): Promise<string[]> {
-      if (role === "homeowner") {
-        // RLS-scoped to household membership (see chats/page.tsx's identical
-        // note), so this is already exactly the user's own-home universe.
-        const { data: props } = await supabase.from("properties").select("id");
-        const propertyIds = (props ?? []).map((p: { id: string }) => p.id);
-        if (!propertyIds.length) return [];
-        // Newest first so the realtime cap below keeps the conversations most
-        // likely to receive the next message.
-        const { data: leads } = await supabase
-          .from("contractor_leads")
-          .select("id")
-          .in("property_id", propertyIds)
-          .order("created_at", { ascending: false });
-        return (leads ?? []).map((l: { id: string }) => l.id);
-      }
-      // contractor: "contractors" RLS also allows reading OTHER contractors'
-      // rows (any contractor related to a lead on a property you own - see
-      // contractor_related_to_me() in 0069_contractors_rls_hardening.sql),
-      // so it must be filtered to this user's own row by user_id explicitly
-      // rather than relied on to self-scope.
-      if (!uid) {
-        const { data } = await supabase.auth.getUser();
-        uid = data.user?.id ?? null;
-      }
-      if (!uid) return [];
-      const { data: mine } = await supabase
-        .from("contractors")
-        .select("id")
-        .eq("user_id", uid)
-        .maybeSingle();
-      if (!mine) return [];
-      const { data: leads } = await supabase
-        .from("contractor_leads")
-        .select("id")
-        .eq("contractor_id", mine.id)
-        .order("created_at", { ascending: false });
-      return (leads ?? []).map((l: { id: string }) => l.id);
-    }
+    // The lead ids that belong to THIS side of the account come from the
+    // shared myLeadIdsForRole helper (src/lib/sideLeads.ts), which carries the
+    // full story of WHY sender_role alone is not a scope for a dual-role
+    // account. NewMessageNotifier's toast poller uses the same helper, so the
+    // badge and the toast cannot drift apart again.
 
     async function poll() {
       if (typeof document !== "undefined" && document.hidden) return;
       const cookieName = SEEN_COOKIE[role];
       const supabase = await getSupabase();
-      const leadIds = await myLeadIds(supabase);
+      const leadIds = await myLeadIdsForRole(supabase, role, cachedUid);
       // Hand the current lead set to the subscription effect. A lead created
       // after mount lands here on the next poll (or focus, or chat-seen) and
       // the channel re-subscribes with it included, so a brand new

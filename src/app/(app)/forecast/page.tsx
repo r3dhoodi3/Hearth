@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
+import { variantForUser } from "@/lib/paywallExperiment";
 import { buildForecast, stateName, type ForecastItem } from "@/lib/forecast";
 import {
   estimateSeasonalEnergyCost,
@@ -43,17 +44,35 @@ import QuoteEarlyLink from "./QuoteEarlyLink";
 import IncentiveViewTracker from "./IncentiveViewTracker";
 import { addForecastStepAction, saveRepairReserveAction } from "./actions";
 import SubmitButton from "@/components/SubmitButton";
-import { Lock } from "lucide-react";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString()}`;
 }
 
-// Free users see the real 10-year total and their soonest system or two; the
-// rest of the per-system amounts are masked (not blurred fake data) so the
-// number stays honest while the detail is what Plus unlocks.
-const MASKED_AMOUNT = "$•,•••";
+// Free users see the real 10-year total and set-aside up top, then the whole
+// breakdown rendered blurred underneath an unlock card. This page is server
+// rendered, so anything printed under the blur can still be copied out of the
+// DOM with devtools: every figure in the tease is therefore coarsely rounded
+// by bandDollars below, never the exact number. The tease shows the true
+// shape of the plan; the exact figures stay genuinely behind Plus.
+function bandDollars(n: number): number {
+  if (n <= 0) return 0;
+  const step = n >= 10000 ? 5000 : n >= 2000 ? 1000 : n >= 500 ? 500 : 100;
+  return Math.max(step, Math.round(n / step) * step);
+}
+
+// A banded dollar figure always carries the "~" so even a copied-out value
+// announces itself as approximate.
+function moneyBand(n: number): string {
+  return `~${money(bandDollars(n))}`;
+}
+
+// A three-year window instead of the exact replacement year, for the same
+// reason bandDollars exists: the tease shows roughly when, Plus shows when.
+function yearBand(year: number): string {
+  return `${year - 1}-${year + 1}`;
+}
 
 // Compact form for the bar chart labels ($1.2k instead of $1,200) so a decade
 // of bars stays readable on a phone screen.
@@ -75,6 +94,18 @@ function pushItOutLine(action: ForecastAction, item: ForecastItem): string {
   return `Typically ${money(action.costLow)} to ${money(
     action.costHigh
   )}, and it usually pushes a ${money(
+    item.costMid
+  )} ${label} replacement out ${action.yearsGainedLow}-${action.yearsGainedHigh} years.`;
+}
+
+// The blurred-tease twin of pushItOutLine. The step's own typical cost range
+// is curated national data, but the replacement bill it delays is the owner's
+// number, so that part goes through the band.
+function pushItOutTeaseLine(action: ForecastAction, item: ForecastItem): string {
+  const label = labelFor(SYSTEM_TYPES, item.system_type).toLowerCase();
+  return `Typically ${money(action.costLow)} to ${money(
+    action.costHigh
+  )}, and it usually pushes a ${moneyBand(
     item.costMid
   )} ${label} replacement out ${action.yearsGainedLow}-${action.yearsGainedHigh} years.`;
 }
@@ -173,13 +204,26 @@ export default async function ForecastPage() {
     hasPlus(),
     getActiveProperty(),
   ]);
-  // Everyone reaches the forecast now: Plus sees it all, free users get the
-  // real 10-year total plus a peek at the soonest systems, with the rest of
-  // the per-system detail masked behind an honest Plus CTA (see below).
+  // Everyone reaches the forecast now: Plus sees it all, free users keep the
+  // two real headline numbers (the 10-year total and the monthly set-aside)
+  // and see the full breakdown blurred, in banded figures, under an unlock
+  // card (see the !plus branch below). The decision is this server-side
+  // hasPlus() read, the same source every other Plus gate uses.
   if (!propertyOrNull) redirect("/onboarding");
 
   const property = propertyOrNull;
   const supabase = await createClient();
+
+  // Paywall experiment (src/lib/paywallExperiment.ts): the unlock card's
+  // sub-line must not promise the 3-day trial to a hard-variant account,
+  // whose checkout would refuse it. Only the free branch pays for the extra
+  // getUser round trip; members never reach the overlay. A missing id falls
+  // back to "soft", matching the lib's own default.
+  let paywallVariant: "soft" | "hard" = "soft";
+  if (!plus) {
+    const { data: userData } = await supabase.auth.getUser();
+    paywallVariant = variantForUser(userData.user?.id ?? null);
+  }
 
   // Same "open issues" query the Home page runs, so a resolved issue drops
   // out here on the very next load too - no separate flag to keep in sync.
@@ -253,13 +297,6 @@ export default async function ForecastPage() {
         0
       )
     : 0;
-  // The single worked example a free reader gets: their soonest system that has
-  // a curated step. Real data about their own home, not a demo house.
-  const freeExample = forecast
-    ? (forecast.timeline
-        .map((item) => ({ item, action: forecastActionFor(item.system_type) }))
-        .find((x) => x.action != null) ?? null)
-    : null;
 
   // Running-costs section: the season the owner is heading into (fall points
   // at winter, spring at summer), estimated from data already on this page.
@@ -765,117 +802,236 @@ export default async function ForecastPage() {
           )}
 
           {!plus && (
-            <>
-            {/* The shape of the paid feature, on ONE real system of theirs: the
-                step, what it costs, what it delays. Same principle as the
-                two-system timeline peek below - a real taste, never a demo
-                house and never a blurred fake number. */}
-            {freeExample?.action && (
-              <div className="card mt-6 space-y-2" data-testid="free-push-example">
-                <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  Push it out
-                </h2>
-                <p className="text-sm text-stone-500 dark:text-stone-400">
-                  Most of these bills can be delayed for a fraction of what they
-                  cost. Here is the one for your{" "}
-                  {labelFor(SYSTEM_TYPES, freeExample.item.system_type).toLowerCase()}.
-                </p>
-                <div className="rounded-lg bg-stone-50 p-3 dark:bg-stone-700/40">
-                  <p className="text-xs font-medium text-stone-900 dark:text-stone-100">
-                    {freeExample.action.step}
-                  </p>
-                  <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">
-                    {pushItOutLine(freeExample.action, freeExample.item)}
-                  </p>
-                  <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                    {freeExample.action.why}
+            /* The whole breakdown, blurred, with the unlock card floating over
+               it. Both numbers up top stay real and free; everything down here
+               is the true SHAPE of the plan in banded figures (see bandDollars
+               above for why not the exact ones). The overlay is absolutely
+               positioned inside this relative wrapper, so it adds no height
+               and shifts nothing. */
+            <div className="relative mt-6" data-testid="forecast-paywall">
+              {/* aria-hidden keeps screen readers on the unlock card instead
+                 of a wall of teaser numbers; pointer-events-none plus
+                 select-none keeps the tease from being clicked, copied or
+                 selected; nothing inside is a link, button or input, so
+                 nothing here is tabbable either. */}
+              <div
+                data-testid="forecast-tease"
+                aria-hidden="true"
+                className="pointer-events-none select-none space-y-6 blur-sm"
+              >
+                {reserve && (
+                  <div className="card space-y-3">
+                    <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
+                      Your repair reserve
+                    </h2>
+                    <p className="text-sm text-stone-500 dark:text-stone-400">
+                      {reserve.nextBig
+                        ? `Over the next ${RESERVE_HORIZON_YEARS} years your list adds up to about ${moneyBand(
+                            reserve.nextFiveYearTotal
+                          )}. That is ${moneyBand(
+                            reserve.monthlySetAside
+                          )} a month, and the biggest single item is your ${labelFor(
+                            SYSTEM_TYPES,
+                            reserve.nextBig.system_type
+                          ).toLowerCase()} at about ${moneyBand(
+                            reserve.nextBig.futureCost
+                          )} around ${yearBand(reserve.nextBig.replacementYear)}.`
+                        : `Nothing big lands in the next ${RESERVE_HORIZON_YEARS} years, so anything you put away now is a head start on the years after that.`}
+                    </p>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-stone-100 dark:bg-stone-700">
+                      <div className="h-full w-2/5 rounded-full bg-bark-500 dark:bg-bark-600" />
+                    </div>
+                    <p className="text-xs text-stone-500 dark:text-stone-400">
+                      Nothing entered yet.
+                    </p>
+                    {/* Static stand-ins for the reserve form, so the tease has
+                       the member card's shape without a live input or button. */}
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="min-w-[9rem] flex-1">
+                        <p className="label">What you have saved so far</p>
+                        <div className="input text-stone-400 dark:text-stone-500">
+                          4500
+                        </div>
+                      </div>
+                      <span className="btn-secondary max-sm:min-h-11">Save</span>
+                    </div>
+                  </div>
+                )}
+
+                {forecast.startHere.length > 0 && (
+                  <div className="card space-y-3">
+                    <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
+                      Start here
+                    </h2>
+                    <div className="space-y-2">
+                      {forecast.startHere.map(({ item, reason }) => (
+                        <div
+                          key={item.system.id}
+                          className="flex items-start justify-between gap-3 rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-700"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                              {labelFor(SYSTEM_TYPES, item.system_type)}
+                            </p>
+                            <p className="text-xs text-stone-500 dark:text-stone-400">
+                              {reason}
+                            </p>
+                          </div>
+                          <span className="btn-secondary shrink-0 whitespace-nowrap px-3 py-1.5 text-xs">
+                            Get quotes
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {riskItems.length > 0 && (
+                  <div className="card space-y-3">
+                    <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
+                      Line up quotes early
+                    </h2>
+                    <p className="text-sm text-stone-500 dark:text-stone-400">
+                      {EMERGENCY_PREMIUM_COPY} Getting two or three numbers now,
+                      while nothing is broken, is the cheapest hour you will
+                      spend on this house.
+                    </p>
+                    <div className="space-y-2">
+                      {riskItems.map((item) => (
+                        <div
+                          key={item.system.id}
+                          className="rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-stone-700"
+                        >
+                          <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                            {labelFor(SYSTEM_TYPES, item.system_type)}
+                          </p>
+                          <p className="text-xs text-stone-500 dark:text-stone-400">
+                            {riskReason(item)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="card space-y-3">
+                  <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
+                    Expected spend by year
+                  </h2>
+                  <div className="overflow-x-auto pb-1">
+                    <div className="flex items-end gap-2 border-b border-stone-200 dark:border-stone-700">
+                      {forecast.yearlySpend.map((y) => {
+                        const banded = bandDollars(y.amount);
+                        const max = Math.max(
+                          ...forecast.yearlySpend.map((x) => bandDollars(x.amount)),
+                          1
+                        );
+                        const height =
+                          banded > 0
+                            ? Math.max(6, Math.round((banded / max) * 96))
+                            : 3;
+                        return (
+                          <div
+                            key={y.year}
+                            className="flex min-w-[2.5rem] flex-col items-center justify-end gap-1"
+                          >
+                            <span className="text-[10px] font-medium tabular-nums text-stone-500 dark:text-stone-400">
+                              {banded > 0 ? moneyShort(banded) : ""}
+                            </span>
+                            <div
+                              className={`w-7 rounded-t-md ${
+                                banded > 0
+                                  ? banded === max
+                                    ? "bg-bark-600 dark:bg-bark-600"
+                                    : "bg-bark-500 dark:bg-bark-600/60"
+                                  : "bg-stone-100 dark:bg-stone-700"
+                              }`}
+                              style={{ height: `${height}px` }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2">
+                      {forecast.yearlySpend.map((y) => (
+                        <span
+                          key={y.year}
+                          className="min-w-[2.5rem] text-center text-[10px] text-stone-500 dark:text-stone-400"
+                        >
+                          {y.year}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card space-y-3">
+                  <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
+                    {forecast.horizonYears}-year timeline
+                  </h2>
+                  <div className="divide-y divide-stone-100 dark:divide-white/10">
+                    {forecast.timeline.map((item) => {
+                      const action = forecastActionFor(item.system_type);
+                      return (
+                        <div key={item.system.id} className="py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                                {labelFor(SYSTEM_TYPES, item.system_type)}
+                              </p>
+                              <p className="text-xs text-stone-500 dark:text-stone-400">
+                                {item.timingEstimated
+                                  ? "Timing unknown, add an install year for a real estimate"
+                                  : `likely around ${yearBand(item.replacementYear)}`}
+                              </p>
+                            </div>
+                            <p className="whitespace-nowrap text-right text-sm text-stone-600 dark:text-stone-300">
+                              {moneyBand(item.costMid)}
+                            </p>
+                          </div>
+                          {action && (
+                            <div className="mt-2 rounded-lg bg-stone-50 p-3 dark:bg-stone-700/40">
+                              <p className="text-xs font-medium text-stone-900 dark:text-stone-100">
+                                {action.step}
+                              </p>
+                              <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">
+                                {pushItOutTeaseLine(action, item)}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Maintenance steps and the years they buy are typical
+                    figures, last reviewed {ACTIONS_AS_OF}.
                   </p>
                 </div>
-                <p className="text-xs text-stone-500 dark:text-stone-400">
-                  Typical figures, last reviewed {ACTIONS_AS_OF}. Plus adds one
-                  of these for every system on your list, the rebates and
-                  credits worth checking before each replacement, and a reserve
-                  plan that tracks what you have actually saved.
-                </p>
-              </div>
-            )}
-
-            <div className="card mt-6 space-y-3">
-              <h2 className="flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
-                {forecast.horizonYears}-year timeline
-              </h2>
-              <div className="divide-y divide-stone-100 dark:divide-white/10">
-                {/* The soonest system or two are shown in full: a real taste,
-                    not a teaser on fake data. */}
-                {forecast.timeline.slice(0, 2).map((item) => (
-                  <div
-                    key={item.system.id}
-                    className="flex items-center justify-between gap-3 py-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
-                          {labelFor(SYSTEM_TYPES, item.system_type)}
-                        </p>
-                        <p className="text-xs text-stone-500 dark:text-stone-400">
-                          {item.timingEstimated ? (
-                            "Timing unknown, add an install year for a real estimate"
-                          ) : (
-                            <>
-                              {item.yearsLeft <= 0
-                                ? "Due now"
-                                : `~${item.yearsLeft} year${item.yearsLeft === 1 ? "" : "s"} left`}
-                              {" · "}
-                              est. {item.replacementYear}
-                            </>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="whitespace-nowrap text-right text-sm text-stone-600 dark:text-stone-300">
-                      {money(item.costLow)} - {money(item.costHigh)}
-                    </div>
-                  </div>
-                ))}
-
-                {/* Everything past the peek: real system names, real order,
-                    amounts masked rather than faked. */}
-                {forecast.timeline.slice(2).map((item) => (
-                  <div
-                    key={item.system.id}
-                    className="flex items-center justify-between gap-3 py-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
-                          {labelFor(SYSTEM_TYPES, item.system_type)}
-                        </p>
-                        <p className="text-xs text-stone-500 dark:text-stone-500">
-                          Timing and cost with Plus
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 whitespace-nowrap text-right text-sm text-stone-500 dark:text-stone-500">
-                      <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span className="tabular-nums">{MASKED_AMOUNT}</span>
-                    </div>
-                  </div>
-                ))}
               </div>
 
-              <div className="rounded-lg border border-bark-100 bg-bark-50 p-4 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
-                <p className="text-sm text-bark-700 dark:text-stone-300">
-                  That total up top is your real 10-year number.
-                  {forecast.timeline.length > 2
-                    ? " Hearth Plus opens up every system's timing and cost, the step that pushes each one further out, the rebates worth checking, and a reserve plan that tracks what you have saved."
-                    : " Hearth Plus adds the step that pushes each system further out, the rebates worth checking, a reserve plan that tracks what you have saved, and the year-by-year chart of when the money is needed."}
-                </p>
-                <Link href="/plus?reason=forecast" className="btn-primary mt-3 inline-block">
-                  See what Plus shows
-                </Link>
+              {/* The unlock card. Sticky inside the full-height overlay, so it
+                 stays on screen while the blurred plan scrolls past behind it. */}
+              <div className="absolute inset-0 flex justify-center px-4">
+                <div className="sticky top-24 h-fit w-full max-w-sm self-start rounded-xl border border-stone-200 bg-white p-5 text-center shadow-sm dark:border-white/10 dark:bg-stone-800">
+                  <p className="text-sm text-stone-600 dark:text-stone-300">
+                    Your full breakdown is ready: every system, when it is
+                    likely due, and what it should cost.
+                  </p>
+                  <Link
+                    href="/plus?reason=forecast"
+                    className="btn-primary mt-3 inline-flex min-h-11 items-center justify-center px-5"
+                  >
+                    Get Hearth Plus
+                  </Link>
+                  <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+                    {paywallVariant === "soft"
+                      ? "Start weekly with a 3-day free trial, or go monthly at $4.99."
+                      : "Go weekly at $1.99 or monthly at $4.99. Cancel anytime."}
+                  </p>
+                </div>
               </div>
             </div>
-            </>
           )}
         </>
       )}

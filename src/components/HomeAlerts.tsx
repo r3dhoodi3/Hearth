@@ -116,14 +116,18 @@ export default function HomeAlerts({ propertyId }: { propertyId: string }) {
           );
         })}
       </ul>
-      {alerts.length > 3 && !expanded && (
+      {alerts.length > 3 && (
+        // The same control opens and closes the list: tapping "Show N more"
+        // expands, tapping it again ("Show fewer") collapses. It used to
+        // disappear once expanded, leaving no way back to the compact view.
         <button
           type="button"
-          onClick={() => setExpanded(true)}
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
           // Phone only: 16px tall before.
           className="text-xs font-medium text-stone-500 hover:text-stone-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-stone-400 dark:hover:text-stone-300"
         >
-          Show {alerts.length - 3} more
+          {expanded ? "Show fewer" : `Show ${alerts.length - 3} more`}
         </button>
       )}
     </section>

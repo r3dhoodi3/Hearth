@@ -38,6 +38,10 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import OpenChatButton from "@/components/OpenChatButton";
+import {
+  INSURANCE_REQUIRED_MESSAGE,
+  INSURANCE_UPLOAD_HREF,
+} from "@/lib/insuranceGate";
 import ApplyJobButton from "../ApplyJobButton";
 import DirectRequestCard from "../DirectRequestCard";
 import JobStatusSelect from "../JobStatusSelect";
@@ -128,6 +132,10 @@ export type OpenJobVM = {
     activeLeadId: string;
     homeownerName: string;
   } | null;
+  /** True for a major-tier (big-ticket) category, which requires insurance on file (0153). */
+  bigJob: boolean;
+  /** True when this is a big job AND the pro has no current insurance on file, so the apply button is withheld. */
+  insuranceRequired: boolean;
   feeCents: number;
   canAfford: boolean;
   billingHref: string;
@@ -178,6 +186,7 @@ export default function LeadsBoard({
   directRequests,
   balance,
   hasPaidMajor,
+  insuranceCurrent,
   openJobs,
   sort,
   hasApplied,
@@ -191,6 +200,8 @@ export default function LeadsBoard({
   directRequests: DirectRequestItem[];
   balance: number;
   hasPaidMajor: boolean;
+  /** Whether this pro has current insurance on file (0153), for the big-job gate on direct-request cards. */
+  insuranceCurrent: boolean;
   openJobs: OpenJobVM[];
   sort: string;
   /** Whether this pro has ever applied to anything, for the empty state. */
@@ -273,6 +284,7 @@ export default function LeadsBoard({
                 d={d.row}
                 balance={balance}
                 hasPaidMajor={hasPaidMajor}
+                hasCurrentInsurance={insuranceCurrent}
                 postedAgoLabel={d.postedAgoLabel}
               />
             ))}
@@ -682,19 +694,46 @@ export default function LeadsBoard({
                     <p className="rounded-lg border border-stone-200 bg-stone-100 px-3 py-2 text-center text-sm font-medium text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400">
                       Job full
                     </p>
+                  ) : j.insuranceRequired ? (
+                    // Big-job insurance gate (0153): no pay button at all
+                    // when the requirement is not met, so a pro is told
+                    // BEFORE typing a message or confirming a charge. The
+                    // server action and the apply_to_lead RPC both refuse
+                    // this same case, this card just says it first. Same
+                    // card anatomy as the relationship-conflict notice above.
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
+                      <span>{INSURANCE_REQUIRED_MESSAGE}</span>
+                      <Link
+                        href={INSURANCE_UPLOAD_HREF}
+                        className="font-medium underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+                      >
+                        Add insurance
+                      </Link>
+                    </div>
                   ) : (
-                    <ApplyJobButton
-                      leadId={j.id}
-                      fee={j.feeStr}
-                      feeCents={j.feeCents}
-                      category={j.categoryLabel}
-                      introPrice={j.introPrice}
-                      baseFee={j.off > 0 || j.introPrice ? j.baseStr : null}
-                      discountKind={j.discountKind}
-                      memberQuoteStr={j.memberQuoteStr}
-                      canAfford={j.canAfford}
-                      billingHref={j.billingHref}
-                    />
+                    <>
+                      {/* On a big job the requirement is stated even when it
+                          is met, so the rule is never a surprise the first
+                          time a certificate lapses. */}
+                      {j.bigJob && (
+                        <p className="text-xs text-stone-500 dark:text-stone-400">
+                          Big job: proof of insurance required. Yours is on
+                          file.
+                        </p>
+                      )}
+                      <ApplyJobButton
+                        leadId={j.id}
+                        fee={j.feeStr}
+                        feeCents={j.feeCents}
+                        category={j.categoryLabel}
+                        introPrice={j.introPrice}
+                        baseFee={j.off > 0 || j.introPrice ? j.baseStr : null}
+                        discountKind={j.discountKind}
+                        memberQuoteStr={j.memberQuoteStr}
+                        canAfford={j.canAfford}
+                        billingHref={j.billingHref}
+                      />
+                    </>
                   )}
                 </li>
               );

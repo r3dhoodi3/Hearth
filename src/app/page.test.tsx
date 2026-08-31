@@ -65,17 +65,25 @@ async function renderLanding() {
 describe("landing page, phone split", () => {
   it("puts the phone landing first, inside the warm band", async () => {
     const { container } = await renderLanding();
-    const create = screen.getByRole("link", { name: "Create your account" });
-    expect(create).toHaveAttribute("href", "/homeowner-signup");
+    const homeowner = screen.getByRole("link", { name: "I'm a homeowner" });
+    expect(homeowner).toHaveAttribute("href", "/homeowner-signup");
 
     // The block itself is phone-only...
-    const phoneBlock = create.closest("div.sm\\:hidden");
+    const phoneBlock = homeowner.closest("div.sm\\:hidden");
     expect(phoneBlock).not.toBeNull();
 
-    // ...and the second door is inside it. Scoped, because the long desktop
-    // footer has a "Sign in" link of its own.
-    expect(within(phoneBlock as HTMLElement).getByRole("link", { name: "Sign in" }))
-      .toHaveAttribute("href", "/signin");
+    // ...and the contractor door and sign-in link are inside it. Scoped,
+    // because the long desktop footer has a "Sign in" link of its own.
+    expect(
+      within(phoneBlock as HTMLElement).getByRole("link", {
+        name: "I'm a contractor",
+      })
+    ).toHaveAttribute("href", "/contractor-signup");
+    expect(
+      within(phoneBlock as HTMLElement).getByRole("link", {
+        name: /already have an account\? sign in/i,
+      })
+    ).toHaveAttribute("href", "/signin");
 
     // ...and it is the first thing in the page, ahead of the desktop header.
     const header = container.querySelector("header");

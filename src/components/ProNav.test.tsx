@@ -7,6 +7,7 @@ import "@testing-library/jest-dom/vitest";
 // relevant to the "Business" side pill this test covers.
 vi.mock("@/components/NavLinks", () => ({ default: () => <div /> }));
 vi.mock("@/components/ProfileMenu", () => ({ default: () => <div /> }));
+vi.mock("@/components/GlobalSearch", () => ({ default: () => <div /> }));
 vi.mock("@/components/NotificationBell", () => ({ default: () => <div /> }));
 vi.mock("@/components/UnreadProvider", () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,

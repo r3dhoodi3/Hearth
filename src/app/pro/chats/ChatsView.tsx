@@ -35,6 +35,7 @@
 import Link from "next/link";
 import { Briefcase, ChevronRight } from "lucide-react";
 import AskHearthRow from "@/components/AskHearthRow";
+import ChatListTabs, { type ChatListTab } from "@/components/ChatListTabs";
 import PhoneChatFrame from "@/components/PhoneChatFrame";
 import LeadChat from "@/components/LeadChat";
 import { PRO_LEADS_HREF } from "@/lib/constants";
@@ -52,6 +53,9 @@ export type ChatRow = {
   preview: string;
   unread: boolean;
   active: boolean;
+  /** True when the lead's status is closed or lost, per the shared
+      isTerminalLeadStatus in ../leadStatusLabel.ts. Decides the tab. */
+  terminal: boolean;
 };
 
 // The open thread, when ?lead= names one.
@@ -100,6 +104,7 @@ export type SelectedApplication = {
 
 export default function ChatsView({
   rows,
+  initialTab = "active",
   applicationRows = [],
   askUserId,
   threadOpenOnMobile,
@@ -112,6 +117,8 @@ export default function ChatsView({
   voidInvoiceAction,
 }: {
   rows: ChatRow[];
+  /** "closed" when the thread the URL opens with is a finished one. */
+  initialTab?: ChatListTab;
   applicationRows?: ApplicationRow[];
   askUserId: string | null;
   threadOpenOnMobile: boolean;
@@ -123,149 +130,167 @@ export default function ChatsView({
   createInvoiceAction?: (formData: FormData) => Promise<void>;
   voidInvoiceAction?: (formData: FormData) => Promise<void>;
 }) {
+  // The Active / Closed split for the list tabs. `terminal` was classified on
+  // the server from the shared closed/lost set; both halves keep the recency
+  // order the page already sorted the rows into.
+  const activeChats = rows.filter((row) => !row.terminal);
+  const closedChats = rows.filter((row) => row.terminal);
+  // One conversation row, unchanged markup, shared by both tabs so the Active
+  // and Closed lists handed to ChatListTabs cannot diverge. Mirrors
+  // renderConvoRow on the homeowner side (src/app/(app)/chats/page.tsx).
+  const renderChatRow = (row: ChatRow) => (
+    <li key={row.id}>
+      <Link
+        href={`/pro/chats?lead=${row.id}`}
+        className={`block border-l-4 px-4 py-3 transition ${
+          row.active
+            ? "border-hearth-500 bg-hearth-50 dark:border-hearth-400 dark:bg-hearth-900/40"
+            : row.unread
+              ? "border-hearth-400 bg-hearth-50/60 hover:bg-hearth-50 dark:border-hearth-500 dark:bg-hearth-900/20 dark:hover:bg-hearth-900/30"
+              : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className={`truncate ${
+              row.unread
+                ? "font-bold text-stone-900 dark:text-stone-100"
+                : "font-medium text-stone-900 dark:text-stone-100"
+            }`}
+          >
+            {row.title}
+          </span>
+          {row.unread ? (
+            // 10px reads fine at a desk but is under the readable
+            // floor on a phone; max-sm:text-sm brings it to 14px
+            // there, same convention as the license badges.
+            <span className="shrink-0 rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white max-sm:text-sm">
+              New
+            </span>
+          ) : (
+            <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
+              {row.categoryLabel}
+            </span>
+          )}
+        </div>
+        <p
+          className={`truncate text-xs ${
+            row.unread
+              ? "font-medium text-stone-800 dark:text-stone-200"
+              : "text-stone-500 dark:text-stone-400"
+          }`}
+        >
+          {row.preview}
+        </p>
+      </Link>
+    </li>
+  );
+
   return (
     <div className="grid gap-4 md:grid-cols-[280px_1fr]">
-      {/* ---- Conversation list (hidden on phones while a thread is open) ---- */}
-      <ul
-        className={`${
-          threadOpenOnMobile ? "hidden md:block" : ""
-        } max-h-[40vh] divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-stone-800 md:h-[calc(100vh-13rem)] md:max-h-none`}
-      >
-        {/* Pinned copilot, always first. */}
-        <AskHearthRow
-          href="/pro/ask"
-          subtitle="Your business copilot"
-          storageKeyBase="hearth_pro_ask_chat"
-          retentionKeyBase="hearth_pro_ask_retention"
-          userId={askUserId}
-          accent="hearth"
-        />
-
-        {/* Pinned second: the way OUT of an empty inbox. A pro with no
-            conversations has nothing to do on this screen, and the answer
-            is always the same one - go find a job to apply to. Same row
-            shape as the copilot above it so the list stays one thing.
-            PRO_LEADS_HREF rather than a literal "/pro", so it follows the
-            open-jobs board when the pro Home / Leads tab split moves it. */}
-        <li>
-          <Link
-            href={PRO_LEADS_HREF}
-            className="flex min-h-11 items-center gap-3 border-l-4 border-transparent px-4 py-3 transition hover:bg-stone-50 dark:hover:bg-stone-700"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-hearth-100 text-hearth-700 dark:bg-hearth-900/50 dark:text-hearth-300">
-              <Briefcase className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium text-stone-900 dark:text-stone-100">
-                Find clients
-              </span>
-              <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
-                Open jobs near you, ready to apply
-              </span>
-            </span>
-            <ChevronRight
-              className="h-4 w-4 shrink-0 text-stone-400 dark:text-stone-500"
-              aria-hidden="true"
-            />
-          </Link>
-        </li>
-
-        {rows.length === 0 && (
-          <li className="px-4 py-6 text-sm text-stone-500 dark:text-stone-400">
-            No conversations yet. Find clients to start one: when a homeowner
-            picks you, your chat opens here.
-          </li>
-        )}
-
-        {rows.map((row) => (
-          <li key={row.id}>
-            <Link
-              href={`/pro/chats?lead=${row.id}`}
-              className={`block border-l-4 px-4 py-3 transition ${
-                row.active
-                  ? "border-hearth-500 bg-hearth-50 dark:border-hearth-400 dark:bg-hearth-900/40"
-                  : row.unread
-                    ? "border-hearth-400 bg-hearth-50/60 hover:bg-hearth-50 dark:border-hearth-500 dark:bg-hearth-900/20 dark:hover:bg-hearth-900/30"
-                    : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span
-                  className={`truncate ${
-                    row.unread
-                      ? "font-bold text-stone-900 dark:text-stone-100"
-                      : "font-medium text-stone-900 dark:text-stone-100"
-                  }`}
-                >
-                  {row.title}
-                </span>
-                {row.unread ? (
-                  // 10px reads fine at a desk but is under the readable
-                  // floor on a phone; max-sm:text-sm brings it to 14px
-                  // there, same convention as the license badges.
-                  <span className="shrink-0 rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white max-sm:text-sm">
-                    New
-                  </span>
-                ) : (
-                  <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
-                    {row.categoryLabel}
-                  </span>
-                )}
-              </div>
-              <p
-                className={`truncate text-xs ${
-                  row.unread
-                    ? "font-medium text-stone-800 dark:text-stone-200"
-                    : "text-stone-500 dark:text-stone-400"
-                }`}
-              >
-                {row.preview}
-              </p>
-            </Link>
-          </li>
-        ))}
-
-        {/* ---- Applications the homeowner has not answered yet ----
-            Under the real conversations on purpose: these are not chats, and
-            the pro cannot write in them. They exist so the message a pro
-            wrote when they applied lives in Messages too, instead of only in
-            the homeowner's applicant list. A row disappears the moment the
-            homeowner picks this pro, because the lead is then assigned and
-            the real conversation above takes its place (the page dedupes by
-            lead id). No unread styling anywhere in here: nothing in an
-            application is new to read, it is the pro's own outgoing note. */}
-        {applicationRows.length > 0 && (
+      {/* ---- Conversation list (hidden on phones while a thread is open) ----
+          The Active / Closed switch and the <ul> shell live in ChatListTabs
+          (shared with the homeowner page); the rows are rendered here and
+          handed over already split. */}
+      <ChatListTabs
+        hiddenOnMobile={threadOpenOnMobile}
+        initialTab={initialTab}
+        activeCount={activeChats.length}
+        closedCount={closedChats.length}
+        activeEmpty="No open conversations yet. Find clients to start one: when a homeowner picks you, your chat opens here."
+        closedEmpty="Nothing here yet. Finished conversations land here."
+        pinned={
           <>
-            <li className="bg-stone-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:bg-stone-700/40 dark:text-stone-400">
-              Waiting on the homeowner
+            {/* Pinned copilot, always first and on both tabs. */}
+            <AskHearthRow
+              href="/pro/ask"
+              subtitle="Your business copilot"
+              storageKeyBase="hearth_pro_ask_chat"
+              retentionKeyBase="hearth_pro_ask_retention"
+              userId={askUserId}
+              accent="hearth"
+            />
+
+            {/* Pinned second: the way OUT of an empty inbox. A pro with no
+                conversations has nothing to do on this screen, and the answer
+                is always the same one - go find a job to apply to. Same row
+                shape as the copilot above it so the list stays one thing.
+                PRO_LEADS_HREF rather than a literal "/pro", so it follows the
+                open-jobs board when the pro Home / Leads tab split moves it. */}
+            <li>
+              <Link
+                href={PRO_LEADS_HREF}
+                className="flex min-h-11 items-center gap-3 border-l-4 border-transparent px-4 py-3 transition hover:bg-stone-50 dark:hover:bg-stone-700"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-hearth-100 text-hearth-700 dark:bg-hearth-900/50 dark:text-hearth-300">
+                  <Briefcase className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-stone-900 dark:text-stone-100">
+                    Find clients
+                  </span>
+                  <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+                    Open jobs near you, ready to apply
+                  </span>
+                </span>
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-stone-400 dark:text-stone-500"
+                  aria-hidden="true"
+                />
+              </Link>
             </li>
-            {applicationRows.map((row) => (
-              <li key={row.id}>
-                <Link
-                  href={`/pro/chats?application=${row.id}`}
-                  className={`block border-l-4 px-4 py-3 transition ${
-                    row.active
-                      ? "border-hearth-500 bg-hearth-50 dark:border-hearth-400 dark:bg-hearth-900/40"
-                      : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate font-medium text-stone-900 dark:text-stone-100">
-                      {row.title}
-                    </span>
-                    <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
-                      {row.dateLabel}
-                    </span>
-                  </div>
-                  <p className="truncate text-xs text-stone-500 dark:text-stone-400">
-                    {row.preview}
-                  </p>
-                </Link>
-              </li>
-            ))}
           </>
-        )}
-      </ul>
+        }
+        activeRows={
+          <>
+            {activeChats.map(renderChatRow)}
+
+            {/* ---- Applications the homeowner has not answered yet ----
+                Under the real conversations on purpose: these are not chats,
+                and the pro cannot write in them. They exist so the message a
+                pro wrote when they applied lives in Messages too, instead of
+                only in the homeowner's applicant list. A row disappears the
+                moment the homeowner picks this pro, because the lead is then
+                assigned and the real conversation above takes its place (the
+                page dedupes by lead id). Active tab only: an application is
+                still in play, so it can never belong under Closed. No unread
+                styling anywhere in here: nothing in an application is new to
+                read, it is the pro's own outgoing note. */}
+            {applicationRows.length > 0 && (
+              <>
+                <li className="bg-stone-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-stone-500 dark:bg-stone-700/40 dark:text-stone-400">
+                  Waiting on the homeowner
+                </li>
+                {applicationRows.map((row) => (
+                  <li key={row.id}>
+                    <Link
+                      href={`/pro/chats?application=${row.id}`}
+                      className={`block border-l-4 px-4 py-3 transition ${
+                        row.active
+                          ? "border-hearth-500 bg-hearth-50 dark:border-hearth-400 dark:bg-hearth-900/40"
+                          : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate font-medium text-stone-900 dark:text-stone-100">
+                          {row.title}
+                        </span>
+                        <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
+                          {row.dateLabel}
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-stone-500 dark:text-stone-400">
+                        {row.preview}
+                      </p>
+                    </Link>
+                  </li>
+                ))}
+              </>
+            )}
+          </>
+        }
+        closedRows={closedChats.map(renderChatRow)}
+      />
 
       {/* ---- Open thread (the only pane on phones once one is picked) ---- */}
       {selected ? (

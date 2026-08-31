@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
 import Logo from "@/components/Logo";
+import GlobalSearch from "@/components/GlobalSearch";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
 import NotificationBell from "@/components/NotificationBell";
@@ -150,6 +151,33 @@ export default function ProNav({
           >
             <ClipboardList className="h-5 w-5 shrink-0" aria-hidden="true" />
             <span className="hidden sm:inline">Back office</span>
+          </Link>
+          {/* Same smart search as the homeowner header, switched to the pro
+              registry and FAQ half. Inline box from sm up, mirroring Nav.tsx. */}
+          <div className="hidden sm:block">
+            <GlobalSearch side="pro" />
+          </div>
+          {/* Phone-only entry to /pro/search; the inline box above is hidden
+              below sm and the page would have no other way in. Mirrors the
+              homeowner Nav's phone search icon, with this shell's accent. */}
+          <Link
+            href="/pro/search"
+            aria-label="Search"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-stone-500 hover:bg-hearth-50 hover:text-hearth-700 sm:hidden dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4.3-4.3" />
+            </svg>
           </Link>
           <NotificationBell />
           <ProfileMenu
