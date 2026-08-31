@@ -5,7 +5,55 @@
 
 ---
 
-## LATEST (2026-08-30, latest): Home Wins revamp + signup copy, committed `48870a5`, PUSHED
+## LATEST (2026-08-31 overnight): 12-feature mega-wave, PUSHED `87fc50a`
+
+Overnight autonomous wave under Landen's one-night push permission (he sleeps,
+wakes 6am PST). All gated GREEN (tsc 0, eslint 0, vitest 246 files / 3368
+passed, isolated build 0), adversarially verified, then IDOR + rate-limit red
+teams (running at time of writing). Live: main `87fc50a`, deploying.
+
+### Shipped
+1. Phone landing: homeowner/contractor doors + benefits (was bare).
+2. Fake message toasts fixed (dual-role self-message leak) via shared
+   src/lib/sideLeads.ts.
+3. Post-review popups -> one centered modal card.
+4. Messages Active/Closed tabs, both sides, Ask Hearth pinned on Active.
+5. Smart search: as-you-type destination + FAQ suggestions, both sides; pro
+   search is new (src/lib/searchSuggestions.ts, faqIndex.ts).
+6. Report-a-bug: first qualifying report grants $5 once (race-proof SQL),
+   later reports stored for owner review only.
+7. Big-job insurance gate (major categories need current insurance on file,
+   SQL-enforced) + pro-terms insurance/venue clause + VERSION bump.
+8. Spotlight tutorial tour (walks to each page, rings the real element).
+9. Forecast free-branch: full breakdown blurred in BANDED figures + Get Plus.
+10. Paywall experiment: soft (3-day trial) vs hard (no trial), deterministic
+    per account, honored server-side, tracked; PAYWALL_EXPERIMENT env ends it.
+11. Dropdown triggers toggle-close on second tap.
+12. Home Wins revamp (previous wave, `48870a5`).
+
+### OWNER SQL (after 0151 which is confirmed live)
+Paste `supabase/PASTE-ME-ALL-PENDING-2026-08-31.sql` (migrations 0152 feedback
+repeat reports + 0153 insurance gate; guarded prechecks, one transaction).
+Until pasted: repeat bug reports refused with an "already sent" message
+(nothing breaks), and the insurance gate is code-advisory only (SQL backstop
+inactive), so a crafted direct RPC call could still apply to a major job
+without insurance. Paste to close that.
+
+### Owner still owes (unchanged)
+Rotate Supabase service-role key; Supabase Auth settings; delete test accounts;
+DMCA + legal TODOs; Twilio for SMS. Apple sign-in + VAPID done tonight.
+
+### Decisions / notes
+- Paywall experiment hard-arm trial copy scrubbed on plus/pro-plus/nudge/CTA/
+  quote-check/forecast/pro-ask/FAQ; remaining trial mentions are anonymous
+  marketing pages (/pricing, /pros, /terms) with no user id to assign.
+- PerksList "10% off apply fees" (was "every lead fee"): honesty fix, direct
+  requests are not discounted and trial does not qualify (0151).
+- Insurance migration renumbered 0152 -> 0153 (0152 taken by feedback).
+
+---
+
+## (2026-08-30): Home Wins revamp + signup copy, committed `48870a5`, PUSHED
 
 ### Goals
 Landen's evening asks: (1) remove the fee blurb from the contractor signup
