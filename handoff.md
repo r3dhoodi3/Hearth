@@ -5,7 +5,48 @@
 
 ---
 
-## LATEST (2026-08-31 overnight): 12-feature mega-wave, PUSHED `87fc50a`
+## GOOD MORNING (2026-08-31): read this first
+
+Overnight autonomous session under your one-night push permission. Everything
+below is on main and DEPLOYED. Three pushes: `87fc50a` (12-feature wave),
+`0b768cb` (handoff), `a300ad7` (security fix from the red team).
+
+### The ONE thing you owe: paste the SQL
+`supabase/PASTE-ME-ALL-PENDING-2026-08-31.sql` into the Supabase SQL editor
+(after 0151, which is live). It carries 0152 (bug reports welcome forever) and
+0153 (big-job insurance gate). Guarded prechecks, one transaction, safe to run
+once. Until you paste it, the insurance gate is app-advisory only (a crafted
+direct API call could still apply to a big job without insurance) and repeat
+bug reports are refused rather than stored.
+
+### What shipped (all gated green + verified + red-teamed)
+The 12-feature wave (details in the section below) PLUS a security fix: the
+rate-limit red team found every IP-based limiter was spoofable (a client could
+forge X-Forwarded-For and dodge the caps). Fixed across all 10 call sites via
+src/lib/clientIp.ts, which trusts Vercel's own client-IP header. The
+data-ownership red team found ZERO cross-tenant issues.
+
+### Two red-team notes that are YOUR calls, not bugs
+1. Multi-account AI/trial farming is still possible because RISK_ENFORCE is
+   off (log-only). Flip it to true in Vercel once you have looked at a week of
+   account_risk data.
+2. The global daily AI breaker exempts paying accounts, so a swarm of free
+   accounts could exhaust it and briefly black out AI for paying members. The
+   hourly ceiling bounds the burn rate. Accepted design; revisit if abused.
+
+### Still yours (unchanged from before)
+Rotate the Supabase service-role key; Supabase Auth settings; delete test
+accounts; DMCA + legal TODOs; Twilio for SMS. Apple sign-in + VAPID are DONE.
+
+### Try on your phone
+The new Home Wins card, the spotlight tutorial (sign out and back in, or the
+"show guide" button), the forecast blurred breakdown as a free user, the
+Messages Active/Closed tabs, and the smart search (start typing in the
+top-right box). Report a bug from the pro side to see the $5 instant credit.
+
+---
+
+## (2026-08-31 overnight): 12-feature mega-wave, PUSHED `87fc50a`
 
 Overnight autonomous wave under Landen's one-night push permission (he sleeps,
 wakes 6am PST). All gated GREEN (tsc 0, eslint 0, vitest 246 files / 3368
