@@ -12,7 +12,6 @@ import AppleSignInButton, {
   APPLE_SIGNIN_ENABLED,
 } from "@/components/AppleSignInButton";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
-import { LEAD_TIER_FEES, MAJOR_INTRO_FEE } from "@/lib/constants";
 import { SIGNUP_EMAIL_NEUTRAL, friendlyAuthError } from "@/lib/friendlyAuthError";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -253,12 +252,10 @@ export default function ContractorSignUpPage(props: {
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             Join Hearth for Pros
           </h1>
-          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            Browse local jobs free. Pay only when you apply, $
-            {LEAD_TIER_FEES.light}-${LEAD_TIER_FEES.major} by trade, with the
-            price on every job card. Your first big-ticket lead is $
-            {MAJOR_INTRO_FEE}.
-          </p>
+          {/* No fee blurb here, at the owner's request (2026-08-30): the
+              account door stays clean, and pricing is explained where it is
+              acted on - the price sits on every job card, and /pros carries
+              the full pitch. */}
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">

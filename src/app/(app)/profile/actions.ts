@@ -365,6 +365,17 @@ export async function updateSystemAction(
   // Same caps and ranges as addSystemAction: an edit is just as forgeable as
   // the original add, so it gets the same treatment. system_type isn't
   // editable here, so there is nothing to allow-list on this path.
+  //
+  // confirmed_at: saving this form is the owner looking at the system and
+  // attesting to its details, which is the same statement the walkthrough
+  // confirm makes. Stamping it here means a person who corrects a seeded
+  // system's install year (leaving condition and service date blank) counts
+  // as having assessed the system everywhere confirmed_at is read: the
+  // health score stops treating it as an onboarding guess, and the Home Wins
+  // card (isOwnerAssessed in src/lib/homeWins.ts) can count it toward the
+  // great-shape line instead of understating with the Tracking fallback.
+  // Unconditional on purpose: re-stamping an already-confirmed system just
+  // refreshes the attestation date, which is truthful.
   const baseUpdate = {
     material_or_model: cappedFieldOrNull(
       formData,
@@ -379,6 +390,7 @@ export async function updateSystemAction(
       CONDITION_MAX
     ),
     notes: cappedFieldOrNull(formData, "notes", MAX_NOTES),
+    confirmed_at: new Date().toISOString(),
   };
 
   // Optional columns a live DB might not have yet (filter reminder fields,

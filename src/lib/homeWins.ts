@@ -26,9 +26,11 @@ import { assessSystem } from "@/lib/health";
 
 // A system counts as "in great shape" when nothing about it is a red flag: the
 // owner did not mark it worn (2) or failing (1), and its age-based stage is not
-// "due" (past / near end of life). Healthy, aging-but-fine, and not-yet-dated
-// systems all count - this is a flattering read on purpose, but a failing or
-// past-life system is never counted, so the number stays honest.
+// "due" (past / near end of life). This is a flattering read on purpose, but a
+// failing or past-life system is never counted. NOTE: this is a per-system
+// red-flag check only; selectHomeWins additionally requires isOwnerAssessed
+// before a system can count toward the great-shape line, so a seeded
+// onboarding row never claims "great shape" on zero owner input.
 // assessSystem reads the real current year internally (no injectable clock),
 // exactly as it does everywhere else in the app - tests drive it with an
 // install_year relative to the real year, the same way health.test.ts does.
@@ -37,6 +39,26 @@ export function isGreatShape(system: HomeSystem): boolean {
     return false;
   }
   return assessSystem(system).stage !== "due";
+}
+
+// Whether the OWNER has actually told us something about this system, as
+// opposed to it being one of the ~7 starter rows onboarding seeds for every
+// claimed home. Those seeds carry an install_year ESTIMATED from the build
+// year (onboarding/actions.ts), so a present install_year proves nothing
+// about owner input and is deliberately NOT a signal here. The three columns
+// that only ever come from the owner are: confirmed_at (the walkthrough
+// confirm, migration 0056), condition_rating (an owner rating), and
+// last_serviced (an owner-logged service date). This is health.ts's
+// isUnconfirmedEstimate convention (confirmed_at null + condition_rating
+// null = still an onboarding guess), extended with last_serviced, which the
+// seed never writes. Without this gate a brand-new home with zero owner input
+// was bragging "All 7 systems in great shape", which is a lie.
+export function isOwnerAssessed(system: HomeSystem): boolean {
+  return (
+    system.confirmed_at != null ||
+    system.condition_rating != null ||
+    system.last_serviced != null
+  );
 }
 
 export interface HomeWinsInput {
@@ -57,6 +79,11 @@ export interface HomeWin {
   // A self-contained, pronoun-free phrase that reads correctly in both the
   // first-person in-app caption and the third-person share card.
   text: string;
+  // The same win split into a bare number and the words around it, so the
+  // share card can shout the number at poster scale without re-parsing text.
+  // Absent when the win has no single number to shout (the starter line).
+  stat?: string;
+  statLabel?: string;
 }
 
 export interface HomeWins {
@@ -91,7 +118,12 @@ export function selectHomeWins(input: HomeWinsInput): HomeWins {
   const now = input.now ?? new Date();
   const systems = input.systems ?? [];
   const systemsCount = systems.length;
-  const greatCount = systems.filter((s) => isGreatShape(s)).length;
+  // Only systems the owner actually told us about can claim "great shape".
+  // The seeded starter rows are excluded from BOTH sides of the fraction, so
+  // "2 of 3" always means "2 of the 3 systems the owner has assessed".
+  const assessed = systems.filter((s) => isOwnerAssessed(s));
+  const assessedCount = assessed.length;
+  const greatCount = assessed.filter((s) => isGreatShape(s)).length;
   const tasksDone = Math.max(0, Math.floor(input.tasksDoneCount || 0));
   const years = fullYearsBetween(input.createdAt, now);
 
@@ -101,33 +133,76 @@ export function selectHomeWins(input: HomeWinsInput): HomeWins {
   // to the systems (so the card never says "systems" twice).
   const candidates: HomeWin[] = [];
 
-  const greatLine =
-    systemsCount >= 1 && greatCount >= 1
-      ? greatCount === systemsCount
-        ? systemsCount === 1
-          ? "1 system in great shape"
-          : `All ${systemsCount} systems in great shape`
-        : `${greatCount} of ${systemsCount} systems in great shape`
-      : null;
-  if (greatLine) candidates.push({ key: "great", text: greatLine });
+  // Three phrasings, honest about what the denominator covers: "All N" only
+  // when every system in the home is assessed AND great; a bare count when
+  // every assessed system is great but unassessed seeds remain (claiming
+  // "All" there would overstate, and "2 of 2" reads oddly next to 7 tracked
+  // systems); "X of Y" for a genuine mix of assessed systems.
+  let greatWin: HomeWin | null = null;
+  if (assessedCount >= 1 && greatCount >= 1) {
+    if (greatCount === assessedCount && assessedCount === systemsCount) {
+      greatWin = {
+        key: "great",
+        text:
+          systemsCount === 1
+            ? "1 system in great shape"
+            : `All ${systemsCount} systems in great shape`,
+        stat: String(systemsCount),
+        statLabel:
+          systemsCount === 1
+            ? "system in great shape"
+            : "systems in great shape",
+      };
+    } else if (greatCount === assessedCount) {
+      greatWin = {
+        key: "great",
+        text: `${plural(greatCount, "system")} in great shape`,
+        stat: String(greatCount),
+        statLabel:
+          greatCount === 1 ? "system in great shape" : "systems in great shape",
+      };
+    } else {
+      greatWin = {
+        key: "great",
+        text: `${greatCount} of ${assessedCount} systems in great shape`,
+        stat: String(greatCount),
+        statLabel: `of ${assessedCount} systems in great shape`,
+      };
+    }
+  }
+  if (greatWin) candidates.push(greatWin);
 
   if (years >= 1) {
-    candidates.push({ key: "years", text: `${plural(years, "year")} on Hearth` });
+    candidates.push({
+      key: "years",
+      text: `${plural(years, "year")} on Hearth`,
+      stat: String(years),
+      statLabel: years === 1 ? "year on Hearth" : "years on Hearth",
+    });
   }
 
   if (tasksDone >= 1) {
     candidates.push({
       key: "tasks",
       text: `${plural(tasksDone, "maintenance task")} handled`,
+      stat: String(tasksDone),
+      statLabel:
+        tasksDone === 1
+          ? "maintenance task handled"
+          : "maintenance tasks handled",
     });
   }
 
-  // Fallback systems line only when there was no great-shape line to carry the
-  // systems story (e.g. every system is still an undated onboarding guess).
-  if (!greatLine && systemsCount >= 1) {
+  // Fallback systems line only when there was no great-shape line to carry
+  // the systems story - which now includes the every-system-is-still-a-seed
+  // home, where the honest brag is simply "this home is being tracked".
+  if (!greatWin && systemsCount >= 1) {
     candidates.push({
       key: "systems",
       text: `Tracking ${plural(systemsCount, "home system")}`,
+      stat: String(systemsCount),
+      statLabel:
+        systemsCount === 1 ? "home system tracked" : "home systems tracked",
     });
   }
 
@@ -166,9 +241,9 @@ export function isValidWinsCode(code: string): boolean {
 // contains a link and never promises a reward.
 export function homeWinsCaption(wins: HomeWins): string {
   if (wins.variant === "starter") {
-    return "Just set up my home on Hearth to stay on top of maintenance. Handy for keeping a house in shape:";
+    return "Just put my home on Hearth so nothing sneaks up on me. Handy for keeping a house in shape:";
   }
   const top = wins.wins[0]?.text ?? "";
   const topSentence = top ? ` ${top.charAt(0).toUpperCase()}${top.slice(1)}.` : "";
-  return `I've been staying on top of my home with Hearth.${topSentence} Worth a look for yours:`;
+  return `A little proud of my house right now.${topSentence} Hearth keeps me on top of it, worth a look for yours:`;
 }

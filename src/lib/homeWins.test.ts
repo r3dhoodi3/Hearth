@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   selectHomeWins,
   isGreatShape,
+  isOwnerAssessed,
   isValidWinsCode,
   homeWinsCaption,
   type HomeWinsInput,
@@ -30,6 +31,19 @@ function system(over: Partial<HomeSystem> = {}): HomeSystem {
     confirmed_at: null,
     ...over,
   } as HomeSystem;
+}
+
+// A fixed owner-confirmation timestamp. Any non-null confirmed_at marks a
+// system as owner-assessed; the exact instant never matters to the logic.
+const CONFIRMED = "2026-01-02T00:00:00Z";
+
+// An owner-assessed system: same fixture as system() but confirmed, the way
+// the walkthrough confirm flow (migration 0056) leaves a real row. Most
+// framing tests use this because a bare install_year no longer counts - the
+// onboarding seed writes an ESTIMATED install_year on every starter row, so
+// install_year alone is indistinguishable from a placeholder.
+function assessedSystem(over: Partial<HomeSystem> = {}): HomeSystem {
+  return system({ confirmed_at: CONFIRMED, ...over });
 }
 
 function input(over: Partial<HomeWinsInput> = {}): HomeWinsInput {
@@ -60,7 +74,28 @@ describe("isGreatShape", () => {
     expect(isGreatShape(system({ install_year: THIS_YEAR - 30 }))).toBe(false);
   });
   it("counts a system with no install year (undated, not a red flag)", () => {
+    // Per-system semantics only: "nothing is a red flag". selectHomeWins
+    // additionally requires isOwnerAssessed before this can reach the card.
     expect(isGreatShape(system())).toBe(true);
+  });
+});
+
+describe("isOwnerAssessed (the placeholder gate)", () => {
+  it("rejects a seeded onboarding row, even one with an estimated install year", () => {
+    // This is exactly what onboarding/actions.ts seeds: install_year guessed
+    // from the build year, expected lifespan set, and NO owner input
+    // (confirmed_at null, condition_rating null, last_serviced null).
+    expect(
+      isOwnerAssessed(
+        system({ install_year: THIS_YEAR - 5, expected_lifespan_years: 22 })
+      )
+    ).toBe(false);
+    expect(isOwnerAssessed(system())).toBe(false);
+  });
+  it("accepts any of the three owner-only signals", () => {
+    expect(isOwnerAssessed(system({ confirmed_at: CONFIRMED }))).toBe(true);
+    expect(isOwnerAssessed(system({ condition_rating: 4 }))).toBe(true);
+    expect(isOwnerAssessed(system({ last_serviced: "2026-03-01" }))).toBe(true);
   });
 });
 
@@ -82,12 +117,15 @@ describe("selectHomeWins - starter variant (never a bad number)", () => {
 });
 
 describe("selectHomeWins - framing", () => {
+  // These framing fixtures use assessedSystem (confirmed_at set): they used
+  // to pass with a bare install_year, but that relied on the placeholder bug
+  // where an unassessed seed row counted as "great shape".
   it("frames all-healthy systems as 'All N in great shape'", () => {
     const w = selectHomeWins(
       input({
         systems: [
-          system({ install_year: THIS_YEAR - 1 }),
-          system({ install_year: THIS_YEAR - 2 }),
+          assessedSystem({ install_year: THIS_YEAR - 1 }),
+          assessedSystem({ install_year: THIS_YEAR - 2 }),
         ],
       })
     );
@@ -97,13 +135,13 @@ describe("selectHomeWins - framing", () => {
     );
   });
 
-  it("frames a mix as 'X of Y in great shape'", () => {
+  it("frames a mix as 'X of Y in great shape' over ASSESSED systems only", () => {
     const w = selectHomeWins(
       input({
         systems: [
-          system({ install_year: THIS_YEAR - 1 }), // great
-          system({ install_year: THIS_YEAR - 2 }), // great
-          system({ install_year: THIS_YEAR - 30 }), // due, not great
+          assessedSystem({ install_year: THIS_YEAR - 1 }), // great
+          assessedSystem({ install_year: THIS_YEAR - 2 }), // great
+          assessedSystem({ install_year: THIS_YEAR - 30 }), // due, not great
         ],
       })
     );
@@ -114,9 +152,62 @@ describe("selectHomeWins - framing", () => {
 
   it("uses singular wording for one great system", () => {
     const w = selectHomeWins(
-      input({ systems: [system({ install_year: THIS_YEAR - 1 })] })
+      input({ systems: [assessedSystem({ install_year: THIS_YEAR - 1 })] })
     );
     expect(w.wins.some((x) => x.text === "1 system in great shape")).toBe(true);
+  });
+
+  it("gives an all-placeholder home the Tracking line, never a great line", () => {
+    // A freshly claimed home: onboarding seeded every row with an estimated
+    // install_year and zero owner input. Before the placeholder gate this
+    // produced "All 7 systems in great shape" on a home Hearth knows nothing
+    // real about; now the honest "Tracking 7 home systems" carries the card.
+    const seeds = Array.from({ length: 7 }, (_, i) =>
+      system({ id: `seed-${i}`, install_year: THIS_YEAR - 5 })
+    );
+    const w = selectHomeWins(input({ systems: seeds }));
+    expect(w.wins.some((x) => x.key === "great")).toBe(false);
+    expect(w.wins.some((x) => x.text === "Tracking 7 home systems")).toBe(true);
+  });
+
+  it("counts only assessed systems in both halves of the fraction (mixed seeds + real)", () => {
+    const w = selectHomeWins(
+      input({
+        systems: [
+          // Two owner-assessed systems: one great, one the owner marked worn.
+          assessedSystem({ id: "a", install_year: THIS_YEAR - 1 }),
+          assessedSystem({ id: "b", condition_rating: 2 }),
+          // Three untouched onboarding seeds, which must not inflate either
+          // the numerator or the denominator.
+          system({ id: "c", install_year: THIS_YEAR - 3 }),
+          system({ id: "d", install_year: THIS_YEAR - 4 }),
+          system({ id: "e" }),
+        ],
+      })
+    );
+    expect(w.wins.some((x) => x.text === "1 of 2 systems in great shape")).toBe(
+      true
+    );
+  });
+
+  it("uses a bare count when every assessed system is great but seeds remain", () => {
+    // "All" would overstate (5 systems exist, only 2 are assessed) and
+    // "2 of 2" reads oddly, so the line is the plain honest count.
+    const w = selectHomeWins(
+      input({
+        systems: [
+          assessedSystem({ id: "a", install_year: THIS_YEAR - 1 }),
+          assessedSystem({ id: "b", condition_rating: 5 }),
+          system({ id: "c" }),
+          system({ id: "d" }),
+          system({ id: "e" }),
+        ],
+      })
+    );
+    expect(w.wins.some((x) => x.text === "2 systems in great shape")).toBe(
+      true
+    );
+    expect(w.wins.every((x) => !x.text.includes("All"))).toBe(true);
   });
 
   it("counts whole years on Hearth from createdAt", () => {
@@ -147,13 +238,15 @@ describe("selectHomeWins - framing", () => {
   });
 
   it("falls back to 'Tracking N systems' only when no great-shape line exists", () => {
-    // Every system past life => no great-shape line, so the plain tracking line
-    // carries the systems story instead (never both).
+    // Every assessed system past life => no great-shape line, so the plain
+    // tracking line carries the systems story instead (never both). These are
+    // assessed (confirmed) so the missing great line is about being due, not
+    // about the placeholder gate.
     const w = selectHomeWins(
       input({
         systems: [
-          system({ install_year: THIS_YEAR - 30 }),
-          system({ install_year: THIS_YEAR - 31 }),
+          assessedSystem({ install_year: THIS_YEAR - 30 }),
+          assessedSystem({ install_year: THIS_YEAR - 31 }),
         ],
       })
     );
@@ -163,7 +256,7 @@ describe("selectHomeWins - framing", () => {
 
   it("never mentions systems twice (great-shape line suppresses the fallback)", () => {
     const w = selectHomeWins(
-      input({ systems: [system({ install_year: THIS_YEAR - 1 })] })
+      input({ systems: [assessedSystem({ install_year: THIS_YEAR - 1 })] })
     );
     expect(w.wins.filter((x) => x.text.includes("system")).length).toBe(1);
   });
@@ -173,7 +266,7 @@ describe("selectHomeWins - framing", () => {
       input({
         createdAt: "2020-01-01T00:00:00Z",
         tasksDoneCount: 9,
-        systems: [system({ install_year: THIS_YEAR - 1 })],
+        systems: [assessedSystem({ install_year: THIS_YEAR - 1 })],
       })
     );
     expect(w.wins.length).toBeLessThanOrEqual(3);
@@ -181,12 +274,28 @@ describe("selectHomeWins - framing", () => {
     expect(w.wins[0].key).toBe("great");
   });
 
+  it("carries a stat/statLabel split for the card's hero number", () => {
+    const w = selectHomeWins(
+      input({
+        createdAt: "2020-01-01T00:00:00Z",
+        systems: [assessedSystem({ install_year: THIS_YEAR - 1 })],
+      })
+    );
+    // Every non-starter win exposes the number and the words separately so
+    // the share card can render the number at poster scale.
+    for (const win of w.wins) {
+      expect(win.stat).toBeTruthy();
+      expect(win.statLabel).toBeTruthy();
+      expect(win.stat).toMatch(/^\d+$/);
+    }
+  });
+
   it("never emits a dollar figure (product decision: omitted)", () => {
     const w = selectHomeWins(
       input({
         createdAt: "2020-01-01T00:00:00Z",
         tasksDoneCount: 9,
-        systems: [system({ install_year: THIS_YEAR - 1 })],
+        systems: [assessedSystem({ install_year: THIS_YEAR - 1 })],
       })
     );
     for (const win of w.wins) expect(win.text).not.toContain("$");
@@ -202,13 +311,13 @@ describe("homeWinsCaption", () => {
   });
   it("leads an active caption with the top win", () => {
     const w = selectHomeWins(
-      input({ systems: [system({ install_year: THIS_YEAR - 1 })] })
+      input({ systems: [assessedSystem({ install_year: THIS_YEAR - 1 })] })
     );
     expect(homeWinsCaption(w)).toContain("1 system in great shape");
   });
   it("uses no em dashes", () => {
     const w = selectHomeWins(
-      input({ systems: [system({ install_year: THIS_YEAR - 1 })] })
+      input({ systems: [assessedSystem({ install_year: THIS_YEAR - 1 })] })
     );
     expect(homeWinsCaption(w)).not.toContain("—");
   });

@@ -5,13 +5,16 @@
 // A small, dismissible "Share your home wins" card for the dashboard. Shows the
 // homeowner their own positive wins (computed server-side by
 // src/lib/homeWins.ts and passed in), then lets them share them: the public
-// wins card image (src/app/api/wins-card/[code]/route.tsx) is fetched and
-// shared as an actual FILE through the Web Share API where the platform
-// accepts files (iMessage, Instagram, Photos, etc), so the recipient gets the
-// real picture instead of a bare link. Falls back to a link-only native
-// share, then to copying the caption and link, then to showing them as
-// selectable text - and a "Download image" of the same card stays available
-// no matter which of those paths runs. The referral link (?ref=CODE) rides
+// wins card image (src/app/api/wins-card/[code]/route.tsx) is shown as a
+// live PREVIEW (the exact image that gets posted, with a skeleton while it
+// loads), then fetched and shared as an actual FILE through the Web Share
+// API where the platform accepts files (iMessage, Instagram, Photos, etc),
+// so the recipient gets the real picture instead of a bare link. Falls back
+// to a link-only native share, then to copying the caption and link, then
+// to showing them as selectable text. A quiet "Download the image" link
+// exists ONLY where file sharing is unavailable (desktop browsers): on a
+// phone the OS share sheet already offers Save Image, so a second download
+// control there would be clutter. The referral link (?ref=CODE) rides
 // along in every path so the share and the acquisition attribution always
 // use the SAME code.
 //
@@ -26,6 +29,7 @@
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import InlineSpinner from "@/components/InlineSpinner";
+import { Skeleton } from "@/components/Skeleton";
 import type { HomeWins } from "@/lib/homeWins";
 import { homeWinsCaption } from "@/lib/homeWins";
 
@@ -71,9 +75,38 @@ export default function HomeWinsShare({
   const [shareState, setShareState] = useState<"idle" | "copied" | "show-link">(
     "idle"
   );
+  // Preview image lifecycle: skeleton until the card renders, and the whole
+  // preview block disappears on a load error rather than showing a broken
+  // image glyph above the share button.
+  const [preview, setPreview] = useState<"loading" | "ready" | "failed">(
+    "loading"
+  );
+  // Whether this browser can hand an image FILE to the OS share sheet. null
+  // until the probe runs after mount, and the download fallback renders only
+  // on an explicit false - so it can never flash on a phone whose share
+  // sheet already offers Save Image.
+  const [canShareFiles, setCanShareFiles] = useState<boolean | null>(null);
 
   useEffect(() => {
     setHidden(alreadyDismissed());
+    // Same canShare gate the share handler uses, probed with a tiny inert
+    // File. Anything throwing (File unsupported, canShare absent) means the
+    // file path can't work, which is exactly when the download link earns
+    // its place.
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function"
+      ) {
+        const probe = new File([""], "probe.png", { type: "image/png" });
+        setCanShareFiles(navigator.canShare({ files: [probe] }) === true);
+        return;
+      }
+    } catch {
+      // Fall through to the explicit false below.
+    }
+    setCanShareFiles(false);
   }, []);
 
   function inviteUrl(): string {
@@ -179,7 +212,29 @@ export default function HomeWinsShare({
         ))}
       </ul>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      {/* Live preview of the exact card the share sends, so nobody posts an
+          image they haven't seen. Skeleton while the OG route renders (per
+          the loading-states convention); the block removes itself entirely
+          if the image fails, since the share still works without it. The
+          1200/630 aspect box reserves the space either way so the card
+          never jumps. max-w-md keeps it phone-sized on desktop. */}
+      {preview !== "failed" && (
+        <div className="relative mt-4 aspect-[1200/630] w-full max-w-md overflow-hidden rounded-lg border border-bark-100 dark:border-stone-700">
+          {preview === "loading" && (
+            <Skeleton className="absolute inset-0 h-full w-full rounded-none" />
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={cardUrl}
+            alt="Preview of your home wins card"
+            className={`h-full w-full object-cover ${preview === "ready" ? "" : "opacity-0"}`}
+            onLoad={() => setPreview("ready")}
+            onError={() => setPreview("failed")}
+          />
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={handleShare}
@@ -189,13 +244,18 @@ export default function HomeWinsShare({
           {pending && <InlineSpinner />}
           {shareState === "copied" ? "Copied" : "Share"}
         </button>
-        <a
-          href={cardUrl}
-          download="hearth-home-wins.png"
-          className="btn-secondary text-sm"
-        >
-          Download image
-        </a>
+        {/* Quiet download fallback, desktop only in practice: rendered
+            solely when the file-share probe said no. A phone with a real
+            share sheet gets Save Image from the sheet itself instead. */}
+        {canShareFiles === false && (
+          <a
+            href={cardUrl}
+            download="hearth-home-wins.png"
+            className="text-xs text-stone-500 underline decoration-stone-300 underline-offset-2 hover:text-stone-700 dark:text-stone-400 dark:decoration-stone-600 dark:hover:text-stone-200"
+          >
+            Download the image
+          </a>
+        )}
       </div>
 
       {shareState === "show-link" && (

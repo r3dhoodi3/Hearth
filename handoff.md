@@ -5,7 +5,63 @@
 
 ---
 
-## LATEST (2026-08-30, late): reopen loader (warming screen), committed `7af5da6`, PUSHED
+## LATEST (2026-08-30, latest): Home Wins revamp + signup copy, committed `48870a5`, PUSHED
+
+### Goals
+Landen's evening asks: (1) remove the fee blurb from the contractor signup
+header ("Browse local jobs free. Pay only when you apply..."), (2) Home Wins:
+drop the Download button (share sheet covers Instagram/save), add a preview of
+the card, make the card pop with a real reason to share, and (3) fix the card
+claiming systems are in great shape when the user logged nothing.
+
+### Current state
+Built, verified, gate GREEN (tsc 0, eslint 0, vitest 246 files / 3225 passed
+exit 0, isolated build 0). Committed `48870a5` and PUSHED on Landen's
+go-ahead, including the two SQL helper files the owner already used
+(FIX-DUPLICATE-HOMES + PASTE-ME-ALL-PENDING-FINAL; 0151 confirmed live).
+Decision: the /welcome/role contractor one-liner STAYS (it identifies the
+door, unlike the fee blurb; Landen deferred, Claude recommended keeping).
+
+### Files touched
+src/lib/homeWins.ts (+test), src/components/HomeWinsShare.tsx (+test),
+src/app/api/wins-card/[code]/route.tsx, src/app/(app)/profile/actions.ts,
+src/app/contractor-signup/page.tsx, the two supabase helper files, handoff.
+
+### What changed
+- BUG: onboarding seeds ~7 placeholder systems and the card counted them as
+  "in great shape". Now only owner-assessed systems count (confirmed_at,
+  condition_rating, or last_serviced set; install_year deliberately not a
+  signal since seeds fake it). Data-free homes honestly say "Tracking N home
+  systems". Denominators use assessed counts; "All N" only when every system
+  in the home is assessed and great. Editing a system in the profile now
+  stamps confirmed_at (owner attestation), so corrections count everywhere.
+- Share UX: Download button removed; live preview of the exact card (skeleton
+  while loading, hides on error); native share sheet is the path to
+  Instagram/Messages/Save Image; quiet download link only where file-share is
+  unavailable (desktop), probe starts null so phones never flash it.
+- Card redesign (Wrapped-style, flat, no gradients): ember canvas, first-name
+  headline, one poster-scale hero number, check rows, "Looked after, and it
+  shows." tagline; charming starter variant. Privacy unchanged: first name +
+  counts only, no score/dollar/address.
+- Contractor signup header: fee blurb removed (pricing lives on job cards and
+  /pros); unused imports cleaned.
+
+### What failed / accepted
+- Verifier: no confirmed defects. Two lead fixes applied from its notes
+  (confirmed_at stamp on system edit; navigator mock cleanup in tests). Two
+  accepted understate-only edges: resolving an issue can un-assess a system;
+  a system with an open issue can still count great (follow-up idea: consult
+  open issues in isGreatShape). Preview shares the 30/5min IP bucket with the
+  share fetch (mitigated by 1h cache + graceful onError).
+
+### Next steps
+1. Landen: commit/push go-ahead (also open: does the /welcome/role card's
+   "Browse local jobs and win work near you." one-liner go too?).
+2. After deploy: share a wins card from the phone once to see the new design.
+
+---
+
+## (2026-08-30, late): reopen loader (warming screen), committed `7af5da6`, PUSHED
 
 ### Goals
 Landen (mid-session): closing and reopening the installed app hangs on a black
@@ -17,8 +73,16 @@ Built and verified, gate GREEN (tsc 0, eslint 0, vitest 246 files / 3217 passed
 exit 0, isolated build 0 on retry: the first build attempt failed ONLY on a
 transient Google Fonts fetch for Inter, unrelated). Committed `7af5da6` and
 PUSHED to main together with the open-offers wave (`42470da` + `22f0292`) on
-Landen's go-ahead. Owner update the same evening: RISK_ENFORCE and the Stripe
-env items are DONE per Landen; the 0151 SQL paste status is being checked.
+Landen's go-ahead. Owner updates the same evening, all VERIFIED: RISK_ENFORCE
+and Stripe env DONE per Landen; migration 0151 CONFIRMED LIVE (duplicate homes
+cleaned via FIX-DUPLICATE-HOMES, FINAL paste ran, 7-row VERIFY all true, live
+DB now through 0151); Apple sign-in RESTORED end to end (key rotated to
+86W6M42H37, JWT sub com.landenchu.hearth.web, expires 2027-02-27, flags set,
+button live on all three pages, prod also aliases gethearth.vercel.app);
+VAPID keys added to Vercel Production+Preview via CLI and redeployed, public
+key verified in the shipped client bundle. Push notifications are fully armed.
+Remaining owner items: TWILIO_* (SMS), rotate the Supabase service-role key,
+real-device Apple sign-in tap test, mid-Feb-2027 Apple JWT reminder.
 
 ### Files touched
 public/sw.js (VERSION hearth-sw-2), NEW public/warming.html, src/middleware.ts
