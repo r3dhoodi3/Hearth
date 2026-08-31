@@ -102,7 +102,20 @@ export default function NavLinks({
               // 12px still fits five tabs at 360px (about 64px of label room
               // each, longest short label measures about 53px), so keep new
               // shortLabels to 8 characters or truncate will bite.
-              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1 text-xs ${
+              //
+              // The max-lg active-opacity trio is the tab's pressed state: a
+              // brief dim while a thumb is on it, which matters because
+              // globals.css removes the platform tap highlight and this is the
+              // feedback that replaces it. Gated max-lg, not max-sm, because
+              // the bottom bar itself lives until lg (Nav.tsx / ProNav.tsx
+              // lg:hidden): a tablet in the 640-1023px band shows these tabs
+              // too and must not lose the highlight without a replacement.
+              // Desktop gains no :active style at all (the bar is gone at lg
+              // anyway), so its rendering stays byte-identical. Both shells
+              // render their bottom bars through this one variant, so the
+              // homeowner and pro sides get the exact same pressed state by
+              // construction.
+              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1 text-xs max-lg:transition-opacity max-lg:duration-75 max-lg:active:opacity-60 ${
                 active
                   ? accent === "hearth"
                     ? "font-semibold text-hearth-700 dark:text-stone-300"

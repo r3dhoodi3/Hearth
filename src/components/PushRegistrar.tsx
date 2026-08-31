@@ -13,8 +13,12 @@ import {
 // Renders nothing. Two jobs, both once per page load:
 //
 //   1. Register /sw.js, the service worker that shows a notification when the
-//      app is closed (public/sw.js). Registering is harmless and idempotent -
-//      the browser only installs a new worker when the file's bytes change.
+//      app is closed AND paints the cold-start warming screen when a
+//      navigation stalls (public/sw.js). Registering is harmless and
+//      idempotent - the browser only installs a new worker when the file's
+//      bytes change - and it happens for EVERYONE, with no VAPID keys and no
+//      notification permission required: the warming screen half of the
+//      worker must reach every installed device, not just push users.
 //   2. If notifications are ALREADY granted, quietly re-post this device's
 //      subscription to the server. That is the self-healing step: a browser can
 //      drop or rotate a subscription on its own (site data cleared, the app
@@ -34,17 +38,19 @@ export default function PushRegistrar({ side }: { side: PushSide }) {
     if (ranRef.current) return;
     ranRef.current = true;
 
-    // Nothing to register when the deployment has no VAPID keys: the worker
-    // would install and then never receive anything. Keeping it unregistered
-    // means turning the keys on later is a deploy, not a deploy plus a wait for
-    // every browser to notice.
-    if (!vapidPublicKey()) return;
-    if (!pushSupported()) return;
-
     let cancelled = false;
     (async () => {
+      // Registration runs unconditionally: the worker's warming screen serves
+      // every user, so it must not wait on VAPID keys or push support. The
+      // call is a no-op wherever service workers do not exist (it returns
+      // null instead of throwing, see src/lib/pushClient.ts).
       await registerServiceWorker();
       if (cancelled) return;
+      // Everything below is push only, and stays exactly as gated as before:
+      // keys present, push APIs present, permission already granted. It never
+      // prompts.
+      if (!vapidPublicKey()) return;
+      if (!pushSupported()) return;
       if (pushPermission() !== "granted") return;
       await refreshPushSubscription(side);
     })();

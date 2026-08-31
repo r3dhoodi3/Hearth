@@ -77,6 +77,10 @@ afterEach(() => {
   delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   delete (window as unknown as { PushManager?: unknown }).PushManager;
   delete (globalThis as unknown as { Notification?: unknown }).Notification;
+  // The registration path no longer needs PushManager, so a serviceWorker mock
+  // left behind by one test would make the "no service worker at all" test
+  // register anyway. installPushApis defines it configurable for this delete.
+  delete (window.navigator as unknown as { serviceWorker?: unknown }).serviceWorker;
 });
 
 describe("PushRegistrar", () => {
@@ -97,6 +101,29 @@ describe("PushRegistrar", () => {
       rerender(<PushRegistrar side="homeowner" />);
     });
     expect(registerCalls.length).toBe(1);
+  });
+
+  // The whole point of decoupling registration from push support: a browser
+  // with service workers but no push APIs (no PushManager, no Notification)
+  // still gets the worker, because its warming-screen half serves everyone.
+  // Only navigator.serviceWorker is installed here, nothing else.
+  it("registers on a browser with service workers but no push APIs", async () => {
+    Object.defineProperty(window.navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        register: async (url: string) => {
+          registerCalls.push(url);
+          return {};
+        },
+        ready: Promise.resolve({}),
+      },
+    });
+    await act(async () => {
+      render(<PushRegistrar side="homeowner" />);
+    });
+    expect(registerCalls).toEqual(["/sw.js"]);
+    expect(subscribeCalls).toBe(0);
+    expect(fetchCalls).toEqual([]);
   });
 
   // Never prompts: with permission still "default", asking would need a user
@@ -140,20 +167,23 @@ describe("PushRegistrar", () => {
     });
   });
 
-  // A deployment with no keys must not install a worker that can never receive
-  // anything, so turning the keys on later is a deploy rather than a wait.
-  it("does nothing at all without a VAPID public key", async () => {
+  // The worker also serves the cold-start warming screen now, so it registers
+  // even on a deployment with no VAPID keys; only the push half stays dormant
+  // (no subscribe, no server call) until the keys arrive.
+  it("registers the worker without a VAPID public key but never subscribes", async () => {
     installPushApis("granted");
     delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     await act(async () => {
       render(<PushRegistrar side="homeowner" />);
     });
-    expect(registerCalls).toEqual([]);
+    expect(registerCalls).toEqual(["/sw.js"]);
+    expect(subscribeCalls).toBe(0);
     expect(fetchCalls).toEqual([]);
   });
 
-  it("does nothing on a browser with no push support", async () => {
-    // No serviceWorker, no PushManager: an old browser, or iOS Safari in a tab.
+  it("does nothing on a browser with no service worker at all", async () => {
+    // jsdom's default: no navigator.serviceWorker, no PushManager. An old
+    // browser, or iOS Safari in a plain tab.
     await act(async () => {
       render(<PushRegistrar side="homeowner" />);
     });

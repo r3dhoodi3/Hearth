@@ -42,6 +42,17 @@ export function vapidPublicKey(): string {
   return (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "").trim();
 }
 
+// Does this browser have service workers at all? Wider than pushSupported():
+// the worker now also serves the cold-start warming screen (public/sw.js), so
+// it is worth registering on a browser that has service workers but no push.
+export function serviceWorkerSupported(): boolean {
+  try {
+    return typeof window !== "undefined" && "serviceWorker" in navigator;
+  } catch {
+    return false;
+  }
+}
+
 // Does this browser have the three APIs the feature needs?
 export function pushSupported(): boolean {
   try {
@@ -86,9 +97,13 @@ function urlBase64ToBytes(base64: string): ArrayBuffer {
 
 // Register (or find the existing registration for) /sw.js. Returns null rather
 // than throwing when service workers are unavailable or the registration is
-// refused, which happens in private windows and on insecure origins.
+// refused, which happens in private windows and on insecure origins. Gated on
+// serviceWorkerSupported() rather than pushSupported(): registration is what
+// installs the cold-start warming screen, and that has no push prerequisites.
+// Every push caller (enablePush, refreshPushSubscription) still checks
+// pushSupported() itself before subscribing.
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!pushSupported()) return null;
+  if (!serviceWorkerSupported()) return null;
   try {
     return await navigator.serviceWorker.register(SERVICE_WORKER_URL);
   } catch {

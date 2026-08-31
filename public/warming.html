@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Never indexed: this is the service worker's cold-start fallback screen
+     (public/sw.js serves it when a navigation stalls), not a real page.
+     COUPLING: installed clients only refetch this file when the service
+     worker itself changes, so any edit here MUST bump VERSION in
+     public/sw.js or it never reaches devices that already installed. -->
+<meta name="robots" content="noindex">
+<title>Opening Hearth</title>
+<style>
+  /* Everything on this page is inline on purpose: it is precached by the
+     service worker and shown while the server is still waking up, so a single
+     external request (a font, an icon, a /_next chunk) would mean a fallback
+     screen that itself fails to paint. System fonts, inline SVG, no fetches. */
+  :root {
+    --bg: #fbf7f2;      /* bark-50, the app's light background */
+    --ink: #292524;     /* stone-800 */
+    --muted: #57534e;   /* stone-600 */
+    --faint: #78716c;   /* stone-500 */
+    --accent: #73482b;  /* bark-700, the brand accent */
+    --accent-ink: #ffffff;
+    --track: #e8d8bf;   /* bark-200 */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1917;    /* stone-900, matching the app's dark:bg-stone-900 */
+      --ink: #f5f5f4;   /* stone-100 */
+      --muted: #d6d3d1; /* stone-300 */
+      --faint: #a8a29e; /* stone-400 */
+      --accent: #c19a66; /* bark-400 reads better on the dark ground */
+      --accent-ink: #1c1917;
+      --track: #44403c; /* stone-700 */
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    /* Safe-area padding so nothing hides behind the notch or the home bar in
+       the installed app, which is exactly where this screen appears. */
+    padding: calc(24px + env(safe-area-inset-top, 0px))
+             calc(24px + env(safe-area-inset-right, 0px))
+             calc(24px + env(safe-area-inset-bottom, 0px))
+             calc(24px + env(safe-area-inset-left, 0px));
+  }
+  main { width: 100%; max-width: 22rem; }
+  .brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--accent);
+  }
+  .brand svg { width: 34px; height: 34px; }
+  .brand span {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .bar {
+    position: relative;
+    height: 4px;
+    margin: 28px 0 14px;
+    border-radius: 999px;
+    background: var(--track);
+    overflow: hidden;
+  }
+  .bar i {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 40%;
+    border-radius: 999px;
+    background: var(--accent);
+    animation: sweep 1.4s ease-in-out infinite alternate;
+  }
+  /* The segment is 40% of the track, so 175% of its own width carries it just
+     past the far edge; alternate sweeps it back. Pure CSS, no JS needed. */
+  @keyframes sweep {
+    from { transform: translateX(-25%); }
+    to { transform: translateX(175%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bar i { animation-duration: 3.5s; }
+  }
+  .status { margin: 0; color: var(--muted); font-size: 0.95rem; }
+  .tip { margin-top: 32px; }
+  .tip-label {
+    color: var(--faint);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  #tip {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+    min-height: 4.5em;
+    opacity: 1;
+    transition: opacity 0.4s ease;
+  }
+  #slow { margin: 20px 0 0; color: var(--faint); font-size: 0.875rem; }
+  [hidden] { display: none; }
+  #retry {
+    margin-top: 20px;
+    min-height: 44px;
+    padding: 0 24px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <!-- The brand mark from src/components/Logo.tsx, copied inline so it
+         renders with zero network requests. -->
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 11.5 12 4l4 3.33V5.5h2.5v3.92L21 11.5"/>
+      <path d="M5 10.5V20h14v-9.5"/>
+      <path d="M12 17.8c1.8 0 3-1.2 3-2.8 0-1.9-1.7-2.6-2.2-4-.9.6-1 1.5-.9 2.2-.6-.2-1-.6-1.2-1.2-.9.8-1.7 1.9-1.7 3 0 1.6 1.2 2.8 3 2.8z" fill="currentColor" stroke="none"/>
+    </svg>
+    <span>Hearth</span>
+  </div>
+  <div class="bar" role="progressbar" aria-label="Loading"><i></i></div>
+  <p class="status">Waking Hearth up...</p>
+  <div class="tip">
+    <div class="tip-label">While you wait, a house tip:</div>
+    <p id="tip"></p>
+  </div>
+  <p id="slow" hidden>Still connecting. If this keeps spinning, check your internet connection.</p>
+  <button id="retry" type="button">Try again</button>
+</main>
+<script>
+(function () {
+  "use strict";
+
+  var tips = [
+    "On freezing nights, let faucets on outside walls drip. Moving water is much harder to freeze.",
+    "Test your smoke alarms once a month with the test button, and replace the batteries when they chirp.",
+    "Flush a few gallons from your water heater once a year to clear sediment. It heats faster and lasts longer.",
+    "Set your water heater to 120 degrees. It prevents scalding and trims the energy bill.",
+    "Clear the lint from your dryer's vent duct once a year, not just the screen. Lint buildup is a leading cause of house fires.",
+    "Change your HVAC filter every 1 to 3 months. A clogged filter makes the system work harder and wear out sooner.",
+    "Leaving for a trip? Shut off the main water valve. Most severe water damage happens when nobody is home.",
+    "Reseal grout and caulk lines in showers once a year. Water behind tile is expensive, a tube of caulk is not.",
+    "Put a few drops of food coloring in your toilet tank. If the bowl changes color without a flush, the flapper is leaking.",
+    "Test your garage door's auto reverse: lay a roll of paper towels under it. The door should back off when it touches."
+  ];
+
+  var tipEl = document.getElementById("tip");
+  var index = Math.floor(Math.random() * tips.length);
+  tipEl.textContent = tips[index];
+  setInterval(function () {
+    tipEl.style.opacity = "0";
+    setTimeout(function () {
+      index = (index + 1) % tips.length;
+      tipEl.textContent = tips[index];
+      tipEl.style.opacity = "1";
+    }, 400);
+  }, 4000);
+
+  /* Retry with backoff. The service worker serves this page's content AT the
+     original URL (the address bar still shows /dashboard or wherever), so a
+     plain location.reload() re-requests the real page, and once the server is
+     warm the real page wins the race and this screen disappears. */
+  var KEY = "hearth.warming.attempts";
+  var memoryState = { count: 0, at: 0 };
+
+  /* sessionStorage can throw in private browsing, so every touch is wrapped
+     and the in-memory counter carries on when it does. */
+  function readState() {
+    try {
+      var raw = sessionStorage.getItem(KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.count === "number" && typeof parsed.at === "number") {
+          return parsed;
+        }
+      }
+    } catch (err) { /* Fall through to the in-memory counter. */ }
+    return memoryState;
+  }
+
+  function writeState(state) {
+    memoryState = state;
+    try {
+      sessionStorage.setItem(KEY, JSON.stringify(state));
+    } catch (err) { /* Private mode: the in-memory copy is enough. */ }
+  }
+
+  var now = Date.now();
+  var state = readState();
+  /* A successful load of the real page cannot be observed from here, so the
+     counter expires on its own: a stored count older than 60 seconds belongs
+     to an earlier cold start and resets to zero. */
+  if (!state.at || now - state.at > 60000) {
+    state = { count: 0, at: now };
+  }
+  var attempts = state.count;
+  writeState({ count: attempts + 1, at: now });
+
+  if (attempts >= 3) {
+    document.getElementById("slow").hidden = false;
+  }
+
+  /* Backoff: 2.5s, then 5s, then 10s, then every 15s between probes. */
+  var delays = [2500, 5000, 10000];
+  var delay = attempts < delays.length ? delays[attempts] : 15000;
+
+  /* Probe first, reload second. A blind location.reload() would race the
+     service worker's fixed navigation timeout again and could land right back
+     here while the server is still mid-boot. The probe is a plain fetch, which
+     the service worker does not intercept (it only touches navigations), so it
+     waits as long as the server needs; any response at all, an error status
+     included, means the server is awake, and the reload that follows is then
+     served fast. A network failure means we are offline or the server is still
+     down, so back off and probe again. This also self-throttles: a probe in
+     flight schedules nothing until it settles. */
+  function probeThenReload() {
+    fetch(location.href, { cache: "no-store", credentials: "include" }).then(
+      function () { location.reload(); },
+      function () { setTimeout(probeThenReload, delay); }
+    );
+  }
+  setTimeout(probeThenReload, delay);
+
+  document.getElementById("retry").addEventListener("click", function () {
+    location.reload();
+  });
+})();
+</script>
+</body>
+</html>

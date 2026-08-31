@@ -125,6 +125,12 @@ export const PUSH_NOTIFICATION_KINDS: ReadonlySet<string> = new Set([
   "new_lead",
   // The homeowner closed the job out (the pro won or lost it).
   "job_closed",
+  // The homeowner picked another pro and the losing pro's lead fee came back
+  // as wallet credit (src/app/(app)/contractors/actions.ts). Same reasoning as
+  // job_closed: a money moment the pro is waiting on, and "you lost the bid,
+  // but your fee is back as credit" is exactly the buzz that keeps a lost lead
+  // from feeling like a robbery.
+  "apply_credit_back",
   // A review landed on a pro's profile, or a homeowner was asked for one.
   "new_review",
   "review_request",

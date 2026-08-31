@@ -5,7 +5,138 @@
 
 ---
 
-## LATEST (2026-08-30 late night): interactive UX + feature wave
+## LATEST (2026-08-30, late): reopen loader (warming screen), committed `7af5da6`, PUSHED
+
+### Goals
+Landen (mid-session): closing and reopening the installed app hangs on a black
+or white screen; "at least make a loader so it's not blank, with a progress bar
+or something, or tips/tricks for house".
+
+### Current state
+Built and verified, gate GREEN (tsc 0, eslint 0, vitest 246 files / 3217 passed
+exit 0, isolated build 0 on retry: the first build attempt failed ONLY on a
+transient Google Fonts fetch for Inter, unrelated). Committed `7af5da6` and
+PUSHED to main together with the open-offers wave (`42470da` + `22f0292`) on
+Landen's go-ahead. Owner update the same evening: RISK_ENFORCE and the Stripe
+env items are DONE per Landen; the 0151 SQL paste status is being checked.
+
+### Files touched
+public/sw.js (VERSION hearth-sw-2), NEW public/warming.html, src/middleware.ts
+(matcher), src/middleware.test.ts, src/lib/pushClient.ts,
+src/components/PushRegistrar.tsx (+test), NEW src/lib/swNavigationFallback.test.ts.
+
+### What changed
+- The service worker (previously push-only) now precaches /warming.html and,
+  for same-origin GET page navigations ONLY, races the network against 3.5s:
+  if the server has not answered (cold start) or the device is offline, it
+  instantly shows the warming screen INSTEAD of a blank page. Real pages and
+  data are still never cached, so the stale-dashboard risk stays impossible.
+- warming.html: fully self-contained (inline CSS/JS/SVG, zero network needs),
+  brand colors light + dark, indeterminate progress bar, 10 rotating house
+  tips, "Still connecting..." line after 3 tries, 44px Try again button. It
+  retries by PROBING with a plain fetch (which the worker never intercepts, so
+  it can outwait a cold start) and reloads only once the server answers;
+  backoff 2.5/5/10 then 15s, counter in sessionStorage expiring after 60s.
+- /auth/ and /api/ are excluded from interception (verifier catches: one-time
+  OAuth/confirm codes must never be replayed by the retry, and <a download>
+  exports route through the handler as navigations and would loop).
+- The worker now registers for EVERYONE (it was gated behind VAPID keys, which
+  production does not have yet, so it would never have installed): push
+  subscribe logic stays exactly as gated as before.
+- Matcher excludes /warming.html like sw.js (a /signin 307 would poison the
+  precache). New source tests pin the guards, the precache, the probe logic,
+  the VERSION bump, and warming.html's inline-only/no-em-dash invariants.
+
+### What failed / was caught
+- Verifier: auth-code replay (HIGH) and download hijack (HIGH), both fixed via
+  the /auth/ + /api/ exclusions; a vacuous em-dash test assertion (fixed with
+  a char-code check); blind reload could re-race the 3.5s timeout on a still
+  cold server (fixed by the probe); warming.html edits silently not shipping
+  without a VERSION bump (coupling comment + test); no direct test for
+  register-without-push (test added).
+- Known accepted: with sessionStorage blocked the backoff stays at 2.5s
+  between probes (self-throttled by the probe awaiting the server); iOS's own
+  resume snapshot can still flash before any network request happens, which no
+  web code can control.
+- Not verifiable without a device: real standalone behavior on iPhone.
+
+### Next steps
+1. DONE: committed and pushed on the in-the-moment go-ahead. After deploy,
+   fully close and reopen the installed app twice so hearth-sw-2 installs.
+2. Owner list: 0151 SQL paste status under check; VAPID env still open;
+   RISK_ENFORCE + Stripe reported done by Landen this evening.
+
+---
+
+## (2026-08-30, after the overnight): open-offers wave, committed `42470da`, NOT pushed
+
+### Goals
+Continue from the previous handoff's open offers: (1) push notification for the
+credit-back a pro gets when they lose a bid, (2) fix the installed-PWA blank
+screen for good, (3) the app-feel punch list (tap-highlight, tab pressed state,
+overscroll bounce).
+
+### Current state
+All three built, verified, gate GREEN (tsc 0, eslint 0, vitest 246 files / 3204
+passed with exit code captured, isolated build 0). Committed locally as
+`42470da` on Landen's go-ahead; NOT pushed (push not yet authorized). Live is
+still main `472e34d`; live DB still through 0150 (the
+PASTE-ME-live-2026-08-30-night.sql owner action from the section below is STILL
+OWED and unchanged by this wave).
+
+### Files touched
+src/lib/notifyGating.ts (+test), src/app/manifest.ts (+ new manifest.test.ts),
+NEW src/app/open/page.tsx + OpenRedirect.tsx, src/lib/supabase/middleware.ts,
+src/middleware.test.ts, src/app/robots.ts, src/app/globals.css,
+src/components/NavLinks.tsx.
+
+### What changed
+- apply_credit_back added to PUSH_NOTIFICATION_KINDS: the losing pro's phone
+  now buzzes when their lead fee comes back as credit (sender already passed
+  kind/title/url, so this one line arms the whole path once VAPID is set).
+- PWA launch shell: manifest start_url now /open?source=pwa, a force-static
+  branding page that paints instantly from the CDN on a cold start, then
+  location.replace()s to /dashboard?source=pwa. /open is public (exact match)
+  in isPublicPath, its segment is on GUARDED_SEGMENTS so nothing under /open/
+  can inherit anonymity, and robots.txt disallows it. New tests pin start_url
+  to a public path so manifest and middleware cannot drift.
+- App-feel: -webkit-tap-highlight-color transparent on html; bottom tab bar
+  pressed state (max-lg:active:opacity-60 trio on NavLinks bottom variant, one
+  code path for both homeowner and pro bars); overscroll-behavior-y none on
+  html/body inside @media (display-mode: standalone) only. Desktop pixels
+  untouched by construction (touch-only property, standalone-only media query,
+  max-lg gating on a bar that is lg:hidden anyway).
+
+### What failed / was caught
+- Verifier caught the pressed state gated max-sm while the tab bar lives to lg:
+  an iPad at 640-1023px would have lost the highlight with no replacement.
+  Regated to max-lg.
+- Verifier caught the isPublicPath comment promising /open/ children stay
+  guarded when GUARDED_SEGMENTS did not list "open". Segment added.
+- The robots drift test then correctly failed (guarded segments must be
+  disallowed); /open added to DISALLOWED_PATHS. Full gate rerun green.
+- Decision made in code comments: Android standalone pull-to-refresh is
+  deliberately disabled by the overscroll rule (accidental mid-scroll refresh
+  is the classic installed-app complaint; live screens poll/refetch on focus).
+- Not verifiable without a device: real iOS/Android standalone behavior of the
+  launch shell and the overscroll/pressed-state feel.
+
+### Next steps
+1. Landen: say the word and `42470da` pushes to main (then the usual read-only
+   Vercel smoke checks). No push until then.
+2. Landen: everything in the section below still stands, above all the SQL
+   paste (live DB through 0150) and the Vercel env list.
+3. Noted, not built (low severity, verifier finding): plain icon buttons and
+   links now have no touch feedback at all since the tap highlight is gone;
+   .btn and .card-link have their own active: scales, but one-off icon buttons
+   do not. A follow-up could add a shared pressed utility.
+4. Still queued from the previous wave's verifiers (non-blocking): Plus-side
+   customer symmetry, LOW-34 retry parity on the pro side,
+   resolveDepositSession redeliver-on-transient-error.
+
+---
+
+## (2026-08-30 late night): interactive UX + feature wave
 
 Read this first. It covers the whole overnight of 2026-08-30 (two waves) and what is still owed.
 

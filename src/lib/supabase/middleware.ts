@@ -265,6 +265,11 @@ const GUARDED_SEGMENTS = new Set([
   // 401/redirect, never fall through to an HTML 404.
   "api",
   "auth",
+  // The PWA launch shell's segment. /open itself is public (isPublicPath runs
+  // first and wins), but listing the segment here means a future routed page
+  // under /open/ redirects to /signin instead of rendering to a signed-out
+  // visitor, which is what the exact-match comment in isPublicPath promises.
+  "open",
 ]);
 
 // Does this path sit under a section that requires a session? First segment
@@ -294,6 +299,15 @@ export function isPublicPath(path: string): boolean {
     // session when someone taps "Add to Home Screen", so it must not bounce
     // to /signin or the installed app gets a screenshot for an icon.
     path.startsWith("/apple-icon") ||
+    // The PWA launch shell (src/app/open): the installed app's start_url in
+    // the web manifest. It is a force-static branding screen that must render
+    // with no session and no auth round trip, or a cold start puts the blank
+    // white screen right back where the shell was built to remove it. Nothing
+    // is exposed: the page reads no cookies and no data, and the /dashboard
+    // it forwards to still does the /signin bounce for a signed-out visitor.
+    // Exact match, not a prefix: only the shell itself is public, so a future
+    // page under /open/ cannot inherit anonymity by accident.
+    path === "/open" ||
     path.startsWith("/get-started") ||
     path.startsWith("/signin") ||
     // Password reset request page: a signed-out user is exactly who needs it,

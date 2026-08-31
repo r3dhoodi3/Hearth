@@ -32,6 +32,10 @@ describe("middleware matcher", () => {
       // public/sw.js, fetched by the browser on every service-worker update
       // check. There is nothing to guard and nothing to refresh on it.
       "/sw.js",
+      // public/warming.html, the cold-start loading screen the service worker
+      // precaches for every user. A /signin redirect here would be cached in
+      // place of the screen, so it is excluded exactly like sw.js.
+      "/warming.html",
     ]) {
       expect(matches(asset), asset).toBe(false);
     }
@@ -84,6 +88,7 @@ describe("middleware matcher", () => {
   it("does not let a lookalike path borrow an exclusion", () => {
     for (const path of [
       "/pro/sw.js",
+      "/pro/warming.html",
       "/account/robots.txt",
       "/chats/icon.svg",
       "/api/photos/1",
@@ -146,9 +151,25 @@ describe("unrouted paths fall through to the 404", () => {
     }
   });
 
+  // The PWA launch shell is public by exact match only. The shell itself must
+  // paint with no session (it is the manifest's start_url, and demanding auth
+  // would recreate the cold-start blank screen it exists to fix), but the
+  // entry is not a prefix, and the segment is on GUARDED_SEGMENTS, so a
+  // future routed page under /open/ redirects to /signin rather than
+  // rendering to a signed-out visitor. The dashboard the shell forwards to
+  // still demands a session.
+  it("keeps the PWA launch shell public, exact match only", () => {
+    expect(isPublicPath("/open")).toBe(true);
+    expect(isPublicPath("/open/anything")).toBe(false);
+    expect(isGuardedPath("/open/anything")).toBe(true);
+    expect(isPublicPath("/dashboard")).toBe(false);
+    expect(isGuardedPath("/dashboard")).toBe(true);
+  });
+
   it("keeps the public pages public", () => {
     for (const path of [
       "/",
+      "/open",
       "/signin",
       "/pros",
       "/pricing",

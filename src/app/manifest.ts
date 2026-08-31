@@ -4,10 +4,16 @@ import type { MetadataRoute } from "next";
 // real app icon that opens full-screen. Served at /manifest.webmanifest and
 // linked from the root layout's metadata. Safari on iOS ignores the icons
 // here and uses apple-icon.tsx instead; Android and desktop Chrome read this.
-// start_url is the signed-in home: an installed app should open into the
-// product, and the dashboard already bounces a signed-out visitor to /signin.
+// start_url is the launch shell at /open (src/app/open/page.tsx), not the
+// dashboard itself. Pointing straight at /dashboard meant a serverless cold
+// start plus the signed-out 307 to /signin could leave the installed app on a
+// blank white screen for seconds, which the owner hit in the wild. The shell
+// is force-static, so the CDN paints Hearth branding instantly even on a cold
+// start, then forwards to the dashboard, which still owns the auth bounce.
 // The ?source=pwa on it is just an attribution marker (nothing reads it yet)
 // so installed-app traffic can eventually be told apart from a browser tab.
+// The shell itself reads no params, on purpose, so it stays fully static; its
+// hardcoded forward target is /dashboard?source=pwa, which keeps the marker.
 // Built once at deploy time, not per request: nothing below reads a param, a
 // cookie or the database, so the bytes are a constant of the deployment.
 export const dynamic = "force-static";
@@ -19,7 +25,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Hearth",
     description:
       "Keep your house in good shape, know what needs attention, and reach a trustworthy pro when something breaks.",
-    start_url: "/dashboard?source=pwa",
+    start_url: "/open?source=pwa",
     scope: "/",
     display: "standalone",
     // No orientation lock: "portrait" fought anyone reading a document, a

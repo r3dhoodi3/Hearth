@@ -166,13 +166,20 @@ describe("isPushKind", () => {
     "winback_credit",
     "first_apply_guarantee",
     "apply_receipt",
-    "apply_credit_back",
     "aging_deal",
     "applicant_waiting",
     "ghost_refund",
     "trial_abuse",
   ])("stays silent for %s", (kind) => {
     expect(isPushKind(kind)).toBe(false);
+  });
+
+  // A lost bid whose lead fee just came back as wallet credit. Deliberately
+  // moved OFF the silent list above: it is a money moment the pro is waiting
+  // on, the same reasoning as job_closed, and the buzz that keeps a lost lead
+  // from feeling like a robbery.
+  it("buzzes the phone for apply_credit_back", () => {
+    expect(isPushKind("apply_credit_back")).toBe(true);
   });
 
   // An ALLOWLIST, and this is the assertion that keeps it one: a push

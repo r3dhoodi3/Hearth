@@ -13,8 +13,38 @@
   color-scheme: dark;
 }
 
+/* Kill the gray flash iOS and Android paint over anything tappable. The
+   property only exists on touch devices, so desktop rendering cannot change.
+   Removing the flash is safe only because taps still get visible feedback of
+   their own: the bottom tab bar has an explicit pressed state (the max-lg
+   active-opacity utilities on NavLinks' bottom variant, shared by Nav.tsx and
+   ProNav.tsx, gated max-lg because the bar itself lives until lg), and
+   buttons/cards already carry their own active: scale utilities (.btn,
+   .card-link). */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   @apply bg-hearth-50 text-stone-800 antialiased leading-[1.55] dark:bg-stone-900 dark:text-stone-200;
+}
+
+/* Installed-app (PWA) only: stop the whole page rubber-banding when a scroll
+   hits the top or bottom. Scoped to display-mode: standalone, so normal
+   browser tabs, and all of desktop, are completely unaffected. iOS standalone
+   has no pull-to-refresh UI for this to take away; on Android standalone this
+   DOES disable Chrome's pull-to-refresh, and that is deliberate: an
+   accidental refresh mid-scroll is the classic installed-app complaint, and
+   the screens with live data (chat, the notification bell) already refetch on
+   focus and on their own polls rather than relying on it. Inner scrollers
+   keep their own containment: the notification sheet and chat feed already use
+   overscroll-contain on the scrolling element itself (see NotificationBell.tsx
+   for the pattern), and this rule does not touch them. */
+@media (display-mode: standalone) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
 }
 
 /* Below lg, both the homeowner and pro shells (Nav.tsx / ProNav.tsx, mirrored)

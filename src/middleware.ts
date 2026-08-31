@@ -52,7 +52,10 @@ export const config = {
   //
   //   _next/static, _next/image  - Next's own build output.
   //   favicon.ico                - the one asset Next serves from the root.
-  //   demo-vo/, photos/, sw.js   - everything in /public.
+  //   demo-vo/, photos/, sw.js, warming.html - everything in /public. The
+  //   warming screen must be fetchable with no session: the service worker
+  //   precaches it for every user, signed in or not, and a 307 to /signin
+  //   here would poison the cache with a redirect instead of the screen.
   //
   // Then the root asset and metadata routes generated out of src/app:
   // /icon.svg, /icon-192.png, /icon-512.png, /apple-icon, /opengraph-image,
@@ -70,6 +73,6 @@ export const config = {
   // /pro/crm/<uuid>.png and /api/win-card/<id>.png skip the guard, so the rule
   // stays: name the file, never the extension.
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico|demo-vo/|photos/|sw\\.js|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|icon\\.svg|icon-192\\.png|icon-512\\.png|apple-icon|opengraph-image).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|demo-vo/|photos/|sw\\.js|warming\\.html|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|icon\\.svg|icon-192\\.png|icon-512\\.png|apple-icon|opengraph-image).*)",
   ],
 };

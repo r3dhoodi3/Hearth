@@ -43,6 +43,12 @@ export const DISALLOWED_PATHS = [
   "/join",
   "/learn",
   "/onboarding",
+  // The PWA launch shell. Publicly readable (it is the installed app's
+  // start_url and must paint with no session), but it is a branding screen
+  // that immediately forwards to the dashboard: there is nothing for a search
+  // index to show, and indexing it would only hand searchers a page that
+  // bounces them to /signin.
+  "/open",
   "/plus",
   "/pro/",
   "/profile",
