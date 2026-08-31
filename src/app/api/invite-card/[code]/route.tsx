@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { ImageResponse } from "next/og";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ogFontOption } from "@/lib/ogFont";
+import { clientIpFromHeaders } from "@/lib/clientIp";
 
 export const runtime = "nodejs";
 
@@ -93,7 +94,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ code: str
   // an RPC hiccup - only an explicit `allowed === false` blocks - so a limiter
   // outage never breaks the card behind a link someone actually shared. The
   // budget is set well above what a social scraper needs for one link.
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const ip = clientIpFromHeaders(req.headers);
   const rlAdmin = createAdminClient();
   const { data: allowed } = await rlAdmin.rpc("rate_limit_hit", {
     p_bucket: `invitecard:${ip ?? "unknown"}`,

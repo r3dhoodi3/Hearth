@@ -31,6 +31,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ogFontOption } from "@/lib/ogFont";
 import { selectHomeWins, isValidWinsCode, type HomeWins } from "@/lib/homeWins";
 import type { HomeSystem } from "@/lib/database.types";
+import { clientIpFromHeaders } from "@/lib/clientIp";
 
 export const runtime = "nodejs";
 
@@ -122,7 +123,7 @@ export async function GET(
   // blocked caller costs nothing. Fails open on an RPC hiccup - only an explicit
   // `allowed === false` blocks - so a limiter outage never breaks a card behind
   // a link someone actually shared.
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const ip = clientIpFromHeaders(req.headers);
   const rlAdmin = createAdminClient();
   const { data: allowed } = await rlAdmin.rpc("rate_limit_hit", {
     p_bucket: `winscard:${ip ?? "unknown"}`,

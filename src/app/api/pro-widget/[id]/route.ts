@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clientIpFromHeaders } from "@/lib/clientIp";
 
 export const runtime = "nodejs";
 
@@ -91,7 +92,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   // false` blocks - so a limiter outage never breaks a widget actually
   // embedded on a pro's site. Same 30-per-5-minutes budget as invite-card:
   // generous next to what one embedded widget's real traffic needs.
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const ip = clientIpFromHeaders(req.headers);
   try {
     const rlAdmin = createAdminClient();
     const { data: allowed } = await rlAdmin.rpc("rate_limit_hit", {

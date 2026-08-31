@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { recordRequestSignals, recordEmailSignals } from "@/lib/risk/signals";
+import { clientIpFromHeaders } from "@/lib/clientIp";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -41,7 +42,7 @@ export async function recordTermsAcceptance(
   }
 
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const ip = clientIpFromHeaders(h);
   const userAgent = h.get("user-agent");
 
   const admin = createAdminClient();

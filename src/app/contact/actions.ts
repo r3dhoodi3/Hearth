@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { cappedField, honeypotTripped, FIELD_MAX } from "@/lib/formFields";
 import { err, type ActionResult } from "@/lib/actionResult";
 import { trackServerEvent } from "@/lib/trackServer";
+import { clientIpFromHeaders } from "@/lib/clientIp";
 
 // Length caps for an endpoint with no session and no per-user rate limit to
 // fall back on - account/help's saveSupportMessageAction (which this mirrors)
@@ -74,7 +75,7 @@ export async function sendContactMessageAction(
   // open on an RPC hiccup: only an explicit `allowed === false` blocks the
   // message, so an outage never silently eats a real visitor's message.
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const ip = clientIpFromHeaders(h);
   const admin = createAdminClient();
   const { data: allowed } = await admin.rpc("rate_limit_hit", {
     p_bucket: `contact:${ip ?? "unknown"}`,

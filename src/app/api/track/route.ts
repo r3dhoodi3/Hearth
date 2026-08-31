@@ -5,6 +5,7 @@ import { isMissingSchemaError } from "@/lib/dbErrors";
 import { logSafe } from "@/lib/logSafe";
 import type { Json } from "@/lib/database.types";
 import { sanitizeTrackProps } from "@/lib/trackProps";
+import { clientIpFromHeaders } from "@/lib/clientIp";
 
 export const runtime = "nodejs";
 
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
     // an explicit `allowed === false` skips the insert - and returns 200
     // either way: analytics must never error the caller's beacon.
     const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+      clientIpFromHeaders(req.headers);
     const admin = createAdminClient();
     const { data: allowed } = await admin.rpc("rate_limit_hit", {
       p_bucket: `track:${ip ?? "unknown"}`,

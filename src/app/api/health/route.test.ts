@@ -147,21 +147,37 @@ describe("a healthy database", () => {
 });
 
 describe("the per-IP limit on a public, service-role endpoint", () => {
-  it("meters each caller separately, on the first x-forwarded-for hop", async () => {
+  it("meters each caller separately, on the trusted last x-forwarded-for hop", async () => {
     // WHY THIS EXISTS. The probe runs on the SERVICE-ROLE key - the one
     // credential with no RLS ceiling - and the response is uncacheable by
     // design, so an unthrottled public route turns anonymous traffic into
     // privileged database load. The anon-key probe this replaced had that
     // bound for free; this is what puts it back.
     const { GET } = await import("./route");
+    // The FIRST hop is attacker-supplied (a client can prepend its own
+    // X-Forwarded-For, which Vercel does not strip), so the bucket must key on
+    // the LAST hop the edge appended - see src/lib/clientIp.ts. Keying on the
+    // first hop let a caller mint a fresh bucket per request and defeat the cap.
     await GET(request("203.0.113.7, 70.41.3.18"));
 
     const limiter = rateLimitCalls.find((c) => c.fn === "rate_limit_hit");
     expect(limiter).toBeDefined();
-    // Later hops are attacker-supplied, so only the first one counts.
-    expect(limiter!.args.p_bucket).toBe("health:203.0.113.7");
+    expect(limiter!.args.p_bucket).toBe("health:70.41.3.18");
     expect(limiter!.args.p_limit).toBe(30);
     expect(limiter!.args.p_window_seconds).toBe(60);
+  });
+
+  it("prefers Vercel's own header over a spoofable x-forwarded-for", async () => {
+    const { GET } = await import("./route");
+    const req = new Request("https://hearth.app/api/health", {
+      headers: {
+        "x-vercel-forwarded-for": "198.51.100.5",
+        "x-forwarded-for": "9.9.9.9, 198.51.100.5",
+      },
+    });
+    await GET(req);
+    const limiter = rateLimitCalls.find((c) => c.fn === "rate_limit_hit");
+    expect(limiter!.args.p_bucket).toBe("health:198.51.100.5");
   });
 
   it("buckets a header-less request rather than giving it a free lane", async () => {

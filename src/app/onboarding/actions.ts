@@ -34,6 +34,7 @@ import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
 import { recordSignal } from "@/lib/risk/signals";
 import { trackServerEvent } from "@/lib/trackServer";
+import { clientIpFromHeaders } from "@/lib/clientIp";
 import {
   boundedNumber,
   boundedInt,
@@ -155,7 +156,7 @@ export async function joinMarketWaitlistAction(
   // src/app/contact/actions.ts and /api/track: only an explicit
   // `allowed === false` blocks, so a limiter outage never costs a real
   // out-of-area homeowner their place on the list.
-  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const ip = clientIpFromHeaders(await headers());
   const { data: allowed } = await admin.rpc("rate_limit_hit", {
     p_bucket: `waitlist:${ip ?? "unknown"}`,
     p_limit: 5,

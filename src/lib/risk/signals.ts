@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { riskHash, SALT_VERSION, type SignalKind } from "./hash";
 import { normalizeEmail } from "./emailNorm";
 import { DEVICE_COOKIE, FINGERPRINT_COOKIE } from "./cookies";
+import { clientIpFromHeaders } from "@/lib/clientIp";
 
 // Writing signals into public.account_signals (migration 0130).
 //
@@ -138,10 +139,11 @@ export async function recordRequestSignals(
   try {
     const [h, c] = await Promise.all([headers(), cookies()]);
 
-    // First hop only. x-forwarded-for is a comma-separated chain and every hop
-    // after the first was appended by our own infrastructure; the first entry
-    // is the one the edge actually saw.
-    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+    // Trusted client IP (src/lib/clientIp.ts): x-vercel-forwarded-for, else
+    // the LAST x-forwarded-for hop. The old first-hop read let a client spoof
+    // this signal (send your own X-Forwarded-For and every request gets a
+    // fresh IP hash, so network-based multi-account linking never fired).
+    const ip = clientIpFromHeaders(h);
     const device = c.get(DEVICE_COOKIE)?.value ?? null;
     const fingerprint = c.get(FINGERPRINT_COOKIE)?.value ?? null;
 

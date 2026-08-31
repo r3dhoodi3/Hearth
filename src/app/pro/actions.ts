@@ -62,6 +62,7 @@ import {
 import { selectLaunchCities } from "./onboarding/launchCities";
 import { trackServerEvent } from "@/lib/trackServer";
 import { leadStatusLabel } from "./leadStatusLabel";
+import { clientIpFromHeaders } from "@/lib/clientIp";
 
 // Ceiling for the free-text "Other" service on CategoryPicker. It renders on
 // the public /p/<id> page and the browse cards next to the canonical labels,
@@ -1096,8 +1097,7 @@ export async function saveCompanyAction(formData: FormData) {
         // out-of-area pro their place on the list. The reject below still
         // goes through either way.
         const ip =
-          (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ??
-          null;
+          clientIpFromHeaders(await headers());
         const { data: allowed } = await createAdminClient().rpc(
           "rate_limit_hit",
           {

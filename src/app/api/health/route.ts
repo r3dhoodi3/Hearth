@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clientIpFromHeaders } from "@/lib/clientIp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,13 +91,15 @@ function supabaseConfigured(): boolean {
   );
 }
 
-// The first hop of x-forwarded-for, same as every other IP read in this repo
-// (src/lib/risk/signals.ts, src/app/api/track/route.ts): later hops are
-// attacker-supplied. A request with no header at all shares one bucket, which
-// is the correct pessimistic answer - it is either a local call or a proxy
-// that strips the header, and neither should get an unlimited lane.
+// The trusted client IP (src/lib/clientIp.ts): Vercel's own header, else the
+// LAST x-forwarded-for hop. The old first-hop read was spoofable - a client
+// could send its own X-Forwarded-For and mint a fresh bucket per request,
+// which mattered most here because this endpoint runs on the service-role key.
+// A request with no usable header shares the "unknown" bucket, the correct
+// pessimistic answer: a local call or a header-stripping proxy, neither of
+// which should get an unlimited lane.
 function clientIp(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  return clientIpFromHeaders(req.headers) ?? "unknown";
 }
 
 // FAILS OPEN, like every other rate_limit_hit call in this codebase: if the
