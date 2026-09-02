@@ -28,6 +28,11 @@ import {
   type AddressSuggestion,
 } from "@/lib/addressSuggest";
 import OnboardingValueBullets from "@/components/OnboardingValueBullets";
+import {
+  isStaleDeployError,
+  recoverFromStaleDeploy,
+  STALE_RELOAD_MESSAGE,
+} from "@/lib/staleDeploy";
 import { Home } from "lucide-react";
 
 // LAUNCH_ONLY_MESSAGE used to be duplicated here by hand, because ./actions.ts
@@ -595,7 +600,15 @@ export default function OnboardingForm({
       const prefillName = draftRef.current.fullName.trim() || existingName?.trim() || "";
       setAutofocusName(!prefillName);
       setStep("ready");
-    } catch {
+    } catch (err) {
+      // A page left open across a deploy posts a Server Action id the new
+      // server no longer knows. That is a reload away from fixed, and the
+      // draft above already holds everything typed - so reload once instead
+      // of showing a dead-end error (src/lib/staleDeploy.ts).
+      if (isStaleDeployError(err) && recoverFromStaleDeploy()) {
+        setError(STALE_RELOAD_MESSAGE);
+        return;
+      }
       // A rejected server action (network blip, server hiccup) should never
       // strand the button in its busy state with no explanation.
       setError("That didn't go through. Please try again.");
@@ -691,6 +704,16 @@ export default function OnboardingForm({
       // as "that didn't go through" - rethrow it so the redirect still happens.
       // Anything else is a genuine network/server blip.
       if (err?.digest?.startsWith("NEXT_REDIRECT")) throw err;
+      // Deploy skew: the open page predates the current deployment, so its
+      // claim posted an action id the server no longer knows. Give the draft
+      // back FIRST (the reload lands on a form that reseeds from it), then
+      // reload once instead of stranding them on a claim that can never
+      // succeed from this page (src/lib/staleDeploy.ts).
+      if (isStaleDeployError(err) && recoverFromStaleDeploy()) {
+        persist({});
+        setError(STALE_RELOAD_MESSAGE);
+        return;
+      }
       setError("That didn't go through. Please try again.");
       persist({});
       restoreTypedValues();
