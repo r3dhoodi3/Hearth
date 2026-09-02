@@ -5,6 +5,66 @@ the owner-only account and money items. Items are ordered by impact. Each one is
 a dashboard setting or a paste, not code; the code-level protections are already
 in the repo.
 
+## Status update 2026-09-01 (read this first)
+
+Where things stand as of tonight, so the list below reads against reality:
+
+- **Live DB is fully current through migration 0153** (verified in the SQL
+  editor: big-job insurance gate live in both charge functions, repeat bug
+  reports unblocked). No SQL pastes are owed right now.
+- **A production redeploy on 09-01 activated env vars that had been sitting
+  unapplied**: `ANTHROPIC_API_KEY` (re-entered as a shared variable), the
+  three VAPID push keys, `RISK_HASH_SALT`, `RISK_ENFORCE`. Env edits in
+  Vercel do nothing until a redeploy; that is what had Ask Hearth down.
+- **Stripe is in TEST mode in production ON PURPOSE** (Landen, 09-01: still
+  testing, switches to the live key at go-live). The env-separation alert in
+  the logs fires on every request until then; that is expected. At go-live:
+  live key in, then `REQUIRE_LIVE_STRIPE=1` so a test key becomes a hard
+  error instead of an alert. Do not "fix" the test key before Landen says.
+- **Incident, resolved: an Apple sign-up got no `public.users` row**, which
+  broke claiming a home and the terms record for that account (FK errors).
+  Hotfix `supabase/PASTE-ME-fix-missing-user-row-2026-09-01.sql` backfilled
+  the row and re-asserted `handle_new_user()` as security definer; Landen ran
+  it live at 21:07. Root cause is not fully proven, so: **after any fresh
+  Apple sign-up, check the account can claim a home**. If it recurs, the next
+  step is an ensure-row fallback in `/auth/callback` (code change, small).
+- **Shipped be74eda: stale-deploy auto-recovery.** Pages left open across a
+  deploy used to fail every form submit with "Failed to find Server Action"
+  until someone thought to refresh. Such pages now reload themselves once
+  (`src/lib/staleDeploy.ts`; wired into the root layout, all three error
+  boundaries, and the onboarding form). Pages loaded before be74eda still
+  need one manual refresh; everything after heals itself.
+- Corrections to stale notes floating around: the app is already on
+  **Next 15.5 / React 19** (no upgrade pending), and the launch area is
+  already **all of Orange County** (migration 0129), not just FV/HB.
+
+Still open from the list below, in current priority order: service-role key
+rotation (6), Resend SMTP (2), signup captcha (3), RLS audit (1), per-IP rate
+limits (4), confirm-email back ON in Supabase Auth, deleting the throwaway
+test accounts, `TWILIO_*` in Vercel (14), delete `GEMINI_API_KEY` (7).
+Apple key rotation from item 11 is DONE (08-30: old key revoked, new key
+86W6M42H37; the client-secret JWT now expires 2027-02-27, calendar reminder
+mid-February 2027).
+
+## Working in this repo with Claude Code
+
+House rules Landen holds every session to; they apply to yours too:
+
+1. **Never commit or push without Landen's explicit go-ahead, per push.** A
+   yes yesterday does not carry to today.
+2. **Gate before calling anything done**: `npx tsc --noEmit`, `npx vitest
+   run`, and a production build with `$env:NEXT_DIST_DIR=".next-build"; npm
+   run build` (never build into `.next` while a dev server runs). Check real
+   exit codes, not scrollback.
+3. **Live schema changes are SQL-editor pastes, never the CLI**, and every
+   pending migration ships as one combined `PASTE-ME-*.sql` with a precheck
+   guard. Editing repo SQL alone changes nothing on live.
+4. **Money logic and RLS are review-first**: anything touching wallets,
+   charges, grants, or policies gets read end-to-end before it lands.
+5. Mobile formatting changes stay behind breakpoints (desktop stays
+   byte-identical), and every homeowner-side phone change gets mirrored on
+   the pro side in the same wave.
+
 ## Before launch
 
 1. **RLS audit, live DB.** Run queries 1a and 1b from
