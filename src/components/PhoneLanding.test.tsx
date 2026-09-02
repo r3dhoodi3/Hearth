@@ -9,6 +9,14 @@ import PhoneLanding from "./PhoneLanding";
 // testing-library's auto-cleanup never wires itself up on its own.
 afterEach(() => cleanup());
 
+// A minimal stand-in for the HERO_PHOTOS set page.tsx passes in. Two entries
+// so the cycler has something to mount and a distinct first-frame alt to
+// assert on; the real list lives in src/app/page.tsx.
+const PHOTOS = [
+  { src: "/photos/craftsman-home-dusk.jpg", alt: "A warm craftsman home at dusk" },
+  { src: "/photos/plumber-pipe-fittings.jpg", alt: "A plumber tightening fittings" },
+];
+
 // The phone landing exists so a visitor who already installed the app can get
 // into an account without reading a marketing page. Two properties keep that
 // true and both are one careless edit away from regressing:
@@ -28,12 +36,12 @@ afterEach(() => cleanup());
 // test's reach.
 describe("PhoneLanding", () => {
   it("renders only below sm", () => {
-    const { container } = render(<PhoneLanding />);
+    const { container } = render(<PhoneLanding photos={PHOTOS} />);
     expect(container.firstElementChild).toHaveClass("sm:hidden");
   });
 
   it("offers two equal role doors, straight to the real signup forms", () => {
-    render(<PhoneLanding />);
+    render(<PhoneLanding photos={PHOTOS} />);
 
     const homeowner = screen.getByRole("link", { name: "I'm a homeowner" });
     expect(homeowner).toHaveAttribute("href", "/homeowner-signup");
@@ -45,7 +53,7 @@ describe("PhoneLanding", () => {
   });
 
   it("keeps sign-in below the doors as a quieter full-width link, not a third button", () => {
-    render(<PhoneLanding />);
+    render(<PhoneLanding photos={PHOTOS} />);
     const signIn = screen.getByRole("link", {
       name: /already have an account\? sign in/i,
     });
@@ -56,7 +64,7 @@ describe("PhoneLanding", () => {
   });
 
   it("keeps only Emergency help in the quiet row, since contractor is a door now", () => {
-    render(<PhoneLanding />);
+    render(<PhoneLanding photos={PHOTOS} />);
     const emergency = screen.getByRole("link", { name: "Emergency help" });
     expect(emergency).toHaveAttribute("href", "/emergency-help");
     expect(emergency.className).not.toMatch(/btn/);
@@ -73,7 +81,7 @@ describe("PhoneLanding", () => {
   });
 
   it("shows the three one-line benefits so the screen is not just buttons", () => {
-    render(<PhoneLanding />);
+    render(<PhoneLanding photos={PHOTOS} />);
     for (const line of [
       "Freeze and heat warnings before things break.",
       "Maintenance reminders for what your home has.",
@@ -84,23 +92,32 @@ describe("PhoneLanding", () => {
   });
 
   it("does not repeat Privacy here (it lives in the phone footer only)", () => {
-    render(<PhoneLanding />);
+    render(<PhoneLanding photos={PHOTOS} />);
     expect(screen.queryByRole("link", { name: "Privacy" })).toBeNull();
   });
 
   it("keeps the theme switch reachable, since the page header is hidden on phone", () => {
-    render(<PhoneLanding />);
+    render(<PhoneLanding photos={PHOTOS} />);
     expect(
       screen.getByRole("button", { name: /switch to (light|dark) mode/i })
     ).toBeInTheDocument();
   });
 
   it("says one thing above the doors and smuggles no marketing sections back in", () => {
-    render(<PhoneLanding />);
+    render(<PhoneLanding photos={PHOTOS} />);
     expect(
       screen.getByRole("heading", { level: 1, name: "Your home, looked after." })
     ).toBeInTheDocument();
     expect(screen.queryByText(/How it works/i)).toBeNull();
     expect(screen.queryByText(/What Hearth watches for you/i)).toBeNull();
+  });
+
+  it("shows a hero photo so the screen is not just text on a flat fill", () => {
+    render(<PhoneLanding photos={PHOTOS} />);
+    // The cycler mounts its first frame server-visible; that image is the
+    // visual anchor the phone screen was missing.
+    expect(
+      screen.getByRole("img", { name: PHOTOS[0].alt })
+    ).toBeInTheDocument();
   });
 });

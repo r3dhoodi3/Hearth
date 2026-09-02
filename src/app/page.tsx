@@ -362,13 +362,14 @@ export default async function Home(props: {
       <div className="bg-hearth-50 dark:bg-stone-900">
         <div className="mx-auto max-w-5xl px-6 pt-6">
           {/* PHONE ONLY (sm:hidden, see PhoneLanding.tsx). Below `sm` this
-              block IS the landing page: wordmark, one line, two role doors
-              (homeowner/contractor), a quiet sign-in, three benefit lines.
-              Everything below it in this file carries `max-sm:hidden` so the
-              marketing page stays exactly as it was from `sm` up and is only
-              ever hidden on phones, never deleted. Someone on a phone
-              downloaded the app already; they need a way in, not a pitch. */}
-          <PhoneLanding />
+              block IS the landing page: wordmark, one line, a hero photo, two
+              role doors (homeowner/contractor), a quiet sign-in, three benefit
+              lines. Everything below it in this file carries `max-sm:hidden` so
+              the marketing page stays exactly as it was from `sm` up and is
+              only ever hidden on phones, never deleted. The hero photo reuses
+              the same HERO_PHOTOS set the desktop cycler uses, so there is one
+              source of truth for the images. */}
+          <PhoneLanding photos={HERO_PHOTOS} />
 
           {/* Slim header: wordmark left, theme switch + quiet pro door right */}
           <header className="flex items-center justify-between max-sm:hidden">
