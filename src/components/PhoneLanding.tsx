@@ -1,15 +1,17 @@
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
+import HeroPhotoCycler from "@/components/HeroPhotoCycler";
 
 // The phone landing: everything a visitor who already downloaded the app
 // needs, plus just enough substance that the screen does not read as empty.
 //
 // Someone arriving here on a phone came from the App Store listing or from a
-// friend's link. They may be a homeowner or a contractor, so the screen leads
-// with two role doors (homeowner signup, contractor signup), then a quieter
-// sign-in for people who already have an account, then three one-line reasons
-// to walk through a door. Every marketing section on the landing page is
+// friend's link. They may be a homeowner or a contractor, so the screen shows
+// a warm hero photo for life, then two role doors (homeowner signup,
+// contractor signup), then a quieter sign-in for people who already have an
+// account, then three one-line reasons to walk through a door. Every marketing
+// section on the landing page is
 // hidden below `sm` instead (`max-sm:hidden` on each section wrapper in
 // src/app/page.tsx) - hidden, not deleted, so desktop is byte-identical and
 // the copy still gets indexed.
@@ -18,10 +20,13 @@ import ThemeToggle from "@/components/ThemeToggle";
 // Hearth watches for you") is now the post-login guide, src/components/
 // AppGuide.tsx, which is where it actually helps.
 //
-// SIZING: this whole block lands in roughly 600px. The two role doors and the
-// sign-in link all sit inside the first ~420px, so they clear the fold on a
-// 390x844 phone even with the browser chrome; only the benefit rows and the
-// quiet row can fall below it. Keep it that way - the doors are the point.
+// SIZING: a hero photo (the same HERO_PHOTOS the desktop cycler uses, passed
+// in as a prop) sits under the headline to give the phone screen a visual
+// anchor - without it the page was just text on a flat fill and read as empty.
+// The photo's aspect-[3/2] frame is ~225px tall at phone width, so the two
+// role doors sit a little lower than before but still clear the fold on a
+// 390x844 phone; only the benefit rows and the quiet row fall below it. Keep
+// the doors above the fold - they are the point.
 //
 // The doors stay single-line on purpose: .btn (globals.css) is a row flex
 // tuned to center a single line inside its 44px minimum, and a sub-line
@@ -64,7 +69,11 @@ const benefits = [
   },
 ];
 
-export default function PhoneLanding() {
+export default function PhoneLanding({
+  photos,
+}: {
+  photos: { src: string; alt: string }[];
+}) {
   return (
     <div className="sm:hidden">
       {/* The full header is hidden on phone, so the wordmark and the theme
@@ -88,6 +97,15 @@ export default function PhoneLanding() {
       <p className="mt-3 text-base leading-relaxed text-stone-600 dark:text-stone-400">
         Hearth checks on your home for you and warns you before things break.
       </p>
+
+      {/* Hero photo: the visual anchor the phone screen was missing. Same
+          crossfading HERO_PHOTOS the desktop cycler uses (passed in from
+          page.tsx so the image set has one home), in the same rounded frame.
+          The cycler reserves its own aspect-[3/2] box, so it never shifts the
+          doors as photos load. */}
+      <div className="mt-6 overflow-hidden rounded-xl border border-stone-200 dark:border-white/10">
+        <HeroPhotoCycler photos={photos} />
+      </div>
 
       {/* The two role doors, stacked, full width, equal size. min-h-12 (48px)
           is above the 44px thumb minimum .btn already enforces. Each goes
