@@ -7,8 +7,8 @@ import DeviceFingerprint from "@/components/DeviceFingerprint";
 
 // Server wrapper for sign-in: an already-signed-in user visiting /signin is
 // sent straight to where they were headed (?next=) or to their side of the
-// app, same pattern as /get-started and the root page, instead of being shown
-// the form again. Everyone else gets the client form (./SignInForm.tsx).
+// app, same pattern as the root page, instead of being shown the form again.
+// Everyone else gets the client form (./SignInForm.tsx).
 export default async function SignInPage(
   props: {
     searchParams?: Promise<{ next?: string; error?: string; expired?: string }>;

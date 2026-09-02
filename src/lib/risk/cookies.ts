@@ -71,7 +71,6 @@ function looksLikeFile(path: string): boolean {
 // before any account or payment exists to link.
 const DEVICE_COOKIE_PATHS = [
   "/signin",
-  "/get-started",
   "/homeowner-signup",
   "/contractor-signup",
   "/welcome",

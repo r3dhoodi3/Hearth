@@ -849,7 +849,7 @@ describe("isProTrialExcludedPath: home pages and the review prompt's own list", 
 
   it("excludes the rest of the public funnel", async () => {
     const { isProTrialExcludedPath } = await import("./reviewPrompt");
-    for (const p of ["/pricing", "/get-started", "/join", "/welcome"]) {
+    for (const p of ["/pricing", "/join", "/welcome"]) {
       expect(isProTrialExcludedPath(p), p).toBe(true);
     }
   });

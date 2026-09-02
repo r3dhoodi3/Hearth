@@ -22,7 +22,7 @@ import { Eye, EyeOff } from "lucide-react";
 // /auth/callback with next=/pro/onboarding so verifying drops them straight
 // into company setup instead of back at sign-in.
 //
-// ?next=: carried in from /get-started same as the homeowner sign-up. Note
+// ?next=: carried in from /signin same as the homeowner sign-up. Note
 // it only survives as far as /pro/onboarding: the company-setup form there
 // posts to saveCompanyAction (src/app/pro/actions.ts, owned by another fix),
 // which redirects on its own, so a contractor's original destination isn't

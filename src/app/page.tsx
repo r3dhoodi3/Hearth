@@ -416,7 +416,8 @@ export default async function Home(props: {
               </p>
               {/* Straight to homeowner signup: this page is homeowner-targeted
                   and pros have two dedicated doors (header link + pro band), so
-                  the "Who are you?" fork on /get-started only cost a click. */}
+                  a separate "Who are you?" role-chooser page would only cost a
+                  click - this landing is itself the fork. */}
               <Link
                 href="/homeowner-signup"
                 className="btn-primary mt-8 px-6 py-3 text-base shadow-lift"

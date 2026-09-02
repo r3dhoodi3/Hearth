@@ -46,14 +46,12 @@ export default function SignInForm({
   sessionExpired?: boolean;
 }) {
   const supabase = createClient();
-  // Same ?next=, from the server-provided prop instead of window so it's
-  // available for the "Get started" link below with no hydration mismatch:
-  // a signed-out visitor who lands here via a gated CTA and decides to sign
-  // up instead of signing in should not lose their destination (see
-  // /get-started and the sign-up pages, which carry it the rest of the way).
-  const getStartedHref = next
-    ? `/get-started?next=${encodeURIComponent(next)}`
-    : "/get-started";
+  // "New to Hearth?" sends visitors to the home page (the landing with the
+  // hero photos and both role doors), which is now the single front door for
+  // new users. It does not carry ?next= - the landing has no destination to
+  // thread on - so a signed-out visitor who arrived via a gated CTA and then
+  // chooses to sign up starts fresh from the landing. `next` is still used
+  // below for the actual sign-in and the Google/Apple buttons.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -182,7 +180,7 @@ export default function SignInForm({
         <div className="mt-6 border-t border-stone-100 pt-4 text-center dark:border-white/10">
           <p className="text-sm text-stone-500 dark:text-stone-400">New to Hearth?</p>
           <Link
-            href={getStartedHref}
+            href="/"
             className="btn-secondary mt-2 inline-block w-full"
           >
             Get started

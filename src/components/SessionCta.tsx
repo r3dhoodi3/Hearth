@@ -61,7 +61,7 @@ export function useSignedIn(): boolean {
 }
 
 // The header button shared by the guides layout and the city landing pages.
-// signedOutHref differs between them (/get-started vs /homeowner-signup), so
+// signedOutHref differs between them ("/" vs /homeowner-signup), so
 // it is a prop; every class name is identical to what the two server versions
 // rendered, character for character, so the pages look the same as before.
 export default function SessionCta({
