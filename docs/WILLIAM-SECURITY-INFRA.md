@@ -5,6 +5,51 @@ the owner-only account and money items. Items are ordered by impact. Each one is
 a dashboard setting or a paste, not code; the code-level protections are already
 in the repo.
 
+## Build request from Landen (2026-09-01): permit-based system verification
+
+WHAT. When a homeowner claims a home, onboarding seeds seven systems with
+install years guessed by arithmetic (build year + typical lifespans, see
+claimPropertyAction in src/app/onboarding/actions.ts). City building permits
+are the free public record that turns those guesses into facts: a reroof,
+HVAC changeout, water heater swap, repipe, or panel upgrade almost always has
+a dated permit.
+
+HOW, v1 (free, no vendors). Goal is ALL of Orange County (Hearth serves the
+whole county since 0129; FV/HB is only the marketing order, never a product
+boundary). Do NOT build one scraper per city: most OC cities run one of a few
+permit-portal platforms (Accela Citizen Access, eTRAKiT/CentralSquare, Tyler
+EnerGov/CSS, and a couple of others), so build PLATFORM ADAPTERS:
+1. Survey which platform each OC city's permit portal runs (an afternoon of
+   clicking), then write one adapter per platform plus a small per-city config
+   (base URL, city name, quirks). Four to six adapters should cover most of
+   the county; one adapter instantly covers every city on that platform.
+   Same engineering pattern as the CSLB license scraper (src/lib/cslb.ts):
+   polite rate limits, WAF-aware fetch, parse defensively, fail soft. Check
+   each city for an open-data permit export first (a free CSV beats a
+   scraper). Roll out city-by-city in the order users actually appear
+   (FV/HB first because marketing starts there), and accept honest gaps:
+   a city we cannot read just keeps its arithmetic estimates.
+2. Nightly cron: for each claimed property in a covered city, look up permits,
+   classify against the seven system types (reroof -> roof, mechanical/HVAC
+   changeout -> hvac, water heater -> water_heater, repipe -> plumbing,
+   service/panel upgrade -> electrical_panel, window retrofit -> windows).
+3. Update rule, non-negotiable: only rows the owner has NOT confirmed
+   (confirmed_at null) may be updated, and owner-entered data is never
+   overwritten. Permit-sourced years get a third provenance level between
+   arithmetic guess and owner-confirmed: show a "from city permit records"
+   badge in SystemRow, keep confirmed_at null (it stays reserved for the
+   owner's own confirmation).
+4. Surface it as a trust moment: a notification / profile note like "We found
+   the 2006 reroof permit for your home and updated your roof's age."
+
+BONUS uses of the same data (later, do not block v1): permits name the
+contractor who did the work (warm pro-recruiting list for Landen), and fresh
+permits identify homeowners mid-project (marketing).
+
+DO NOT: pay Shovels (~$599/mo) or ATTOM at this stage; scrape any city we have
+no users in; hammer city portals (cache results, look up each address at most
+weekly); present permit-derived years as owner-verified.
+
 ## Status update 2026-09-01 (read this first)
 
 Where things stand as of tonight, so the list below reads against reality:
