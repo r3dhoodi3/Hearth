@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import ToastProvider from "@/components/ToastProvider";
 import FlashToast from "@/components/FlashToast";
+import StaleDeployRecovery from "@/components/StaleDeployRecovery";
 import { LAUNCH_CITY_NAMES } from "@/lib/serviceArea";
 
 // KEEP THIS FILE FREE OF cookies() AND headers().
@@ -151,6 +152,7 @@ export default async function RootLayout({
           {children}
           <FlashToast />
         </ToastProvider>
+        <StaleDeployRecovery />
       </body>
     </html>
   );
