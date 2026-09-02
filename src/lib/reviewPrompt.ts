@@ -606,7 +606,6 @@ export const PRO_TRIAL_EXCLUDED_PATHS = [
   // finished onboarding yet) can land on. A full-screen paywall has no place
   // in front of any of these either.
   "/pricing",
-  "/get-started",
   "/join",
   "/welcome",
   "/contractor-signup",

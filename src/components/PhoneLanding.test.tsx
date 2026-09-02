@@ -27,7 +27,7 @@ const PHOTOS = [
 //     desktop page grows a duplicate hero.
 //  2. The two role doors point at the real forms. "I'm a homeowner" goes
 //     STRAIGHT to /homeowner-signup and "I'm a contractor" to
-//     /contractor-signup, not to the /get-started "who are you?" fork:
+//     /contractor-signup, not to a "who are you?" role-chooser fork:
 //     this screen IS that fork, and routing through it again would cost an
 //     extra tap for no answer.
 //

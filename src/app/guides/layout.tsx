@@ -47,7 +47,7 @@ export default function GuidesLayout({
         >
           <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
         </Link>
-        <SessionCta signedOutHref="/get-started" />
+        <SessionCta signedOutHref="/" />
       </header>
 
       {children}

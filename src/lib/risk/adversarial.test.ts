@@ -592,7 +592,6 @@ describe("FIXED: the device cookie only lands on pages people read", () => {
       "/plus",
       "/signin",
       "/pro/plus",
-      "/get-started",
       "/homeowner-signup",
       "/contractor-signup",
       "/welcome",

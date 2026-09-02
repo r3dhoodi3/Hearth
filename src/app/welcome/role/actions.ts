@@ -113,7 +113,7 @@ export async function chooseRoleAction(formData: FormData) {
   // holds the pre-stamp JWT with no role. Cookie-based getRole() (the /pro,
   // /pro/onboarding and /onboarding guards read the cookie, not the live auth
   // server) would see null and bounce this user straight back through the
-  // picker -> /pro -> /get-started -> picker loop. Refresh so the cookie
+  // picker -> /pro -> picker loop. Refresh so the cookie
   // carries a JWT with role before we redirect them into onboarding.
   const { error: refreshError } = await supabase.auth.refreshSession();
   if (refreshError) {

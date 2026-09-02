@@ -153,7 +153,7 @@ describe("ProTrialNudge: the same smart timing as the review prompt", () => {
 });
 
 describe("ProTrialNudge: never on a home or landing page", () => {
-  it.each(["/", "/pros", "/pricing", "/get-started", "/pro"])(
+  it.each(["/", "/pros", "/pricing", "/pro"])(
     "stays hidden on %s even after the threshold is reached",
     async (path) => {
       mockPathname = path;

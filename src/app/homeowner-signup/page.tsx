@@ -27,8 +27,9 @@ import { Eye, EyeOff } from "lucide-react";
 // with next=/onboarding so verifying drops them straight into onboarding
 // instead of back at sign-in.
 //
-// ?next=: carried in from /get-started (originally from /signin, ultimately
-// from the middleware bouncing a signed-out visitor off a gated page). Read
+// ?next=: carried in from /signin (ultimately from the middleware bouncing a
+// signed-out visitor off a gated page) via the Google/Apple buttons and the
+// sign-up links that thread it. Read
 // via the searchParams prop rather than window/useSearchParams so it's
 // available with no hydration mismatch or Suspense boundary. Passed through
 // to /onboarding on success; the claimed-home gate still routes a brand-new

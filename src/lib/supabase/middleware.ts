@@ -13,8 +13,8 @@ import {
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // Refreshes the auth session on every request and guards app routes.
-// Public routes: "/", "/get-started", "/signin", "/reset-password", the
-// sign-up pages, "/auth/*". Everything else requires a session.
+// Public routes: "/", "/signin", "/reset-password", the sign-up pages,
+// "/auth/*". Everything else requires a session.
 //
 // INVARIANT: NO SERVER ACTION MAY RELY ON THE MIDDLEWARE FOR AUTH. What this
 // function does is redirect page navigations, and that is all it is allowed to
@@ -308,7 +308,6 @@ export function isPublicPath(path: string): boolean {
     // Exact match, not a prefix: only the shell itself is public, so a future
     // page under /open/ cannot inherit anonymity by accident.
     path === "/open" ||
-    path.startsWith("/get-started") ||
     path.startsWith("/signin") ||
     // Password reset request page: a signed-out user is exactly who needs it,
     // so it must not bounce to /signin.
