@@ -174,12 +174,13 @@ body {
            dark:focus-visible:ring-bark-500 dark:focus-visible:ring-offset-stone-900;
   }
   .btn-primary {
-    /* Primary/CTA buttons use bark, the pre-redesign hearth brown, instead
-       of the current red-leaning hearth accent. Focus ring follows the
-       button color instead of inheriting .btn's ember ring. */
-    @apply btn bg-bark-600 text-white shadow-card hover:bg-bark-700
-           hover:shadow-lift focus-visible:ring-bark-600 dark:bg-bark-500
-           dark:hover:bg-bark-600 dark:focus-visible:ring-bark-500;
+    /* Primary/CTA buttons use oak, a warmer/more golden brown than bark (whose
+       darker shades read as mahogany). Scoped here so ONLY the filled buttons
+       change color; the rest of the brown UI stays on bark. Focus ring follows
+       the button color instead of inheriting .btn's ember ring. */
+    @apply btn bg-oak-600 text-white shadow-card hover:bg-oak-700
+           hover:shadow-lift focus-visible:ring-oak-600 dark:bg-oak-500
+           dark:hover:bg-oak-600 dark:focus-visible:ring-oak-500;
   }
   .btn-secondary {
     /* Elevated tier (stone-700, one step lighter than .card's stone-800) so

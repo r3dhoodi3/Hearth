@@ -65,9 +65,13 @@ export default function HomeSwitcher({
             min-content size equal to its max-content size, so the explicit
             min-width:0 above is what actually lets this label give way. The
             max-w ladder is a ceiling, not a floor - it stops a long address
-            eating the header on a wide screen, while the min-w-0 above lets
-            it go narrower still when the nav needs the space. */}
-        <span className="min-w-0 max-w-[8.5rem] truncate sm:max-w-[10rem] lg:max-w-[14rem]">
+            eating the header on a wide screen, while the min-w-0 above lets it
+            go narrower still when the nav needs the space. NO mobile cap: below
+            sm there is no nav strip in this row, so the address fills the space
+            left by the toolbar (search/bell/avatar) and only truncates when it
+            would actually overlap them - min-w-0 + truncate handle that. The
+            sm/lg ceilings stay because there the nav strip competes for the row. */}
+        <span className="min-w-0 truncate sm:max-w-[10rem] lg:max-w-[14rem]">
           {active?.address_line1}
         </span>
         <span

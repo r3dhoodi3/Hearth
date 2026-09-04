@@ -88,9 +88,9 @@ const config: Config = {
           800: "#7d2f1b",
           900: "#682816",
         },
-        // The pre-redesign hearth brown, revived for buttons. 50/100 are
-        // light tints added for the homeowner/landing sweep off the ember
-        // accent, matched to the same pre-redesign ramp as 500-700.
+        // The pre-redesign hearth brown. Used across the homeowner/landing UI
+        // (side pill, active nav highlight, links, hover tints). NOT the filled
+        // CTA button color - that is `oak` below, scoped to .btn-primary only.
         bark: {
           50: "#fbf7f2",
           100: "#f3e9dd",
@@ -101,6 +101,14 @@ const config: Config = {
           600: "#915d32",
           700: "#73482b",
           900: "#4a2e1c",
+        },
+        // Oak brown: warmer, more golden than bark (whose darker shades read as
+        // mahogany). Scoped to the FILLED CTA buttons only (.btn-primary in
+        // globals.css); the rest of the brown UI stays on bark.
+        oak: {
+          500: "#a67c49",
+          600: "#8a6a3c",
+          700: "#6f5636",
         },
       },
     },
