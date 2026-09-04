@@ -8,7 +8,7 @@ export default function ProNotFound() {
     <main className="mx-auto max-w-xl px-6 py-16 text-center">
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
         {/* Flat warm banner strip, no gradient: hearth-100 in light, a
-            translucent hearth tint over the stone-800 card in dark. */}
+            translucent Hearth tint over the stone-800 card in dark. */}
         <div className="h-20 bg-bark-100 dark:bg-bark-700/30" />
         <div className="px-6 pb-8 pt-2">
           <h1 className="mt-3 text-xl font-semibold text-stone-900 dark:text-stone-100">

@@ -63,7 +63,7 @@ const FAQS = [
     a: "Getting more than one quote for anything beyond a small repair, comparing itemized breakdowns rather than just the bottom line, confirming license and insurance independently, and having a written contract with a payment schedule tied to milestones, not just a handshake and a deposit.",
   },
   {
-    q: "Can Hearth tell me if my quote is fair?",
+    q: "Ca Hearth tell me if my quote is fair?",
     a: "Hearth's Quote analyzer reads a quote you upload or paste in, compares the total and each line item to typical costs, flags anything that looks padded, vague, or duplicated, and drafts a message you can send back if you want to negotiate.",
   },
 ];

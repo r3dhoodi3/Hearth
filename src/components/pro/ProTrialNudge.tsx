@@ -7,6 +7,8 @@ import { useFormStatus } from "react-dom";
 import { X } from "lucide-react";
 import { startProCheckoutAction } from "@/app/pro/plus/actions";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
+import AutoRenewalConsentCheckbox from "@/components/AutoRenewalConsentCheckbox";
+import BillingLegalLine from "@/components/BillingLegalLine";
 import InlineSpinner from "@/components/InlineSpinner";
 import Logo from "@/components/Logo";
 import { track } from "@/lib/analytics";
@@ -98,7 +100,15 @@ const YEARLY_SAVE_PCT = Math.round(
 const MONTHLY_PRICE = formatUsd(PRO_PLAN.monthly);
 const YEARLY_PRICE = formatUsd(PRO_PLAN.yearly);
 
-function CheckoutButton({ label }: { label: string }) {
+function CheckoutButton({
+  label,
+  disabled = false,
+}: {
+  label: string;
+  // Caller-driven disable (the auto-renewal consent checkbox not yet
+  // checked), ORed with the in-flight pending state below.
+  disabled?: boolean;
+}) {
   const { pending } = useFormStatus();
   // Same synchronous double-submit latch src/app/pro/plus/ProPlanToggle.tsx
   // uses: `pending` lags a render behind the click, so a fast double tap can
@@ -120,7 +130,7 @@ function CheckoutButton({ label }: { label: string }) {
     <button
       type="submit"
       className="btn-primary min-h-12 w-full text-base"
-      disabled={pending}
+      disabled={pending || disabled}
       onClick={handleClick}
     >
       {pending && <InlineSpinner />}
@@ -149,6 +159,9 @@ export default function ProTrialNudge({
   const headingId = useId();
   const [open, setOpen] = useState(false);
   const [plan, setPlan] = useState<Plan>("yearly");
+  // The required auto-renewal consent checkbox (Cal. Bus. & Prof. Code
+  // 17602(a)(2)): unchecked by default, gating the one checkout button below.
+  const [consent, setConsent] = useState(false);
 
   const mountedRef = useRef(true);
   const openRef = useRef(false);
@@ -443,12 +456,18 @@ export default function ProTrialNudge({
               {priceLine}
             </p>
             <AutoRenewalTerms plan={planLabel} introEligible={introEligible} />
+            <AutoRenewalConsentCheckbox
+              id="pro-trial-nudge-consent"
+              checked={consent}
+              onChange={setConsent}
+            />
             <CheckoutButton
               label={
                 introEligible
                   ? `Start ${PRO_PLAN.trialDays}-day free trial`
                   : "Get Hearth Pro"
               }
+              disabled={!consent}
             />
           </form>
           <p className="text-center text-xs text-stone-500 dark:text-stone-400">
@@ -461,6 +480,10 @@ export default function ProTrialNudge({
               Terms of Service
             </Link>
           </p>
+          {/* Cal. Bus. & Prof. Code 17538: legal name, address, and a route to
+              the refund policy, on the same screen as the checkout button
+              above before any charge happens. */}
+          <BillingLegalLine className="text-center text-xs text-stone-500 dark:text-stone-400" />
         </div>
       </div>
     </div>

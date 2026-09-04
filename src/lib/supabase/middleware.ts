@@ -361,6 +361,12 @@ export function isPublicPath(path: string): boolean {
     // visitor must be able to open before they have an account.
     path === "/pro-terms" ||
     path.startsWith("/pro-terms/") ||
+    // Pro Data Addendum (src/app/pro-data-addendum): the Pro Terms addendum
+    // governing homeowner contact data, linked from the same contractor
+    // sign-up checkbox as pro-terms above - same reasoning, must be readable
+    // with no account.
+    path === "/pro-data-addendum" ||
+    path.startsWith("/pro-data-addendum/") ||
     // AI disclosure (src/app/ai-disclosure): same reasoning as privacy/terms.
     // It is ALSO linked from the inline AI label inside the signed-in app
     // (src/components/AiNotice.tsx), so it has to resolve either way.
@@ -368,6 +374,39 @@ export function isPublicPath(path: string): boolean {
     path.startsWith("/ai-disclosure/") ||
     path === "/dmca" ||
     path.startsWith("/dmca/") ||
+    // The rest of the legal document set (src/content/legal/*.md, rendered by
+    // src/components/LegalDocument.tsx): same reasoning as privacy/terms/
+    // pro-terms/ai-disclosure/dmca above - every one of these is either
+    // legally required to be readable with no account (billing disclosures
+    // under B&P 17538, the SMS terms linked from the opt-in checkbox, the
+    // DMCA-adjacent subprocessor list) or is itself an accessibility/privacy
+    // commitment that would be self-defeating behind a sign-in wall.
+    path === "/billing" ||
+    path.startsWith("/billing/") ||
+    path === "/sms-terms" ||
+    path.startsWith("/sms-terms/") ||
+    path === "/accessibility" ||
+    path.startsWith("/accessibility/") ||
+    path === "/guidelines" ||
+    path.startsWith("/guidelines/") ||
+    path === "/security" ||
+    path.startsWith("/security/") ||
+    // Law Enforcement Requests (src/app/law-enforcement): read by an agency
+    // or a civil litigant with no Hearth account, same reasoning as the rest
+    // of the legal document set above.
+    path === "/law-enforcement" ||
+    path.startsWith("/law-enforcement/") ||
+    path === "/cookies" ||
+    path.startsWith("/cookies/") ||
+    path === "/subprocessors" ||
+    path.startsWith("/subprocessors/") ||
+    path === "/privacy-choices" ||
+    path.startsWith("/privacy-choices/") ||
+    // RFC 9116 security.txt (src/app/.well-known/security.txt/route.ts) and
+    // anything else that ever lands under /.well-known: fetched by automated
+    // scanners and researchers with no session, same reasoning as
+    // robots.txt/sitemap.xml below.
+    path.startsWith("/.well-known/") ||
     // Public contact form (src/app/contact): the whole point is to give a
     // signed-out visitor a reachable channel now that the site no longer
     // publishes FOUNDER.email directly (see LegalContact.tsx). A signed-out

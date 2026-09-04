@@ -14,7 +14,7 @@ import {
   hasClaimedPromo,
 } from "@/lib/subscription";
 import { PRO_PLAN } from "@/lib/constants";
-import { billingTermsText } from "@/lib/billingTerms";
+import { billingTermsText, AUTO_RENEWAL_CHECKBOX_LABEL } from "@/lib/billingTerms";
 import {
   checkoutIdempotencyBucket,
   checkoutIdempotencyKey,
@@ -111,6 +111,20 @@ export async function startProCheckoutAction(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
+
+  // REQUIRE THE AUTO-RENEWAL CONSENT CHECKBOX (Cal. Bus. & Prof. Code
+  // 17602(a)(2), as amended by AB 2863, effective July 1, 2025). Mirrors
+  // startPlusCheckoutAction's identical guard: the checkout screens
+  // (ProPlanToggle.tsx, ProTrialNudge.tsx) already disable their submit
+  // buttons until the box is checked, so this is the server-side brace for a
+  // request that never went through one of those buttons.
+  if (formData.get("consent_checkbox") !== "true") {
+    await setFlash(
+      "Check the box agreeing to the automatic renewal terms to continue.",
+      "error"
+    );
+    redirect("/pro/plus");
+  }
 
   // Membership is a contractor perk bundle, so only a set-up company can buy
   // it. It never changes which leads anyone can see or apply to.
@@ -625,6 +639,12 @@ export async function startProCheckoutAction(formData: FormData) {
           plan,
           consent_terms: consentTerms,
           consent_at: consentAt,
+          // The affirmative checkbox itself (Cal. Bus. & Prof. Code
+          // 17602(a)(2)), alongside the disclosure text it confirms. The
+          // guard above already refused to reach this point unless the
+          // posted value was exactly "true".
+          consent_checkbox: "true",
+          consent_checkbox_label: AUTO_RENEWAL_CHECKBOX_LABEL,
           // Session-level twin of intro_step_up above, for the OTHER half of
           // the rollback: checkout.session.expired. An abandoned checkout never
           // produces a subscription at all, so the webhook has nothing but this

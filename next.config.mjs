@@ -65,6 +65,16 @@ const CSP_DIRECTIVES = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // src/components/LegalDocument.tsx reads src/content/legal/*.md with
+  // fs.readFileSync at request time. Next's serverless build only bundles
+  // the files a route's static analysis can see, and a runtime fs.readFileSync
+  // path is invisible to that analysis, so without this every legal page
+  // (terms, privacy, billing, etc.) would 500 on Vercel while working fine in
+  // `next dev`, which reads straight off local disk. This forces every
+  // serverless function to carry the whole folder along.
+  outputFileTracingIncludes: {
+    "/**": ["./src/content/legal/**/*.md"],
+  },
   // `next dev` and `next build` corrupt each other when they share .next
   // (missing vendor chunks, prerender failures). Setting NEXT_DIST_DIR lets a
   // verification build write somewhere else while the dev server keeps

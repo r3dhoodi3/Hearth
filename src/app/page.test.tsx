@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
+import { LEGAL_LINKS } from "@/lib/legal";
 
 // Vitest globals are off in this repo (see vitest.config.ts), so
 // testing-library's auto-cleanup never wires itself up on its own.
@@ -107,7 +108,9 @@ describe("landing page, phone split", () => {
         })
         .closest("div.grid")
     ).toHaveClass("max-sm:hidden");
-    expect(screen.getByTestId("hero-photos")).toBeInTheDocument();
+    // Rendered once in the desktop hero and once inside PhoneLanding, so
+    // assert presence without assuming a single instance.
+    expect(screen.getAllByTestId("hero-photos").length).toBeGreaterThan(0);
     expect(screen.getByTestId("hero-demo").closest("section")).toHaveClass(
       "max-sm:hidden"
     );
@@ -142,17 +145,18 @@ describe("landing page, phone split", () => {
     );
   });
 
-  it("leaves a minimal phone footer with Terms, which the block above has no door for", async () => {
+  it("leaves a minimal phone footer with the full legal link set, which the block above has no door for", async () => {
     const { container } = await renderLanding();
     const phoneFooter = container.querySelector("footer.sm\\:hidden");
     expect(phoneFooter).not.toBeNull();
-    // Privacy and Terms only: the other doors are in PhoneLanding already,
-    // a few hundred pixels up the same short screen.
+    // LEGAL_LINKS (src/lib/legal.ts) is the source of truth here, not a
+    // hardcoded pair: the other doors ("I'm a contractor", "Emergency help")
+    // are in PhoneLanding already, a few hundred pixels up the same short
+    // screen, so this footer only ever needs to carry the legal set.
     const links = within(phoneFooter as HTMLElement).getAllByRole("link");
-    expect(links.map((a) => a.getAttribute("href"))).toEqual([
-      "/privacy",
-      "/terms",
-    ]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(
+      LEGAL_LINKS.map((l) => l.href)
+    );
   });
 
   it("keeps the invisible structured data on every width", async () => {

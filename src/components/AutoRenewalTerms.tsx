@@ -74,6 +74,17 @@ export default function AutoRenewalTerms({
           {terms.cancel}
         </li>
       </ul>
+      {/* The consent line sits directly under the itemized terms, above the
+          checkbox the checkout screen renders right after this block (see
+          src/lib/billingTerms.ts's AUTO_RENEWAL_CONSENT_LINE and
+          AUTO_RENEWAL_CHECKBOX_LABEL). Checkout only: the acknowledgment
+          variant is shown after the charge already happened, so there is
+          nothing left to agree to. */}
+      {!acknowledgment && (
+        <p className="mt-2 text-xs text-stone-600 max-sm:text-sm dark:text-stone-300">
+          {terms.consentLine}
+        </p>
+      )}
     </div>
   );
 }

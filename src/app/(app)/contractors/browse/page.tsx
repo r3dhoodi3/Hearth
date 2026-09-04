@@ -5,6 +5,7 @@ import { getActiveProperty } from "@/lib/property";
 import { JOB_CATEGORIES, SERVICE_CATEGORIES, labelFor } from "@/lib/constants";
 import { isAcceptableCustomCategory } from "@/lib/customCategory";
 import { licenseVerifiedOnLine } from "@/lib/guaranteeCopy";
+import { LEGAL } from "@/lib/legal";
 
 // Homeowner-facing pro directory. Lists claimed, launch-market pros from the
 // browse_pros() RPC (migration 0104, trust fields added in 0111), which
@@ -293,7 +294,11 @@ function ProCard({ pro }: { pro: BrowsePro }) {
                 </span>
               )}
               {pro.has_insurance && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300">
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
+                  title={`Reported by the pro. Not verified by ${LEGAL.brand}.`}
+                  aria-label={`Insurance (self-reported). Reported by the pro. Not verified by ${LEGAL.brand}.`}
+                >
                   <svg
                     viewBox="0 0 24 24"
                     className="h-3 w-3"
@@ -302,10 +307,11 @@ function ProCard({ pro }: { pro: BrowsePro }) {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    aria-hidden="true"
                   >
                     <path d="M12 22s8-3.6 8-9V5l-8-3-8 3v8c0 5.4 8 9 8 9z" />
                   </svg>
-                  Insurance on file
+                  Insurance (self-reported)
                 </span>
               )}
               {pro.background_checked_at && (

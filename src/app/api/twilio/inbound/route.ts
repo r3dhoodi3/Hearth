@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { LEGAL } from "@/lib/legal";
 
 // Twilio's inbound-SMS webhook: fires whenever someone texts our Twilio
 // number back. This is the OTHER half of the TCPA consent gate in
@@ -69,7 +70,25 @@ function escapeXml(s: string): string {
 // separate REST call needed). Identifies the sender, points to support, and
 // restates the rate + opt-out disclosure carriers look for.
 function helpTwiml(): string {
-  const message = `Hearth: home maintenance help. Support: ${SITE_URL}/contact Msg&data rates may apply. Reply STOP to opt out.`;
+  const message = `${LEGAL.brand}: home maintenance help. Support: ${SITE_URL}/contact Msg&data rates may apply. Reply STOP to opt out.`;
+  return `<Response><Message>${escapeXml(message)}</Message></Response>`;
+}
+
+// The STOP-family confirmation (09-sms-terms.md section 5). Carriers require
+// this to be the SINGLE, FINAL message a texter gets after a STOP-family
+// keyword - no HELP text, no second message, nothing else riding along with
+// it - so this is returned alone, in its own TwiML response, and nothing
+// else in this route ever appends to it.
+function stopTwiml(): string {
+  const message = `You have opted out of ${LEGAL.brand} text messages. No further messages will be sent. Reply START to opt back in. For help, reply HELP.`;
+  return `<Response><Message>${escapeXml(message)}</Message></Response>`;
+}
+
+// The START/YES/UNSTOP opt-in confirmation (09-sms-terms.md section 7),
+// restating the same rate/frequency/opt-out disclosure the Account checkbox
+// promises, so a text-triggered opt-in reads exactly like a checkbox one.
+function startTwiml(): string {
+  const message = `You have opted in to ${LEGAL.brand} text messages for account and job-related alerts. Msg&data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help.`;
   return `<Response><Message>${escapeXml(message)}</Message></Response>`;
 }
 
@@ -155,6 +174,12 @@ function verifyTwilioSignature(
 }
 
 export async function POST(req: NextRequest) {
+  // Declared outside the try block so the final return (after the try/catch)
+  // can still see which keyword family fired even if the DB update inside
+  // the try threw partway through - the confirmation reply is owed to the
+  // texter independent of whether the matching users row was found or
+  // updated cleanly.
+  let consent: boolean | null = null;
   try {
     // Read the raw body once (form-encoded, not multipart) so the exact same
     // bytes back both the signature check and the From/Body values below -
@@ -190,7 +215,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    let consent: boolean | null = null;
     if (STOP_WORDS.has(body)) consent = false;
     else if (START_WORDS.has(body)) consent = true;
 
@@ -251,13 +275,22 @@ export async function POST(req: NextRequest) {
       }
     }
   } catch (err) {
-    // Twilio retries on a non-2xx response - always 200 with empty TwiML
-    // below regardless of what went wrong here, so a parsing hiccup doesn't
-    // turn into a retry storm.
+    // Twilio retries on a non-2xx response - always 200 below regardless of
+    // what went wrong here, so a parsing hiccup doesn't turn into a retry
+    // storm. `consent` may already be set (the keyword parse happens before
+    // the DB work that can throw), so the confirmation still goes out even
+    // if the users-table update failed.
     console.error("twilio inbound:", err instanceof Error ? err.message : err);
   }
 
-  return new NextResponse(TWIML_EMPTY_RESPONSE, {
+  // Carriers require the STOP-family confirmation to be the single, final
+  // message a texter gets - never bundled with anything else - so it (and
+  // the START confirmation) are returned alone here, after every DB write
+  // attempt above has already run. A keyword outside STOP/HELP/START gets the
+  // same empty ack every unrecognized inbound text always got.
+  const twiml =
+    consent === false ? stopTwiml() : consent === true ? startTwiml() : TWIML_EMPTY_RESPONSE;
+  return new NextResponse(twiml, {
     status: 200,
     headers: { "Content-Type": "text/xml" },
   });

@@ -3,7 +3,7 @@
 // when hasPro is true, ProNav.tsx only when hasHome is true, so a single-side
 // account sees nothing new here. One accent color, no icon, no gradient,
 // matching the flat-color design rule; the accent follows whichever side's
-// own token the calling nav already uses (bark for Nav.tsx, hearth for
+// own token the calling nav already uses (bark for Nav.tsx, Hearth for
 // ProNav.tsx) so this never introduces a third brand color.
 export default function SidePill({
   label,

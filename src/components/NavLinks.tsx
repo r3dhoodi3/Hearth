@@ -68,7 +68,7 @@ export default function NavLinks({
   links: NavLink[];
   variant?: "top" | "bottom";
   // Which brand accent marks the active/hover link: bark for the homeowner
-  // shell (Nav), hearth for the pro shell (ProNav). Kept as a prop instead of
+  // shell (Nav), Hearth for the pro shell (ProNav). Kept as a prop instead of
   // reading the route so this component stays a plain rendering of whatever
   // it's handed. Full class strings are spelled out per accent below (not
   // interpolated) so Tailwind's compiler can see them.

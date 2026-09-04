@@ -238,6 +238,11 @@ export default function ReviewButton({
                 </p>
               )}
 
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Reviews are never paid for and never removed for being
+                negative. Only post about your own experience on this job.
+              </p>
+
               <div className="flex gap-2">
                 <button
                   type="button"

@@ -1,220 +1,127 @@
 # Legal and compliance to-do (for Landen, to take to a CA attorney)
 
-Written 2026-08-22 from a research pass over the repo's terms, pro terms,
-privacy, AI disclosure and DMCA pages plus the 46 `TODO(legal)` markers in
-`src`. A checklist, not legal advice. "Handled" means a page or mechanism
-exists; "Open" means nothing exists yet.
+Rewritten 2026-09-02. The full legal document set is now published as real
+site pages, rendered from Markdown in `src/content/legal/*.md` (see
+`src/components/LegalDocument.tsx` and `src/lib/legalMarkdown.tsx`). Editing a
+policy is now editing its `.md` file, not a page component. This file is a
+short status list, not legal advice: what's live, what env vars fill in the
+company identity, and what's still on the owner before launch.
 
-## 1. Before launch (must)
+## 1. What's published
 
-1. **Form the entity.** No LLC exists. "Hearth LLC" is a placeholder in
-   `src/app/terms/page.tsx` and `src/app/pro-terms/page.tsx`. File a CA LLC
-   (bizfileonline.sos.ca.gov), get an EIN, file a county Fictitious Business
-   Name statement if trading as "Hearth", get a Huntington Beach business
-   license. No seller's permit needed (no tangible goods). Open.
-2. **Register the DMCA agent** at dmca.copyright.gov and publish it in the
-   Copyright Office directory; `src/app/dmca/page.tsx` is blank until then.
-   Required for the safe harbor. Open.
-3. **Fill every bracketed placeholder**: mailing address (`src/lib/notify.ts`,
-   terms opt-out address, DMCA page), governing-law county, liability caps,
-   contractor claims period, the "N months" anti-circumvention window in
-   pro terms. Open. Also move the legal contact off Gmail.
-4. **CSLB marketplace rules.** Keep the lead fee flat per lead, never a
-   percentage of the job (a percentage can make the platform itself need a
-   license). License numbers must appear in pro ads over $500 (B&P 7027.1,
-   7048). Handled: "verified = point-in-time CSLB check" wording exists.
-   Confirm fee structure with counsel.
-5. **B.O.T. Act (B&P 17941)**: bot disclosure at the point of interaction.
-   Mostly handled (in-chat AI label + /ai-disclosure); confirm the in-chat
-   label alone satisfies "at the point of interaction".
-6. **SMS: TCPA / CTIA / 10DLC.** Consent checkbox exists and is unchecked by
-   default. Open: 10DLC brand + campaign registration, STOP auto-handling,
-   quiet hours. Needed before any SMS goes to the public. (See William's
-   list item 14 for the Twilio side.)
-7. **CAN-SPAM**: every email needs a physical postal address and a working
-   unsubscribe. Address is a `TODO(legal)` placeholder in `src/lib/notify.ts`.
-   Open, blocks real email.
-8. **18+**: handled (confirmation at signup).
+Every page below reads from `src/content/legal/<slug>.md` through
+`LegalDocument`, so the text and this list can't drift apart the way hand-
+written JSX copies used to:
 
-## 2. Before charging money, or within 30 days of launch
+| Page | Slug |
+|---|---|
+| `/terms` | `terms.md` |
+| `/pro-terms` | `pro-terms.md` |
+| `/privacy` | `privacy.md` |
+| `/cookies` | `cookies.md` |
+| `/subprocessors` | `subprocessors.md` |
+| `/billing` | `billing.md` |
+| `/sms-terms` | `sms-terms.md` |
+| `/ai-disclosure` | `ai-disclosure.md` |
+| `/accessibility` | `accessibility.md` |
+| `/dmca` | `dmca.md` |
+| `/guidelines` | `guidelines.md` |
+| `/security` | `security.md` |
+| `/pro-data-addendum` | `pro-data-addendum.md` |
+| `/law-enforcement` | `law-enforcement.md` |
 
-9. **CA Automatic Renewal Law** (amended July 1, 2025, AB 2863): express
-   affirmative consent to the renewal terms SEPARATE from general terms
-   acceptance, annual reminder notices, one-step cancel, 3-year consent
-   records; free-trial-to-paid conversions are covered. The checkout
-   disclosure and in-app cancel exist; verify the separate consent and the
-   annual reminder email. The federal FTC click-to-cancel rule was vacated in
-   July 2025; CA's law still controls.
-10. **CCPA/CPRA**: under the revenue/volume thresholds, but notice at
-    collection and the privacy policy apply anyway and exist. Re-check the
-    activity-based triggers (selling/sharing, sensitive PI) as features grow.
-10b. **Trial-abuse risk score (migration 0130, `src/lib/risk`)**: Hearth now
-    stores salted one-way hashes of device, network, browser-fingerprint,
-    payment-method and normalized-email identifiers, used only to stop the same
-    person farming the 3-day free trial with new accounts. Three things to
-    confirm with counsel: (a) the CCPA notice at collection and the
-    "Abuse-prevention identifiers" row in `src/lib/privacy.ts` CATEGORIES cover
-    it, and the `/privacy` copy is accurate; (b) whether a hashed IP or device
-    id counts as an identifier requiring anything beyond that notice under
-    CPRA's "sharing" and ADMT rules (it is never sold, shared, or used for
-    profiling, and it drives no automated decision other than declining a free
-    trial and declining a sale); (c) whether the fraud-prevention exception
-    (Cal. Civ. Code 1798.105(d)(2)) should be used to RETAIN abuse flags through
-    an account deletion. Today it is not: the tables cascade on
-    `auth.users` delete, so deleting an account wipes its signals and flags,
-    which means account deletion is itself a way to reset the score. That is
-    the privacy-friendly default and a real hole. Open decision.
-11. **FTC Fake Reviews Rule (16 CFR Part 465)**: applies to the planned
-    reviews feature and to showing Yelp/Google links. No fabricated or
-    incentivized reviews; disclose insider reviews.
-12. **Referral credits ($25/$25)**: disclose program terms in-app; FTC
-    endorsement disclosure applies if pros promote it publicly.
-13. **Sign in with Apple**: in-app account deletion must also revoke Apple
-    tokens (Apple TN3194). Verify the delete-account flow does this.
-14. **Insurance**: E&O and cyber liability quotes before real payments at
+`/privacy-choices` is a short, hand-written page (not from Markdown) pointing
+at the Privacy Policy's CCPA section and the in-app Account > Privacy
+controls. `/.well-known/security.txt` (`src/app/.well-known/security.txt/route.ts`)
+is a machine-readable RFC 9116 file built from the same `LEGAL` config, linking
+to `/security`. All fifteen pages are in the public allowlist
+(`src/lib/supabase/middleware.ts`) and the sitemap (`src/app/sitemap.ts`), and
+every footer that lists legal links now maps over `LEGAL_LINKS`
+(`src/lib/legal.ts`) instead of hardcoding hrefs.
+
+Every document still carries the `{{TOKENS}}` described below, filled at
+render time by `fillLegalTokens()`. Nothing in `src/content/legal` should be
+published with the literal token still showing; `legalPlaceholdersRemaining()`
+in `src/lib/legal.ts` reports which owner-fillable fields are still
+placeholders, and a repo-wide `grep -r "TODO(legal)"` should be run before
+each launch milestone to catch anything new.
+
+## 2. Env vars to set (src/lib/legal.ts)
+
+None of these are required to build or run the app: every one has a fallback
+(a bracketed `[TODO(legal): ...]` placeholder for the entity/DMCA fields, or a
+`name@<domain>` guess for the email fields), so the site works today and the
+fallbacks are what currently render on every legal page. Set these in Vercel
+(and `.env.local`) once each fact is real:
+
+- `NEXT_PUBLIC_LEGAL_BRAND` - product name (default "Hearth").
+- `NEXT_PUBLIC_LEGAL_ENTITY_NAME` - the formed LLC's legal name. **Not set. The LLC does not exist yet.**
+- `NEXT_PUBLIC_LEGAL_ADDRESS` - registered business address. **Not set.** Required before purchase under Cal. B&P 17538 and in every email under CAN-SPAM.
+- `NEXT_PUBLIC_LEGAL_DOMAIN` - defaults to the host in `NEXT_PUBLIC_SITE_URL`; only set this separately if the legal domain differs from the site's own host.
+- `NEXT_PUBLIC_LEGAL_EMAIL`, `NEXT_PUBLIC_SUPPORT_EMAIL`, `NEXT_PUBLIC_PRIVACY_EMAIL`, `NEXT_PUBLIC_SECURITY_EMAIL` - default to `legal@`/`support@`/`privacy@`/`security@` the domain above. Set these once real, monitored inboxes exist; the legal address in particular currently routes to a personal inbox and needs to move off it.
+- `NEXT_PUBLIC_PRIVACY_PHONE` - optional; blank hides the phone line on `/privacy` and `/privacy-choices`.
+- `NEXT_PUBLIC_DMCA_AGENT_NAME`, `NEXT_PUBLIC_DMCA_AGENT_ADDRESS`, `NEXT_PUBLIC_DMCA_AGENT_PHONE` - **not set.** `NEXT_PUBLIC_DMCA_AGENT_EMAIL` defaults to `dmca@` the domain.
+- `NEXT_PUBLIC_LEGAL_EFFECTIVE_DATE` - the "Last updated" date shown at the top of every document; bump this (and the doc's own "Last updated" line, which the token also fills) whenever a document changes.
+
+## 3. Remaining owner items before launch
+
+1. **Form the LLC.** File a CA LLC, get an EIN, file a county Fictitious
+   Business Name statement if trading as "Hearth", get a Huntington Beach
+   business license. Then set `NEXT_PUBLIC_LEGAL_ENTITY_NAME` and
+   `NEXT_PUBLIC_LEGAL_ADDRESS`. Until this is done, `{{LLC_NAME}}` and
+   `{{ADDRESS}}` render as `TODO(legal)` placeholders on every page that uses
+   them, on purpose, so this is easy to catch.
+2. **Register the DMCA agent** at dmca.copyright.gov ($6, renew every 3
+   years), then set the four `NEXT_PUBLIC_DMCA_AGENT_*` vars to match exactly
+   what was registered. `/dmca` does not have a working safe harbor until
+   this is done, no matter what the page shows.
+3. **Move legal/support/privacy/security email off any personal inbox** onto
+   real, monitored addresses at the real domain, then set the four email env
+   vars to match.
+4. **B&P 17538 checkout disclosure.** The legal name, address, and a link to
+   `/billing` are not yet shown on the checkout or pricing screen before
+   purchase. Out of scope for this pass (checkout/pricing pages are owned by
+   another work stream); flagging here so it isn't lost.
+5. **Auto-renewal consent checkbox.** `/billing` describes an unchecked "I
+   agree to the automatic renewal terms above" checkbox at checkout; that
+   checkbox does not exist yet (`src/components/AutoRenewalTerms.tsx` shows
+   the disclosure but nothing gates the submit button on it). Same
+   out-of-scope note as above.
+6. **SMS STOP/START confirmation texts.** `/sms-terms` describes a
+   confirmation message sent on STOP and on opt-in; `src/app/api/twilio/inbound/route.ts`
+   currently flips the consent flag silently with no confirmation text. Also
+   still open: Twilio 10DLC brand and campaign registration.
+7. ~~**Global Privacy Control.**~~ Done 2026-09-02: `src/middleware.ts` now
+   calls `logGpcSignalOncePerSession` (`src/lib/gpc.ts`) after every request,
+   fire-and-forget via `event.waitUntil`. `/privacy` and `/cookies` say Hearth
+   honors the GPC signal; that claim now has a logged `app_event` behind it.
+   Because Hearth doesn't sell or share personal information, this changes no
+   other behavior.
+8. **Pro CRM data purge on homeowner deletion.** `/privacy` discloses that a
+   pro's CRM copy of a deleted homeowner's name/phone/email/address is
+   removed within 30 days. Confirm this is actually implemented before
+   relying on the claim; it was an open gap as of the last privacy pass.
+9. **Sign in with Apple token revocation** (Apple TN3194): confirm
+   account deletion also revokes Apple sign-in tokens.
+10. **Insurance**: E&O and cyber liability quotes before real payments at
     scale.
+11. **Attorney review of every document in `src/content/legal`**, especially
+    the arbitration/class-waiver section of `terms.md`, the liability cap, and
+    the independent-contractor language in `pro-terms.md`. Nothing here has
+    been reviewed by counsel.
 
-## 3. Nice to have / monitor
+## 4. Nice to have / monitor
 
-15. **SB 942 (AI Transparency Act, Aug 2026)** and **AB 2013** target large
-    GenAI developers; Hearth is a downstream API user, likely out of scope.
-16. **SB 243 (companion chatbots, Jan 2026)**: Ask Hearth is task-based,
-    likely excluded; confirm.
-17. **Unruh Act / WCAG**: no federal mandate for private sites, but CA is the
-    most litigated state ($4,000 per violation). A WCAG 2.1 AA pass is cheap
-    insurance.
-18. **CA SaaS sales tax**: not taxable today; SB 122 makes SaaS taxable from
-    Jan 1, 2027. Plan 2027 pricing.
-19. **Written data retention schedule** (the privacy page describes deletion;
-    no internal document exists).
-
-## 4. 2026-08-26 update (privacy / AI-disclosure copy pass)
-
-`/privacy`, `/ai-disclosure` and `src/lib/privacy.ts` were updated to reflect
-five code changes: the Orange County-wide service area (36 cities,
-`src/lib/serviceArea.ts`), the RentCast-AVM-or-formula home value estimate
-(`src/lib/homeValue.ts`) and the new Photon/OpenStreetMap address-suggestion
-third party (`src/lib/addressSuggest.ts`), a first-party cookie list
-(`hearth_did`, `hearth_fp`, `hearth_pwrecovery`, the active-home cookie),
-Twilio's 10-digit-US-numbers-only scope and STOP keyword, and the Orange-County gate
-plus slur/contact-info moderation on public pro profiles
-(`src/lib/publicText.ts`). No code changed as part of this pass, only the
-legal-copy pages; still flagging for counsel:
-
-20. **Re-flagging from item 2**: the DMCA agent is still unregistered and
-    `src/app/dmca/page.tsx` is still blank. Open.
-21. **Re-flagging from item 3**: the mailing/business address placeholders in
-    `src/lib/notify.ts`, the terms opt-out address, and the DMCA page are
-    still unfilled `TODO(legal)` markers. Open.
-22. **Follow-up on 10b(a)**: the `/privacy` copy and the
-    "Abuse-prevention identifiers" CCPA category now explicitly state that
-    trial-abuse signals are retained only while the account exists, deleted
-    with the account, and that a chargeback or manual flag can remove trial
-    eligibility with the decision logged. Point (a) of 10b can likely be
-    closed on review; points (b) and (c) of 10b (whether a hashed
-    IP/device id needs more than notice under CPRA's sharing/ADMT rules, and
-    whether to invoke the fraud-prevention retention exception) are still
-    open decisions, unchanged by this copy pass.
-23. **Orange County service-area expansion**: confirm the wider launch area
-    (up from a handful of cities to all 36) doesn't trigger additional
-    per-city business-license or marketplace-registration requirements beyond
-    the Huntington Beach license already flagged in item 1.
-24. **Public pro profile gating and moderation**: confirm the
-    Orange-County-only visibility gate and the automated slur/profanity/
-    contact-info filter on business name and About text
-    (`src/lib/publicText.ts`, a keyword filter, not human review) is adequate
-    disclosure and doesn't need its own consumer-facing moderation policy.
-
-Files with `TODO(legal)` needing attorney sign-off: terms, pro-terms,
-ai-disclosure, dmca pages; `src/lib/constants.ts`, `src/lib/notify.ts`,
-`src/lib/privacy.ts`, `src/components/LegalContact.tsx`,
-`src/app/(app)/account/ProfileInfoForm.tsx`,
-`src/app/(auth)/recordTermsAcceptance.ts`.
-
-## 5. 2026-08-30 update (privacy, terms, pro-terms, AI-disclosure copy pass)
-
-`/privacy`, `/terms`, `/pro-terms` and `/ai-disclosure` were updated to reflect
-the overnight 2026-08-29/30 wave (see STATUS.md, "Wave 2026-08-29/30"). No code
-changed as part of this pass, only the legal-copy pages. What was added:
-
-25. **Web push disclosure**: `/privacy`'s Notifications section now explains
-    the push_subscriptions data collected (an endpoint and two keys, migration
-    0143), that it is free and not gated by Hearth Plus, the allowlisted kinds
-    it fires for, and the quiet-hours rule that holds weather/safety pushes
-    between 9pm and 8am Pacific. Also added a glance-table row for it.
-26. **SMS quiet hours**: `/privacy` now states texts are never sent between
-    9pm and 8am Pacific, alongside a new TODO(legal) asking counsel to review
-    the SMS consent checkbox wording on both the homeowner Account settings
-    form and the pro sign-up form (`src/app/pro/onboarding/OnboardingCompanyForm.tsx`),
-    and confirm STOP-handling and quiet-hours language meets TCPA/CTIA.
-27. **Idle sign-out and log redaction**: `/privacy`'s cookie list now
-    describes `hearth_seen` (35-day httpOnly stamp, 30-day idle sign-out) and
-    `hearth_flash` (one-shot toast), plus a new paragraph listing the
-    localStorage values Hearth keeps client-side (collapsed panels, the Ask
-    Hearth daily lock, review-prompt timing, push-prompt snooze) and stating
-    plainly that none of it leaves the device and no ad/analytics cookies are
-    set. The Security section now also states the 30-day idle sign-out and
-    that server logs are redacted before being written.
-28. **Upload guard**: `/privacy`'s Photos and documents section now discloses
-    that uploads are checked by their actual bytes (not the browser's claimed
-    type), capped in size, and that photos have metadata (including GPS)
-    stripped before storage.
-29. **Owner-name publication (migration 0141)**: `/privacy`'s Public pro
-    profiles section now discloses that a pro's own name, if they add one, is
-    shown on their public profile page, with a new TODO(legal) asking counsel
-    to confirm typing a name into a field a pro can see is public counts as
-    adequate consent to publish it.
-30. **Analytics retention gap found**: while writing this pass, found that
-    `public.app_events` (migration 0093) is `on delete set null` on
-    `user_id`, not `on delete cascade` like `push_subscriptions` (0143) and
-    `pro_feedback` (0144) are. Deleting an account today unlinks usage-event
-    rows rather than deleting them outright. `/privacy` now says this plainly
-    and carries a new TODO(legal) asking whether that is acceptable retention
-    practice given the rows carry no content beyond an id and a category.
-    Related: item 19 above (no written retention schedule exists) and the new
-    TODO(legal) added to `/privacy`'s "we keep each category of data..."
-    paragraph, which now states the honest default (until account deletion or
-    a request, aside from legally-required records) rather than implying a
-    schedule that does not exist.
-31. **Auto-renewal (California ARL, AB 2863, effective July 1, 2025)**:
-    `/terms`'s Fees and refunds section now states the 3-day trial applies to
-    every Hearth Plus and Hearth Pro plan and cadence
-    (`src/lib/billingTerms.ts`, `PLUS_PLAN.trialDays` / `PRO_PLAN.trialDays`
-    in `src/lib/constants.ts`), with a new TODO(legal) naming the amended
-    statute and asking counsel to confirm the checkout flow actually collects
-    a separate, itemized renewal consent rather than relying on this
-    paragraph alone.
-32. **Pro lead fees, ghost protection, and membership**: `/pro-terms` gained a
-    new "Lead fees, wallet credit, and membership" section describing the
-    flat per-category application fee, the ghost-protection wallet-credit
-    refund, that deposits are non-refundable and bonus credit can expire, and
-    that Hearth Pro membership is perks-only and never gates lead access
-    (`LEAD_FEES`, `GHOST_PROTECTION_DAYS`, `BONUS_EXPIRY_DAYS`,
-    `PRO_DEPOSIT_BOOST_PTS` in `src/lib/constants.ts`), flagged for attorney
-    review.
-33. **Feedback credit ($5, `src/lib/proFeedback.ts`)**: `/pro-terms` gained a
-    new "Product feedback credit" section stating the credit is non-cash
-    lead-application wallet credit, one claim per contractor account, gated
-    on an established account, and explicitly never tied to a store rating or
-    review, with a new TODO(legal) for the terms.
-34. **Ask Hearth for Pros gating**: `/ai-disclosure` now discloses the daily
-    cap difference between a free and a Hearth Pro contractor account, and
-    that the copilot stays locked for a brand-new sign-up until the business
-    looks established (verified license, a paid lead, a settled deposit, or
-    membership) - a fraud control, described as such.
-35. **Review-prompt no-incentives rule extended to store ratings**:
-    `/terms`'s reviews paragraph now states explicitly that the
-    no-payment-for-reviews rule also covers any in-app prompt asking someone
-    to rate Hearth in the App Store or Play Store, matching the "NO
-    INCENTIVES. EVER." block in `src/lib/reviewPrompt.ts`.
-
-Files with `TODO(legal)` needing attorney sign-off, extended by this pass:
-terms, pro-terms, privacy, ai-disclosure, dmca pages; `src/lib/constants.ts`,
-`src/lib/notify.ts`, `src/lib/privacy.ts`, `src/components/LegalContact.tsx`,
-`src/app/(app)/account/ProfileInfoForm.tsx`,
-`src/app/(auth)/recordTermsAcceptance.ts`.
+- **SB 942 (AI Transparency Act)** and **AB 2013** target large GenAI
+  developers; Hearth is a downstream API user, likely out of scope.
+- **SB 243 (companion chatbots)**: Ask Hearth is task-based, likely excluded;
+  confirm.
+- **CA SaaS sales tax**: not taxable today; SB 122 makes SaaS taxable from
+  Jan 1, 2027. Plan 2027 pricing.
+- **Formal WCAG 2.2 AA audit.** `/accessibility` is honest that Hearth is
+  "partially conformant" and no formal audit has run yet.
 
 Sources: CSLB online marketplace fast facts (cslb.ca.gov), leginfo B&P 7027.1
-/ 7048 / 17941, Cooley on AB 2863, Sidley on the vacated FTC rule, FTC 16 CFR
-465 final rule, Apple TN3194, CTIA messaging principles, Holland & Knight on
-SB 122.
+/ 7048 / 7159 / 17538 / 17941, CA Automatic Renewal Law as amended by AB 2863
+(eff. July 1, 2025), FTC 16 CFR 465 (Consumer Reviews and Testimonials Rule),
+Apple TN3194, CTIA messaging principles, 17 U.S.C. 512 (DMCA), CCPA/CPRA.

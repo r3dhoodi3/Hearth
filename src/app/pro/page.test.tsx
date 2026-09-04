@@ -90,7 +90,7 @@ describe("pro home: three tool tiles (E8)", () => {
 
   it("chips the tiles honestly: 'Pro' only where the door is truly member-only", () => {
     // The insights trend on /pro/business is really member-only, so it keeps
-    // the hearth-accent "Pro" chip. The playbook is free for every pro, so it
+    // the Hearth-accent "Pro" chip. The playbook is free for every pro, so it
     // wears nothing: a chip on an open door is a lie.
     expect(view).toContain('{!member && t.chip === "pro" && (');
     expect(view).toContain('title: "Playbook"');
@@ -108,7 +108,7 @@ describe("pro home: three tool tiles (E8)", () => {
 
   it("swaps the Estimate tile's chip for a green 'Free to try' tag (0145: two free drafts, not member-only)", () => {
     // Every contractor gets two free drafts before /pro/tools gates, so the
-    // hearth-accent "Pro" chip used to overstate the door. It reads
+    // Hearth-accent "Pro" chip used to overstate the door. It reads
     // "Free to try" instead, in ProChip's tone="free" styling, and is static
     // rather than a live drafts-left count (see the comment beside it in
     // HomeView.tsx for why a query was not worth adding to this render).

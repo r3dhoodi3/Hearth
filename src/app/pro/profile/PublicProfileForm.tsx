@@ -11,6 +11,7 @@ import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
 import LaunchCityCheckboxes from "../onboarding/LaunchCityCheckboxes";
 import type { Contractor } from "@/lib/database.types";
+import { LEGAL } from "@/lib/legal";
 
 // Small submit buttons for the form below. Each needs its own component
 // because useFormStatus only reports pending state inside a descendant of
@@ -309,9 +310,18 @@ export default function PublicProfileForm({
                 <span className="text-sm text-stone-600 dark:text-stone-400">
                   Text me when a job matches or a homeowner replies. Message
                   and data rates may apply. Message frequency varies. Reply
-                  STOP to opt out, HELP for help.
+                  STOP to opt out, HELP for help. This number is never used
+                  for marketing from other companies.
                 </span>
               </label>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Consent isn&apos;t required to use {LEGAL.brand} or to buy
+                anything. See our{" "}
+                <Link href="/sms-terms" className="underline hover:text-stone-700 dark:hover:text-stone-300">
+                  SMS Terms
+                </Link>
+                .
+              </p>
 
               <div>
                 <label className="label">Cities You Serve</label>

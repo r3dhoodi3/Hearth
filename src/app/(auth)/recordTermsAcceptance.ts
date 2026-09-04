@@ -34,7 +34,14 @@ const VERSION = "2026-08-30";
 
 export async function recordTermsAcceptance(
   userId: string,
-  doc: "terms" | "pro_terms"
+  // "pro_terms_onboarding" (added for the onboarding-wizard acknowledgment
+  // checkbox, Pro Terms appendix) is deliberately its own doc key rather than
+  // reusing "pro_terms": the two checkboxes ask for materially different
+  // confirmations (18+/Terms-and-Privacy vs. independent-business/license/
+  // insurance/wallet-credit understanding), and reusing "pro_terms" would be
+  // silently no-op'd by this function's own idempotency guard below whenever
+  // the account already has a "pro_terms" row from contractor-signup.
+  doc: "terms" | "pro_terms" | "pro_terms_onboarding"
 ): Promise<void> {
   if (!UUID_RE.test(userId)) {
     console.error("recordTermsAcceptance: malformed userId", { userId, doc });

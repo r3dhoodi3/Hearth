@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SessionCta from "@/components/SessionCta";
 import Logo from "@/components/Logo";
+import { LEGAL_LINKS } from "@/lib/legal";
 
 // Shared shell for the public /guides pages: informational content meant to
 // be indexed and read by anonymous search visitors (see the middleware
@@ -56,27 +57,27 @@ export default function GuidesLayout({
         <p className="inline-flex w-full items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
           <Logo className="h-4 w-4 text-bark-700 dark:text-stone-400" /> Hearth · Your home, looked after
         </p>
+        {/* "All guides" plus the legal set (LEGAL_LINKS, src/lib/legal.ts).
+            Plain inline text wraps on its own on a phone. */}
         <p className="mt-2 text-xs">
           <Link
             href="/guides"
             className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
           >
             All guides
-          </Link>{" "}
-          ·{" "}
-          <Link
-            href="/privacy"
-            className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
-          >
-            Privacy
-          </Link>{" "}
-          ·{" "}
-          <Link
-            href="/terms"
-            className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
-          >
-            Terms
           </Link>
+          {LEGAL_LINKS.map((link) => (
+            <span key={link.href}>
+              {" "}
+              ·{" "}
+              <Link
+                href={link.href}
+                className="text-stone-500 hover:text-bark-700 hover:underline dark:text-stone-400 dark:hover:text-stone-300"
+              >
+                {link.label}
+              </Link>
+            </span>
+          ))}
         </p>
       </footer>
     </div>

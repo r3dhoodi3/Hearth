@@ -16,6 +16,7 @@ import {
   billingTermsText,
   trialApplies,
   TRIAL_PLAN_SWITCH_MESSAGE,
+  AUTO_RENEWAL_CHECKBOX_LABEL,
 } from "@/lib/billingTerms";
 import {
   checkoutCadence,
@@ -104,6 +105,22 @@ export async function startPlusCheckoutAction(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
+
+  // REQUIRE THE AUTO-RENEWAL CONSENT CHECKBOX (Cal. Bus. & Prof. Code
+  // 17602(a)(2), as amended by AB 2863, effective July 1, 2025). The checkout
+  // screen (PlanToggle.tsx) disables its submit button until the box is
+  // checked, but that is a client-side belt only - the brace is here: a
+  // request that never went through the button (a replayed form, a scripted
+  // POST) is refused before Stripe is ever consulted. Checked as a value
+  // rather than presence-of-key so a hand-crafted "consent_checkbox=false"
+  // cannot slip past a naive `formData.has(...)` check.
+  if (formData.get("consent_checkbox") !== "true") {
+    await setFlash(
+      "Check the box agreeing to the automatic renewal terms to continue.",
+      "error"
+    );
+    redirect("/plus");
+  }
 
   // One pre-created Stripe Price per cadence, each optional: an unset env var
   // falls through to the inline price_data below, so a cadence works before
@@ -486,6 +503,14 @@ export async function startPlusCheckoutAction(formData: FormData) {
           plan,
           consent_terms: consentTerms,
           consent_at: consentAt,
+          // The affirmative checkbox itself (Cal. Bus. & Prof. Code
+          // 17602(a)(2)), alongside the disclosure text it confirms. The
+          // guard above already refused to reach this point unless the
+          // posted value was exactly "true", so this is always "true" here -
+          // stamped explicitly anyway so the Stripe record is self-describing
+          // without cross-referencing this file.
+          consent_checkbox: "true",
+          consent_checkbox_label: AUTO_RENEWAL_CHECKBOX_LABEL,
           // Which attempt holds the one-trial reservation above, for the
           // webhook's rollback on checkout.session.expired. An abandoned
           // checkout never produces a subscription, so the session's own

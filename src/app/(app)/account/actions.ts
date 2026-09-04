@@ -12,6 +12,9 @@ import { stripe } from "@/lib/stripe";
 import { eraseUserData, type EraseSummary } from "@/lib/privacy";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
+import { sendNotification } from "@/lib/notify";
+import { smsOptinConfirmationAllowed } from "@/lib/smsOptinLimit";
+import { LEGAL } from "@/lib/legal";
 
 // Password re-verification is a brute-force surface: updatePasswordAction,
 // updateEmailAction, and deleteAccountAction each take a current password and
@@ -149,7 +152,8 @@ export async function saveAccountAction(formData: FormData) {
   // missing-column fingerprint, in which case there is nothing to store and
   // the name/phone save above still stands. Consent defaults to off in that
   // state, which is the safe direction.
-  const { error: consentError } = await createAdminClient()
+  const admin = createAdminClient();
+  const { error: consentError } = await admin
     .from("users")
     .update(consentFields)
     .eq("id", user.id);
@@ -160,6 +164,49 @@ export async function saveAccountAction(formData: FormData) {
       "error"
     );
     redirect("/account");
+  }
+
+  // SMS OPT-IN CONFIRMATION (09-sms-terms.md section 7, CTIA convention).
+  // Sent exactly once, the moment consent actually turns ON for a real
+  // number: gated on consentFields.sms_consent (the value that was just
+  // WRITTEN, which the phoneChanged override above may have forced back to
+  // false even though the submitted checkbox was ticked) and on
+  // !priorConsent, so a re-save that leaves consent already true never
+  // repeats it. Routed through sendNotification, the one door every
+  // notification goes through, so quiet hours, the outbound kill switch and
+  // the per-minute send brake in src/lib/notify.ts all still apply.
+  // "sms_optin_confirmation" is on the transactional allowlist
+  // (src/lib/notifyGating.ts) so it is never capped like a campaign. Best
+  // effort: a send failure here must never undo or block the account save
+  // that already succeeded above.
+  //
+  // RATE LIMITED, on top of the false -> true gate above: phone is
+  // unverified (see src/lib/smsOptinLimit.ts), so toggling consent off and
+  // back on repeatedly must not blast this text at whatever number is
+  // currently entered. See smsOptinConfirmationAllowed for the shared limit
+  // both this action and the pro-side twin enforce identically.
+  if (
+    !consentError &&
+    consentFields.sms_consent === true &&
+    !priorConsent &&
+    phone &&
+    (await smsOptinConfirmationAllowed(admin, user.id))
+  ) {
+    try {
+      await sendNotification(supabase, {
+        userId: user.id,
+        kind: "sms_optin_confirmation",
+        // sendSms (src/lib/notify.ts) always appends its own "Reply STOP to
+        // opt out." after title+body, so that phrase is left out of this
+        // copy on purpose - repeating it here would say it twice.
+        title: `You're opted in to ${LEGAL.brand} text messages for account and job-related alerts.`,
+        body: "Msg&data rates may apply. Message frequency varies. Reply HELP for help.",
+        phone,
+        smsConsent: true,
+      });
+    } catch (err) {
+      console.error("saveAccountAction: opt-in confirmation send failed", err);
+    }
   }
 
   // Mirror the name into auth metadata too. This is what the toolbar reads, so

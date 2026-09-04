@@ -19,7 +19,7 @@ export const alt = "Hearth pro profile";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Warm hearth palette (tailwind.config.ts).
+// Warm Hearth palette (tailwind.config.ts).
 const HEARTH_50 = "#fbf7f2";
 const HEARTH_500 = "#a9743f";
 const HEARTH_700 = "#73482b";

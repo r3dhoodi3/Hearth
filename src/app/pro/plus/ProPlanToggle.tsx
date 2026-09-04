@@ -5,6 +5,8 @@ import { useFormStatus } from "react-dom";
 import { ChevronRight } from "lucide-react";
 import { startProCheckoutAction } from "./actions";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
+import AutoRenewalConsentCheckbox from "@/components/AutoRenewalConsentCheckbox";
+import BillingLegalLine from "@/components/BillingLegalLine";
 import InlineSpinner from "@/components/InlineSpinner";
 import {
   PRO_PLAN,
@@ -20,7 +22,16 @@ import {
 // Needs its own component because useFormStatus only reports pending state
 // inside a descendant of the <form> it belongs to, not the component
 // rendering the form itself.
-function CheckoutButton({ label }: { label: string }) {
+function CheckoutButton({
+  label,
+  disabled = false,
+}: {
+  label: string;
+  // Caller-driven disable (the auto-renewal consent checkbox not yet
+  // checked), ORed with the in-flight pending state below. Mirrors
+  // SubmitButton's own `disabled` prop.
+  disabled?: boolean;
+}) {
   const { pending } = useFormStatus();
   // Synchronous double-submit latch (MED-13), the same one SubmitButton uses.
   // `pending` is state and lags a render behind the click, so a fast double tap
@@ -48,7 +59,7 @@ function CheckoutButton({ label }: { label: string }) {
   return (
     <button
       className="btn-primary w-full"
-      disabled={pending}
+      disabled={pending || disabled}
       onClick={handleClick}
     >
       {pending && <InlineSpinner />}
@@ -172,6 +183,12 @@ export default function ProPlanToggle({
 }) {
   const [plan, setPlan] = useState<Plan>("yearly");
   const copy = PLAN_COPY[plan];
+  // The required auto-renewal consent checkbox (Cal. Bus. & Prof. Code
+  // 17602(a)(2)), one state per checkout FORM on this page: the top trial
+  // shortcut and the main plan-picker form below are two separate submits, so
+  // checking the box in one must never silently unlock the other.
+  const [topConsent, setTopConsent] = useState(false);
+  const [mainConsent, setMainConsent] = useState(false);
   // Arrow-key order for the radio group below. Visual order differs by
   // breakpoint (the yearly hero comes first on a phone), so the keyboard walks
   // the plans in cadence order and stays predictable at every width.
@@ -235,7 +252,10 @@ export default function ProPlanToggle({
       {trialEligible && (
         <form action={startProCheckoutAction} className="card-hero space-y-2">
           <input type="hidden" name="plan" value="monthly" />
-          <CheckoutButton label={`Start ${PRO_PLAN.trialDays} free days`} />
+          <CheckoutButton
+            label={`Start ${PRO_PLAN.trialDays} free days`}
+            disabled={!topConsent}
+          />
           <p className="text-center text-sm text-stone-600 dark:text-stone-300">
             {PRO_PLAN.trialDays} days free, then {PLAN_COPY.monthly.price}
             /month. Cancel anytime before the trial ends.
@@ -258,6 +278,11 @@ export default function ProPlanToggle({
           <div className="max-sm:hidden">
             <AutoRenewalTerms plan="pro_monthly" introEligible={trialEligible} />
           </div>
+          <AutoRenewalConsentCheckbox
+            id="pro-plus-trial-consent"
+            checked={topConsent}
+            onChange={setTopConsent}
+          />
         </form>
       )}
 
@@ -441,15 +466,25 @@ export default function ProPlanToggle({
               introEligible={trialEligible}
             />
           </div>
+          <AutoRenewalConsentCheckbox
+            id="pro-plus-main-consent"
+            checked={mainConsent}
+            onChange={setMainConsent}
+          />
           <CheckoutButton
             label={
               trialEligible
                 ? `Try Pro free for ${PRO_PLAN.trialDays} days`
                 : "Start my Pro membership"
             }
+            disabled={!mainConsent}
           />
         </form>
       </div>
+      {/* Cal. Bus. & Prof. Code 17538: legal name, address, and a route to the
+          refund policy, shown on the same screen as the checkout buttons
+          above before any charge happens. */}
+      <BillingLegalLine className="text-center text-xs text-stone-500 max-sm:text-sm dark:text-stone-400" />
     </div>
   );
 }

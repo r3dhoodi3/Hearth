@@ -85,6 +85,15 @@ function pickSpecificCities() {
   );
 }
 
+// Required to reach the server on step 3 (Pro Terms appendix). Named by a
+// substring of the label text rather than the full sentence so a copy tweak
+// doesn't break every test that has to check this box before finishing.
+function agreeToProTerms() {
+  fireEvent.click(
+    screen.getByLabelText(/I have read and agree to the Pro Terms/)
+  );
+}
+
 describe("pro onboarding wizard: the trade chips", () => {
   it("keeps the picked trade through the whole city-list detour", async () => {
     const { form } = renderWizard();
@@ -459,6 +468,7 @@ describe("pro onboarding wizard: Finish setup double-submit", () => {
     next();
     await settle();
     expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+    agreeToProTerms();
 
     const finish = screen.getByRole("button", { name: "Finish setup" });
     // Two clicks back to back, before React gets a chance to re-render with
@@ -480,6 +490,7 @@ describe("pro onboarding wizard: Finish setup double-submit", () => {
     fireEvent.click(screen.getByLabelText("Irvine"));
     next();
     await settle();
+    agreeToProTerms();
 
     fireEvent.click(screen.getByRole("button", { name: "Finish setup" }));
     expect(saveCompanyAction).toHaveBeenCalledTimes(1);

@@ -112,6 +112,9 @@ export default function PhotoUpload({
       <label className="label" htmlFor={id}>
         Photos (optional)
       </label>
+      <p className="mb-1 text-xs text-stone-500 dark:text-stone-400">
+        Only upload photos of property you own or have permission to share.
+      </p>
       <input
         id={id}
         type="file"

@@ -261,6 +261,12 @@ export const TRANSACTIONAL_NOTIFICATION_KINDS: ReadonlySet<string> = new Set([
   "license",
   "insurance",
   "trial_abuse",
+  // The CTIA-required opt-in confirmation sent once, the moment someone
+  // checks the SMS box in their profile (homeowner or pro). It is a direct
+  // reply to something the person just did, not a campaign, and carriers
+  // expect it to actually arrive, so it must never compete with a seasonal
+  // nudge for the same two-a-week budget.
+  "sms_optin_confirmation",
   // Safety alerts: time-critical by definition, the same reasoning
   // PUSH_QUIET_HOURS_KINDS uses to bypass quiet hours above. A freeze warning
   // and a heat warning three days apart in one bad week must not compete with

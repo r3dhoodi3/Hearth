@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 // Homeowner invite share card: the image behind a "/homeowner-signup?ref=CODE"
 // invite link when a homeowner shares it. Modeled directly on
 // src/app/api/win-card/[leadId]/route.tsx and review-card: same 1200x630 size,
-// same warm hearth palette, same "no more than a first name and a city, never
+// same warm Hearth palette, same "no more than a first name and a city, never
 // an address or last name" rule those cards already hold to.
 //
 // Unlike win-card / review-card this route is PUBLIC and unauthenticated: it
@@ -26,7 +26,7 @@ export const runtime = "nodejs";
 
 const size = { width: 1200, height: 630 };
 
-// Warm hearth palette (tailwind.config.ts), copied from win-card / review-card
+// Warm Hearth palette (tailwind.config.ts), copied from win-card / review-card
 // so all three share cards read as the same product.
 const HEARTH_50 = "#fbf7f2";
 const HEARTH_500 = "#a9743f";

@@ -20,6 +20,7 @@ import {
   PRO_RESERVATION_REF,
 } from "@/lib/promoClaimRef";
 import { trackServerEvent } from "@/lib/trackServer";
+import { LEGAL } from "@/lib/legal";
 
 // The promo_claims reservation key AND ref for the Pro FREE TRIAL (HIGH-31),
 // the twin of PLUS_RESERVATION_REF/'plus_trial' on the homeowner side. Distinct
@@ -91,6 +92,17 @@ function fmtDate(d: Date): string {
     year: "numeric",
     timeZone: "UTC",
   });
+}
+
+// Two lines appended to every billing acknowledgment this webhook sends: a
+// link to the full Billing, Subscriptions, Refunds and Credits Policy, and
+// the one-click cancel path, in the exact words the policy itself uses
+// ("Cancel anytime from... in the app, in Account > Membership"). billingTerms
+// already gives the acknowledgment its price/cadence/cancel sentence; this is
+// the extra pointer 07-billing-refund-policy.md's SITE CHANGES REQUIRED item 2
+// asks for on top of that.
+function billingPolicyFooter(): string {
+  return `Full billing and refund policy: ${LEGAL.siteUrl}/billing. Cancel anytime in Account > Membership.`;
 }
 
 // Write a notification exactly once for a given (user, kind, url) key.
@@ -809,7 +821,7 @@ async function sendRenewalAcknowledgment(
       userId,
       kind: ACK_KIND,
       title: `Your ${terms.product} subscription: renewal and cancellation terms`,
-      body: billingTermsText(plan, introEligible),
+      body: `${billingTermsText(plan, introEligible)} ${billingPolicyFooter()}`,
       url,
       email: user?.email ?? null,
       // Deliberately no phone: this is a document to keep, not an alert.
@@ -1228,7 +1240,9 @@ async function endTrialIfRisky(
         title: `Your ${terms.product} membership starts today`,
         body:
           "Your free trial could not be applied to this account, so your membership starts now instead. " +
-          billingTermsText(plan, false),
+          billingTermsText(plan, false) +
+          " " +
+          billingPolicyFooter(),
         url: `${terms.cancelPath}?ack=${subscription.id}`,
         email: user?.email ?? null,
         phone: null,

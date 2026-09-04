@@ -113,7 +113,7 @@ export default function GlobalSearch({
     side === "pro"
       ? `/pro/ask?q=${encodeURIComponent(trimmed)}`
       : `/chats?lead=ask-hearth&q=${encodeURIComponent(trimmed)}`;
-  // The two shells keep their own accents: bark on the homeowner side, hearth
+  // The two shells keep their own accents: bark on the homeowner side, Hearth
   // ember on the pro side, matching each header's palette.
   const focusBorder =
     side === "pro"

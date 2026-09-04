@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Sparkles } from "lucide-react";
 import InlineSpinner from "@/components/InlineSpinner";
+import BillingLegalLine from "@/components/BillingLegalLine";
 import { applyToJobAction } from "./actions";
 import {
   readComposeDraft,
@@ -375,6 +376,10 @@ export default function ApplyJobButton({
         {ghostProtectionGuaranteeRich()} {firstApplicationGuaranteeRich()}{" "}
         {creditNotCashLineRich()}
       </p>
+      {/* Cal. Bus. & Prof. Code 17538: legal name, address, and a route to
+          the refund policy, shown on the same screen as the "Confirm and
+          pay" button before the fee is actually charged. */}
+      <BillingLegalLine />
       {/* Said at the moment of the charge, not after it: the price on this
           card is a one-time thing, and a pro deciding whether to spend it
           deserves to know what the next one costs. LEAD_TIER_FEES.major is

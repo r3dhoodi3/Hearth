@@ -645,6 +645,30 @@ const DEFAULT_HEADING_SUBTITLE =
 const DEFAULT_DISCLAIMER =
   "Hearth's cost figures are ballpark estimates. Confirm with a local pro before you commit.";
 
+// The point-of-interaction bot disclosure B&P 17940-17941 wants (see
+// 11-ai-disclosure.md section 1): shown at the TOP of every Ask session,
+// above the first message, every time the chat opens - not just once, and
+// not dismissible, so there is never a state where the chat is open and this
+// line is not visible. Distinct from AiNotice near the composer below, which
+// carries the ballpark-estimate caveat instead; this is the plain "you are
+// talking to software" line the law wants at the point of interaction.
+// Shared by both render branches below (compact card and full dock) and by
+// both sides of the marketplace - the pro copilot (src/app/pro/ask/page.tsx)
+// renders this same AskHearth component, just with its own headingSubtitle.
+function AiChatDisclosure() {
+  return (
+    <p className="text-[11px] text-stone-500 max-sm:text-xs dark:text-stone-400">
+      You&apos;re chatting with an AI assistant, not a person.{" "}
+      <Link
+        href="/ai-disclosure"
+        className="underline decoration-dotted hover:text-stone-600 dark:hover:text-stone-300"
+      >
+        How it works
+      </Link>
+    </p>
+  );
+}
+
 // `fill` = take the full height of its container (the Messages pane); otherwise
 // it renders as a compact card (/search). `suggestions` are starter questions
 // shown as chips until the owner asks something. `greeting` is an optional
@@ -2067,6 +2091,9 @@ export default function AskHearth({
       <div className="card border-bark-100 bg-bark-50 dark:border-bark-700 dark:bg-bark-700/20">
         <p className="text-sm font-semibold text-bark-700 dark:text-stone-300">{headingTitle}</p>
         <p className="text-xs text-bark-700 dark:text-stone-300">{headingSubtitle}</p>
+        <div className="mt-1">
+          <AiChatDisclosure />
+        </div>
 
         {(hasConversation || loading) && (
           <div
@@ -2150,6 +2177,7 @@ export default function AskHearth({
           </button>
         </div>
       </div>
+      <AiChatDisclosure />
 
       <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto py-2">
         {messages.map((m, i) => bubble(m, i, i === messages.length - 1))}

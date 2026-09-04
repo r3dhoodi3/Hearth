@@ -431,7 +431,7 @@ export default function SpotlightTour({
     cardStyle = { top: "50%", transform: "translateY(-50%)" };
   }
 
-  // The two shells accent differently (bark on the homeowner side, hearth on
+  // The two shells accent differently (bark on the homeowner side, Hearth on
   // the pro side), same split ShowAppGuideButton makes.
   const ringClass =
     side === "pro"

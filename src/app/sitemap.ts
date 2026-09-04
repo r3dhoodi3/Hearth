@@ -106,6 +106,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.3,
     },
     {
+      url: `${SITE_URL}/pro-data-addendum`,
+      changeFrequency: "monthly",
+      priority: 0.3,
+    },
+    {
       url: `${SITE_URL}/ai-disclosure`,
       changeFrequency: "monthly",
       priority: 0.3,
@@ -115,6 +120,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.3,
     },
+    // Rest of the legal document set (src/content/legal/*.md): same low
+    // priority and monthly cadence as the legal pages above, since none of
+    // these change often and none is a real entry point for a new visitor.
+    ...(
+      ["/billing", "/sms-terms", "/accessibility", "/guidelines", "/security", "/law-enforcement", "/cookies", "/subprocessors", "/privacy-choices"] as const
+    ).map((path) => ({
+      url: `${SITE_URL}${path}`,
+      changeFrequency: "monthly" as const,
+      priority: 0.3,
+    })),
     {
       url: `${SITE_URL}/contact`,
       changeFrequency: "monthly",

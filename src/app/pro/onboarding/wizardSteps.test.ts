@@ -16,6 +16,7 @@ const complete: ProOnboardingValues = {
   phone: "(555) 123-4567",
   cities: ["Huntington Beach"],
   categories: ["plumbing"],
+  agreedToProTerms: true,
 };
 
 function values(overrides: Partial<ProOnboardingValues>): ProOnboardingValues {
@@ -120,8 +121,17 @@ describe("validateProOnboardingStep", () => {
     ).toMatch(/city/i);
   });
 
-  it("never blocks the last step, since both of its fields are optional", () => {
+  it("never blocks the last step on name/cities, since those two fields are optional there", () => {
     expect(validateProOnboardingStep(2, values({ name: "", cities: [] }))).toBeNull();
+  });
+
+  it("blocks the last step until the Pro Terms acknowledgment is checked", () => {
+    expect(
+      validateProOnboardingStep(2, values({ agreedToProTerms: false }))
+    ).toMatch(/pro terms/i);
+    expect(
+      validateProOnboardingStep(2, values({ agreedToProTerms: true }))
+    ).toBeNull();
   });
 
   it("treats an out-of-range index as complete", () => {

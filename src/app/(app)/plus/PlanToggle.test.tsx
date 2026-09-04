@@ -268,12 +268,18 @@ describe("PlanToggle checkout disclosure", () => {
     });
     expect(button).toBeInTheDocument();
     // The desktop disclosure is still the element immediately before the
-    // button's own wrapper (CR3#4's sticky-on-phone bar, a no-op on desktop),
-    // so nothing can be slipped between the terms and the act of consent.
-    // terms[1] is the second copy in document order, which is the sm-and-up
-    // one; the phone copy inside the <details> comes first.
+    // required auto-renewal consent checkbox, which is immediately before the
+    // button's own wrapper (CR3#4's sticky-on-phone bar, a no-op on desktop) -
+    // so the only thing between the terms and the act of consent is the
+    // checkbox that confirms it. terms[1] is the second copy in document
+    // order, which is the sm-and-up one; the phone copy inside the <details>
+    // comes first.
     const desktopBlock = terms[1].closest("div")?.parentElement as HTMLElement;
-    const buttonWrapper = desktopBlock.nextElementSibling as HTMLElement;
+    const consentCheckbox = desktopBlock.nextElementSibling as HTMLElement;
+    expect(
+      within(consentCheckbox).getByRole("checkbox")
+    ).toBeInTheDocument();
+    const buttonWrapper = consentCheckbox.nextElementSibling as HTMLElement;
     expect(buttonWrapper.contains(button)).toBe(true);
   });
 

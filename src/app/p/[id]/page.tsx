@@ -11,6 +11,7 @@ import BackLink from "./BackLink";
 import ReportSheet from "@/components/ReportSheet";
 import BlockMenu from "@/components/BlockMenu";
 import { requestProAction } from "@/app/(app)/contractors/actions";
+import { LEGAL } from "@/lib/legal";
 
 // Public, shareable business page for a pro: /p/<contractor_id> or, once
 // migration 0043 lands, /p/<slug>. No account needed. Data comes from the
@@ -269,7 +270,7 @@ function NotReadyCard() {
     <main className="mx-auto max-w-xl px-6 py-16 text-center">
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
         {/* Flat warm banner strip, no gradient: hearth-100 in light, a
-            translucent hearth tint over the stone-800 card in dark. */}
+            translucent Hearth tint over the stone-800 card in dark. */}
         <div className="h-20 bg-bark-100 dark:bg-bark-700/30" />
         <div className="px-6 pb-8 pt-2">
           <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
@@ -335,12 +336,19 @@ export default async function PublicProPage(
   // the same as the CSLB and background-check badges below. Membership only
   // gates cosmetics (logo, about).
   const showBadge = profile.has_license || profile.has_insurance;
+  // Insurance is always labeled "(self-reported)" here, on its own or
+  // combined with the license half of this same neutral badge - never just
+  // "Insurance" or "on file", which reads as more verified than it is.
   const badgeLabel =
     profile.has_license && profile.has_insurance
-      ? "License and insurance on file"
+      ? "License on file and insurance (self-reported)"
       : profile.has_license
         ? "License on file"
-        : "Insurance on file";
+        : "Insurance (self-reported)";
+  const badgeMentionsInsurance = profile.has_insurance;
+  const badgeCaption = badgeMentionsInsurance
+    ? `Reported by the pro. Not verified by ${LEGAL.brand}.`
+    : "Reported by the business, not verified.";
   const about = profile.member ? (profile.about ?? "").trim() : "";
   // Guard: the RPC only includes 'projects' once migration 0045 has run, so
   // older payloads simply render no section.
@@ -391,7 +399,7 @@ export default async function PublicProPage(
       <BackLink />
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
         {/* Flat warm banner strip, no gradient: hearth-100 in light, a
-            translucent hearth tint over the stone-800 card in dark. */}
+            translucent Hearth tint over the stone-800 card in dark. */}
         <div className="h-20 bg-bark-100 dark:bg-bark-700/30" />
         <div className="px-6 pb-6">
           {/* Logo (Pro members) or a neutral monogram */}
@@ -442,7 +450,13 @@ export default async function PublicProPage(
             <div className="mt-3">
               {/* Self-reported: neutral stone, not green, so it can never be
                   mistaken for the real CSLB-verified badge below. */}
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
+                title={badgeMentionsInsurance ? badgeCaption : undefined}
+                aria-label={
+                  badgeMentionsInsurance ? `${badgeLabel}. ${badgeCaption}` : undefined
+                }
+              >
                 <svg
                   viewBox="0 0 24 24"
                   className="h-3.5 w-3.5"
@@ -451,13 +465,14 @@ export default async function PublicProPage(
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  aria-hidden="true"
                 >
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 15l2 2 4-4" />
                 </svg>
                 {badgeLabel}
               </span>
               <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                Reported by the business, not verified.
+                {badgeCaption}
               </p>
             </div>
           )}

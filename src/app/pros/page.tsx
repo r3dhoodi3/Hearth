@@ -20,9 +20,11 @@ import {
 } from "@/lib/guaranteeCopy";
 import { AGING_LEAD_TIERS } from "@/lib/leadPricing";
 import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
+import { LEGAL_LINKS } from "@/lib/legal";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
+import BillingLegalLine from "@/components/BillingLegalLine";
 import ThemeToggle from "@/components/ThemeToggle";
 import ProDemoPlayerLazy from "@/components/ProDemoPlayerLazy";
 import {
@@ -214,7 +216,7 @@ export default async function ProsLanding(props: {
   ];
 
   return (
-    <main className="pb-16">
+    <main id="main" className="pb-16">
       {/* Warm band wraps header and hero: a single flat fill, hearth-50 in
           light and stone-900 in dark (matching the body), no gradient. */}
       <div className="bg-bark-50 dark:bg-stone-900">
@@ -443,6 +445,9 @@ export default async function ProsLanding(props: {
           </Link>
           .
         </p>
+        {/* Cal. Bus. & Prof. Code 17538: legal name, address, and a route to
+            the refund policy, shown before purchase. */}
+        <BillingLegalLine className="mx-auto mt-2 max-w-md text-center text-sm text-stone-500 dark:text-stone-400" />
       </section>
 
       {/* Flat trade photo break before the steps, mirroring how the landing
@@ -526,14 +531,17 @@ export default async function ProsLanding(props: {
         <Link href="/" className="text-sm text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
           Looking after your own home instead? Hearth for Homeowners →
         </Link>
+        {/* Source of truth: LEGAL_LINKS in src/lib/legal.ts. Plain inline
+            text wraps on its own on a phone; no layout change needed. */}
         <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-          <Link href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-            Privacy
-          </Link>{" "}
-          ·{" "}
-          <Link href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-            Terms
-          </Link>
+          {LEGAL_LINKS.map((link, i) => (
+            <span key={link.href}>
+              {i > 0 && " · "}
+              <Link href={link.href} className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                {link.label}
+              </Link>
+            </span>
+          ))}
         </p>
       </footer>
       </div>

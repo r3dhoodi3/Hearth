@@ -94,7 +94,7 @@ export default async function AppLayout({
           strip collided with the wordmark between 640 and 1023px), so the
           padding has to reach the same width or tablets get content under the
           bar. Desktop at lg and up keeps exactly today's pb-8. */}
-      <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 lg:pb-8">
+      <main id="main" className="mx-auto max-w-5xl px-6 pb-24 pt-8 lg:pb-8">
         {children}
       </main>
       {/* The floating Ask Hearth dock used to mount here, on every signed-in

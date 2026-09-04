@@ -244,7 +244,7 @@ one commit rather than letting it throttle silently.
 
 ### Log prefixes worth a saved Vercel search
 
-`[ALERT]` marks the owner-wide ceilings tripping - the ones that mean Hearth is
+`[ALERT]` marks the owner-wide ceilings tripping - the ones that mea Hearth is
 refusing its own customers rather than an individual abusing their allowance:
 
 - `[ALERT] AI global spend breaker tripped ...` (`src/lib/aiUsage.ts`)

@@ -177,7 +177,7 @@ export default async function SearchPage(
       </div>
 
       {/* Ask Hearth lives only in Messages now (owner's rule, 2026-08-29:
-          "ask hearth can just be on the messages tab to limit potential
+          "ask Hearth can just be on the messages tab to limit potential
           usage") - this page no longer renders it inline. Nothing matched is
           exactly the moment a homeowner wants to ask instead of click, so it
           points at Messages with the same question already typed in, using

@@ -148,6 +148,13 @@ export default async function RootLayout({
         />
       </head>
       <body>
+        {/* First focusable element on every page. Off-screen until it gets
+            keyboard focus (see .skip-link in globals.css), then it jumps a
+            keyboard or screen-reader user straight past the header and nav to
+            the page's own <main id="main">. */}
+        <a href="#main" className="skip-link rounded-md bg-bark-700 px-4 py-2 text-sm font-semibold text-white">
+          Skip to content
+        </a>
         <ToastProvider>
           {children}
           <FlashToast />

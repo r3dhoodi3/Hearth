@@ -22,6 +22,7 @@ import {
   toUsE164,
 } from "@/lib/outboundGuards";
 import { sendPush } from "@/lib/push";
+import { LEGAL } from "@/lib/legal";
 
 // Single entry point for notifying a homeowner. Always writes the in-app
 // notification row (what the bell in the nav shows), then tries the push,
@@ -384,11 +385,13 @@ function isLiveHomeownerRow(row: {
 }
 
 // CAN-SPAM footer appended to every outgoing email: sender identity, a
-// physical mailing address, and a working per-user unsubscribe link. The
-// address is a deliberate TODO(legal) placeholder in the same bracketed
-// convention as src/app/dmca/page.tsx, so the pre-launch legal sweep's
-// grep for TODO(legal) catches it before real mail goes out (email is
-// dormant until RESEND_API_KEY is set regardless).
+// physical mailing address, and a working per-user unsubscribe link. Reads
+// LEGAL.legalName / LEGAL.address (src/lib/legal.ts), which render their own
+// bracketed "[TODO(legal): ...]" placeholder text until the owner sets the
+// corresponding env vars - the same safety net src/app/dmca/page.tsx uses, so
+// the pre-launch legal sweep's grep for TODO(legal) still catches an unfilled
+// address before real mail goes out (email is dormant until RESEND_API_KEY is
+// set regardless).
 //
 // Uniform footer on ALL emails, including transactional-critical ones: that
 // is the safe default. CAN-SPAM's transactional exemption from the unsubscribe
@@ -399,10 +402,83 @@ function emailFooter(unsubscribeUrl: string): string {
   return [
     "",
     "--",
-    "Hearth",
-    "[TODO(legal): registered business address]",
+    LEGAL.brand,
+    LEGAL.legalName,
+    LEGAL.address,
     `Unsubscribe from these emails: ${unsubscribeUrl}`,
   ].join("\n");
+}
+
+// Email-only kinds that must reach an opted-out inbox even though they carry
+// no counterpart in TRANSACTIONAL_NOTIFICATION_KINDS (src/lib/notifyGating.ts,
+// which is scoped to the marketing-frequency cap and the SMS/push senders,
+// not specifically to what CAN-SPAM's transactional exemption covers on
+// email). CAN-SPAM (15 U.S.C. 7702(2)) and Hearth's own Terms and Privacy
+// Policy both promise that account, security, billing and active-job mail
+// keeps going regardless of a marketing opt-out - only digests and product
+// updates are what "unsubscribe" actually turns off (see the /unsubscribe
+// confirmation copy). None of these four literals has a live caller in the
+// app today; they are named here so a future security/password/receipt/
+// deletion-confirmation email is exempt from day one instead of silently
+// inheriting the opt-out.
+const EMAIL_ONLY_TRANSACTIONAL_KINDS: ReadonlySet<string> = new Set([
+  "password_changed",
+  "security_alert",
+  "receipt",
+  "account_deletion_confirmation",
+]);
+
+// An explicit allowlist, not the union of TRANSACTIONAL_NOTIFICATION_KINDS
+// and EMAIL_ONLY_TRANSACTIONAL_KINDS. TRANSACTIONAL_NOTIFICATION_KINDS
+// (src/lib/notifyGating.ts) answers a different question - which kinds are
+// exempt from the marketing FREQUENCY CAP and skip SMS/push quiet hours -
+// and it includes several kinds that are not "account, billing, or an active
+// job" mail under CAN-SPAM's transactional exemption or Hearth's own Terms:
+// new_review and referral_reward are engagement nudges, and freeze/heat/
+// high_wind/heavy_rain/recall are safety alerts that must reach a phone or a
+// push notification immediately but have no such urgency by email, where an
+// opted-out recipient's choice should hold. Unioning that whole list into
+// email meant those seven kinds silently bypassed the opt-out too. Listed
+// here by hand instead, so a future addition to TRANSACTIONAL_NOTIFICATION_
+// KINDS does not automatically exempt itself from the email opt-out as a
+// side effect.
+export const EMAIL_TRANSACTIONAL_KINDS: ReadonlySet<string> = new Set([
+  "message",
+  "direct_request",
+  "direct_accepted",
+  "direct_declined",
+  "quote",
+  "quote_sent",
+  "invoice",
+  "invoice_sent",
+  "invoice_signed",
+  "job_closed",
+  "new_lead",
+  "applicant_waiting",
+  "quote_analysis",
+  "apply_receipt",
+  "apply_credit_back",
+  "ghost_refund",
+  "first_apply_guarantee",
+  "payment_failed",
+  "payment_failed_followup",
+  "renewal_reminder",
+  "annual_notice",
+  "renewal_acknowledgment",
+  "background_check_clear",
+  "compliance",
+  "license",
+  "insurance",
+  "trial_abuse",
+  "sms_optin_confirmation",
+  "support_digest",
+  ...EMAIL_ONLY_TRANSACTIONAL_KINDS,
+]);
+
+// Is this kind exempt from the email opt-out? Account, security, billing and
+// active-job mail always is; a digest or a product update never is.
+export function isEmailOptOutExempt(kind: string): boolean {
+  return EMAIL_TRANSACTIONAL_KINDS.has(kind);
 }
 
 // Fires once per process: warns that emails will only reach the account
@@ -412,8 +488,11 @@ function emailFooter(unsubscribeUrl: string): string {
 let warnedSandboxFrom = false;
 
 // Email via the Resend REST API. Plain fetch, no SDK, so there is no new
-// dependency to install. Dormant until RESEND_API_KEY is set.
-async function sendEmail(
+// dependency to install. Dormant until RESEND_API_KEY is set. Exported (not
+// just called internally by sendOutboundChannels) so the opt-out exemption
+// below can be driven directly in tests rather than only inferred from
+// sendNotification's side effects.
+export async function sendEmail(
   input: NotificationInput,
   knownOptOut?: boolean | null
 ): Promise<void> {
@@ -436,22 +515,33 @@ async function sendEmail(
   // every caller. A lookup hiccup falls open and still sends: the footer's
   // unsubscribe link remains the recipient's guaranteed exit either way.
   //
+  // TRANSACTIONAL EMAIL IS NEVER BLOCKED BY THE OPT-OUT. CAN-SPAM's
+  // transactional exemption (15 U.S.C. 7702(2)) covers exactly this, and our
+  // Terms and Privacy Policy promise it in plain language: unsubscribing
+  // turns off digests and product updates, not the mail about your own
+  // account, billing, or an active job. isEmailOptOutExempt short-circuits
+  // the whole check for those kinds, so an opted-out recipient's
+  // renewal_acknowledgment, apply_receipt, payment_failed, etc. still land
+  // regardless of what knownOptOut or the database row say.
+  //
   // knownOptOut lets a caller that already read this recipient's row hand the
   // answer over instead of paying for a second query (see
   // OutboundChannelOverrides). Only an explicit true/false counts; undefined
   // and null both mean "unknown", which runs the lookup exactly as before.
-  if (knownOptOut === true) return;
-  if (knownOptOut !== false) {
-    try {
-      const admin = createAdminClient();
-      const { data: prefRow } = await admin
-        .from("users")
-        .select("notification_prefs")
-        .eq("id", input.userId)
-        .single();
-      if (prefRow?.notification_prefs?.email_opt_out === true) return;
-    } catch {
-      // Couldn't read prefs; fall open and send. See comment above.
+  if (!isEmailOptOutExempt(input.kind)) {
+    if (knownOptOut === true) return;
+    if (knownOptOut !== false) {
+      try {
+        const admin = createAdminClient();
+        const { data: prefRow } = await admin
+          .from("users")
+          .select("notification_prefs")
+          .eq("id", input.userId)
+          .single();
+        if (prefRow?.notification_prefs?.email_opt_out === true) return;
+      } catch {
+        // Couldn't read prefs; fall open and send. See comment above.
+      }
     }
   }
 

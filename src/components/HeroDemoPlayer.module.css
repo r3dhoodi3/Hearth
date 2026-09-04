@@ -604,7 +604,7 @@
   color: var(--dev-ink-dim);
 }
 .endScore { font-size: 10px; font-weight: 700; color: var(--dev-ok-ink); font-variant-numeric: tabular-nums; display: inline-block; }
-/* Mirrors the live .btn-primary: rounded-lg, hearth brown, white text,
+/* Mirrors the live .btn-primary: rounded-lg, Hearth brown, white text,
    soft card shadow, scaled to the device's tiny coordinate system. */
 .endBtn {
   margin-top: 4px;

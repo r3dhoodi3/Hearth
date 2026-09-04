@@ -11,6 +11,7 @@ import {
   countPaidLeadApplications,
 } from "@/lib/contractor";
 import { sendNotification } from "@/lib/notify";
+import { smsOptinConfirmationAllowed } from "@/lib/smsOptinLimit";
 // ALWAYS awaited, everywhere in this file. setFlash writes its cookie through
 // Next's async cookies() store, and every call site here is followed by a
 // redirect() that throws immediately - so an un-awaited setFlash raced the
@@ -54,6 +55,7 @@ import {
   isAllowedValue,
 } from "@/lib/formFields";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
+import { LEGAL } from "@/lib/legal";
 import {
   majorLeadInsuranceGate,
   isInsuranceGateSqlError,
@@ -432,6 +434,40 @@ async function saveProSmsConsent(
       .update(fields)
       .eq("id", userId);
     if (error) throw error;
+
+    // SMS OPT-IN CONFIRMATION (09-sms-terms.md section 7, CTIA convention),
+    // pro-side twin of the homeowner send in
+    // src/app/(app)/account/actions.ts. Sent once, only on the fresh
+    // false -> true grant this function exists to record - never on a
+    // re-save that leaves consent already true. Best effort: a send failure
+    // here must never surface to the pro or block the company save that
+    // already succeeded above (see the outer catch's own comment).
+    const sendPhone =
+      (typeof fields.phone === "string" ? fields.phone : null) ??
+      (typeof current?.phone === "string" ? current.phone : null);
+    // RATE LIMITED, same shared check the homeowner-side twin in
+    // src/app/(app)/account/actions.ts runs, and for the same reason: phone
+    // is unverified, so a pro toggling consent off and on repeatedly must
+    // not blast this text at whatever number is currently entered. See
+    // src/lib/smsOptinLimit.ts.
+    if (
+      wants &&
+      !priorConsent &&
+      sendPhone &&
+      (await smsOptinConfirmationAllowed(admin, userId))
+    ) {
+      await sendNotification(admin, {
+        userId,
+        kind: "sms_optin_confirmation",
+        // sendSms (src/lib/notify.ts) always appends its own "Reply STOP to
+        // opt out." after title+body, so that phrase is deliberately left
+        // out of this copy - repeating it here would say it twice.
+        title: `You're opted in to ${LEGAL.brand} text messages for account and job-related alerts.`,
+        body: "Msg&data rates may apply. Message frequency varies. Reply HELP for help.",
+        phone: sendPhone,
+        smsConsent: true,
+      });
+    }
   } catch (err) {
     // Never blocks the company save. 0075 not being live answers the
     // missing-column fingerprint, in which case there is nothing to store and
@@ -1072,6 +1108,24 @@ export async function saveCompanyAction(formData: FormData) {
     return;
   }
 
+  // PRO TERMS ONBOARDING ACKNOWLEDGMENT (Pro Terms appendix), first-time
+  // company creation only - everything above this point in the function
+  // already returned for the edit (`existing`) path, so reaching here means
+  // this submit is creating the contractors row for the first time.
+  // Required, unlike the SMS checkbox: a pro cannot start applying to jobs
+  // without confirming they are an independent business, that any license
+  // listed is accurate, that they carry the insurance their work requires,
+  // and that lead-fee credit-back is wallet credit, not cash. Server-side
+  // floor under the wizard's own client-side gate
+  // (./onboarding/wizardSteps.ts case 2), the same discipline as the name/
+  // phone/city checks above it.
+  if (formData.get("pro_terms_ack") === null) {
+    await backToForm(
+      "Please confirm the Pro Terms acknowledgment to continue."
+    );
+    return;
+  }
+
   // Orange County launch gate (0074), first-time company creation only. A pro
   // who didn't check the box never gets a contractors row at all: instead
   // they land on a waitlist so Hearth can reach out when it opens in their
@@ -1413,6 +1467,13 @@ export async function saveCompanyAction(formData: FormData) {
   // gets a no-op, and the homeowner who just added a business gets the row
   // that was missing before.
   await recordTermsAcceptance(user.id, "pro_terms");
+  // The onboarding-wizard acknowledgment checked just above (independent
+  // business, license/insurance/wallet-credit understanding, 18+) is a
+  // materially different confirmation from the general pro_terms checkbox
+  // above, so it gets its own audit-trail doc key - reusing "pro_terms"
+  // here would be a silent no-op against the row that call just wrote (or
+  // already found).
+  await recordTermsAcceptance(user.id, "pro_terms_onboarding");
 
   // Preferred landing side. Only stamped when the account has NO side stamped
   // yet: a homeowner who adds a business keeps landing on their home until

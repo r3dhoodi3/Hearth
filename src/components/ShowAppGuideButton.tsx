@@ -10,7 +10,7 @@ import { APP_GUIDE_EVENT } from "@/lib/appGuide";
 // no route that only exists to be a switch. It also works after the account
 // has been stamped as seen, which a server-decided prop could not do.
 // The two shells accent their links differently (bark on the homeowner side,
-// hearth on the pro side), so the colour is the caller's to pass rather than
+// Hearth on the pro side), so the colour is the caller's to pass rather than
 // something this button decides and gets wrong on one of them.
 const TONE = {
   homeowner: "text-bark-700 dark:text-stone-300",

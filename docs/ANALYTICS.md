@@ -211,3 +211,13 @@ available from this data is aggregate, de-identified statistics with no path
 back to an individual record - for example, "the median Orange County home
 spends $X/year on maintenance" - published or licensed as a statistic, never
 as rows tied to a person.
+
+`gpc_signal_seen` (`src/lib/gpc.ts`, via `trackServerEvent`): logged the first
+time a signed-in user's browser sends the Global Privacy Control header
+(`Sec-GPC: 1`) in a session, at most once per session. Signed-out visitors
+only get the session cookie, never a row: an anonymous client could drop the
+cookie and resend the header on every request, which would be an unbounded
+service-role insert (red-team finding, 2026-09-02). No props. Since Hearth
+does not sell or share data, honoring GPC changes no behavior - this event
+exists only as proof the signal was seen. Not yet wired into a request path;
+see the comment at the top of `src/lib/gpc.ts` for where it hooks in.

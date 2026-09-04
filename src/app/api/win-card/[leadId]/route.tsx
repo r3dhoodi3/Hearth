@@ -20,13 +20,13 @@ export const runtime = "nodejs";
 // renders, there is no consent flow to build or check here.
 //
 // Visual style matches src/app/p/[id]/opengraph-image.tsx exactly: same
-// warm hearth palette, same 1200x630 size, same hand drawn Star (satori's
+// warm Hearth palette, same 1200x630 size, same hand drawn Star (satori's
 // default font has no reliable star glyph, so stars stay SVG rather than a
 // unicode character).
 
 const size = { width: 1200, height: 630 };
 
-// Warm hearth palette (tailwind.config.ts), copied from opengraph-image.tsx
+// Warm Hearth palette (tailwind.config.ts), copied from opengraph-image.tsx
 // so both share cards read as the same product.
 const HEARTH_50 = "#fbf7f2";
 const HEARTH_500 = "#a9743f";

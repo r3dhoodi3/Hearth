@@ -13,7 +13,7 @@ function src(rel: string): string {
 
 const page = src("./page.tsx");
 
-// 2026-08-30 research wave, owner's rule (2026-08-29): "ask hearth can just
+// 2026-08-30 research wave, owner's rule (2026-08-29): "ask Hearth can just
 // be on the messages tab to limit potential usage". /search used to render
 // two inline AskHearth panes (nothing-matched and a trailing fallback); both
 // are gone, and the empty state now points at Messages with the query

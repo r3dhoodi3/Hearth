@@ -74,7 +74,7 @@ export default async function ProLayout({
             </form>
           </div>
         </header>
-        <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+        <main id="main" className="mx-auto max-w-5xl px-6 py-8">{children}</main>
       </div>
     );
   }
@@ -131,7 +131,7 @@ export default async function ProLayout({
       {/* Extra bottom padding below lg keeps content clear of the fixed bottom
           tab bar. It was sm:pb-8; the bar now runs to lg (ProNav.tsx), so the
           padding follows it. Desktop at lg and up keeps today's pb-8. */}
-      <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 lg:pb-8">
+      <main id="main" className="mx-auto max-w-5xl px-6 pb-24 pt-8 lg:pb-8">
         {children}
       </main>
       {/* The footer sits outside <main>, so main's pb-24 does not cover it and

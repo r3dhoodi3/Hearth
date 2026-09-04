@@ -5,6 +5,8 @@ import { ChevronRight } from "lucide-react";
 import { startPlusCheckoutAction } from "./actions";
 import SubmitButton from "@/components/SubmitButton";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
+import AutoRenewalConsentCheckbox from "@/components/AutoRenewalConsentCheckbox";
+import BillingLegalLine from "@/components/BillingLegalLine";
 import {
   PLUS_PLAN,
   PLUS_INCLUDED_HOMES,
@@ -144,6 +146,12 @@ export default function PlanToggle({
   trialEligible?: boolean;
 }) {
   const [choice, setChoice] = useState<Choice>("monthly");
+  // The required auto-renewal consent checkbox (Cal. Bus. & Prof. Code
+  // 17602(a)(2)): unchecked by default, gating the checkout button below
+  // until it is checked. One state for the whole form, since the plan cards
+  // change the price the disclosure quotes but never the fact of agreeing to
+  // it.
+  const [consent, setConsent] = useState(false);
   // The cadence the form posts. Free is not a cadence, so it falls back to the
   // anchor plan; the button is disabled in that state, so nothing can actually
   // be submitted while it is showing.
@@ -535,6 +543,7 @@ export default function PlanToggle({
             <div className="max-sm:hidden">
               <AutoRenewalTerms plan={plan} introEligible={trialEligible} />
             </div>
+            <AutoRenewalConsentCheckbox id="plus-consent" checked={consent} onChange={setConsent} />
           </>
         )}
 
@@ -557,12 +566,17 @@ export default function PlanToggle({
             <SubmitButton
               className="btn-primary w-full py-3"
               pendingLabel="Starting…"
+              disabled={!consent}
             >
               {buttonLabel}
             </SubmitButton>
           )}
         </div>
       </form>
+      {/* Cal. Bus. & Prof. Code 17538: legal name, address, and a route to the
+          refund policy, shown on the same screen as the checkout button
+          before any charge happens. */}
+      <BillingLegalLine className="text-center text-xs text-stone-500 max-sm:text-sm dark:text-stone-400" />
     </div>
   );
 }

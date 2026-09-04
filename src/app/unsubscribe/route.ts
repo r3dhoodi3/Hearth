@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
 
   return page(
     "You're unsubscribed",
-    "You won't get any more notification emails from Hearth. Your in-app notifications are unchanged.",
+    "You're unsubscribed from digests and product updates. We'll still email you about your account, billing, and active jobs. Your in-app notifications are unchanged.",
     true
   );
 }

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizeEmail } from "@/lib/risk/emailNorm";
 
 // =============================================================================
 // Hearth - California privacy rights plumbing (CCPA/CPRA).
@@ -233,6 +234,8 @@ export async function collectUserData(userId: string): Promise<ExportPayload> {
     learningRequests,
     aiUsage,
     subscriptions,
+    termsAcceptances,
+    pushSubscriptions,
   ] = await Promise.all([
     rows(admin.from("users").select("*").eq("id", userId)),
     propertyIds.length
@@ -283,6 +286,12 @@ export async function collectUserData(userId: string): Promise<ExportPayload> {
     rows(untyped(admin).from("learning_requests").select("*").eq("user_id", userId)),
     rows(untyped(admin).from("ai_usage").select("*").eq("user_id", userId)),
     rows(admin.from("subscriptions").select("*").eq("user_id", userId)),
+    // terms_acceptances (0075): the signup/consent checkbox ledger. push_
+    // subscriptions (0143): the device endpoints notifications go to. Both
+    // are personal information the privacy policy lists as collected, and
+    // both were missing from this export until now.
+    rows(admin.from("terms_acceptances").select("*").eq("user_id", userId)),
+    rows(admin.from("push_subscriptions").select("*").eq("user_id", userId)),
   ]);
 
   // Pro-side records, only fetched when this account actually has a listing.
@@ -447,6 +456,8 @@ export async function collectUserData(userId: string): Promise<ExportPayload> {
       learning_requests: learningRequests,
       ai_usage: aiUsage,
       subscriptions,
+      terms_acceptances: termsAcceptances,
+      push_subscriptions: pushSubscriptions,
     },
     pro,
   };
@@ -471,6 +482,15 @@ export type EraseSummary = {
   // Things we deliberately did not touch, and why. Surfaced so the deletion
   // path can never quietly claim more than it did.
   retained: string[];
+  // Things we did not delete outright, but stripped of identifying fields
+  // and left in place, and why. Separate from `retained` on purpose: a pro's
+  // CRM copy of a departed homeowner is not "kept as-is", it is de-identified,
+  // and those are different promises to make in a privacy disclosure.
+  deidentified: string[];
+  // How many pro_clients rows had name/phone/email/address scrubbed. Kept as
+  // its own field (not just parsed out of `deidentified`'s prose) so the
+  // privacy_actions log entry records a real number, not a sentence.
+  proClientsDeidentifiedCount: number;
   // Labels for deletes/removals that ERRORED. A non-empty list means the purge
   // was partial: the caller must log it rather than report a clean deletion.
   failed: string[];
@@ -480,6 +500,141 @@ export type EraseSummary = {
   // instead of proceeding to delete the auth user.
   contractorDeleteFailed: boolean;
 };
+
+// The label a pro sees in place of a departed homeowner's real name. Exported
+// so the CRM detail views can recognize a de-identified row if they ever need
+// to (e.g. to hide the "message this client" action), without hard-coding the
+// string in more than one place.
+export const DEIDENTIFIED_CLIENT_NAME = "Deleted homeowner";
+
+// Which pro_clients rows are about the homeowner being deleted? There are two
+// ways a row can be theirs:
+//
+//   1. lead_id points at a job posted on a property this homeowner owned.
+//      This is the reliable link: contractor_leads.property_id ->
+//      properties.user_id is the actual account relationship, independent of
+//      whatever the pro typed into client_name/email for that row.
+//
+//   2. No lead_id (the pro typed the client in by hand, see addClientAction
+//      in src/app/pro/crm/actions.ts), so the only signal available is
+//      whether what the pro typed for email matches this homeowner's own
+//      account email, normalized.
+//
+// SECURITY: this used to also match on users.phone, and on users.email
+// straight off the public.users row. Both are attacker-controlled: phone is
+// never verified and is freely editable from /account, and email on the
+// public.users row is a cache of the auth email that (depending on how it
+// got there) is not guaranteed to be re-verified on every change. Matching
+// on either meant anyone could type a victim's phone number or claimed email
+// into their OWN account, delete that account, and have every pro_clients
+// row bearing that value scrubbed platform-wide - including rows that never
+// had anything to do with the attacker. So:
+//
+//   - Phone matching is gone entirely. There is no verified phone to match
+//     against, and this purge would rather under-scrub a phone-only row than
+//     let anyone wipe an arbitrary number out of a stranger's CRM.
+//   - Email matching now reads the ACCOUNT'S VERIFIED IDENTITY -
+//     admin.auth.admin.getUserById(userId).data.user.email - never
+//     public.users.email. If that lookup fails or has no email, the email
+//     branch is skipped rather than falling back to the unverified column.
+//   - Email matching is also scoped to contractors who actually received a
+//     lead from this homeowner (resolved from ownLeadIds via
+//     contractor_leads.contractor_id), not the whole pro_clients table. A
+//     matching email at a contractor this homeowner never dealt with is not
+//     this homeowner's relationship to redact - it is either a stranger's
+//     coincidence or someone else's forged input, and scrubbing it would be
+//     de-identifying the wrong person's CRM entry.
+//
+// `ownLeadIds` is the caller's already-resolved list of contractor_leads ids
+// on this homeowner's own properties (eraseUserData fetches this once for the
+// chat-attachment purge and passes it in here, rather than this function
+// re-querying it).
+export async function findProClientIdsToScrub(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  ownLeadIds: string[]
+): Promise<string[]> {
+  const ids = new Set<string>();
+
+  if (ownLeadIds.length) {
+    const { data: byLead } = await admin
+      .from("pro_clients")
+      .select("id")
+      .in("lead_id", ownLeadIds);
+    for (const row of byLead ?? []) ids.add(row.id as string);
+  }
+
+  // The verified identity, not the editable users.email column. A failed
+  // lookup or a userless auth record skips the email branch entirely rather
+  // than matching on nothing (which .eq("email", null) would not do anyway,
+  // but skip explicitly so the intent is not left to normalizeEmail's
+  // behavior on null/undefined).
+  const { data: authUser, error: authError } = await admin.auth.admin.getUserById(
+    userId
+  );
+  const authEmailNorm = authError
+    ? null
+    : normalizeEmail(authUser?.user?.email ?? null)?.normalized ?? null;
+
+  if (authEmailNorm && ownLeadIds.length) {
+    // Which contractors actually received one of this homeowner's leads?
+    // Only their pro_clients rows are in scope for the email match - see the
+    // SECURITY note above.
+    const { data: leadRows } = await admin
+      .from("contractor_leads")
+      .select("contractor_id")
+      .in("id", ownLeadIds);
+    const contractorIds = [
+      ...new Set(
+        (leadRows ?? [])
+          .map((r) => r.contractor_id as string | null)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+
+    if (contractorIds.length) {
+      // pro_clients has no normalized email column to filter this in SQL, so
+      // this pulls every candidate row (already scoped to the relevant
+      // contractors) and compares normalized emails in JS. Same trade-off
+      // the rest of this file makes (see the header comment): a legal-rights
+      // purge favors completeness over a cheap query.
+      const { data: candidates } = await admin
+        .from("pro_clients")
+        .select("id, email")
+        .in("contractor_id", contractorIds)
+        .not("email", "is", null);
+      for (const row of candidates ?? []) {
+        const rowEmailNorm = normalizeEmail(row.email ?? null)?.normalized ?? null;
+        if (rowEmailNorm && rowEmailNorm === authEmailNorm) ids.add(row.id as string);
+      }
+    }
+  }
+
+  return [...ids];
+}
+
+// Strip the identifying fields off a batch of pro_clients rows, leaving the
+// pro's own stage/note/lead_id/est_value_cents untouched. This is an update,
+// not a delete: the row (and the pro's notes timeline hanging off it in
+// pro_client_notes) is the pro's own CRM record of a deal, which they are
+// entitled to keep. Only the departed homeowner's identifying details go.
+export async function scrubProClientContactInfo(
+  admin: ReturnType<typeof createAdminClient>,
+  ids: string[]
+): Promise<{ error: unknown }> {
+  if (!ids.length) return { error: null };
+  const { error } = await admin
+    .from("pro_clients")
+    .update({
+      client_name: DEIDENTIFIED_CLIENT_NAME,
+      email: null,
+      phone: null,
+      address: null,
+      updated_at: new Date().toISOString(),
+    })
+    .in("id", ids);
+  return { error };
+}
 
 // Purge everything that admin.auth.admin.deleteUser() would NOT remove, then
 // let the caller delete the auth user (which cascades the rest).
@@ -505,6 +660,8 @@ export async function eraseUserData(userId: string): Promise<EraseSummary> {
   let storageObjectsRemoved = 0;
   const tablesPurged: string[] = [];
   const retained: string[] = [];
+  const deidentified: string[] = [];
+  let proClientsDeidentifiedCount = 0;
   const failed: string[] = [];
   let contractorDeleteFailed = false;
 
@@ -536,12 +693,14 @@ export async function eraseUserData(userId: string): Promise<EraseSummary> {
   // so they go too. A pro's leads survive (contractor_id is set null), which
   // is why this is scoped to leads on properties the user owns, not all leads
   // they were party to.
+  const ownLeadIds: string[] = [];
   if (propertyIds.length) {
     const { data: ownLeads } = await admin
       .from("contractor_leads")
       .select("id")
       .in("property_id", propertyIds);
     for (const lead of ownLeads ?? []) {
+      ownLeadIds.push(lead.id as string);
       await purgeStorage(HOME_PHOTOS, `chat/${lead.id}`);
     }
   }
@@ -624,19 +783,47 @@ export async function eraseUserData(userId: string): Promise<EraseSummary> {
       "Jobs you quoted on stay in the homeowner's account. They hold the homeowner's information, not yours."
     );
   }
-  // TODO(legal): a pro's CRM copy (pro_clients: client_name, phone, email,
-  // address) of a homeowner is NOT removed when that homeowner deletes their
-  // account. Whether Hearth must reach into a contractor's own records to
-  // erase it - or whether the contractor is a separate controller with their
-  // own retention basis - is a question for counsel. Currently retained.
   retained.push(
     "Records we must keep by law, including invoices and payment records kept for tax and accounting purposes."
   );
+
+  // --- De-identify a pro's CRM copy of this homeowner ---------------------
+  // A pro's client tracker (pro_clients) is the pro's own record of a deal,
+  // and its notes and job history are theirs to keep - but the homeowner's
+  // name, phone, email, and address inside it are this person's personal
+  // information, and stay linked to it after this account is gone unless we
+  // scrub them here. This runs immediately (not on a 30-day timer): "within
+  // 30 days" in the privacy policy is the outer bound the law requires, not
+  // a promise to wait.
+  //
+  // Dual-side accounts (this same person also runs a contractor listing) need
+  // no special case: any pro_clients row under THEIR OWN contractor_id that
+  // happens to match gets deleted a few lines up anyway, when the contractors
+  // row cascades - so by the time this scrub would touch it, it's already
+  // gone. This only ever reaches other pros' CRM copies of this homeowner.
+  const proClientIdsToScrub = await findProClientIdsToScrub(
+    admin,
+    userId,
+    ownLeadIds
+  );
+  if (proClientIdsToScrub.length) {
+    const { error } = await scrubProClientContactInfo(admin, proClientIdsToScrub);
+    if (error) {
+      failed.push("pro_clients (contact info scrub)");
+    } else {
+      proClientsDeidentifiedCount = proClientIdsToScrub.length;
+      deidentified.push(
+        `${proClientIdsToScrub.length} pro CRM record(s) that referenced you had your name, phone, email, and address removed. The pro's own notes and job history were kept.`
+      );
+    }
+  }
 
   const summary: EraseSummary = {
     storageObjectsRemoved,
     tablesPurged,
     retained,
+    deidentified,
+    proClientsDeidentifiedCount,
     failed,
     contractorDeleteFailed,
   };

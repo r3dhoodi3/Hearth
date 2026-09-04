@@ -422,8 +422,17 @@ export default function AccountSecurityPanel({
               className="mt-4 max-w-md space-y-4 border-t border-red-200 pt-4 dark:border-red-900/50"
             >
               <p className="text-sm font-bold text-red-800 dark:text-red-300">
-                This permanently deletes your account, your homes, systems,
-                documents, and messages. This cannot be undone.
+                This permanently deletes your account, homes, systems,
+                photos, and documents. This cannot be undone.
+              </p>
+              <p className="text-xs text-stone-600 dark:text-stone-400">
+                We keep billing records for 7 years, a record that you asked
+                us to delete, and messages or reviews already visible to
+                another user. See our{" "}
+                <Link href="/privacy" className="underline hover:text-stone-800 dark:hover:text-stone-200">
+                  Privacy Policy
+                </Link>
+                .
               </p>
               {hasPassword ? (
                 <div>

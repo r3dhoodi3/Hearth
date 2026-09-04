@@ -6,6 +6,7 @@ import { getVerifiedUser } from "@/lib/auth";
 import { getSides, landingFor } from "@/lib/contractor";
 import { FOUNDER, PLUS_PLAN } from "@/lib/constants";
 import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
+import { LEGAL_LINKS } from "@/lib/legal";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
@@ -354,7 +355,7 @@ export default async function Home(props: {
   ];
 
   return (
-    <main className="pb-16">
+    <main id="main" className="pb-16">
       <StructuredData data={landingJsonLd} />
       {/* Warm band wraps header, hero, and the product preview: a single
           flat fill, hearth-50 in light and stone-900 in dark (matching the
@@ -758,26 +759,22 @@ export default async function Home(props: {
               Fine print
             </p>
             <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
-              <li>
-                <Link href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                  Privacy
-                </Link>
-              </li>
-              <li>
-                <Link href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                  Terms
-                </Link>
-              </li>
-              <li>
-                <Link href="/ai-disclosure" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                  How we use AI
-                </Link>
-              </li>
+              {/* Source of truth: LEGAL_LINKS in src/lib/legal.ts, so a new
+                  legal document only needs adding there, not in every footer
+                  that lists them. */}
+              {LEGAL_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
               {/* Was a mailto: to FOUNDER.email; a raw address in a
                   site-wide footer is exactly the kind of thing spam
                   scrapers find first. Always rendered now, unlike the old
                   conditional, since the contact form needs no owner-fillable
-                  field to work. */}
+                  field to work. Not in LEGAL_LINKS: it's a contact channel,
+                  not a legal document. */}
               <li>
                 <Link
                   href="/contact"
@@ -795,27 +792,26 @@ export default async function Home(props: {
         </p>
       </footer>
 
-      {/* PHONE ONLY footer. Two links, not four: "I'm a contractor" (now a
-          full-width door button) and "Emergency help" already sit in
-          PhoneLanding a few hundred pixels up this same short screen, and
-          repeating them down here would read as a mistake rather than a
-          footer. Terms has no other phone door, so it gets one. */}
-      <footer className="mt-16 flex items-center justify-center gap-5 text-sm text-stone-500 sm:hidden dark:text-stone-400">
+      {/* PHONE ONLY footer. "I'm a contractor" (now a full-width door button)
+          and "Emergency help" already sit in PhoneLanding a few hundred
+          pixels up this same short screen, and repeating them down here
+          would read as a mistake rather than a footer, so only the legal
+          links (from LEGAL_LINKS, same source as the desktop footer above)
+          get a phone door. flex-wrap because that list is now longer than
+          two items. */}
+      <footer className="mt-16 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm text-stone-500 sm:hidden dark:text-stone-400">
         {/* min-h-11 with the text left small: py-1 alone gave these a 24px
             target. This whole footer is sm:hidden, so nothing here reaches
             desktop. */}
-        <Link
-          href="/privacy"
-          className="inline-flex min-h-11 items-center py-1 hover:text-bark-700 dark:hover:text-stone-300"
-        >
-          Privacy
-        </Link>
-        <Link
-          href="/terms"
-          className="inline-flex min-h-11 items-center py-1 hover:text-bark-700 dark:hover:text-stone-300"
-        >
-          Terms
-        </Link>
+        {LEGAL_LINKS.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="inline-flex min-h-11 items-center py-1 hover:text-bark-700 dark:hover:text-stone-300"
+          >
+            {link.label}
+          </Link>
+        ))}
       </footer>
       </div>
     </main>

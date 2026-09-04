@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 // Review share card: an image a pro can post when a homeowner leaves them a
 // strong review. Modeled directly on src/app/api/win-card/[leadId]/route.tsx:
-// same 1200x630 size, same warm hearth palette, same "no more homeowner data
+// same 1200x630 size, same warm Hearth palette, same "no more homeowner data
 // than the win card already shows" rule. The only homeowner detail here is a
 // first name (never a last name, never an address or city), read off
 // contractor_leads.homeowner_name - the same contact snapshot column the win
@@ -20,7 +20,7 @@ export const runtime = "nodejs";
 
 const size = { width: 1200, height: 630 };
 
-// Warm hearth palette (tailwind.config.ts), copied from win-card so both
+// Warm Hearth palette (tailwind.config.ts), copied from win-card so both
 // share cards read as the same product.
 const HEARTH_50 = "#fbf7f2";
 const HEARTH_500 = "#a9743f";

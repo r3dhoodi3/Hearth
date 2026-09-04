@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import BillingLegalLine from "@/components/BillingLegalLine";
 import {
   PLUS_PLAN,
   COLD_START_FREE_POSTING,
@@ -305,6 +306,9 @@ export default function PricingPage() {
           free trial, you are never charged, and if you cancel later you keep
           Plus until the end of the period you already paid for.
         </p>
+        {/* Cal. Bus. & Prof. Code 17538: legal name, address, and a route to
+            the refund policy, shown before purchase. */}
+        <BillingLegalLine className="mt-3 text-sm text-stone-500 dark:text-stone-400" />
       </div>
 
       {/* What stays free forever, so "free" isn't a bait word. */}

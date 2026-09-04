@@ -197,7 +197,7 @@ export default function HomeView({
           Same classes, same grid, same tile shape. Titles shorten below sm so
           three fit across at 390px without wrapping to three lines.
           `chip` says what a non-member sees before tapping, never after:
-          "pro" is the hearth-accent gate for a tile that is truly member-only
+          "pro" is the Hearth-accent gate for a tile that is truly member-only
           (the insights trend on /pro/business), "free" is the green two-free-
           drafts tag for the back office (0145 gave every contractor two free
           drafts before it gates, so a "Pro" chip there overstated the door),

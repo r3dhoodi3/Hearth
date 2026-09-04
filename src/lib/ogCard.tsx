@@ -14,7 +14,7 @@ import { ogFontOption } from "@/lib/ogFont";
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_CONTENT_TYPE = "image/png";
 
-// Same warm hearth palette p/[id]'s card uses (tailwind.config.ts).
+// Same warm Hearth palette p/[id]'s card uses (tailwind.config.ts).
 const HEARTH_50 = "#fbf7f2";
 const HEARTH_500 = "#a9743f";
 const HEARTH_700 = "#73482b";

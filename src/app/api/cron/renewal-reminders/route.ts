@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
 import { stripe } from "@/lib/stripe";
 import { billingTerms, type PaidPlan } from "@/lib/billingTerms";
+import { LEGAL } from "@/lib/legal";
 
 export const runtime = "nodejs";
 
@@ -164,6 +165,16 @@ function toPaidPlan(plan: string | null | undefined): PaidPlan | null {
   if (plan === "weekly" || plan === "monthly" || plan === "yearly") return plan;
   if (plan === "pro_monthly" || plan === "pro_yearly") return plan;
   return null;
+}
+
+// Appended to every reminder body below: a link to the full Billing,
+// Subscriptions, Refunds and Credits Policy, and the one-click cancel path in
+// the policy's own words. `terms.cancel` already names the exact button
+// ("Cancel membership") on the exact page for the plan being reminded about;
+// this is the extra, plan-independent pointer 07-billing-refund-policy.md's
+// SITE CHANGES REQUIRED item 2 asks every renewal notice to carry.
+function billingPolicyFooter(): string {
+  return `Full billing and refund policy: ${LEGAL.siteUrl}/billing. Cancel anytime in Account > Membership.`;
 }
 
 type SubRow = {
@@ -488,7 +499,7 @@ async function runCron(req: NextRequest) {
           // the next charge is, and how to stop it. `terms.recurring` is the
           // same sentence shown before purchase, so the warning and the
           // original promise are word-for-word consistent.
-          const body = `${terms.recurring} ${terms.cancel}`;
+          const body = `${terms.recurring} ${terms.cancel} ${billingPolicyFooter()}`;
 
           const sent = await sendNotification(supabase, {
             userId: sub.user_id,
@@ -578,7 +589,7 @@ async function runCron(req: NextRequest) {
             /^After that,\s*/i,
             ""
           );
-          const body = `${recurringStandalone} ${terms.cancel}`;
+          const body = `${recurringStandalone} ${terms.cancel} ${billingPolicyFooter()}`;
 
           const sent = await sendNotification(supabase, {
             userId: sub.user_id,

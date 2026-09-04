@@ -98,6 +98,10 @@ export default function PostJobButton({
           {shownError}
         </p>
       )}
+      <p className="text-xs text-stone-500 dark:text-stone-400">
+        Pros who pay to apply will see your name, address, phone (if added),
+        and the details below.
+      </p>
       <button
         ref={btnRef}
         onClick={check}
