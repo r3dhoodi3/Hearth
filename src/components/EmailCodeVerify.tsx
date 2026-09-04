@@ -73,8 +73,14 @@ export default function EmailCodeVerify({
 
     if (error) {
       setBusy(false);
-      // Let the auto-submit effect fire again once the reader edits the code.
-      autoSubmitted.current = false;
+      // Do NOT clear autoSubmitted here. Clearing it caused an infinite loop:
+      // the auto-submit effect re-runs when `busy` flips back to false, and
+      // with the guard reset and the code still 6 digits it fired verify again
+      // immediately - the SAME rejected code - hammering Supabase into a rate
+      // limit and flashing the error on and off. The guard re-arms only when
+      // the reader actually edits the code below 6 (see the effect below); to
+      // retry the same code they use the Verify button, which calls onVerify
+      // directly and is not gated by this ref.
       setError(friendlyAuthError(error));
       return;
     }
