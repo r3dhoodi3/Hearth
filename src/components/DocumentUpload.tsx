@@ -340,7 +340,7 @@ export default function DocumentUpload({
           </p>
           <Link
             href={FREE_TASTE_PAYWALL.document.link}
-            className="btn-primary inline-block"
+            className="btn-primary"
           >
             Get Hearth Plus
           </Link>

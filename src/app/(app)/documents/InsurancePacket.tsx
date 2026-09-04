@@ -65,7 +65,7 @@ export default function InsurancePacket({
           upgrades, and the questions worth asking beyond price. You stay in
           control: Hearth never contacts insurers for you.
         </p>
-        <Link href="/plus?reason=insurance" className="btn-primary inline-block">
+        <Link href="/plus?reason=insurance" className="btn-primary">
           Unlock with Hearth Plus
         </Link>
       </div>

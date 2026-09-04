@@ -637,7 +637,7 @@ export default async function Home(props: {
         </h2>
         <Link
           href="/homeowner-signup"
-          className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-lift"
+          className="btn-primary mt-6 px-6 py-3 text-base shadow-lift"
         >
           Get started free
         </Link>

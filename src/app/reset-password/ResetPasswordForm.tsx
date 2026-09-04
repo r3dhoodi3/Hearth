@@ -218,7 +218,7 @@ export default function ResetPasswordForm({
 
         <div className="mt-6 border-t border-stone-100 pt-4 text-center dark:border-white/10">
           <p className="text-sm text-stone-500 dark:text-stone-400">Remembered it after all?</p>
-          <Link href="/signin" className="btn-secondary mt-2 inline-block w-full">
+          <Link href="/signin" className="btn-secondary mt-2 flex w-full">
             Back to sign in
           </Link>
         </div>

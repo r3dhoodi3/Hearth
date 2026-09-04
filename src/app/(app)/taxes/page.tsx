@@ -207,7 +207,7 @@ export default async function TaxesPage() {
                 {BUILDING_RECORD_NOTICE}
               </p>
             )}
-            <Link href="/value" className="btn-primary inline-block">
+            <Link href="/value" className="btn-primary">
               Set up your home value
             </Link>
           </div>

@@ -220,7 +220,7 @@ export default function SignInForm({
             </p>
             <Link
               href={`/verify?email=${encodeURIComponent(unconfirmedEmail)}`}
-              className="btn-secondary mt-3 inline-block w-full"
+              className="btn-secondary mt-3 flex w-full"
             >
               Verify your email
             </Link>
@@ -242,7 +242,7 @@ export default function SignInForm({
           <p className="text-sm text-stone-500 dark:text-stone-400">New to Hearth?</p>
           <Link
             href="/"
-            className="btn-secondary mt-2 inline-block w-full"
+            className="btn-secondary mt-2 flex w-full"
           >
             Get started
           </Link>

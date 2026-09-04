@@ -509,7 +509,7 @@ export default function QuoteAnalyzer({
             </p>
             <Link
               href={QUOTE_TASTE_PAYWALL.link}
-              className="btn-primary inline-block"
+              className="btn-primary"
             >
               Get Hearth Plus
             </Link>
@@ -984,7 +984,7 @@ export default function QuoteAnalyzer({
             </div>
           )}
 
-          <Link href="/contractors" className="btn-primary block text-center">
+          <Link href="/contractors" className="btn-primary flex text-center">
             Get more quotes to compare
           </Link>
         </div>
@@ -1000,7 +1000,7 @@ export default function QuoteAnalyzer({
               ? "That was your free check. Get every quote checked with Hearth Plus, $4.99/mo, and your first 3 days are free."
               : "That was your free check. Get every quote checked with Hearth Plus, $4.99/mo."}
           </p>
-          <Link href="/plus?reason=quote" className="btn-primary inline-block">
+          <Link href="/plus?reason=quote" className="btn-primary">
             Get Hearth Plus
           </Link>
         </div>

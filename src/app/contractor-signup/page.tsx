@@ -366,7 +366,7 @@ export default function ContractorSignUpPage(props: {
           <p className="text-sm text-stone-500 dark:text-stone-400">Already have an account?</p>
           <Link
             href={`/signin${nextQuery}`}
-            className="btn-secondary mt-2 inline-block w-full"
+            className="btn-secondary mt-2 flex w-full"
           >
             Sign in
           </Link>

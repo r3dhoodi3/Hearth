@@ -92,7 +92,7 @@ export default function ProNudge({
         </p>
         <Link
           href="/pro/plus?reason=nudge"
-          className="btn-primary mt-3 inline-block text-sm"
+          className="btn-primary mt-3 text-sm"
         >
           {/* Same label the rest of the pro side uses, so the trial length is
               quoted from PRO_PLAN and can never drift from checkout. */}

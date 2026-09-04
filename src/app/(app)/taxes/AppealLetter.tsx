@@ -34,7 +34,7 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
           with your county. You stay in control, Hearth never files anything
           for you.
         </p>
-        <Link href="/plus?reason=tax" className="btn-primary inline-block">
+        <Link href="/plus?reason=tax" className="btn-primary">
           Unlock with Hearth Plus
         </Link>
       </div>

@@ -252,7 +252,7 @@ export default function HelpView({
             ? FEEDBACK_REPEAT_NOTE
             : "It takes about a minute: a score from 1 to 5 and a few words. We read every message."}
         </p>
-        <Link href="/pro/feedback" className="btn-secondary mt-3 inline-block">
+        <Link href="/pro/feedback" className="btn-secondary mt-3">
           Report a bug
         </Link>
       </div>
