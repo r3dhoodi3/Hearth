@@ -76,15 +76,26 @@ export default function PhoneLanding({
 }) {
   return (
     <div className="sm:hidden">
-      {/* The full header is hidden on phone, so the wordmark and the theme
-          switch live here instead. Nothing else from that header is lost:
-          its pro door is now the contractor button below, and Emergency
+      {/* The full header is hidden on phone, so the wordmark, the theme switch,
+          and the sign-in door live here instead. Nothing else from that header
+          is lost: its pro door is the contractor button below, and Emergency
           help is in the quiet row at the bottom. */}
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100">
           <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
         </span>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          {/* Sign in in the header, matching the desktop landing: a solid bark
+              button so a recurring user has a one-tap door top-right instead of
+              hunting for a text link below the doors. */}
+          <Link
+            href="/signin"
+            className="whitespace-nowrap rounded-lg bg-bark-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-bark-700 dark:bg-bark-500 dark:hover:bg-bark-600"
+          >
+            Sign in
+          </Link>
+        </div>
       </div>
 
       {/* Deliberately an h1: the desktop hero's h1 is display:none at this
@@ -125,19 +136,6 @@ export default function PhoneLanding({
           I&apos;m a contractor
         </Link>
       </div>
-
-      {/* Sign in stays under the doors but visually below them in weight: a
-          plain full-width text link, not a third button, so the hierarchy
-          reads doors first. min-h-11 keeps the whole line a 44px target. */}
-      <Link
-        href="/signin"
-        className="mt-3 inline-flex min-h-11 w-full items-center justify-center text-sm text-stone-600 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300"
-      >
-        {"Already have an account? "}
-        <span className="font-medium underline underline-offset-2">
-          Sign in
-        </span>
-      </Link>
 
       {/* Three one-line reasons to pick a door. This is deliberately a list,
           not a marketing section: no headings, no paragraphs, so the tour
