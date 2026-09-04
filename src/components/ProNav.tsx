@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { ClipboardList } from "lucide-react";
 import Logo from "@/components/Logo";
 import GlobalSearch from "@/components/GlobalSearch";
 import NavLinks from "@/components/NavLinks";
@@ -137,25 +136,15 @@ export default function ProNav({
           <nav className="-mx-1 hidden items-center gap-1 overflow-x-auto px-1 lg:flex">
             <NavLinks links={LINKS} accent="hearth" />
           </nav>
-          {/* AI back office, same row as the bell so it reads as a daily
-              control rather than something buried in the profile menu. Icon
-              only on the phone (44px hit area, matching the bell and
-              ProfileMenu triggers beside it); a visible label joins it from
-              sm up, where the header has the width to spare. The href is
-              precomputed in pro/layout.tsx - this link never decides where it
-              points, it just goes there. */}
-          <Link
-            href={backOfficeHref}
-            aria-label="AI back office"
-            className="group flex items-center gap-1.5 rounded-full px-2 text-stone-500 hover:bg-bark-50 hover:text-bark-700 active:scale-95 max-sm:min-h-11 max-sm:min-w-11 max-sm:justify-center max-sm:px-0 sm:h-9 sm:px-2.5 sm:text-sm sm:font-medium dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-          >
-            <ClipboardList className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <span className="hidden sm:inline">Back office</span>
-          </Link>
+          {/* Back office is NOT a header button anymore: it duplicated the
+              "Back office" entry already in the profile menu below, and its
+              label + icon were crowding the row (the nav pills were overlapping
+              at desktop widths). The menu entry now carries the same gated
+              backOfficeHref so the member/non-member routing is preserved. */}
           {/* Same smart search as the homeowner header, switched to the pro
               registry and FAQ half. Inline box from sm up, mirroring Nav.tsx. */}
           <div className="hidden sm:block">
-            <GlobalSearch side="pro" />
+            <GlobalSearch side="pro" expandable />
           </div>
           {/* Phone-only entry to /pro/search; the inline box above is hidden
               below sm and the page would have no other way in. Mirrors the
@@ -193,7 +182,7 @@ export default function ProNav({
               // business" says what you DO here.
               { href: "/pro/profile", label: "Edit business profile" },
               { href: "/pro/playbook", label: "Playbook" },
-              { href: "/pro/tools", label: "Back office" },
+              { href: backOfficeHref, label: "Back office" },
               { href: "/pro/plus", label: "Membership" },
               { href: "/pro/billing", label: "Billing" },
               { href: "/pro/privacy", label: "Your privacy rights" },

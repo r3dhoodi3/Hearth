@@ -19,6 +19,14 @@ import type { FaqEntry } from "@/lib/faqIndex";
 // request. Submitting still routes to the side's search page (/search for the
 // homeowner, which also queries their own systems/documents/issues on the
 // server; /pro/search for pros), so enter-without-picking keeps working.
+//
+// EXPANDABLE MODE (expandable prop, used by BOTH shells): instead of an
+// always-open pill, the box starts as a single circular search-icon button and
+// expands into the full input on click, collapsing back to the icon when it's
+// dismissed with an empty query. This keeps the header tight (the pro row in
+// particular) while preserving every search behavior below. The prop defaults
+// to false, in which case the box renders exactly as the original always-open
+// pill.
 const EXAMPLES: Record<SearchSide, string[]> = {
   homeowner: [
     "Water heater",
@@ -47,10 +55,15 @@ const DEBOUNCE_MS = 180;
 
 export default function GlobalSearch({
   side = "homeowner",
+  expandable = false,
 }: {
   // Which registry/FAQ half this box searches, and which shell's accent color
   // and search page it uses.
   side?: SearchSide;
+  // Start as a search-icon button that expands into the full input on click,
+  // instead of an always-open pill. Both shells pass this; default false keeps
+  // the original always-open behavior for any other caller.
+  expandable?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -67,6 +80,9 @@ export default function GlobalSearch({
   const [activeIndex, setActiveIndex] = useState(-1);
   // Which FAQ question is expanded inline, if any.
   const [openFaq, setOpenFaq] = useState<string | null>(null);
+  // Expandable mode only: whether the icon has been clicked open into the full
+  // input. Ignored when !expandable (the input is always shown then).
+  const [expanded, setExpanded] = useState(false);
   const wasFocused = useRef(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -80,6 +96,12 @@ export default function GlobalSearch({
     }
     wasFocused.current = focused;
   }, [focused]);
+
+  // Expandable mode: the moment the icon opens the input, land the cursor in
+  // it so clicking the magnifier starts typing without a second tap.
+  useEffect(() => {
+    if (expanded) inputRef.current?.focus();
+  }, [expanded]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), DEBOUNCE_MS);
@@ -121,14 +143,27 @@ export default function GlobalSearch({
       : "focus:border-bark-500 dark:focus:border-bark-500";
   const rowHover = side === "pro" ? "hover:bg-hearth-50" : "hover:bg-bark-50";
   const rowActive = side === "pro" ? "bg-hearth-50" : "bg-bark-50";
+  // Collapsed icon button hover accent, matching the sibling header icon
+  // buttons (bell / back-office): bark on the homeowner side, hearth on the pro
+  // side.
+  const iconHover =
+    side === "pro"
+      ? "hover:bg-hearth-50 hover:text-hearth-700"
+      : "hover:bg-bark-50 hover:text-bark-700";
 
   function close() {
     setFocused(false);
     inputRef.current?.blur();
+    // Escape (and other close paths) collapse back to the icon in expandable
+    // mode; harmless no-op otherwise.
+    if (expandable) setExpanded(false);
   }
 
   function navigate(href: string) {
     setFocused(false);
+    // Picking a result / submitting changes the page anyway, so let the box
+    // fall back to its icon in expandable mode.
+    if (expandable) setExpanded(false);
     // Wrap in a transition so the left icon can flip to a spinner the instant
     // they pick, rather than the box sitting dead until the RSC payload lands.
     startTransition(() => router.push(href));
@@ -137,7 +172,10 @@ export default function GlobalSearch({
   function go(query: string) {
     const s = query.trim();
     if (s) navigate(`${searchHref}?q=${encodeURIComponent(s)}`);
-    else setFocused(false);
+    else {
+      setFocused(false);
+      if (expandable) setExpanded(false);
+    }
   }
 
   function select(item: Item) {
@@ -186,9 +224,42 @@ export default function GlobalSearch({
         setFocused(true);
       }}
       onBlur={() => {
-        blurTimer.current = setTimeout(() => setFocused(false), 120);
+        blurTimer.current = setTimeout(() => {
+          setFocused(false);
+          // Expandable mode: collapse back to the icon on blur ONLY when the
+          // box is empty. If they typed something, keep the input open (don't
+          // throw away their query); the dropdown still closes via setFocused
+          // above either way.
+          if (expandable && q.trim() === "") setExpanded(false);
+        }, 120);
       }}
     >
+      {expandable && !expanded ? (
+        // Collapsed: a single circular search-icon button, sized/styled to
+        // match the sibling header icon buttons (bell / back office). Clicking
+        // it opens the input; the focus effect above then lands the cursor.
+        <button
+          type="button"
+          aria-label="Search"
+          onClick={() => setExpanded(true)}
+          className={`flex h-9 w-9 items-center justify-center rounded-full text-stone-500 ${iconHover} dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300`}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.3-4.3" />
+          </svg>
+        </button>
+      ) : (
+        <>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -234,8 +305,12 @@ export default function GlobalSearch({
           // it below sm), so a sm:text-sm here would make it 14px in the only
           // sizes it is visible - including iPad-portrait touch - and iOS
           // Safari zooms the page on focus of any input under 16px. Same
-          // reasoning as `.input` in globals.css.
-          className={`w-24 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-base text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 ${focusBorder}`}
+          // reasoning as `.input` in globals.css. In expandable mode the box is
+          // only ever shown once opened, so it skips the w-24-at-rest / focus:w-48
+          // dance and just renders at its full width.
+          className={`${
+            expandable ? "w-56" : "w-24 focus:w-48"
+          } rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-base text-stone-700 transition-all placeholder:text-stone-500 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 ${focusBorder}`}
         />
       </form>
 
@@ -365,6 +440,8 @@ export default function GlobalSearch({
             </div>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );
