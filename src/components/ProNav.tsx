@@ -107,15 +107,15 @@ export default function ProNav({
             <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" />
             <span>
               Hearth{" "}
-              {/* Hidden until lg: at 768-900px (md), "Leads / Messages /
-                  Clients / My Business" plus the Business pill already fill
-                  the row, so "for Pros" was getting squeezed by its shrinkable
-                  flex parent and wrapping under "Hearth" (measured two lines,
-                  reading as overlapping letters). The strip itself is lg-only
-                  now, so the room is there below lg - but lg is also exactly
-                  where this suffix started fitting, so it stays put and both
-                  halves of the header switch on the same line. */}
-              <span className="hidden font-normal text-stone-500 lg:inline dark:text-stone-400">
+              {/* Shown at every width so a pro (especially a pro-only account,
+                  which gets no side pill) can tell at a glance they're in the
+                  Pro app, not the homeowner one. This used to be hidden below lg
+                  because the top nav strip filled the row at md and squeezed the
+                  suffix into a wrap - but the strip is lg-only now (it lives in
+                  the bottom tab bar below lg), so the top row has the room, and
+                  the wordmark's whitespace-nowrap keeps "Hearth for Pros" on one
+                  line at phone widths. */}
+              <span className="font-normal text-stone-500 dark:text-stone-400">
                 for Pros
               </span>
             </span>
@@ -206,12 +206,22 @@ export default function ProNav({
           />
         </div>
       </div>
-      {/* Phone twin of the desktop SidePill above. Mirrors Nav.tsx: its own
-          quiet line under the logo instead of risking a wrap on an already
-          tight phone header. */}
+      {/* Phone twin of the desktop side pill: its own quiet line under the
+          wordmark rather than risking a wrap on the tight phone header. pl-12
+          starts it under the "H" of "Hearth" (past the h-6 logo + gap). On the
+          phone it shows the COMPANY NAME (truncated) instead of the generic
+          "Business" - the phone has nowhere else the business name is visible,
+          not even the profile dropdown. Falls back to "Business" when unset. */}
       {hasHome && (
-        <div className="px-4 pb-1.5 sm:hidden">
-          <SidePill label="Business" accent="hearth" />
+        // Negative top margin pulls the pill up under the wordmark: the header
+        // row's own bottom padding (py-2.5) plus the wordmark's line-height
+        // otherwise leave a visible gap between "Hearth for Pros" and this line.
+        <div className="-mt-5 pl-12 pb-1.5 sm:hidden">
+          <SidePill
+            label={company ?? "Business"}
+            accent="hearth"
+            className="inline-block max-w-[75vw] truncate align-middle"
+          />
         </div>
       )}
     </header>
