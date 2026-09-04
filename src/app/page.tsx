@@ -397,6 +397,16 @@ export default async function Home(props: {
                 <span className="sm:hidden">For Pros</span>
                 <span className="hidden sm:inline">Hearth for Pros</span>
               </Link>
+              {/* Sign in, rightmost. Solid bark (the brand brown, same tone as
+                  btn-primary) so the returning-user door reads as a real
+                  action next to the outlined pro door. Appending it here lets
+                  justify-between shift the rest of the group left to make room. */}
+              <Link
+                href="/signin"
+                className="whitespace-nowrap rounded-lg bg-bark-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-bark-700 dark:bg-bark-500 dark:hover:bg-bark-600"
+              >
+                Sign in
+              </Link>
             </div>
           </header>
 
