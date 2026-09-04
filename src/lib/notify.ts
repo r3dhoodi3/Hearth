@@ -43,7 +43,7 @@ import { LEGAL } from "@/lib/legal";
 // check unconditionally anyway. A future fan-out kind that is NOT
 // transactional would need the check added to sendOutboundChannels too.
 //
-// Hearth Plus gate: for the proactive homeowner alert/reminder kinds listed in
+// OakTend Plus gate: for the proactive homeowner alert/reminder kinds listed in
 // src/lib/notifyGating.ts, the email and SMS channels are a paid perk. The
 // in-app row is still written for everyone, and so is the web push (free to
 // send, so nothing to gate); only email and SMS are withheld. See
@@ -63,7 +63,7 @@ import { LEGAL } from "@/lib/legal";
 // See src/lib/push.ts and docs/GO-LIVE-WIRING.md.
 // To activate email: create a Resend account (resend.com) and set
 //   RESEND_API_KEY - from resend.com/api-keys
-//   RESEND_FROM    - a verified sender, e.g. "Hearth <hello@yourdomain.com>"
+//   RESEND_FROM    - a verified sender, e.g. "OakTend <hello@yourdomain.com>"
 // To activate SMS: create a Twilio account (twilio.com) and set
 //   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER
 //
@@ -223,7 +223,7 @@ export async function sendOutboundChannels(
   // PUSH, started before the email/SMS gates below and deliberately ahead of
   // the "no contact details" return: push needs no email address and no phone
   // number, so a caller that has neither (most crons, and the job fan-out in
-  // proAlerts.ts) still reaches a phone. It is also NOT behind the Hearth Plus
+  // proAlerts.ts) still reaches a phone. It is also NOT behind the OakTend Plus
   // gate - see the note in src/lib/notifyGating.ts - and it has its own
   // allowlist of kinds, its own opt-out, and its own quiet-hours rule, all of
   // which sendPush applies itself.
@@ -260,7 +260,7 @@ export async function sendOutboundChannels(
     return;
   }
 
-  // Hearth Plus gate on the OUTBOUND channels only (see src/lib/notifyGating.ts
+  // OakTend Plus gate on the OUTBOUND channels only (see src/lib/notifyGating.ts
   // for the kind list and the reasoning). Enforced here, at the one door every
   // sender goes through, rather than in each cron: a gate a caller has to
   // remember is a gate the next cron forgets. The in-app row is already
@@ -282,7 +282,7 @@ export async function sendOutboundChannels(
   ]);
 }
 
-// Does this recipient have Hearth Plus benefits, as far as the service role
+// Does this recipient have OakTend Plus benefits, as far as the service role
 // can tell? Mirrors hasPlus() from src/lib/subscription.ts, which is
 // session-bound and therefore useless to a cron: the recipient counts as a
 // member if they hold a live homeowner subscription row themselves, or if
@@ -299,7 +299,7 @@ async function lookupPlusStatus(
   try {
     const admin = createAdminClient();
 
-    // Homeowner side only: a contractor's pro_ plan is not Hearth Plus.
+    // Homeowner side only: a contractor's pro_ plan is not OakTend Plus.
     const { data: own, error: ownError } = await admin
       .from("subscriptions")
       .select("plan, status, current_period_end")
@@ -413,7 +413,7 @@ function emailFooter(unsubscribeUrl: string): string {
 // no counterpart in TRANSACTIONAL_NOTIFICATION_KINDS (src/lib/notifyGating.ts,
 // which is scoped to the marketing-frequency cap and the SMS/push senders,
 // not specifically to what CAN-SPAM's transactional exemption covers on
-// email). CAN-SPAM (15 U.S.C. 7702(2)) and Hearth's own Terms and Privacy
+// email). CAN-SPAM (15 U.S.C. 7702(2)) and OakTend's own Terms and Privacy
 // Policy both promise that account, security, billing and active-job mail
 // keeps going regardless of a marketing opt-out - only digests and product
 // updates are what "unsubscribe" actually turns off (see the /unsubscribe
@@ -433,7 +433,7 @@ const EMAIL_ONLY_TRANSACTIONAL_KINDS: ReadonlySet<string> = new Set([
 // (src/lib/notifyGating.ts) answers a different question - which kinds are
 // exempt from the marketing FREQUENCY CAP and skip SMS/push quiet hours -
 // and it includes several kinds that are not "account, billing, or an active
-// job" mail under CAN-SPAM's transactional exemption or Hearth's own Terms:
+// job" mail under CAN-SPAM's transactional exemption or OakTend's own Terms:
 // new_review and referral_reward are engagement nudges, and freeze/heat/
 // high_wind/heavy_rain/recall are safety alerts that must reach a phone or a
 // push notification immediately but have no such urgency by email, where an
@@ -566,7 +566,7 @@ export async function sendEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: process.env.RESEND_FROM || "Hearth <onboarding@resend.dev>",
+        from: process.env.RESEND_FROM || "OakTend <onboarding@resend.dev>",
         to: input.email,
         subject,
         text: `${bodyText}\n${emailFooter(unsubscribeUrl)}`,

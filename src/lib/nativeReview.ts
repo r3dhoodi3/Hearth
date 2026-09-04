@@ -50,7 +50,7 @@ export type ReviewMoment = "plan_built" | "job_hired";
 
 // Dispatched the instant a positive outcome lands, by whatever component owns
 // that success state. ReviewPrompt.tsx is the only listener.
-export const REVIEW_MOMENT_EVENT = "hearth:review-moment";
+export const REVIEW_MOMENT_EVENT = "oaktend:review-moment";
 
 // The moment also goes in sessionStorage, not just the event, for two reasons:
 // the success state is often followed by a redirect (the rehire flow lands

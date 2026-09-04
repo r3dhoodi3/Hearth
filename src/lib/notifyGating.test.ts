@@ -12,8 +12,8 @@ import {
   TRANSACTIONAL_NOTIFICATION_KINDS,
 } from "./notifyGating";
 
-// The proactive homeowner alerts and reminders - the ones Hearth generates on
-// its own schedule. Email/SMS on these is what Hearth Plus sells.
+// The proactive homeowner alerts and reminders - the ones OakTend generates on
+// its own schedule. Email/SMS on these is what OakTend Plus sells.
 const GATED = [
   "freeze",
   "heat",
@@ -275,7 +275,7 @@ describe("isTransactionalKind", () => {
     expect(isTransactionalKind(kind)).toBe(true);
   });
 
-  // The proactive, Hearth-initiated nudges the cap exists for: seasonal
+  // The proactive, OakTend-initiated nudges the cap exists for: seasonal
   // upsells, digests, win-back credits, review asks, aging-deal reminders.
   it.each([
     "maintenance_upcoming",

@@ -1,16 +1,16 @@
 // Does the name CSLB has on file for a license actually belong to the pro
-// claiming it on Hearth?
+// claiming it on OakTend?
 //
 // WHY THIS EXISTS: src/lib/cslb.ts only answers "is this license number
 // current and active". Until this file shipped, that was the whole check, so
 // anyone could paste a stranger's valid CSLB number into their profile and
 // collect a real "License verified" badge on someone else's credential. This
 // module is the identity half: compare the business name CSLB registered
-// against the names Hearth knows for the account.
+// against the names OakTend knows for the account.
 //
 // DELIBERATELY LENIENT. A false rejection locks a legitimate pro out of the
 // badge they earned, and real-world names disagree constantly:
-//   - CSLB stores sole proprietors surname-first ("DOE JOHN"), Hearth stores
+//   - CSLB stores sole proprietors surname-first ("DOE JOHN"), OakTend stores
 //     "John Doe";
 //   - one side carries INC / LLC / CORP and the other doesn't;
 //   - CSLB packs a "dba" trade name into the same line;
@@ -19,7 +19,7 @@
 // guarantee against license theft is NOT this comparison - it is the
 // one-license-one-account lock (migration 0125 plus the app-side pre-check in
 // src/app/pro/actions.ts): a license number can be verified on exactly one
-// Hearth account, so a thief cannot silently ride along on a real pro's
+// OakTend account, so a thief cannot silently ride along on a real pro's
 // credential, and the loser of that race has a dispute path.
 
 // Words that carry no identity. Stripped from both sides before comparing so
@@ -72,7 +72,7 @@ const GENERIC_TRADE_WORDS = new Set([
 // stopwords and standalone single letters (middle initials, "A" in "A & B
 // Plumbing"). Returns the surviving words in source order; callers treat them
 // as an unordered set, since CSLB's surname-first sole-proprietor records
-// never line up positionally with a Hearth business name.
+// never line up positionally with an OakTend business name.
 export function normalizeBusinessName(raw: string): string[] {
   if (!raw || typeof raw !== "string") return [];
 
@@ -96,7 +96,7 @@ export function normalizeBusinessName(raw: string): string[] {
 
 // True when the CSLB-registered name plausibly belongs to this account.
 //
-// Passes when ANY candidate (the Hearth business name, the account holder's
+// Passes when ANY candidate (the OakTend business name, the account holder's
 // full name, ...) either:
 //   a. shares at least one significant word with the CSLB name, in any order -
 //      the core test, because CSLB sole-proprietor records are surname-first.

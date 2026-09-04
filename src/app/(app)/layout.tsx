@@ -35,7 +35,7 @@ export default async function AppLayout({
     getUserProfile(),
     getUser(),
     hasPlus(),
-    // Only to decide what the profile menu offers ("Switch to Hearth Pro" vs
+    // Only to decide what the profile menu offers ("Switch to OakTend Pro" vs
     // "Set up your business"). Cached per request, so a page that already
     // asked for the company row pays nothing extra.
     getCurrentContractor(),
@@ -97,9 +97,9 @@ export default async function AppLayout({
       <main id="main" className="mx-auto max-w-5xl px-6 pb-24 pt-8 lg:pb-8">
         {children}
       </main>
-      {/* The floating Ask Hearth dock used to mount here, on every signed-in
+      {/* The floating Ask OakTend dock used to mount here, on every signed-in
           screen. It is gone on purpose: Messages is now the one place the
-          assistant lives (the pinned Ask Hearth row at the top of /chats, and
+          assistant lives (the pinned Ask OakTend row at the top of /chats, and
           /ask behind it), so a pill floating over every other page was a
           second door to the same room. Its proactive opener is computed by
           /ask and /chats themselves, where it is actually read. */}

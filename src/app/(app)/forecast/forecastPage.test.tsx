@@ -136,7 +136,7 @@ async function renderForecast(over: Partial<typeof fixtures> = {}) {
   return render(element as React.ReactElement);
 }
 
-describe("forecast page, Hearth Plus member", () => {
+describe("forecast page, OakTend Plus member", () => {
   it("shows the push-it-out step for a system, with a range and no fake precision", async () => {
     await renderForecast();
     expect(
@@ -263,7 +263,7 @@ describe("forecast page, free reader", () => {
     expect(
       screen.getByText(/Your full breakdown is ready/)
     ).toBeInTheDocument();
-    const cta = screen.getByRole("link", { name: "Get Hearth Plus" });
+    const cta = screen.getByRole("link", { name: "Get OakTend Plus" });
     expect(cta).toHaveAttribute("href", "/plus?reason=forecast");
   });
 

@@ -112,7 +112,7 @@ not purely a dashboard click.
 
 **Where**: Authentication, Rate Limits.
 
-The defaults are generous because they are sized for a large project. Hearth is
+The defaults are generous because they are sized for a large project. OakTend is
 one county. Bring them down to something a real person cannot notice and a
 script cannot live with:
 
@@ -167,7 +167,7 @@ project is upgraded, and it is worth upgrading for.
 single signed-in request: the middleware calls `signOut()` (which revokes the
 refresh token at Supabase, not just locally), clears the auth cookies, and lands
 the person on `/signin?expired=1` with a plain "you were signed out because this
-device had not used Hearth in a while". The stamp lives in one httpOnly cookie
+device had not used OakTend in a while". The stamp lives in one httpOnly cookie
 (`hearth_seen`), written at most once an hour, and `/auth/signout` clears it
 along with the session.
 
@@ -192,7 +192,7 @@ as US/CA E.164 before sending, which is the right check in the right place, but
 it is one code path away from being bypassed and Geo Permissions is enforced by
 Twilio no matter what we send.
 
-Hearth serves Orange County, California. There is no legitimate reason for this
+OakTend serves Orange County, California. There is no legitimate reason for this
 account to be able to text another country.
 
 While in that console, also confirm:

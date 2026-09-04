@@ -64,7 +64,7 @@ const SITE_URL =
 // Title/description held once so metadata.title, openGraph, and twitter
 // can't drift from each other; the OG image at ./opengraph-image.tsx keeps
 // its own literal copy of the title (see that file's comment for why).
-const TITLE = "Hearth for Pros: real local leads, honest pricing";
+const TITLE = "OakTend for Pros: real local leads, honest pricing";
 const DESCRIPTION =
   "Browse local jobs free and pay only when you apply, with the price on every card. No subscription required, no ghost leads, and free license-verified badges for California pros.";
 const CANONICAL = `${SITE_URL}/pros`;
@@ -79,7 +79,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "website",
   },
   twitter: {
@@ -194,7 +194,7 @@ export default async function ProsLanding(props: {
       body:
         "The moment a job posts in your trades and area, we send you an email and a phone alert right away." +
         (COLD_START_FREE_ALERTS
-          ? " Free for every pro while Hearth is new. Later, a Pro membership perk."
+          ? " Free for every pro while OakTend is new. Later, a Pro membership perk."
           : " A Pro membership perk."),
     },
     {
@@ -217,7 +217,7 @@ export default async function ProsLanding(props: {
 
   return (
     <main id="main" className="pb-16">
-      {/* Warm band wraps header and hero: a single flat fill, hearth-50 in
+      {/* Warm band wraps header and hero: a single flat fill, oaktend-50 in
           light and stone-900 in dark (matching the body), no gradient. */}
       <div className="bg-bark-50 dark:bg-stone-900">
         <div className="mx-auto max-w-3xl px-6 pt-6">
@@ -226,7 +226,7 @@ export default async function ProsLanding(props: {
               href="/"
               className="inline-flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
             >
-              <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
+              <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> OakTend
             </Link>
             {/* Theme switch + bordered cross-link, mirroring the landing
                 page's header exactly so the two doors read as one system. */}
@@ -236,7 +236,7 @@ export default async function ProsLanding(props: {
                 href="/"
                 className="inline-flex min-h-11 items-center whitespace-nowrap rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 hover:border-bark-500 hover:text-bark-700 sm:min-h-0 dark:border-white/10 dark:text-stone-300 dark:hover:border-bark-500 dark:hover:text-stone-300"
               >
-                {/* Mirrors the landing header's "For Pros" / "Hearth for
+                {/* Mirrors the landing header's "For Pros" / "OakTend for
                     Pros" pair: short label on a phone, full wording from sm
                     up, and never wrapping to a second line. */}
                 <span className="sm:hidden">Homeowners</span>
@@ -252,7 +252,7 @@ export default async function ProsLanding(props: {
             </h1>
             <p className="mt-5 max-w-xl text-lg text-stone-600 dark:text-stone-400">
               Other sites charge you for leads you didn&apos;t ask for and that
-              other pros already have. On Hearth you see the price first and
+              other pros already have. On OakTend you see the price first and
               only pay when you choose to apply.
             </p>
             <p className="mt-2 max-w-xl text-sm text-stone-500 dark:text-stone-400">
@@ -391,7 +391,7 @@ export default async function ProsLanding(props: {
               A free public profile page
             </h3>
             <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
-              Your own shareable page with your services and real Hearth
+              Your own shareable page with your services and real OakTend
               reviews, built to rank on Google. Every pro gets one, free, no
               membership required.
             </p>
@@ -529,7 +529,7 @@ export default async function ProsLanding(props: {
 
       <footer className="mt-16 border-t border-stone-200 pt-6 text-center dark:border-white/10">
         <Link href="/" className="text-sm text-stone-500 hover:text-bark-700 dark:text-stone-400 dark:hover:text-stone-300">
-          Looking after your own home instead? Hearth for Homeowners →
+          Looking after your own home instead? OakTend for Homeowners →
         </Link>
         {/* Source of truth: LEGAL_LINKS in src/lib/legal.ts. Plain inline
             text wraps on its own on a phone; no layout change needed. */}

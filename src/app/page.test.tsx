@@ -120,7 +120,7 @@ describe("landing page, phone split", () => {
       "Find a pro for",
       "What we check",
       "How it works",
-      "What Hearth watches for you",
+      "What OakTend watches for you",
       "Real people, real answers",
       "Quick questions",
       "For contractors",

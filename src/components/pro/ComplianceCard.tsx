@@ -24,7 +24,7 @@ export type LicenseVerification = {
   // license_verify_detail.statusText: the CSLB's own sentence about the
   // license ("Expired", "License is cancelled", ...) when there is one.
   statusText: string | null;
-  // license_verify_detail.failure_reason: set when the failure is Hearth's
+  // license_verify_detail.failure_reason: set when the failure is OakTend's
   // identity check rather than anything the CSLB said, which needs its own
   // wording (see PublicProfileForm, which offers the dispute form).
   identityFailure: boolean;
@@ -74,7 +74,7 @@ function StatusPill({ status }: { status: ComplianceStatus }) {
 }
 
 // "License and insurance": the pro's license number and its CSLB result, plus
-// the document calendar - upload a document once and Hearth reads the
+// the document calendar - upload a document once and OakTend reads the
 // expiration date off it so it can remind the pro before anything lapses.
 // Honest by construction: an uploaded document is only ever "on file", never
 // "verified", and the verified/pending/not-confirmed line is the CSLB check
@@ -98,7 +98,7 @@ export default function ComplianceCard({
           License and insurance
         </h2>
         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-          Hearth stores your documents and reminds you before they expire.
+          OakTend stores your documents and reminds you before they expire.
           Uploading one doesn&apos;t verify it, your license number is checked
           separately against California&apos;s license board.
         </p>
@@ -132,7 +132,7 @@ function LicenseVerificationBlock({ v }: { v: LicenseVerification }) {
   if (!v.number) return null;
 
   // "unverified" and "pending" are different facts and used to share one pill
-  // and one sentence: a number nobody has checked yet was told "Hearth is
+  // and one sentence: a number nobody has checked yet was told "OakTend is
   // checking this number", which is a promise the app was not keeping. Worse
   // for a pro outside California, where no automatic check will EVER run.
   const pill =
@@ -173,7 +173,7 @@ function LicenseVerificationBlock({ v }: { v: LicenseVerification }) {
         ? `CSLB says: ${v.statusText}`
         : "The CSLB public database did not confirm this license."
       : v.status === "pending"
-      ? "Hearth is checking this number against the CSLB public database."
+      ? "OakTend is checking this number against the CSLB public database."
       : v.cslbEligible
       ? "Not checked yet. Verify it on your profile."
       : "On file. Automatic checks cover California licenses only.";
@@ -197,7 +197,7 @@ function LicenseVerificationBlock({ v }: { v: LicenseVerification }) {
       </p>
       <Link
         href="/pro/profile"
-        className="mt-1 inline-block text-xs font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+        className="mt-1 inline-block text-xs font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
       >
         {v.status === "verified" || (v.status === "unverified" && !v.cslbEligible)
           ? "Manage on your profile →"
@@ -331,14 +331,14 @@ function ComplianceRow({
           accept="image/*,.pdf"
           onChange={onPick}
           disabled={busy}
-          className="block text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300 dark:file:bg-hearth-900/40 dark:file:text-hearth-200"
+          className="block text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-oaktend-100 file:px-3 file:py-1.5 file:text-oaktend-800 dark:text-stone-300 dark:file:bg-oaktend-900/40 dark:file:text-oaktend-200"
         />
         {state.docPath && (
           <a
             href={`/api/pro-compliance?path=${encodeURIComponent(state.docPath)}`}
             target="_blank"
             rel="noreferrer"
-            className="text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+            className="text-sm font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
           >
             View document
           </a>
@@ -350,7 +350,7 @@ function ComplianceRow({
           <label className="text-xs text-stone-500 dark:text-stone-400">
             {needsManual
               ? (manualReason ??
-                "Hearth couldn't read a date off that document. Enter it:")
+                "OakTend couldn't read a date off that document. Enter it:")
               : "Expiration date"}
           </label>
           <input

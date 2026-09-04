@@ -8,7 +8,7 @@ import { PLUS_PLAN, extraHomeUnitPrice } from "@/lib/constants";
 // carrying `product: <the product the subscription item already points at>`.
 // That is the only shape a subscription-item update accepts (unlike Checkout,
 // price_data there takes a product ID, not product_data), and it broke live:
-// the "Hearth Plus" product backing the live subscriptions had been archived in
+// the "OakTend Plus" product backing the live subscriptions had been archived in
 // the connected Stripe account, and Stripe refuses to attach a new price to an
 // inactive product -
 //
@@ -168,7 +168,7 @@ export async function plusPriceId(cadence: PlusCadence): Promise<string> {
         : process.env.STRIPE_PRICE_PLUS_MONTHLY;
   if (configured) return configured;
 
-  const productId = await activeProductId(PLUS_META_VALUE, "Hearth Plus");
+  const productId = await activeProductId(PLUS_META_VALUE, "OakTend Plus");
   return activePriceId({
     productId,
     unitAmount: plusAmountCents(cadence),
@@ -194,7 +194,7 @@ export async function homeSlotPriceId(
 
   const productId = await activeProductId(
     HOME_SLOT_META_VALUE,
-    "Extra Hearth home"
+    "Extra OakTend home"
   );
   return activePriceId({
     productId,

@@ -313,11 +313,11 @@ function WaitlistedPanel({ userId }: { userId: string }) {
         You&apos;re on the waitlist
       </h1>
       <p className="text-sm text-stone-600 dark:text-stone-300">
-        Hearth is matching pros in {LAUNCH_AREA_LABEL} right now. We added you
-        to the waitlist and will reach out when Hearth opens in your area.
+        OakTend is matching pros in {LAUNCH_AREA_LABEL} right now. We added you
+        to the waitlist and will reach out when OakTend opens in your area.
       </p>
       <p className="text-sm text-stone-500 dark:text-stone-400">
-        There&apos;s nothing else to set up here yet since Hearth covers{" "}
+        There&apos;s nothing else to set up here yet since OakTend covers{" "}
         {LAUNCH_AREA_LABEL} right now. We&apos;ll reach out when that changes.
       </p>
       <form action="/auth/signout" method="post">
@@ -757,7 +757,7 @@ function OnboardingCompanyFormInner({
             />
           </div>
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            Where homeowners and Hearth reach you. Prefilled from your sign-in,
+            Where homeowners and OakTend reach you. Prefilled from your sign-in,
             change it if you want a different one.
           </p>
         </div>
@@ -786,7 +786,7 @@ function OnboardingCompanyFormInner({
             />
           </fieldset>
           <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-            Hearth matches pros across all of Orange County. Keep the whole
+            OakTend matches pros across all of Orange County. Keep the whole
             county, or narrow it to the cities you actually drive to. You can
             change this from your profile any time.
           </p>
@@ -798,7 +798,7 @@ function OnboardingCompanyFormInner({
             <FieldIcon>
               <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
             </FieldIcon>
-            {/* Locked to California while Hearth serves CA only. The hidden
+            {/* Locked to California while OakTend serves CA only. The hidden
                 input still posts service_state=CA, the two-letter code
                 saveCompanyAction and the CSLB check expect. */}
             <div className="input cursor-not-allowed select-none bg-stone-100 pl-9 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
@@ -807,7 +807,7 @@ function OnboardingCompanyFormInner({
             <input type="hidden" name="service_state" value="CA" />
           </div>
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            Hearth serves California only right now, so this is set for you.
+            OakTend serves California only right now, so this is set for you.
           </p>
         </div>
 
@@ -903,7 +903,7 @@ function OnboardingCompanyFormInner({
             condition of signing up. The hidden marker beside it is what tells
             saveCompanyAction "unticked" apart from "this form did not ask" (an
             unticked checkbox posts nothing at all). Without this box, every
-            job alert Hearth already builds and pays for is dropped by the gate
+            job alert OakTend already builds and pays for is dropped by the gate
             in src/lib/notify.ts, silently. Deliberately NOT saved into the
             localStorage draft: a consent has to be given on the form that is
             actually submitted, not restored from a week-old draft.
@@ -911,7 +911,7 @@ function OnboardingCompanyFormInner({
         {/* Said once, here, on purpose: homeowners often reply to whoever
             answers first, so a fast reply wins jobs. It used to be stamped on
             every single new-lead alert, which manufactured the same reply-race
-            anxiety Hearth is trying to be the calm alternative to (research
+            anxiety OakTend is trying to be the calm alternative to (research
             wave RC, 2026-08-30). One quiet mention in onboarding, tied to why
             the texts below are worth turning on, does the job without the
             drumbeat. */}

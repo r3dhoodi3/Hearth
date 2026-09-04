@@ -119,16 +119,16 @@ afterEach(() => {
 describe("ReviewPrompt: the 15 to 20 minute active-time rule", () => {
   it("shows nothing after three seconds, and nothing after ten minutes of use", async () => {
     await mountAndSettle();
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
     await spendTimeInApp(10 * MINUTE);
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
     expect(mockRecordEvent).not.toHaveBeenCalled();
   });
 
   it("shows once the drawn threshold of ACTIVE time is reached", async () => {
     await mountAndSettle();
     await spendTimeInApp(16 * MINUTE);
-    expect(screen.getByText("Enjoying Hearth?")).toBeInTheDocument();
+    expect(screen.getByText("Enjoying OakTend?")).toBeInTheDocument();
     // Logged for staff to count. It is no longer what stops the card coming
     // back: only a real answer does that.
     expect(mockRecordEvent).toHaveBeenCalledWith("prompt_shown");
@@ -141,11 +141,11 @@ describe("ReviewPrompt: the 15 to 20 minute active-time rule", () => {
     await mountAndSettle();
     await setVisibility("hidden");
     await spendTimeInApp(25 * MINUTE);
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
 
     await setVisibility("visible");
     await spendTimeInApp(16 * MINUTE);
-    expect(screen.getByText("Enjoying Hearth?")).toBeInTheDocument();
+    expect(screen.getByText("Enjoying OakTend?")).toBeInTheDocument();
   });
 
   it("resets after five minutes on screen with nothing touched", async () => {
@@ -156,9 +156,9 @@ describe("ReviewPrompt: the 15 to 20 minute active-time rule", () => {
     // Back to using it: the twelve minutes are gone, so six more is not
     // eighteen.
     await spendTimeInApp(6 * MINUTE);
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
     await spendTimeInApp(10 * MINUTE);
-    expect(screen.getByText("Enjoying Hearth?")).toBeInTheDocument();
+    expect(screen.getByText("Enjoying OakTend?")).toBeInTheDocument();
   });
 
   it("keeps the clock across a route change, since it is a session measure", async () => {
@@ -170,7 +170,7 @@ describe("ReviewPrompt: the 15 to 20 minute active-time rule", () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
     await spendTimeInApp(6 * MINUTE);
-    expect(screen.getByText("Enjoying Hearth?")).toBeInTheDocument();
+    expect(screen.getByText("Enjoying OakTend?")).toBeInTheDocument();
   });
 });
 
@@ -179,7 +179,7 @@ describe("ReviewPrompt: which app opens are allowed to ask", () => {
     window.localStorage.removeItem(reviewSessionCountKey(USER));
     await mountAndSettle();
     await spendTimeInApp(25 * MINUTE);
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
   });
 
   it("asks in sessions 2 through 5 whatever the roll says", async () => {
@@ -188,7 +188,7 @@ describe("ReviewPrompt: which app opens are allowed to ask", () => {
     await mountAndSettle();
     // Threshold drawn at 0.99 is the top of the window: 20 minutes.
     await spendTimeInApp(21 * MINUTE);
-    expect(screen.getByText("Enjoying Hearth?")).toBeInTheDocument();
+    expect(screen.getByText("Enjoying OakTend?")).toBeInTheDocument();
   });
 
   it("from session 6 on, a losing roll means this app open never asks", async () => {
@@ -196,7 +196,7 @@ describe("ReviewPrompt: which app opens are allowed to ask", () => {
     window.localStorage.setItem(reviewSessionCountKey(USER), "9");
     await mountAndSettle();
     await spendTimeInApp(25 * MINUTE);
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
   });
 
   it("from session 6 on, a winning roll asks on the same terms", async () => {
@@ -205,7 +205,7 @@ describe("ReviewPrompt: which app opens are allowed to ask", () => {
     await mountAndSettle();
     // Threshold drawn at 0.1: 15.5 minutes.
     await spendTimeInApp(16 * MINUTE);
-    expect(screen.getByText("Enjoying Hearth?")).toBeInTheDocument();
+    expect(screen.getByText("Enjoying OakTend?")).toBeInTheDocument();
   });
 });
 
@@ -215,14 +215,14 @@ describe("ReviewPrompt: nothing renders where it must not", () => {
     await mountAndSettle();
     await spendTimeInApp(20 * MINUTE);
     expect(mockGetSignals).not.toHaveBeenCalled();
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
   });
 
   it("stays hidden, and remembers, when the account has already settled", async () => {
     mockGetSignals.mockResolvedValue({ ...ELIGIBLE_SIGNALS, settled: true });
     const { unmount } = await mountAndSettle();
     await spendTimeInApp(20 * MINUTE);
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
     expect(window.localStorage.getItem("hearth_review_prompt_settled")).toBe("1");
     unmount();
 
@@ -240,14 +240,14 @@ describe("ReviewPrompt: nothing renders where it must not", () => {
     });
     await mountAndSettle();
     await spendTimeInApp(20 * MINUTE);
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
   });
 
   it("stays hidden, and writes nothing, when the signal fetch fails", async () => {
     mockGetSignals.mockResolvedValue(null);
     await mountAndSettle();
     await spendTimeInApp(20 * MINUTE);
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
     expect(
       window.localStorage.getItem("hearth_review_prompt_settled")
     ).toBeNull();
@@ -258,17 +258,17 @@ describe("ReviewPrompt: love it -> rate -> the honest follow-up", () => {
   async function showCard() {
     await mountAndSettle();
     await spendTimeInApp(16 * MINUTE);
-    expect(screen.getByText("Enjoying Hearth?")).toBeInTheDocument();
+    expect(screen.getByText("Enjoying OakTend?")).toBeInTheDocument();
   }
 
   it("Love it moves to the thank-you step without any native prompt", async () => {
     await showCard();
     fireEvent.click(screen.getByRole("button", { name: "Love it" }));
     expect(mockRecordEvent).toHaveBeenCalledWith("loved");
-    expect(screen.getByText("Rate Hearth")).toBeInTheDocument();
+    expect(screen.getByText("Rate OakTend")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Thank you. A quick rating helps other homeowners find Hearth."
+        "Thank you. A quick rating helps other homeowners find OakTend."
       )
     ).toBeInTheDocument();
     expect(mockRequestNativeReview).not.toHaveBeenCalled();
@@ -305,26 +305,26 @@ describe("ReviewPrompt: love it -> rate -> the honest follow-up", () => {
     await showCard();
     fireEvent.click(screen.getByRole("button", { name: "Love it" }));
     fireEvent.click(screen.getByRole("link", { name: "Rate on the App Store" }));
-    expect(screen.queryByText("Rate Hearth")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rate OakTend")).not.toBeInTheDocument();
 
     // Off to the App Store and back.
     await setVisibility("hidden");
     await setVisibility("visible");
     expect(
-      screen.queryByText("Did you get a chance to rate Hearth?")
+      screen.queryByText("Did you get a chance to rate OakTend?")
     ).not.toBeInTheDocument();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
     expect(
-      screen.getByText("Did you get a chance to rate Hearth?")
+      screen.getByText("Did you get a chance to rate OakTend?")
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Yes, done" }));
     expect(mockRecordEvent).toHaveBeenCalledWith("rated");
     expect(window.localStorage.getItem("hearth_review_prompt_settled")).toBe("1");
     expect(
-      screen.queryByText("Did you get a chance to rate Hearth?")
+      screen.queryByText("Did you get a chance to rate OakTend?")
     ).not.toBeInTheDocument();
   });
 
@@ -352,9 +352,9 @@ describe("ReviewPrompt: love it -> rate -> the honest follow-up", () => {
     await setVisibility("visible");
     await spendTimeInApp(20 * MINUTE);
     expect(
-      screen.queryByText("Did you get a chance to rate Hearth?")
+      screen.queryByText("Did you get a chance to rate OakTend?")
     ).not.toBeInTheDocument();
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
   });
 
   it("asks the follow-up at the start of the next session, with no minutes needed", async () => {
@@ -366,9 +366,9 @@ describe("ReviewPrompt: love it -> rate -> the honest follow-up", () => {
     });
     await mountAndSettle();
     expect(
-      screen.getByText("Did you get a chance to rate Hearth?")
+      screen.getByText("Did you get a chance to rate OakTend?")
     ).toBeInTheDocument();
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
   });
 
   it("does not ask the follow-up in a non-ask session once it has been deferred", async () => {
@@ -382,7 +382,7 @@ describe("ReviewPrompt: love it -> rate -> the honest follow-up", () => {
     await mountAndSettle();
     await spendTimeInApp(25 * MINUTE);
     expect(
-      screen.queryByText("Did you get a chance to rate Hearth?")
+      screen.queryByText("Did you get a chance to rate OakTend?")
     ).not.toBeInTheDocument();
   });
 });
@@ -405,7 +405,7 @@ describe("ReviewPrompt: on native, no card, just the system sheet", () => {
   it("never renders the pre-filter card, however long the app is used", async () => {
     await mountAndSettle();
     await spendTimeInApp(25 * MINUTE);
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
     // And it does not ask the server anything either: none of the card's
     // signals matter when there is no card.
     expect(mockGetSignals).not.toHaveBeenCalled();
@@ -450,8 +450,8 @@ describe("ReviewPrompt: not really", () => {
     expect(mockRecordEvent).toHaveBeenCalledWith("not_really");
     expect(mockPush).toHaveBeenCalledWith("/feedback");
     expect(window.localStorage.getItem("hearth_review_prompt_settled")).toBe("1");
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
-    expect(screen.queryByText("Rate Hearth")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rate OakTend")).not.toBeInTheDocument();
   });
 });
 
@@ -463,7 +463,7 @@ describe("ReviewPrompt: dismiss is a snooze, not an answer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
 
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
     expect(mockRecordEvent.mock.calls.length).toBe(callsBeforeDismiss);
     expect(mockPush).not.toHaveBeenCalled();
     // A mis-tap on an X must not end the conversation forever.
@@ -473,7 +473,7 @@ describe("ReviewPrompt: dismiss is a snooze, not an answer", () => {
 
     // Not again in this app open, however long they keep using it.
     await spendTimeInApp(20 * MINUTE);
-    expect(screen.queryByText("Enjoying Hearth?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
   });
 
   it("an X on the follow-up counts as 'Not yet', so it cannot nag every session", async () => {
@@ -483,7 +483,7 @@ describe("ReviewPrompt: dismiss is a snooze, not an answer", () => {
     });
     await mountAndSettle();
     expect(
-      screen.getByText("Did you get a chance to rate Hearth?")
+      screen.getByText("Did you get a chance to rate OakTend?")
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(mockRecordEvent).toHaveBeenCalledWith("rate_deferred");

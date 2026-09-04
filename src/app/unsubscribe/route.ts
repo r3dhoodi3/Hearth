@@ -29,7 +29,7 @@ function page(title: string, message: string, showAccountLink: boolean): NextRes
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex" />
-<title>${title} - Hearth</title>
+<title>${title} - OakTend</title>
 </head>
 <body style="margin:0;background:#faf7f2;color:#1c1917;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.6">
 <main style="max-width:32rem;margin:0 auto;padding:64px 24px">

@@ -26,7 +26,7 @@ html {
 }
 
 body {
-  @apply bg-hearth-50 text-stone-800 antialiased leading-[1.55] dark:bg-stone-900 dark:text-stone-200;
+  @apply bg-oaktend-50 text-stone-800 antialiased leading-[1.55] dark:bg-stone-900 dark:text-stone-200;
 }
 
 /* "Skip to content" link (RootLayout, the first focusable element on every
@@ -81,7 +81,7 @@ body {
 /* Below lg, both the homeowner and pro shells (Nav.tsx / ProNav.tsx, mirrored)
    add a fixed bottom tab bar for primary navigation. A few floating
    bottom-right widgets - the new message toast (NewMessageNotifier.tsx) and
-   the lead chat dock (ChatDock.tsx); the Ask Hearth dock was removed on
+   the lead chat dock (ChatDock.tsx); the Ask OakTend dock was removed on
    2026-08-29 - would otherwise sit on top of that bar's rightmost tab.
    Nudge them up by the tab bar's height instead of overlapping it. Scoped to
    the exact Tailwind class combination each widget's outer wrapper uses
@@ -119,7 +119,7 @@ body {
    first measurement lands: it is the tab bar's real height (see the note
    above) and roughly a header's.
 
-   Selectors are `body .hearth-chat-frame` so they outrank the Tailwind
+   Selectors are `body .oaktend-chat-frame` so they outrank the Tailwind
    utilities on the same element (rounded-xl, border, p-3, h-[...]) without
    editing the four pages' desktop classes, which stay exactly as they were.
 
@@ -129,17 +129,17 @@ body {
    (same 639.98px), which also decides whether the composer is a textarea or an
    input. Both halves have to name the same set of screens. Tablets keep the
    ordinary in-flow chat box and clear the tab bar through the pb-24 the two
-   layouts' <main> now reserves all the way to lg. The --hearth-chat-bottom
+   layouts' <main> now reserves all the way to lg. The --oaktend-chat-bottom
    term below is still the measured tab bar, which does exist on a phone. */
 @media (max-width: 639.98px) {
-  body .hearth-chat-frame {
+  body .oaktend-chat-frame {
     position: fixed;
     left: 0;
     right: 0;
-    top: var(--hearth-chat-top, 3.5rem);
+    top: var(--oaktend-chat-top, 3.5rem);
     height: calc(
-      var(--hearth-vvh, 100dvh) - var(--hearth-chat-top, 3.5rem) -
-        var(--hearth-chat-bottom, 3.5rem)
+      var(--oaktend-vvh, 100dvh) - var(--oaktend-chat-top, 3.5rem) -
+        var(--oaktend-chat-bottom, 3.5rem)
     );
     /* Above page content, below both shells' chrome (the tab bars are z-30,
        the headers z-30 and z-40), which this panel is sized to sit between
@@ -155,20 +155,20 @@ body {
        is the point: no double gap under the composer). */
     padding-bottom: calc(
       0.75rem +
-        max(0px, env(safe-area-inset-bottom) - var(--hearth-chat-bottom, 3.5rem))
+        max(0px, env(safe-area-inset-bottom) - var(--oaktend-chat-bottom, 3.5rem))
     );
   }
   /* Keyboard up: no inset at all. The keyboard is drawn over the home
      indicator, so padding for it would just be a strip of dead space between
      what you are typing and the keys. */
-  body.hearth-kb-open .hearth-chat-frame {
+  body.oaktend-kb-open .oaktend-chat-frame {
     padding-bottom: 0.75rem;
   }
   /* iMessage shows no tab bar while you are typing, and here it would sit on
      top of the keyboard anyway. Toggled by useChatViewport rather than by
      editing Nav.tsx / ProNav.tsx, so the two shells keep one definition of
      their own tab bar. */
-  body.hearth-kb-open nav.fixed.bottom-0 {
+  body.oaktend-kb-open nav.fixed.bottom-0 {
     display: none;
   }
 }
@@ -186,7 +186,7 @@ body {
        fields sit one step BELOW .card's stone-800 (inset into stone-900, the
        same tone as the page) so they read as a recessed field, not a card
        twin; the focus ring uses the bark accent instead of the red-leaning
-       Hearth ember. */
+       OakTend ember. */
     @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base
            sm:text-sm shadow-sm focus:border-bark-600 focus:outline-none
            focus:ring-1 focus:ring-bark-600 dark:border-white/10
@@ -205,8 +205,8 @@ body {
            dark:focus-visible:ring-bark-500 dark:focus-visible:ring-offset-stone-900;
   }
   .btn-primary {
-    /* Primary/CTA buttons use bark, the pre-redesign Hearth brown, instead
-       of the current red-leaning Hearth accent. Focus ring follows the
+    /* Primary/CTA buttons use bark, the pre-redesign OakTend brown, instead
+       of the current red-leaning OakTend accent. Focus ring follows the
        button color instead of inheriting .btn's ember ring. */
     @apply btn bg-bark-600 text-white shadow-card hover:bg-bark-700
            hover:shadow-lift focus-visible:ring-bark-600 dark:bg-bark-500

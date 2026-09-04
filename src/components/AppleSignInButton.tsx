@@ -38,7 +38,7 @@ function AppleLogo() {
 // very FIRST authorization of this app by that Apple ID. Every later sign-in
 // returns the identity token alone. So a user who authorizes, gets deleted
 // from our database, and comes back arrives with no name attached - and there
-// is no way to ask Apple for it again short of the user revoking Hearth under
+// is no way to ask Apple for it again short of the user revoking OakTend under
 // Settings > Apple ID > Sign in with Apple. Supabase handles the token
 // exchange and stores whatever Apple did send, so nothing here needs to
 // special-case it; the callback's full_name backfill simply has nothing to
@@ -47,7 +47,7 @@ function AppleLogo() {
 // a privaterelay.appleid.com address. Those ARE real inboxes, but Apple only
 // relays mail from senders registered under "Sign in with Apple for Email
 // Communication" in the developer console (with SPF/DKIM passing); anything
-// else bounces with 550 5.1.1. Registering Hearth's sending domain is part of
+// else bounces with 550 5.1.1. Registering OakTend's sending domain is part of
 // docs/APPLE-SIGN-IN-SETUP.md, step 6.
 //
 // No queryParams here on purpose. Google's `prompt: "select_account"` is a

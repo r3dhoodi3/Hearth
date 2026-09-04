@@ -17,7 +17,7 @@ export type TempUnit = "F" | "C";
 // are holding, and there is no server round trip to justify for it.
 export const TEMP_UNIT_STORAGE_KEY = "hearth.weatherUnit";
 
-// Hearth launches in US cities, so Fahrenheit is the honest default rather
+// OakTend launches in US cities, so Fahrenheit is the honest default rather
 // than something derived from the browser locale.
 export const DEFAULT_TEMP_UNIT: TempUnit = "F";
 

@@ -115,7 +115,7 @@ function FindingBody({ f }: { f: Finding }) {
 }
 
 // The homeowner's advocate: hand over a photo of a contractor's quote (or its
-// text), and Hearth reads every line, checks it against typical costs, calls
+// text), and OakTend reads every line, checks it against typical costs, calls
 // out padding or vague charges, and writes a negotiation message for them.
 // `freeTaste` means a non-Plus user is spending their one free check, so a
 // successful result gets a compact Plus upsell under it.
@@ -380,7 +380,7 @@ export default function QuoteAnalyzer({
       }
       if (resp.status === 403) {
         // The free check is gone. This used to be a bare "This feature is part
-        // of Hearth Plus." in the red error line: the one cold, benefit-free
+        // of OakTend Plus." in the red error line: the one cold, benefit-free
         // wall left in the app, and it landed at the worst possible moment (a
         // second contractor bid in hand). Now the form is replaced by the same
         // banner the /plus?reason=quote page shows, in the same voice.
@@ -401,13 +401,13 @@ export default function QuoteAnalyzer({
         // rather than inviting a second attempt that can only be refused.
         if (freeTaste) setSpent(true);
       } else if (data?.reason === "rate_limited") {
-        setError("Hearth has hit today's free usage limit. Please try again later.");
+        setError("OakTend has hit today's free usage limit. Please try again later.");
       } else if (data?.reason === "busy") {
         // Not this homeowner's allowance: a burst window or an owner-wide
         // ceiling. Nothing to buy and nothing to fix, so say how long instead
         // of pointing at a limit they have not hit. The server sends the exact
         // sentence (src/lib/aiReason.ts); the fallback covers an older reply.
-        setError(data?.error || "Hearth's AI is busy right now. Try again in a few minutes.");
+        setError(data?.error || "OakTend's AI is busy right now. Try again in a few minutes.");
       } else if (data?.reason === "no_key") {
         setError("The quote analyzer isn't set up yet.");
       } else {
@@ -492,7 +492,7 @@ export default function QuoteAnalyzer({
       {failedRemote && !result && (
         <p className="text-sm text-red-600 dark:text-red-400">
           {failedRemote === "rate_limited"
-            ? "Hearth hit today's usage limit while analyzing your last quote. Try again below."
+            ? "OakTend hit today's usage limit while analyzing your last quote. Try again below."
             : "Couldn't finish analyzing your last quote. Try again below."}
         </p>
       )}
@@ -511,7 +511,7 @@ export default function QuoteAnalyzer({
               href={QUOTE_TASTE_PAYWALL.link}
               className="btn-primary inline-block"
             >
-              Get Hearth Plus
+              Get OakTend Plus
             </Link>
           </div>
         )
@@ -630,7 +630,7 @@ export default function QuoteAnalyzer({
             // without changing the line box.
             className="underline decoration-dotted hover:text-stone-600 max-sm:py-3 dark:hover:text-stone-300"
           >
-            How Hearth uses AI
+            How OakTend uses AI
           </Link>
         </p>
 
@@ -756,7 +756,7 @@ export default function QuoteAnalyzer({
 
           <p className="text-sm text-stone-700 dark:text-stone-300">{result.summary}</p>
 
-          {/* Same honest caveat Ask Hearth carries under its answers: this is an
+          {/* Same honest caveat Ask OakTend carries under its answers: this is an
               AI read, not a professional appraisal. Shared component so the
               wording can't drift from the other AI surfaces. */}
           <AiNotice detail="This whole read, including the verdict and the total, came from the model. Confirm with a licensed pro before you decide." />
@@ -780,7 +780,7 @@ export default function QuoteAnalyzer({
               ]
                 .filter(Boolean)
                 .join(" and ")}
-              . The verdict above is Hearth&apos;s original read of the quote,
+              . The verdict above is OakTend&apos;s original read of the quote,
               before your edits.
             </p>
           )}
@@ -997,11 +997,11 @@ export default function QuoteAnalyzer({
                 sends a reader to the weekly plan to get them. The trial clause
                 drops entirely on the paywall experiment's "hard" arm. */}
             {plusTrialCopy
-              ? "That was your free check. Get every quote checked with Hearth Plus, $4.99/mo, and your first 3 days are free."
-              : "That was your free check. Get every quote checked with Hearth Plus, $4.99/mo."}
+              ? "That was your free check. Get every quote checked with OakTend Plus, $4.99/mo, and your first 3 days are free."
+              : "That was your free check. Get every quote checked with OakTend Plus, $4.99/mo."}
           </p>
           <Link href="/plus?reason=quote" className="btn-primary inline-block">
-            Get Hearth Plus
+            Get OakTend Plus
           </Link>
         </div>
       )}

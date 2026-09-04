@@ -10,7 +10,7 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 
 // Home inspection hub: request a professional inspection (posts a job to
 // local inspectors, same flow as any other trade), or add a report the
-// owner already has so Hearth can read it and propose systems and issues.
+// owner already has so OakTend can read it and propose systems and issues.
 export default async function InspectionPage() {
   const property = await getActiveProperty();
   if (!property) redirect("/onboarding");
@@ -72,7 +72,7 @@ export default async function InspectionPage() {
             Already have an inspection report? Add it to your home
           </h2>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            Upload photos of the report, or paste its text. Hearth reads it
+            Upload photos of the report, or paste its text. OakTend reads it
             and suggests systems and issues for you to confirm, nothing saves
             until you do.
           </p>

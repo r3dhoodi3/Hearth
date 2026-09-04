@@ -60,7 +60,7 @@ export function PlusWelcome({
     <div className="mx-auto max-w-2xl space-y-6 py-6 text-center">
       <div>
         <h1 className="text-3xl font-semibold text-stone-900 dark:text-stone-100">
-          You&apos;re a Hearth Pro member
+          You&apos;re a OakTend Pro member
         </h1>
         <p className="mt-2 text-stone-600 dark:text-stone-300">
           Your perks are switching on now. Here&apos;s what you just added to
@@ -110,10 +110,10 @@ export function PlusWelcome({
         ) : (
           <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-left dark:border-white/10 dark:bg-stone-900">
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-              Your Hearth Pro renewal terms
+              Your OakTend Pro renewal terms
             </p>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-stone-600 dark:text-stone-300">
-              <li>Hearth Pro renews automatically until you cancel.</li>
+              <li>OakTend Pro renews automatically until you cancel.</li>
               <li>
                 Your confirmation email has the exact amount and date.
               </li>
@@ -173,11 +173,11 @@ export function PlusMember({
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="text-center">
-        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Hearth Pro</h1>
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">OakTend Pro</h1>
       </div>
       <div className="card space-y-4 text-center">
-        <p className="text-lg font-medium text-hearth-700 dark:text-hearth-300">
-          You&apos;re a Hearth Pro member
+        <p className="text-lg font-medium text-oaktend-700 dark:text-oaktend-300">
+          You&apos;re a OakTend Pro member
         </p>
         {/* During the trial, current_period_end IS the trial end, so calling
             it a renewal would hide the thing that actually matters: the date
@@ -296,12 +296,12 @@ export function PlusPastDue({
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="text-center">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-          Hearth Pro
+          OakTend Pro
         </h1>
       </div>
       <div className="card space-y-4 text-center">
         <p className="text-sm text-stone-600 dark:text-stone-300">
-          We couldn&apos;t take your last Hearth Pro payment, so your member
+          We couldn&apos;t take your last OakTend Pro payment, so your member
           perks are paused while your bank and Stripe sort it out. Your lead
           access is unaffected either way. Update your payment method to
           switch the perks back on, or cancel so nothing further is charged.
@@ -362,8 +362,8 @@ export function PlusPitch({
     // exact order and phone gets the new one.
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
       {reasonCopy && (
-        <div className="order-1 card border-hearth-200 bg-hearth-50 text-center dark:border-hearth-500/30 dark:bg-hearth-500/15">
-          <p className="text-sm text-hearth-800 dark:text-hearth-200">
+        <div className="order-1 card border-oaktend-200 bg-oaktend-50 text-center dark:border-oaktend-500/30 dark:bg-oaktend-500/15">
+          <p className="text-sm text-oaktend-800 dark:text-oaktend-200">
             {reasonCopy}
           </p>
         </div>
@@ -374,7 +374,7 @@ export function PlusPitch({
           Run your business, not your admin
         </h1>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-          Hearth Pro is a toolkit for the business side: faster alerts, more
+          OakTend Pro is a toolkit for the business side: faster alerts, more
           credit on every deposit, and an AI back office that handles the
           paperwork.
         </p>

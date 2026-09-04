@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { LAUNCH_CITIES, LAUNCH_CITY_GROUPS } from "./launchCities";
 
-// The service-area question: exactly the cities Hearth serves, checkboxes
+// The service-area question: exactly the cities OakTend serves, checkboxes
 // because a pro can serve several. Lives in signup AND in the profile editor
 // (src/app/pro/profile/PublicProfileForm.tsx), which posts the identical field
 // names to the identical action. See ./launchCities.ts for why one answer
@@ -55,7 +55,7 @@ import { LAUNCH_CITIES, LAUNCH_CITY_GROUPS } from "./launchCities";
 // so a pro who narrowed keeps their narrowing across an unrelated profile
 // save. Anything that isn't a launch city is ignored here, and
 // selectLaunchCities drops it server-side too, so a stale or hand-edited
-// value can never pre-check a city Hearth doesn't serve. When "All" starts
+// value can never pre-check a city OakTend doesn't serve. When "All" starts
 // checked (nothing stored, or every city stored - the onboarding draft
 // re-posts every city while a pro leaves "All" checked, so a resumed draft
 // hits this same path), opening the disclosure starts every box unchecked

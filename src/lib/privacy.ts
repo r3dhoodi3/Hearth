@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeEmail } from "@/lib/risk/emailNorm";
 
 // =============================================================================
-// Hearth - California privacy rights plumbing (CCPA/CPRA).
+// OakTend - California privacy rights plumbing (CCPA/CPRA).
 //
 // Two jobs, both keyed to a single auth user id:
 //
@@ -201,7 +201,7 @@ async function logPrivacyAction(
 
 export type ExportPayload = Json;
 
-// Everything Hearth holds that is keyed to this person, as plain JSON.
+// Everything OakTend holds that is keyed to this person, as plain JSON.
 // JSON is a "structured, commonly used, machine-readable" format, which is
 // what 1798.130(a)(2) asks for.
 export async function collectUserData(userId: string): Promise<ExportPayload> {
@@ -404,7 +404,7 @@ export async function collectUserData(userId: string): Promise<ExportPayload> {
       generated_at: new Date().toISOString(),
       format: "JSON",
       about:
-        "Everything Hearth holds that is linked to your account. Photos and " +
+        "Everything OakTend holds that is linked to your account. Photos and " +
         "documents are listed by their storage path and filename; the files " +
         "themselves are downloadable from inside the app.",
       // 1798.110(c): the categories, the sources, the business purpose, and
@@ -893,7 +893,7 @@ export const CATEGORIES: Category[] = [
     sensitive: true,
     source: "You, plus public assessor records.",
     purpose:
-      "Home-value and tax-appeal tools, insurance check-ups, and billing. Card numbers never reach Hearth: payments run through Stripe's hosted checkout.",
+      "Home-value and tax-appeal tools, insurance check-ups, and billing. Card numbers never reach OakTend: payments run through Stripe's hosted checkout.",
   },
   {
     category: "Message contents",
@@ -912,14 +912,14 @@ export const CATEGORIES: Category[] = [
     source:
       "You, plus the California State License Board and our background-check provider.",
     purpose:
-      "Verifying that pros on Hearth are licensed and insured, and, for company name and About text, checking for slurs, profanity, and off-platform contact details before a public profile goes live. Public profiles exist only for pros who serve Orange County.",
+      "Verifying that pros on OakTend are licensed and insured, and, for company name and About text, checking for slurs, profanity, and off-platform contact details before a public profile goes live. Public profiles exist only for pros who serve Orange County.",
   },
   {
     category: "Commercial activity",
     examples:
       "Jobs you post, quotes, reviews you write, subscription status, and payment records.",
     sensitive: false,
-    source: "You, and your use of Hearth.",
+    source: "You, and your use of OakTend.",
     purpose: "Running the marketplace and your subscription.",
   },
   {
@@ -940,22 +940,22 @@ export type ThirdParty = {
 };
 
 // Service providers and contractors under Cal. Civ. Code 1798.140(ag)/(j) -
-// each is contractually limited to processing on Hearth's behalf. None of
+// each is contractually limited to processing on OakTend's behalf. None of
 // these is a sale or a share for cross-context behavioural advertising.
 export const THIRD_PARTIES: ThirdParty[] = [
   {
     name: "Supabase",
     role: "Database, authentication, and file storage",
-    receives: "Everything in your account. This is where Hearth's data lives.",
+    receives: "Everything in your account. This is where OakTend's data lives.",
   },
   {
     name: "Stripe",
     role: "Payments",
     receives:
-      "Your email address and subscription or payment details. Card numbers go to Stripe directly and never touch Hearth's servers.",
+      "Your email address and subscription or payment details. Card numbers go to Stripe directly and never touch OakTend's servers.",
   },
   {
-    // Hearth's ONE AI vendor. Every AI feature runs on Anthropic's Claude
+    // OakTend's ONE AI vendor. Every AI feature runs on Anthropic's Claude
     // through Anthropic's paid API - see /ai-disclosure, which this entry has
     // to agree with word for word on what actually leaves the app. Audio is
     // deliberately absent: voice input is on-device browser speech
@@ -963,13 +963,13 @@ export const THIRD_PARTIES: ThirdParty[] = [
     name: "Anthropic (Claude)",
     role: "AI assistant, document reading, and photo analysis",
     receives:
-      "The question you ask, plus context from your home profile (first name, address, systems, open tasks, recent issues), and any photo or document you submit to an AI feature. No audio: dictation runs on your own device and no recording is sent. Also your purchase price, assessed value, and Hearth's own home-value estimate when you generate a Property Tax Appeal Kit; your insurance premium and renewal date when you generate an Insurance Requote Packet; and the full contents of a contractor's quote when you use the quote analyzer. For contractors: their wallet balance (cash and bonus), license number and verification status, and background-check status when they use Ask Hearth for Pros; their own past-job dollar totals (labor and materials) when they use the estimate or invoice tools; and the full image of an uploaded past invoice, quote, or receipt when they add it to their pricing history.",
+      "The question you ask, plus context from your home profile (first name, address, systems, open tasks, recent issues), and any photo or document you submit to an AI feature. No audio: dictation runs on your own device and no recording is sent. Also your purchase price, assessed value, and OakTend's own home-value estimate when you generate a Property Tax Appeal Kit; your insurance premium and renewal date when you generate an Insurance Requote Packet; and the full contents of a contractor's quote when you use the quote analyzer. For contractors: their wallet balance (cash and bonus), license number and verification status, and background-check status when they use Ask OakTend for Pros; their own past-job dollar totals (labor and materials) when they use the estimate or invoice tools; and the full image of an uploaded past invoice, quote, or receipt when they add it to their pricing history.",
   },
   {
     name: "RentCast",
     role: "Property data and valuation",
     receives:
-      "Your home's street address and ZIP code. When RentCast has an automated valuation for your address, Hearth uses it as the headline home-value estimate; otherwise Hearth calculates a ballpark from your purchase price and typical price trends for your state.",
+      "Your home's street address and ZIP code. When RentCast has an automated valuation for your address, OakTend uses it as the headline home-value estimate; otherwise OakTend calculates a ballpark from your purchase price and typical price trends for your state.",
   },
   {
     name: "Photon (OpenStreetMap)",
@@ -986,7 +986,7 @@ export const THIRD_PARTIES: ThirdParty[] = [
     name: "Checkr",
     role: "Contractor background checks",
     receives:
-      "A contractor's name and email address. Hearth never collects or transmits your Social Security number or date of birth; you provide those to Checkr directly.",
+      "A contractor's name and email address. OakTend never collects or transmits your Social Security number or date of birth; you provide those to Checkr directly.",
   },
   {
     name: "Open-Meteo",

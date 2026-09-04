@@ -1,4 +1,4 @@
-// The wire format the two Ask Hearth chat routes use to stream an answer, and
+// The wire format the two Ask OakTend chat routes use to stream an answer, and
 // the line splitter the client reads it back with. Pure and dependency-free on
 // purpose: both halves are unit tested in src/lib/askStream.test.ts, and the
 // module is imported by a server route AND by a client component, so it must

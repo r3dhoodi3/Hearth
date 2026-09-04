@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 // Homeowner invite share card: the image behind a "/homeowner-signup?ref=CODE"
 // invite link when a homeowner shares it. Modeled directly on
 // src/app/api/win-card/[leadId]/route.tsx and review-card: same 1200x630 size,
-// same warm Hearth palette, same "no more than a first name and a city, never
+// same warm OakTend palette, same "no more than a first name and a city, never
 // an address or last name" rule those cards already hold to.
 //
 // Unlike win-card / review-card this route is PUBLIC and unauthenticated: it
@@ -26,12 +26,12 @@ export const runtime = "nodejs";
 
 const size = { width: 1200, height: 630 };
 
-// Warm Hearth palette (tailwind.config.ts), copied from win-card / review-card
+// Warm OakTend palette (tailwind.config.ts), copied from win-card / review-card
 // so all three share cards read as the same product.
-const HEARTH_50 = "#fbf7f2";
-const HEARTH_500 = "#a9743f";
-const HEARTH_700 = "#73482b";
-const HEARTH_900 = "#4f3324";
+const OAKTEND_50 = "#fbf7f2";
+const OAKTEND_500 = "#a9743f";
+const OAKTEND_700 = "#73482b";
+const OAKTEND_900 = "#4f3324";
 
 function Wordmark() {
   return (
@@ -50,11 +50,11 @@ function Wordmark() {
           width: 14,
           height: 14,
           borderRadius: 9999,
-          backgroundColor: HEARTH_500,
+          backgroundColor: OAKTEND_500,
         }}
       />
-      <div style={{ fontSize: 34, fontWeight: 700, color: HEARTH_700 }}>
-        Hearth
+      <div style={{ fontSize: 34, fontWeight: 700, color: OAKTEND_700 }}>
+        OakTend
       </div>
     </div>
   );
@@ -62,7 +62,7 @@ function Wordmark() {
 
 // First name only: split on whitespace and keep the first token. A blank or
 // missing name returns null - the card then falls back to the fully generic
-// "A neighbor invited you to Hearth" with no name at all, never a guess.
+// "A neighbor invited you to OakTend" with no name at all, never a guess.
 function firstNameOnly(name: string | null | undefined): string | null {
   const trimmed = (name ?? "").trim();
   if (!trimmed) return null;
@@ -142,11 +142,11 @@ export async function GET(req: NextRequest, props: { params: Promise<{ code: str
   // and/or city if we have them, otherwise nothing extra.
   let subline: string | null = null;
   if (firstName && location) {
-    subline = `${firstName} keeps on top of their home in ${location} with Hearth.`;
+    subline = `${firstName} keeps on top of their home in ${location} with OakTend.`;
   } else if (firstName) {
-    subline = `${firstName} keeps on top of their home with Hearth.`;
+    subline = `${firstName} keeps on top of their home with OakTend.`;
   } else if (location) {
-    subline = `A homeowner in ${location} uses Hearth to stay on top of their home.`;
+    subline = `A homeowner in ${location} uses OakTend to stay on top of their home.`;
   }
 
   return new ImageResponse(
@@ -159,7 +159,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ code: str
           flexDirection: "column",
           justifyContent: "center",
           padding: "0 80px",
-          background: HEARTH_50,
+          background: OAKTEND_50,
           position: "relative",
           fontFamily: "sans-serif",
         }}
@@ -170,19 +170,19 @@ export async function GET(req: NextRequest, props: { params: Promise<{ code: str
           style={{
             fontSize: 68,
             fontWeight: 700,
-            color: HEARTH_900,
+            color: OAKTEND_900,
             lineHeight: 1.15,
             maxWidth: 1000,
           }}
         >
-          A neighbor invited you to Hearth
+          A neighbor invited you to OakTend
         </div>
 
         {subline && (
           <div
             style={{
               fontSize: 36,
-              color: HEARTH_700,
+              color: OAKTEND_700,
               fontWeight: 600,
               lineHeight: 1.3,
               marginTop: 28,
@@ -196,7 +196,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ code: str
         <div
           style={{
             fontSize: 32,
-            color: HEARTH_900,
+            color: OAKTEND_900,
             fontWeight: 600,
             marginTop: 40,
             maxWidth: 1000,
@@ -212,7 +212,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ code: str
             left: 0,
             width: "100%",
             height: 14,
-            backgroundColor: HEARTH_500,
+            backgroundColor: OAKTEND_500,
           }}
         />
       </div>

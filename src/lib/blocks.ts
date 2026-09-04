@@ -89,7 +89,7 @@ export async function listMyBlocks(): Promise<BlockedAccount[]> {
     label:
       businessByUser.get(r.blocked_user_id) ||
       nameByUser.get(r.blocked_user_id) ||
-      "Hearth member",
+      "OakTend member",
     reason: r.reason ?? null,
     createdAt: r.created_at,
   }));

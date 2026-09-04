@@ -48,14 +48,14 @@ describe("homeowner Messages: Active / Closed tabs", () => {
     expect(page).toContain("closedRows={closedConvos.map(renderConvoRow)}");
   });
 
-  it("pins Ask Hearth outside the filter so it survives both tabs", () => {
+  it("pins Ask OakTend outside the filter so it survives both tabs", () => {
     // The assistant row goes through the `pinned` prop, which ChatListTabs
     // renders above the filtered rows on every tab.
     const pinnedBlock = page.slice(
       page.indexOf("pinned={"),
       page.indexOf("activeRows={")
     );
-    expect(pinnedBlock).toContain("<AskHearthRow");
+    expect(pinnedBlock).toContain("<AskOakTendRow");
   });
 
   it("starts on Closed only when the open thread is a finished one", () => {

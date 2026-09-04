@@ -37,7 +37,7 @@ export default async function ProBlocksPage() {
         Seeing something that breaks the rules?{" "}
         <Link
           href="/contact?topic=abuse"
-          className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+          className="font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
         >
           Report abuse or a safety concern
         </Link>

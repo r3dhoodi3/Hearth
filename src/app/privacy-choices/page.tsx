@@ -15,7 +15,7 @@ const SITE_URL =
 export const metadata: Metadata = {
   title: "Your Privacy Choices",
   description:
-    "Hearth does not sell or share your personal information. Here's how to exercise your privacy rights and where the controls live.",
+    "OakTend does not sell or share your personal information. Here's how to exercise your privacy rights and where the controls live.",
   alternates: {
     canonical: `${SITE_URL}/privacy-choices`,
   },
@@ -29,7 +29,7 @@ export default function PrivacyChoicesPage() {
           href="/"
           className="text-stone-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-400 dark:hover:text-stone-300"
         >
-          ← Hearth
+          ← OakTend
         </Link>
       </p>
 
@@ -50,9 +50,9 @@ export default function PrivacyChoicesPage() {
             We don&apos;t sell or share your data
           </h2>
           <p className="mt-2 leading-relaxed">
-            Hearth does not sell your personal information, and we do not share it for
+            OakTend does not sell your personal information, and we do not share it for
             cross-context behavioral advertising. There is no advertiser, ad network, or data
-            broker anywhere in Hearth to opt out of. See{" "}
+            broker anywhere in OakTend to opt out of. See{" "}
             <Link href="/privacy#7-your-california-privacy-rights" className="text-bark-700 hover:underline dark:text-stone-300">
               Your California Privacy Rights
             </Link>{" "}
@@ -65,7 +65,7 @@ export default function PrivacyChoicesPage() {
             Global Privacy Control
           </h2>
           <p className="mt-2 leading-relaxed">
-            Where your browser sends the Global Privacy Control (GPC) signal, Hearth honors it as
+            Where your browser sends the Global Privacy Control (GPC) signal, OakTend honors it as
             a valid request to opt out of the sale and sharing of your personal information.
             Because we don&apos;t sell or share personal information in the first place, honoring
             GPC doesn&apos;t change how your data is handled, but we wanted that stated plainly

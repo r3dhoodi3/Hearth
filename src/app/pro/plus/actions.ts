@@ -62,7 +62,7 @@ async function proIntroCouponId(): Promise<string | null> {
   const envId = process.env.STRIPE_PRO_INTRO_COUPON_ID;
   if (envId) return envId;
 
-  const fallbackId = "hearth-pro-intro";
+  const fallbackId = "oaktend-pro-intro";
   try {
     await stripe.coupons.retrieve(fallbackId);
     return fallbackId;
@@ -84,7 +84,7 @@ async function proIntroCouponId(): Promise<string | null> {
   }
 }
 
-// Start a Hearth Pro checkout (monthly or yearly). Uses the pre-created
+// Start a OakTend Pro checkout (monthly or yearly). Uses the pre-created
 // Stripe Price if one is configured, otherwise falls back to inline
 // price_data so the flow works before Products/Prices are set up in Stripe.
 export async function startProCheckoutAction(formData: FormData) {
@@ -148,7 +148,7 @@ export async function startProCheckoutAction(formData: FormData) {
           recurring: {
             interval: plan === "pro_yearly" ? ("year" as const) : ("month" as const),
           },
-          product_data: { name: "Hearth Pro" },
+          product_data: { name: "OakTend Pro" },
         },
       };
 
@@ -173,7 +173,7 @@ export async function startProCheckoutAction(formData: FormData) {
     (existing.status === "active" || existing.status === "trialing");
   if (liveExisting) {
     await setFlash(
-      "You already have a Hearth Pro membership. No need to buy it twice.",
+      "You already have a OakTend Pro membership. No need to buy it twice.",
       "info"
     );
     redirect("/pro/plus");
@@ -232,7 +232,7 @@ export async function startProCheckoutAction(formData: FormData) {
     }
     if (alreadyMember) {
       await setFlash(
-        "You already have a Hearth Pro membership. No need to buy it twice.",
+        "You already have a OakTend Pro membership. No need to buy it twice.",
         "info"
       );
       redirect("/pro/plus");

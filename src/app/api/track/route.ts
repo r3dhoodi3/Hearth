@@ -29,7 +29,7 @@ const MAX_PROPS_CHARS = 1024;
 // those names here would let a visitor forge server-only analytics (e.g. a
 // fake job_won) - comment only, not code, on purpose.
 const CLIENT_ALLOWED_EVENTS = new Set([
-  "post_job_from_chat", // AskHearth.tsx
+  "post_job_from_chat", // AskOakTend.tsx
   "hero_demo_play", // HeroDemoPlayer.tsx
   "signup_homeowner", // homeowner-signup/page.tsx
   "push_enabled", // PushSettingsCard.tsx, both sides (props.side tells them apart)

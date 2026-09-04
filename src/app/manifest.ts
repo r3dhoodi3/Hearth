@@ -8,7 +8,7 @@ import type { MetadataRoute } from "next";
 // dashboard itself. Pointing straight at /dashboard meant a serverless cold
 // start plus the signed-out 307 to /signin could leave the installed app on a
 // blank white screen for seconds, which the owner hit in the wild. The shell
-// is force-static, so the CDN paints Hearth branding instantly even on a cold
+// is force-static, so the CDN paints OakTend branding instantly even on a cold
 // start, then forwards to the dashboard, which still owns the auth bounce.
 // The ?source=pwa on it is just an attribution marker (nothing reads it yet)
 // so installed-app traffic can eventually be told apart from a browser tab.
@@ -21,8 +21,8 @@ export const dynamic = "force-static";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Hearth",
-    short_name: "Hearth",
+    name: "OakTend",
+    short_name: "OakTend",
     description:
       "Keep your house in good shape, know what needs attention, and reach a trustworthy pro when something breaks.",
     start_url: "/open?source=pwa",

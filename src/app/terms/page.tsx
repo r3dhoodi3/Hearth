@@ -11,10 +11,10 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: "Terms of Service",
   description:
-    "What Hearth is and isn't, how accounts and fees work, license and insurance trust signals, and how disputes get resolved.",
+    "What OakTend is and isn't, how accounts and fees work, license and insurance trust signals, and how disputes get resolved.",
   alternates: {
     canonical: `${SITE_URL}/terms`,
   },

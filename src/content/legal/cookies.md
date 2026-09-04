@@ -30,7 +30,7 @@ These values live only in your own browser's local storage. They are never sent 
 - **Ask {{BRAND}} chat history** (keyed to your account, for example `hearth_ask_chat:<your account id>`): the actual text of your conversations with Ask {{BRAND}}. This is the same chat history our Privacy Policy describes as never stored on our servers; it lives only in this browser, on this device.
 - **Ask {{BRAND}} usage lock and retention preference**: whether you've already used today's questions, and how long you'd like your chat history kept in this browser.
 - **Per-thread "seen" markers**: a timestamp of when you last opened a given message thread, so unread counts stay accurate without a server round trip.
-- **Various "seen it" or "dismissed" flags**: for onboarding guides, walkthroughs, referral-ask prompts, the add-to-home-screen prompt, the "enjoying Hearth?" review prompt, and push-notification prompts, so we don't show you the same nudge over and over.
+- **Various "seen it" or "dismissed" flags**: for onboarding guides, walkthroughs, referral-ask prompts, the add-to-home-screen prompt, the "enjoying OakTend?" review prompt, and push-notification prompts, so we don't show you the same nudge over and over.
 - **Draft autosave**: in-progress onboarding form answers and pro message drafts, so you don't lose your typing if you navigate away.
 - **Weather unit preference**: whether you'd rather see Fahrenheit or Celsius.
 

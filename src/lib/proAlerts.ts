@@ -18,7 +18,7 @@ import {
   PRO_LEADS_HREF,
 } from "@/lib/constants";
 
-// Hearth Pro perk: instant new-job alerts. When a homeowner posts a job, every
+// OakTend Pro perk: instant new-job alerts. When a homeowner posts a job, every
 // contractor whose categories cover it AND who holds a live Pro membership gets
 // pinged right away through sendNotification (in-app now, email/SMS too once
 // the provider env vars are set). Free pros lose nothing: the job board and
@@ -311,7 +311,7 @@ export async function alertProsForNewLead(
     // per-recipient semantics must stay in lockstep with that function's:
     // the same notifications row is written for every target, and the same
     // opt-out rules decide the outbound channels. The ONLY thing restated here
-    // is the insert. Everything after it - the Hearth Plus gate, the CAN-SPAM
+    // is the insert. Everything after it - the OakTend Plus gate, the CAN-SPAM
     // email opt-out, the TCPA consent and quiet-hours checks - still runs
     // inside notify.ts, through sendOutboundChannels, so there is one copy of
     // those rules and not two. If you add a step to sendNotification, put it in

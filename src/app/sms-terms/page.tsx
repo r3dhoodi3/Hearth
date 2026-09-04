@@ -12,7 +12,7 @@ const SITE_URL =
 export const metadata: Metadata = {
   title: "SMS Terms",
   description:
-    "Hearth Alerts: what texts you'll get, how to opt in and out, message frequency, quiet hours, and that your number is never shared for marketing.",
+    "OakTend Alerts: what texts you'll get, how to opt in and out, message frequency, quiet hours, and that your number is never shared for marketing.",
   alternates: {
     canonical: `${SITE_URL}/sms-terms`,
   },

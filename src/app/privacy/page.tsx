@@ -10,10 +10,10 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: "Privacy Policy",
   description:
-    "What Hearth collects, why, who it's shared with (including what Ask Hearth sends to Anthropic), how long it's kept, and how to delete it.",
+    "What OakTend collects, why, who it's shared with (including what Ask OakTend sends to Anthropic), how long it's kept, and how to delete it.",
   alternates: {
     canonical: `${SITE_URL}/privacy`,
   },

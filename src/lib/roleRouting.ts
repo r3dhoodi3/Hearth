@@ -138,7 +138,7 @@ function innerNext(path: string): string | null {
 // there therefore came back to the claim-your-home wizard, and for an account
 // that already owns a home that page is the "add another home" screen: on the
 // free plan it renders the cap wall, "Your first home is free. Adding another
-// home is part of Hearth Plus." Someone who did nothing but sign in was told
+// home is part of OakTend Plus." Someone who did nothing but sign in was told
 // to upgrade, with no way on except a link to /plus.
 //
 // The cap is a rule about the add-a-home ACTION, so no sign-in landing may go

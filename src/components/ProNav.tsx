@@ -73,13 +73,13 @@ export default function ProNav({
   //
   // The copilot briefly had a tab of its own here; it lives inside Messages
   // now, as a pinned conversation at the top of /pro/chats that opens the
-  // full-screen /pro/ask view (see AskHearthRow), with NavLinks treating
+  // full-screen /pro/ask view (see AskOakTendRow), with NavLinks treating
   // /pro/ask as a child of Messages so the tab stays lit while you're in there.
   // Home first (2026-08-30). It sat in the centre for one night; the owner
   // asked for the best placement and the answer from Apple's HIG, Material and
   // the field (Airbnb, Angi, Thumbtack, App Store) is the same: the primary
   // destination goes in reading position, leftmost, and the centre slot is
-  // for a primary ACTION (post, create), which Hearth's bar does not have.
+  // for a primary ACTION (post, create), which OakTend's bar does not have.
   const BOTTOM_LINKS = [
     LINKS[0], // Home
     LINKS[1], // Leads
@@ -96,7 +96,7 @@ export default function ProNav({
         running its own. Without it the pro shell paid for two of each on
         every page. */}
     <UnreadProvider role="contractor">
-    <header className="sticky top-0 z-30 border-b border-stone-200 bg-hearth-50 dark:border-white/10 dark:bg-stone-900">
+    <header className="sticky top-0 z-30 border-b border-stone-200 bg-oaktend-50 dark:border-white/10 dark:bg-stone-900">
       {/* One row at every width, mirroring the homeowner Nav: brand left,
           bell + profile pinned top-right, nothing stacks on a phone. */}
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 sm:py-3">
@@ -105,13 +105,13 @@ export default function ProNav({
             href="/pro"
             className="flex shrink-0 items-center gap-2 whitespace-nowrap text-lg font-semibold text-stone-900 dark:text-stone-100"
           >
-            <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" />
+            <Logo className="h-6 w-6 text-oaktend-700 dark:text-oaktend-400" />
             <span>
-              Hearth{" "}
+              OakTend{" "}
               {/* Hidden until lg: at 768-900px (md), "Leads / Messages /
                   Clients / My Business" plus the Business pill already fill
                   the row, so "for Pros" was getting squeezed by its shrinkable
-                  flex parent and wrapping under "Hearth" (measured two lines,
+                  flex parent and wrapping under "OakTend" (measured two lines,
                   reading as overlapping letters). The strip itself is lg-only
                   now, so the room is there below lg - but lg is also exactly
                   where this suffix started fitting, so it stays put and both
@@ -126,7 +126,7 @@ export default function ProNav({
               Desktop only here; the max-sm twin lives just below the header
               row so it can't push this line into two rows next to the bell
               and avatar. */}
-          {hasHome && <SidePill label="Business" accent="hearth" className="hidden sm:inline-block" />}
+          {hasHome && <SidePill label="Business" accent="oaktend" className="hidden sm:inline-block" />}
         </div>
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {/* Primary destinations. Desktop (lg and up) keeps this exact top
@@ -135,7 +135,7 @@ export default function ProNav({
               640-1023px five pills plus the wordmark did not fit one row and
               the strip was painted over the brand. */}
           <nav className="-mx-1 hidden items-center gap-1 overflow-x-auto px-1 lg:flex">
-            <NavLinks links={LINKS} accent="hearth" />
+            <NavLinks links={LINKS} accent="oaktend" />
           </nav>
           {/* AI back office, same row as the bell so it reads as a daily
               control rather than something buried in the profile menu. Icon
@@ -163,7 +163,7 @@ export default function ProNav({
           <Link
             href="/pro/search"
             aria-label="Search"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-stone-500 hover:bg-hearth-50 hover:text-hearth-700 sm:hidden dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-stone-500 hover:bg-oaktend-50 hover:text-oaktend-700 sm:hidden dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
           >
             <svg
               viewBox="0 0 24 24"
@@ -184,7 +184,7 @@ export default function ProNav({
             name={company}
             themeToggle
             links={[
-              // No "Ask Hearth" entry here on purpose: the copilot lives in
+              // No "Ask OakTend" entry here on purpose: the copilot lives in
               // one place, the pinned row at the top of /pro/chats. A second
               // door in the profile menu is what made it feel bigger than the
               // rest of the app.
@@ -222,7 +222,7 @@ export default function ProNav({
           tight phone header. */}
       {hasHome && (
         <div className="px-4 pb-1.5 sm:hidden">
-          <SidePill label="Business" accent="hearth" />
+          <SidePill label="Business" accent="oaktend" />
         </div>
       )}
     </header>
@@ -233,9 +233,9 @@ export default function ProNav({
         docks above this bar on the same lg breakpoint. */}
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-hearth-50 pb-[env(safe-area-inset-bottom)] lg:hidden dark:border-white/10 dark:bg-stone-900"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-stone-200 bg-oaktend-50 pb-[env(safe-area-inset-bottom)] lg:hidden dark:border-white/10 dark:bg-stone-900"
     >
-      <NavLinks links={BOTTOM_LINKS} variant="bottom" accent="hearth" />
+      <NavLinks links={BOTTOM_LINKS} variant="bottom" accent="oaktend" />
     </nav>
     </UnreadProvider>
     </>

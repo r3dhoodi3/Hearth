@@ -5,7 +5,7 @@
 // jsdom, no new dependency, per the "no new dependencies" rule for this
 // feature).
 //
-// THIS PARSES A GOVERNMENT WEBSITE HEARTH DOES NOT CONTROL. Its markup can
+// THIS PARSES A GOVERNMENT WEBSITE OAKTEND DOES NOT CONTROL. Its markup can
 // change at any time without notice and silently break this parser. Whenever
 // the page's shape can't be recognized (or the fetch fails outright), this
 // returns outcome 'error'. Callers MUST treat 'error' as "we don't know",

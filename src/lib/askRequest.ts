@@ -2,7 +2,7 @@
 // /api/pro-ask). Pure and dependency-free on purpose: the routes themselves
 // import "server-only" modules, so this is the layer that can be unit-tested.
 
-// One chat message as the clients send it (see src/components/AskHearth.tsx).
+// One chat message as the clients send it (see src/components/AskOakTend.tsx).
 // Loose on purpose: every field here arrives as untrusted request JSON.
 type LooseMessage = {
   role?: unknown;

@@ -4,7 +4,7 @@ import { trackServerEvent } from "@/lib/trackServer";
 // GPC signal as a valid opt-out-of-sale/share request with no further action
 // needed from the person sending it).
 //
-// Hearth does not sell personal information and does not share it for
+// OakTend does not sell personal information and does not share it for
 // cross-context behavioral advertising (see THIRD_PARTIES and the
 // export_metadata.sold_or_shared_for_cross_context_behavioral_advertising
 // flag in src/lib/privacy.ts), so honoring this signal changes no behavior:

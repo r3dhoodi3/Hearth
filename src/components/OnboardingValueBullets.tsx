@@ -4,7 +4,7 @@ import { Hammer, Bell, FileText } from "lucide-react";
 // once on the sign-up screen (the first thing a visitor reads, CR2#2), and
 // again on the address step of onboarding right after. Pulled into one
 // component so the two can never drift apart in wording - the sign-up page
-// used to say only "Start tracking your home with Hearth" and left the real
+// used to say only "Start tracking your home with OakTend" and left the real
 // pitch for a screen later, which is the "welcome ≠ menu, but welcome ≠
 // blank either" gap CR2 flagged.
 export default function OnboardingValueBullets() {
@@ -20,7 +20,7 @@ export default function OnboardingValueBullets() {
       </li>
       <li className="flex items-start gap-2">
         <FileText className="h-4 w-4 shrink-0 translate-y-0.5" aria-hidden="true" />
-        <span>Scan a warranty or receipt and Hearth files it for you</span>
+        <span>Scan a warranty or receipt and OakTend files it for you</span>
       </li>
     </ul>
   );

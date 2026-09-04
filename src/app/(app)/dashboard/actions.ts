@@ -112,7 +112,7 @@ export async function uncompleteReminderAction(id: string): Promise<ActionResult
   return ok();
 }
 
-// --- Hearth Plus: personalized maintenance plan ---
+// --- OakTend Plus: personalized maintenance plan ---
 //
 // The plan stays small and encouraging. Each scheduled task becomes ONE upcoming
 // reminder, staggered so quick checks land within a couple of weeks and bigger

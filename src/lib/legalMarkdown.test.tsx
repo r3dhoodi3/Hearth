@@ -13,7 +13,7 @@ describe("slugify", () => {
   });
 
   it("trims leading and trailing hyphens", () => {
-    expect(slugify("  What Hearth is  ")).toBe("what-hearth-is");
+    expect(slugify("  What OakTend is  ")).toBe("what-oaktend-is");
   });
 });
 

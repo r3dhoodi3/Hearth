@@ -201,18 +201,18 @@ describe("PushSettingsCard", () => {
   it("explains a blocked browser and offers no button", async () => {
     installPushApis("denied");
     await mount();
-    expect(screen.getByText(/blocked for Hearth in this browser/i)).toBeInTheDocument();
+    expect(screen.getByText(/blocked for OakTend in this browser/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Turn on notifications" })).toBeNull();
   });
 
   // The iPhone case. Detection has to run BEFORE the capability check, or a
   // Safari tab reads as "unsupported" and the card hides from exactly the
   // person who needs the one instruction that fixes it.
-  it("tells an iPhone in a Safari tab to add Hearth to the Home Screen", async () => {
+  it("tells an iPhone in a Safari tab to add OakTend to the Home Screen", async () => {
     installIphoneSafariTab();
     await mount();
     expect(
-      screen.getByText(/add Hearth to your Home Screen first/i)
+      screen.getByText(/add OakTend to your Home Screen first/i)
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Turn on notifications" })).toBeNull();
   });

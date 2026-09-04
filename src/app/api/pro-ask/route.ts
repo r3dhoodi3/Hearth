@@ -55,7 +55,7 @@ import {
 
 export const runtime = "nodejs";
 
-// "Ask Hearth for Pros": a business copilot for a contractor, grounded in their
+// "Ask OakTend for Pros": a business copilot for a contractor, grounded in their
 // own company (trades, service area, license status, wallet, open leads). It
 // mirrors the homeowner /api/ask route's structure and robustness, but talks
 // from the pro's side of the marketplace and stays strictly in the pro lane.
@@ -122,10 +122,10 @@ export async function POST(req: NextRequest) {
   if (!hasClaudeKey()) {
     // The setup detail belongs in the server logs, never in the chat.
     console.error(
-      "Ask Hearth for Pros: ANTHROPIC_API_KEY is not set in the environment."
+      "Ask OakTend for Pros: ANTHROPIC_API_KEY is not set in the environment."
     );
     return NextResponse.json({
-      answer: "Ask Hearth is temporarily unavailable. Please try again soon.",
+      answer: "Ask OakTend is temporarily unavailable. Please try again soon.",
     });
   }
 
@@ -232,7 +232,7 @@ export async function POST(req: NextRequest) {
   // signup, and until now that was enough to get an unmetered-looking run at a
   // paid model. So the copilot is locked until the account has done one thing a
   // pretend business does not do: a CSLB-confirmed license, a paid lead, a
-  // settled deposit, or a Hearth Pro membership (see isEstablishedPro in
+  // settled deposit, or a OakTend Pro membership (see isEstablishedPro in
   // src/lib/contractor.ts, which fails closed on every read).
   //
   // FIRST, before the daily counter and before the context build: a locked
@@ -240,13 +240,13 @@ export async function POST(req: NextRequest) {
   // must not run a page of wallet and lead queries. The copy says how to
   // unlock, because "no" without a next step reads as a bug.
   //
-  // The /pro/ask page and the pinned Ask Hearth row ask the same helper and
+  // The /pro/ask page and the pinned Ask OakTend row ask the same helper and
   // show the same note instead of a composer, so this is the backstop, not the
   // first thing a pro sees.
   if (!(await isEstablishedPro(contractor.id))) {
     return NextResponse.json({
       answer:
-        "Ask Hearth opens once your business is verified: add a California license number we can confirm, or place your first lead. Hearth Pro members get it right away.",
+        "Ask OakTend opens once your business is verified: add a California license number we can confirm, or place your first lead. OakTend Pro members get it right away.",
       link: { href: "/pro/profile", label: "Add your license" },
     });
   }
@@ -260,13 +260,13 @@ export async function POST(req: NextRequest) {
   // sly. No model call and nothing counted for a locked request.
   if (!isProMember && newTurnHasImage(history)) {
     return NextResponse.json({
-      answer: "Photo answers are part of Hearth Pro.",
+      answer: "Photo answers are part of OakTend Pro.",
       // Same shape the homeowner lock uses, so the shared chat component shows
       // the lock and hands the photo back instead of eating it.
       locked: true,
       // ?reason=ask: the plus page opens on the Ask pitch, matching the
       // homeowner side's /plus?reason= banners.
-      link: { href: "/pro/plus?reason=ask", label: "See Hearth Pro" },
+      link: { href: "/pro/plus?reason=ask", label: "See OakTend Pro" },
     });
   }
 
@@ -277,7 +277,7 @@ export async function POST(req: NextRequest) {
   // paid) - so the pro copilot was quietly the most generous free AI surface
   // in the product, and a free pro got eight times what a free homeowner gets
   // for the same kind of question. It now counts exactly like the homeowner
-  // chat: countAskUsage, a free pro on ASK_DAILY_FREE and a Hearth Pro member
+  // chat: countAskUsage, a free pro on ASK_DAILY_FREE and a OakTend Pro member
   // (trial included) on ASK_DAILY_PRO, in the pro chat's own key so the two
   // sides of a dual account never drain each other. Fails closed, resets at
   // midnight; see src/lib/aiUsage.ts.
@@ -309,7 +309,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       // Same words as the daily question cap: from the pro's side it is the
       // same fact, today's allowance is spent.
-      answer: "You have reached today's Ask Hearth limit. It resets tomorrow.",
+      answer: "You have reached today's Ask OakTend limit. It resets tomorrow.",
     });
   }
 
@@ -325,12 +325,12 @@ export async function POST(req: NextRequest) {
       "pro"
     );
     // Only "user_daily" is this pro's own allowance. A tripped owner-wide
-    // breaker or an unreadable counter is Hearth's problem, and telling a pro
+    // breaker or an unreadable counter is OakTend's problem, and telling a pro
     // who has barely used the copilot that they are out for the day (and
-    // pitching Hearth Pro at them) would be plainly false.
+    // pitching OakTend Pro at them) would be plainly false.
     if (reason !== "user_daily") {
       return NextResponse.json(
-        { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
+        { answer: "Ask OakTend is busy right now. Try again in a few minutes." },
         { status: 503 }
       );
     }
@@ -339,8 +339,8 @@ export async function POST(req: NextRequest) {
       // can see it. Both lines stay true - a member's ceiling really is
       // higher than a free pro's.
       answer: isProMember
-        ? "You have reached today's Ask Hearth limit. It resets tomorrow."
-        : "You have reached today's Ask Hearth limit. It resets tomorrow. Hearth Pro raises your daily limit if you want more room.",
+        ? "You have reached today's Ask OakTend limit. It resets tomorrow."
+        : "You have reached today's Ask OakTend limit. It resets tomorrow. OakTend Pro raises your daily limit if you want more room.",
     });
   }
 
@@ -353,7 +353,7 @@ export async function POST(req: NextRequest) {
   if (await overAiGlobalHourlyLimit()) {
     await refundAskUsage(authUser.id, windowStart, "pro");
     return NextResponse.json(
-      { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
+      { answer: "Ask OakTend is busy right now. Try again in a few minutes." },
       { status: 503 }
     );
   }
@@ -399,7 +399,7 @@ export async function POST(req: NextRequest) {
             ? "Their background check came back with items to review."
             : bgStatus === "pending" || bgStatus === "invited"
               ? "Their background check is in progress."
-              : `No background check yet. It is optional, and Hearth pays for it once they have ${BACKGROUND_CHECK_MIN_PAID_LEADS} paid lead applications (a refunded application does not count) - a clear result adds a trust signal on their profile. Never tell them it is available right now unless that earn-in is met.`;
+              : `No background check yet. It is optional, and OakTend pays for it once they have ${BACKGROUND_CHECK_MIN_PAID_LEADS} paid lead applications (a refunded application does not count) - a clear result adds a trust signal on their profile. Never tell them it is available right now unless that earn-in is met.`;
 
       // Pro membership status (perks only, never gates lead access) is
       // resolved above, before the counters, and only read here.
@@ -496,8 +496,8 @@ export async function POST(req: NextRequest) {
         `Service area: ${serviceArea}.\n` +
         `${licenseLine}\n` +
         `${bgLine}\n` +
-        `Pro membership: ${isProMember ? (isProTrialing ? `Hearth Pro member on their ${PRO_PLAN.trialDays}-day free trial, not yet charged` : "active Hearth Pro member") : "not a Pro member (on the free tier)"}.\n` +
-        `Free trial eligibility: ${isProTrialEligible ? "eligible for the one-time free trial (no prior Hearth Pro subscription)" : "NOT eligible for a free trial. Never mention or offer a free trial to this pro; if they ask, say membership starts as a paid plan for their account"}.\n` +
+        `Pro membership: ${isProMember ? (isProTrialing ? `OakTend Pro member on their ${PRO_PLAN.trialDays}-day free trial, not yet charged` : "active OakTend Pro member") : "not a Pro member (on the free tier)"}.\n` +
+        `Free trial eligibility: ${isProTrialEligible ? "eligible for the one-time free trial (no prior OakTend Pro subscription)" : "NOT eligible for a free trial. Never mention or offer a free trial to this pro; if they ask, say membership starts as a paid plan for their account"}.\n` +
         (walletLine ? `${walletLine}\n` : "") +
         (openLeadsLine ? `${openLeadsLine}\n` : "") +
         (openJobsDetail ? `${openJobsDetail}\n` : "") +
@@ -509,7 +509,7 @@ export async function POST(req: NextRequest) {
 
   const today = new Date().toISOString().slice(0, 10);
   const system =
-    "You are Hearth for Pros, a warm, sharp business copilot for a contractor who sells their services on the Hearth marketplace. " +
+    "You are OakTend for Pros, a warm, sharp business copilot for a contractor who sells their services on the OakTend marketplace. " +
     // Scope rule first, before any style or behaviour instruction, so an
     // off-topic request is turned away rather than answered beautifully.
     // Shared word for word with the homeowner route via src/lib/aiGuard.ts.
@@ -534,12 +534,12 @@ export async function POST(req: NextRequest) {
     "STAY IN THEIR TRADES: only ever talk about the trades listed under 'Trades they work in' below. Never bring up or give an example in a trade they do not work in (for instance, never mention roofing to a plumber). When they ask what jobs are available or what they can apply to, use ONLY the specific open leads listed in their company details below (those are already matched to their trades); never invent a job or name one in another trade. " +
     "Talk like a real person having a genuine back-and-forth: warm, direct, never stiff or corporate. Be proactively useful, do not just state a fact and stop. Always move things forward with a concrete next step. " +
     "You help this contractor grow their business, and ONLY with pro topics. Those are:\n" +
-    "Winning work: read a posted lead and draft a persuasive, specific apply message; draft or sharpen a quote or estimate with sensible line items priced to compete locally across Orange County, California, where Hearth operates; and give speed-to-lead and follow-up advice, since replying fast wins jobs.\n" +
-    `The marketplace money model: the per-lead fee to apply is tiered by job value, light work is $${LEAD_TIER_FEES.light}, skilled trades are $${LEAD_TIER_FEES.skilled}, and big-ticket work is $${LEAD_TIER_FEES.major} per lead - those are the BASE numbers before any discount. Hearth Pro members get ${PRO_LEAD_DISCOUNT_PCT}% off every one of those fees, but it NEVER stacks with the aging markdown a listing can also carry (15% off at 3 days unclaimed, 30% off at 7): a lead is always priced at the bigger of the two discounts, never both added together, so a member on a week-old listing still only gets 30% off, not 40%. The 'Pro membership' line below tells you whether this pro is an active member (not merely trialing or eligible), so if they are, you may confidently say a specific job's lead now costs ${PRO_LEAD_DISCOUNT_PCT}% less than the base tier price UNLESS that job is old enough for the bigger aging markdown to apply instead - when you are not sure how old a specific open lead is, say the discount applies without naming a dollar figure rather than guessing one. Never tell a NON-member their per-lead price is anything but the plain base tier number. The $${MAJOR_INTRO_FEE} intro price applies ONLY to a pro's FIRST big-ticket lead ever, is a FIXED price, and is never discounted further by membership or the aging markdown; every big-ticket lead after that is the normal $${LEAD_TIER_FEES.major} (or ${PRO_LEAD_DISCOUNT_PCT}% off that for a member, subject to the same never-stacks rule). You cannot see whether this pro has already used that intro, so never promise them the $${MAJOR_INTRO_FEE} price: if they are unsure whether they have used it, tell them to check their billing page for a past big-ticket charge. The wallet holds cash plus bonus credit, and larger deposits earn a deposit bonus. There are two SEPARATE triggers for a fee coming back, never blend them into one rule: ghost protection automatically returns a lead fee to the pro's wallet as credit after ${GHOST_PROTECTION_DAYS} days of homeowner silence, every time, with no limit. Separately, if the homeowner responds but picks someone else, the pro gets 100% of that fee back as credit too, every time, with no limit, good for 60 days. Every fee-back rule pays wallet credit toward future leads, never cash and never a card refund, so never tell a pro they get money back. A posted job fills at ${MAX_APPLICANTS_PER_JOB} applicants, so applying early matters. Do the simple ROI math when it helps, framed around THEIR own trade and a realistic job value for it: a lead fee is usually a small fraction of the job it can win. Never illustrate with a trade that is not one of theirs.\n` +
-    `Pro membership: Hearth Pro is $${PRO_PLAN.monthly} per month or $${PRO_PLAN.yearly} per year, and its main perk is an extra ${PRO_DEPOSIT_BOOST_PTS} percentage points of deposit bonus on every wallet deposit. New members start with a ${PRO_PLAN.trialDays}-day free trial: the card is entered at signup, nothing is charged for the first ${PRO_PLAN.trialDays} days, it then renews automatically at the price above until cancelled, and cancelling before the trial ends means no charge. Only brand-new members get the trial. The company details below state this pro's free trial eligibility explicitly: if they are NOT eligible, never offer or promise them a trial, and talk about Hearth Pro at its regular price instead. Two perks wait for the first payment: the deposit boost and the monthly $10 lead credit both start when the trial converts, NOT while it runs. So if the details below say this pro is on their free trial, never tell them their next deposit will be matched or that credit is coming this week: deposits during the trial earn only the normal tier bonus, and the match starts the day the trial converts. Membership is perks only, it never changes which leads they can see or apply to. Weigh it against their volume: if they deposit and apply often, the deposit boost can pay for itself.\n` +
+    "Winning work: read a posted lead and draft a persuasive, specific apply message; draft or sharpen a quote or estimate with sensible line items priced to compete locally across Orange County, California, where OakTend operates; and give speed-to-lead and follow-up advice, since replying fast wins jobs.\n" +
+    `The marketplace money model: the per-lead fee to apply is tiered by job value, light work is $${LEAD_TIER_FEES.light}, skilled trades are $${LEAD_TIER_FEES.skilled}, and big-ticket work is $${LEAD_TIER_FEES.major} per lead - those are the BASE numbers before any discount. OakTend Pro members get ${PRO_LEAD_DISCOUNT_PCT}% off every one of those fees, but it NEVER stacks with the aging markdown a listing can also carry (15% off at 3 days unclaimed, 30% off at 7): a lead is always priced at the bigger of the two discounts, never both added together, so a member on a week-old listing still only gets 30% off, not 40%. The 'Pro membership' line below tells you whether this pro is an active member (not merely trialing or eligible), so if they are, you may confidently say a specific job's lead now costs ${PRO_LEAD_DISCOUNT_PCT}% less than the base tier price UNLESS that job is old enough for the bigger aging markdown to apply instead - when you are not sure how old a specific open lead is, say the discount applies without naming a dollar figure rather than guessing one. Never tell a NON-member their per-lead price is anything but the plain base tier number. The $${MAJOR_INTRO_FEE} intro price applies ONLY to a pro's FIRST big-ticket lead ever, is a FIXED price, and is never discounted further by membership or the aging markdown; every big-ticket lead after that is the normal $${LEAD_TIER_FEES.major} (or ${PRO_LEAD_DISCOUNT_PCT}% off that for a member, subject to the same never-stacks rule). You cannot see whether this pro has already used that intro, so never promise them the $${MAJOR_INTRO_FEE} price: if they are unsure whether they have used it, tell them to check their billing page for a past big-ticket charge. The wallet holds cash plus bonus credit, and larger deposits earn a deposit bonus. There are two SEPARATE triggers for a fee coming back, never blend them into one rule: ghost protection automatically returns a lead fee to the pro's wallet as credit after ${GHOST_PROTECTION_DAYS} days of homeowner silence, every time, with no limit. Separately, if the homeowner responds but picks someone else, the pro gets 100% of that fee back as credit too, every time, with no limit, good for 60 days. Every fee-back rule pays wallet credit toward future leads, never cash and never a card refund, so never tell a pro they get money back. A posted job fills at ${MAX_APPLICANTS_PER_JOB} applicants, so applying early matters. Do the simple ROI math when it helps, framed around THEIR own trade and a realistic job value for it: a lead fee is usually a small fraction of the job it can win. Never illustrate with a trade that is not one of theirs.\n` +
+    `Pro membership: OakTend Pro is $${PRO_PLAN.monthly} per month or $${PRO_PLAN.yearly} per year, and its main perk is an extra ${PRO_DEPOSIT_BOOST_PTS} percentage points of deposit bonus on every wallet deposit. New members start with a ${PRO_PLAN.trialDays}-day free trial: the card is entered at signup, nothing is charged for the first ${PRO_PLAN.trialDays} days, it then renews automatically at the price above until cancelled, and cancelling before the trial ends means no charge. Only brand-new members get the trial. The company details below state this pro's free trial eligibility explicitly: if they are NOT eligible, never offer or promise them a trial, and talk about OakTend Pro at its regular price instead. Two perks wait for the first payment: the deposit boost and the monthly $10 lead credit both start when the trial converts, NOT while it runs. So if the details below say this pro is on their free trial, never tell them their next deposit will be matched or that credit is coming this week: deposits during the trial earn only the normal tier bonus, and the match starts the day the trial converts. Membership is perks only, it never changes which leads they can see or apply to. Weigh it against their volume: if they deposit and apply often, the deposit boost can pay for itself.\n` +
     "Trust and compliance: how to earn the CSLB verified badge and what each license status means (verified, failed, pending, or unverified); background checks through Checkr and what homeowners see; and insurance and bonding basics as general guidance, not legal advice. Also how to improve their public profile at /p/<their id> with photos, reviews, and a complete listing to win more homeowners.\n" +
     "Growing locally: gathering reviews, seasonal demand, and using the app well, setting their categories and service area, managing notifications and applications, and marking jobs won.\n\n" +
-    "SCOPING: You are the CONTRACTOR's business copilot, not a homeowner's home assistant. Do NOT act as their personal home helper: never diagnose the pro's own house as a project, and never tell them to post a job to hire someone. You may share trade knowledge when it helps them win or do work, but keep the frame on their business. If they ask something that clearly belongs to the homeowner side, gently steer back to growing their business on Hearth.\n\n" +
+    "SCOPING: You are the CONTRACTOR's business copilot, not a homeowner's home assistant. Do NOT act as their personal home helper: never diagnose the pro's own house as a project, and never tell them to post a job to hire someone. You may share trade knowledge when it helps them win or do work, but keep the frame on their business. If they ask something that clearly belongs to the homeowner side, gently steer back to growing their business on OakTend.\n\n" +
     // Tappable quick replies. Role-neutral: the shared chat renders these.
     "Whenever you ask the pro to choose between options, or you offer next steps, present the choices as tappable buttons. Append a block at the END in EXACTLY this format:\n" +
     '[[OPTIONS]]{"options":["First choice","Second choice"]}[[/OPTIONS]]\n' +
@@ -635,10 +635,10 @@ export async function POST(req: NextRequest) {
     await refundAskUsage(authUser.id, windowStart, "pro");
   };
   const failedAnswer = async (e: unknown): Promise<string> => {
-    console.error("Ask Hearth for Pros: model call failed:", e);
+    console.error("Ask OakTend for Pros: model call failed:", e);
     await refundOnce();
     return isRateLimitError(e)
-      ? "Ask Hearth is busy right now. Try again in a minute."
+      ? "Ask OakTend is busy right now. Try again in a minute."
       : "Sorry, I couldn't generate an answer. Please try again.";
   };
 

@@ -28,7 +28,7 @@
 // callers already treat a null IP as "no IP bucket for this request", which is
 // the safe direction: a missing IP never invents a shared bucket.
 //
-// If Hearth ever moves off Vercel, step 1's header name is the only thing that
+// If OakTend ever moves off Vercel, step 1's header name is the only thing that
 // changes; steps 2 and 3 are generic.
 export function clientIpFromHeaders(
   h: Pick<Headers, "get">

@@ -16,7 +16,7 @@ function notice(): HTMLElement {
 describe("AiNotice sizes", () => {
   it("bumps the 11px variant to 14px on phones and leaves desktop at 11px", () => {
     // The live check found this line rendering at 11px grey under the Ask
-    // Hearth composer, on one of the two screens the phone push is built
+    // OakTend composer, on one of the two screens the phone push is built
     // around. jsdom applies no media queries, so the class is what gets
     // asserted: max-sm: means phones only, desktop unchanged.
     render(<AiNotice size="xxs" />);
@@ -34,7 +34,7 @@ describe("AiNotice sizes", () => {
 
   it("keeps the disclosure link attached to the label", () => {
     render(<AiNotice detail="Check the numbers." />);
-    expect(screen.getByRole("link", { name: "How Hearth uses AI" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "How OakTend uses AI" })).toHaveAttribute(
       "href",
       "/ai-disclosure"
     );

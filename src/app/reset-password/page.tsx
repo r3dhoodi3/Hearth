@@ -20,10 +20,10 @@ import { PW_RECOVERY_COOKIE } from "@/lib/passwordRecovery";
 // (ask for an email), which is the honest thing to show someone who arrived
 // here without a live reset link, and it tells an attacker nothing.
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: "Reset your password",
   description:
-    "Forgot your Hearth password? Enter your email and we'll send you a link to set a new one.",
+    "Forgot your OakTend password? Enter your email and we'll send you a link to set a new one.",
 };
 
 // The cookie read makes this route dynamic; that is correct for a page whose

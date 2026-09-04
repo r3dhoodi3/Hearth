@@ -133,7 +133,7 @@ export default function HomeWinsShare({
           try {
             const res = await fetch(cardUrl);
             const blob = await res.blob();
-            const file = new File([blob], "hearth-home-wins.png", {
+            const file = new File([blob], "oaktend-home-wins.png", {
               type: blob.type || "image/png",
             });
             if (navigator.canShare({ files: [file] })) {
@@ -147,7 +147,7 @@ export default function HomeWinsShare({
           }
         }
         try {
-          await navigator.share({ title: "Hearth", text: caption, url });
+          await navigator.share({ title: "OakTend", text: caption, url });
           return;
         } catch (err) {
           // Closing the share sheet is a choice, not a failure.
@@ -196,7 +196,7 @@ export default function HomeWinsShare({
 
       <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
         {wins.variant === "starter"
-          ? "Your home is set up on Hearth. Know a neighbor who could use the same head start?"
+          ? "Your home is set up on OakTend. Know a neighbor who could use the same head start?"
           : "Nice work staying on top of your home. Pass it along to a neighbor."}
       </p>
 
@@ -250,7 +250,7 @@ export default function HomeWinsShare({
         {canShareFiles === false && (
           <a
             href={cardUrl}
-            download="hearth-home-wins.png"
+            download="oaktend-home-wins.png"
             className="text-xs text-stone-500 underline decoration-stone-300 underline-offset-2 hover:text-stone-700 dark:text-stone-400 dark:decoration-stone-600 dark:hover:text-stone-200"
           >
             Download the image

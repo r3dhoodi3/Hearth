@@ -122,7 +122,7 @@ export function replacementInfoFor(systemType: string): ReplacementInfo | null {
   return REPLACEMENT_INFO[systemType] ?? null;
 }
 
-// Maps a job/service category to the home system Hearth keeps a national
+// Maps a job/service category to the home system OakTend keeps a national
 // replacement range for. Same shape as quoteAnalysis.ts's own baseline map:
 // categories with no clean system match (structural, remodeling, landscaping,
 // cleaning, painting, home_inspection, pest, handyman, other) are left out on

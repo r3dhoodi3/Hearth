@@ -21,9 +21,9 @@ const view = src("./ChatsView.tsx");
 // answer is always the same one - go find a job to apply to. The list now
 // carries that as a pinned row rather than leaving it to a sentence.
 describe("pro Messages: Find clients row", () => {
-  it("pins the row directly under the Ask Hearth row", () => {
-    const ask = view.indexOf("<AskHearthRow");
-    // Anchored past the Ask Hearth row: the Active tab's empty-state copy
+  it("pins the row directly under the Ask OakTend row", () => {
+    const ask = view.indexOf("<AskOakTendRow");
+    // Anchored past the Ask OakTend row: the Active tab's empty-state copy
     // ("... Find clients to start one ...") also carries the phrase, earlier
     // in the file, and it is not the row this test is about.
     const find = view.indexOf("Find clients", ask);
@@ -44,7 +44,7 @@ describe("pro Messages: Find clients row", () => {
 
   it("looks like the other rows: icon chip, title, subtitle, chevron, 44px", () => {
     // Same anchor as above: the pinned row, not the empty-state sentence.
-    const at = view.indexOf("Find clients", view.indexOf("<AskHearthRow"));
+    const at = view.indexOf("Find clients", view.indexOf("<AskOakTendRow"));
     const row = view.slice(at - 900, at + 900);
     expect(row).toContain("min-h-11");
     expect(row).toContain("<Briefcase");
@@ -154,11 +154,11 @@ describe("pro Messages stays one client component with plain-data props", () => 
 
   it("leaves no list or thread markup in the server page", () => {
     // The tail of the page's Flight row is what gets chopped, so the page must
-    // end at the single <ChatsView> element. Any <ul>/<li>/<AskHearthRow> back
+    // end at the single <ChatsView> element. Any <ul>/<li>/<AskOakTendRow> back
     // in here would put elements after ChatsView's ~4 kB of props, past the
     // budget, and the deferrals would return.
     expect(page).toContain("<ChatsView");
-    for (const tag of ["<ul", "<li", "<AskHearthRow", "<LeadChat", "<PhoneChatFrame"]) {
+    for (const tag of ["<ul", "<li", "<AskOakTendRow", "<LeadChat", "<PhoneChatFrame"]) {
       expect(page).not.toContain(tag);
     }
   });

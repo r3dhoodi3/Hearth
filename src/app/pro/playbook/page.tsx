@@ -4,7 +4,7 @@ import PlaybookGuides from "./PlaybookGuides";
 import { PLAYBOOK_GUIDES } from "./guides";
 
 // The Playbook: the pro-side Learn tab. Short, honest guides on winning work
-// on Hearth - speed, apply messages, and how the marketplace mechanics
+// on OakTend - speed, apply messages, and how the marketplace mechanics
 // (ghost protection, aging deals, the 3-spot cap) actually work.
 export default async function ProPlaybookPage() {
   const contractor = await getCurrentContractor();

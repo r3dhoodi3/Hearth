@@ -227,7 +227,7 @@ export default function ProjectsCard({
           </h2>
           <p className="text-sm text-stone-500 dark:text-stone-400">
             Every pro can showcase up to {FREE_PROJECT_LIMIT} projects for
-            free. Hearth Pro members get unlimited projects, plus
+            free. OakTend Pro members get unlimited projects, plus
             Before/After badges on their public photos.
           </p>
           <ProUpgradeCta trialEligible={trialEligible} />
@@ -237,9 +237,9 @@ export default function ProjectsCard({
       {!member && !atFreeCap && (
         <p className="text-xs text-stone-500 dark:text-stone-400">
           Free accounts can showcase up to {FREE_PROJECT_LIMIT} projects.
-          Hearth Pro members get unlimited projects and public Before/After
+          OakTend Pro members get unlimited projects and public Before/After
           badges.{" "}
-          <Link href="/pro/plus" className="text-hearth-700 hover:underline dark:text-hearth-300">
+          <Link href="/pro/plus" className="text-oaktend-700 hover:underline dark:text-oaktend-300">
             {proCtaLabel(trialEligible)}
           </Link>
           {trialEligible ? ` ${proTrialSubline()}` : ""}

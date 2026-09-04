@@ -151,7 +151,7 @@ export default function BusinessView({
             {showApplySpeedNudge && (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                 {COLD_START_FREE_ALERTS || isPro ? (
-                  "You already get instant alerts the moment a matching job posts, open Hearth as soon as one comes in to keep that edge."
+                  "You already get instant alerts the moment a matching job posts, open OakTend as soon as one comes in to keep that edge."
                 ) : trialEligible ? (
                   <>
                     <Link href="/pro/plus" className="font-medium underline">
@@ -167,7 +167,7 @@ export default function BusinessView({
                       href="/pro/plus"
                       className="font-medium underline"
                     >
-                      Hearth Pro membership
+                      OakTend Pro membership
                     </Link>{" "}
                     so you see new jobs the moment they post.
                   </>
@@ -262,7 +262,7 @@ export default function BusinessView({
         <div>
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Insights{" "}
-            <span className="chip ml-1 bg-hearth-100 align-middle text-hearth-800 dark:bg-hearth-900 dark:text-hearth-200">
+            <span className="chip ml-1 bg-oaktend-100 align-middle text-oaktend-800 dark:bg-oaktend-900 dark:text-oaktend-200">
               Pro
             </span>
           </h2>
@@ -396,7 +396,7 @@ export default function BusinessView({
                     still a 20% lift from 10px. */}
                 <p className="flex items-center gap-3 text-[10px] text-stone-500 max-sm:text-xs dark:text-stone-400">
                   <span className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-sm bg-hearth-500 dark:bg-hearth-400" />
+                    <span className="inline-block h-2 w-2 rounded-sm bg-oaktend-500 dark:bg-oaktend-400" />
                     Applications
                   </span>
                   <span className="flex items-center gap-1">
@@ -436,8 +436,8 @@ export default function BusinessView({
                             className={`w-3 rounded-t-md ${
                               m.applications > 0
                                 ? isCurrent
-                                  ? "bg-hearth-600 dark:bg-hearth-500"
-                                  : "bg-hearth-400 dark:bg-hearth-500/60"
+                                  ? "bg-oaktend-600 dark:bg-oaktend-500"
+                                  : "bg-oaktend-400 dark:bg-oaktend-500/60"
                                 : "bg-stone-100 dark:bg-stone-700"
                             }`}
                             style={{ height: `${appHeight}px` }}
@@ -477,7 +477,7 @@ export default function BusinessView({
             {teaserCategories.length > 0 && (
               <div className="card overflow-x-auto">
                 <p className="mb-2 text-sm font-medium text-stone-500 dark:text-stone-400">
-                  Which of your trades actually pays? Included with Hearth Pro.
+                  Which of your trades actually pays? Included with OakTend Pro.
                 </p>
                 <table className="w-full text-sm">
                   <thead>
@@ -531,11 +531,11 @@ export default function BusinessView({
                 : "Insights shows which categories earn your application fees back, and which ones quietly drain them. "}
               <Link
                 href="/pro/plus"
-                className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                className="font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
               >
                 {trialEligible
                   ? `${proCtaLabel(true)} and unlock Insights`
-                  : "Unlock Insights with Hearth Pro"}
+                  : "Unlock Insights with OakTend Pro"}
               </Link>
               .{trialEligible ? ` ${proTrialSubline()}` : ""}
             </p>
@@ -563,7 +563,7 @@ export default function BusinessView({
             Nothing in flight.{" "}
             <Link
               href={PRO_LEADS_HREF}
-              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+              className="font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
             >
               Browse open jobs
             </Link>{" "}
@@ -608,7 +608,7 @@ export default function BusinessView({
             jobs: the{" "}
             <Link
               href="/pro/playbook"
-              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+              className="font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
             >
               Playbook
             </Link>{" "}

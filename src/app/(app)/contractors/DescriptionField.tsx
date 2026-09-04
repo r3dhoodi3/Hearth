@@ -86,7 +86,7 @@ export default function DescriptionField({
       const reason = data?.reason;
       if (reason === "rate_limited") {
         setError(
-          "You've hit today's AI limit, so Hearth can't draft this right now. You can still type the description yourself."
+          "You've hit today's AI limit, so OakTend can't draft this right now. You can still type the description yourself."
         );
       } else if (reason === "no_key") {
         setError(
@@ -215,7 +215,7 @@ export default function DescriptionField({
             under a tap that started on the button (see PostJobButton). */}
         {photoUrl && (
           <span className={handTyped ? "invisible" : ""} aria-hidden={handTyped}>
-            {" "}Or let Hearth draft it from your photo, then edit.
+            {" "}Or let OakTend draft it from your photo, then edit.
           </span>
         )}
       </p>

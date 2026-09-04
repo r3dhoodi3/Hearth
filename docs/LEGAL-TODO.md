@@ -54,7 +54,7 @@ None of these are required to build or run the app: every one has a fallback
 fallbacks are what currently render on every legal page. Set these in Vercel
 (and `.env.local`) once each fact is real:
 
-- `NEXT_PUBLIC_LEGAL_BRAND` - product name (default "Hearth").
+- `NEXT_PUBLIC_LEGAL_BRAND` - product name (default "OakTend").
 - `NEXT_PUBLIC_LEGAL_ENTITY_NAME` - the formed LLC's legal name. **Not set. The LLC does not exist yet.**
 - `NEXT_PUBLIC_LEGAL_ADDRESS` - registered business address. **Not set.** Required before purchase under Cal. B&P 17538 and in every email under CAN-SPAM.
 - `NEXT_PUBLIC_LEGAL_DOMAIN` - defaults to the host in `NEXT_PUBLIC_SITE_URL`; only set this separately if the legal domain differs from the site's own host.
@@ -66,7 +66,7 @@ fallbacks are what currently render on every legal page. Set these in Vercel
 ## 3. Remaining owner items before launch
 
 1. **Form the LLC.** File a CA LLC, get an EIN, file a county Fictitious
-   Business Name statement if trading as "Hearth", get a Huntington Beach
+   Business Name statement if trading as "OakTend", get a Huntington Beach
    business license. Then set `NEXT_PUBLIC_LEGAL_ENTITY_NAME` and
    `NEXT_PUBLIC_LEGAL_ADDRESS`. Until this is done, `{{LLC_NAME}}` and
    `{{ADDRESS}}` render as `TODO(legal)` placeholders on every page that uses
@@ -93,9 +93,9 @@ fallbacks are what currently render on every legal page. Set these in Vercel
    still open: Twilio 10DLC brand and campaign registration.
 7. ~~**Global Privacy Control.**~~ Done 2026-09-02: `src/middleware.ts` now
    calls `logGpcSignalOncePerSession` (`src/lib/gpc.ts`) after every request,
-   fire-and-forget via `event.waitUntil`. `/privacy` and `/cookies` say Hearth
+   fire-and-forget via `event.waitUntil`. `/privacy` and `/cookies` say OakTend
    honors the GPC signal; that claim now has a logged `app_event` behind it.
-   Because Hearth doesn't sell or share personal information, this changes no
+   Because OakTend doesn't sell or share personal information, this changes no
    other behavior.
 8. **Pro CRM data purge on homeowner deletion.** `/privacy` discloses that a
    pro's CRM copy of a deleted homeowner's name/phone/email/address is
@@ -113,12 +113,12 @@ fallbacks are what currently render on every legal page. Set these in Vercel
 ## 4. Nice to have / monitor
 
 - **SB 942 (AI Transparency Act)** and **AB 2013** target large GenAI
-  developers; Hearth is a downstream API user, likely out of scope.
-- **SB 243 (companion chatbots)**: Ask Hearth is task-based, likely excluded;
+  developers; OakTend is a downstream API user, likely out of scope.
+- **SB 243 (companion chatbots)**: Ask OakTend is task-based, likely excluded;
   confirm.
 - **CA SaaS sales tax**: not taxable today; SB 122 makes SaaS taxable from
   Jan 1, 2027. Plan 2027 pricing.
-- **Formal WCAG 2.2 AA audit.** `/accessibility` is honest that Hearth is
+- **Formal WCAG 2.2 AA audit.** `/accessibility` is honest that OakTend is
   "partially conformant" and no formal audit has run yet.
 
 Sources: CSLB online marketplace fast facts (cslb.ca.gov), leginfo B&P 7027.1

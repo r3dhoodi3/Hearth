@@ -145,7 +145,7 @@ export default function HelpView({
               <td className="py-1.5 pr-3 font-semibold text-stone-900 dark:text-stone-100">
                 ${LEAD_TIER_FEES.light}
               </td>
-              <td className="py-1.5 pr-3 font-semibold text-hearth-700 dark:text-hearth-300">
+              <td className="py-1.5 pr-3 font-semibold text-oaktend-700 dark:text-oaktend-300">
                 {memberPriceStr(LEAD_TIER_FEES.light)}
               </td>
               <td className="py-1.5 text-xs text-stone-500 dark:text-stone-400">
@@ -159,7 +159,7 @@ export default function HelpView({
               <td className="py-1.5 pr-3 font-semibold text-stone-900 dark:text-stone-100">
                 ${LEAD_TIER_FEES.skilled}
               </td>
-              <td className="py-1.5 pr-3 font-semibold text-hearth-700 dark:text-hearth-300">
+              <td className="py-1.5 pr-3 font-semibold text-oaktend-700 dark:text-oaktend-300">
                 {memberPriceStr(LEAD_TIER_FEES.skilled)}
               </td>
               <td className="py-1.5 text-xs text-stone-500 dark:text-stone-400">
@@ -173,7 +173,7 @@ export default function HelpView({
               <td className="py-1.5 pr-3 font-semibold text-stone-900 dark:text-stone-100">
                 ${LEAD_TIER_FEES.major}
               </td>
-              <td className="py-1.5 pr-3 font-semibold text-hearth-700 dark:text-hearth-300">
+              <td className="py-1.5 pr-3 font-semibold text-oaktend-700 dark:text-oaktend-300">
                 {memberPriceStr(LEAD_TIER_FEES.major)}
               </td>
               <td className="py-1.5 text-xs text-stone-500 dark:text-stone-400">
@@ -225,13 +225,13 @@ export default function HelpView({
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
           <Link
             href="/contact?topic=abuse"
-            className="text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+            className="text-sm font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
           >
             Report abuse or a safety concern
           </Link>
           <Link
             href="/pro/blocks"
-            className="text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+            className="text-sm font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
           >
             Blocked accounts
           </Link>
@@ -262,7 +262,7 @@ export default function HelpView({
           src/components/ShowAppGuideButton.tsx. */}
       <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-stone-800">
         <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
-          New to Hearth for Pros?
+          New to OakTend for Pros?
         </h2>
         <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
           A one-minute look at leads, your profile and reviews, your client

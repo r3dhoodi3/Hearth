@@ -357,7 +357,7 @@ export const BUDGET_RANGES = [
 // Priced in three tiers keyed to job value + what a pro can bear (a lead is only
 // worth a slice of the expected job profit). Benchmarked below the big lead
 // marketplaces (Angi $15-85+/lead plus a ~$300/yr fee; Thumbtack ~$20-75) so
-// Hearth undercuts them, with no annual fee:
+// OakTend undercuts them, with no annual fee:
 //   Tier 1  $25  light / low-ticket work (cleaning, landscaping, painting,
 //                handyman)
 //   Tier 2  $50  skilled trades + replacements (plumbing, electrical, HVAC,
@@ -374,7 +374,7 @@ export const LEAD_TIER_FEES = { light: 25, skilled: 50, major: 99 } as const;
 // sync with major_lead_price_cents() in 0113 (4999 cents).
 export const MAJOR_INTRO_FEE = 49.99;
 
-// Hearth Pro members' lead-fee discount: 10% off every lead's apply fee.
+// OakTend Pro members' lead-fee discount: 10% off every lead's apply fee.
 // Owner's words: "if they buy it they start off with a 10% discount for
 // leads. It does NOT stack with the 15-30% [aging discount]. More incentive
 // to buy." Never combines with the aging markdown above: apply_to_lead
@@ -417,7 +417,7 @@ export function isMajorCategory(category: string): boolean {
   return LEAD_FEES[category] === LEAD_TIER_FEES.major;
 }
 
-// Hearth Pro membership (contractor side) pricing, USD. This is the ONE place
+// OakTend Pro membership (contractor side) pricing, USD. This is the ONE place
 // the prices live: the /pro/plus page and checkout both read from here, so a
 // price change is a one-line edit. Every brand-new Pro subscriber, on either
 // cadence, gets a trialDays free trial (a Stripe trial, so the card is
@@ -443,7 +443,7 @@ export const PRO_PLAN = {
   introFirstMonth: 9.99,
 } as const;
 
-// Hearth Plus membership (homeowner side) pricing, USD. Same role PRO_PLAN
+// OakTend Plus membership (homeowner side) pricing, USD. Same role PRO_PLAN
 // plays for the contractor side: the ONE place the homeowner prices live, so
 // the /plus page, the checkout action, the auto-renewal disclosure in
 // src/lib/billingTerms.ts, and the renewal-reminder cron can never quote a
@@ -458,7 +458,7 @@ export const PLUS_PLAN = {
   // subscription comparables rather than from a round number: the 2026 in-app
   // benchmarks put the median weekly plan around $7.48 and category weekly
   // medians at $4.99-$6.89, but those sit against monthly plans of $9.99-$12.99,
-  // roughly 2.3x the monthly rate on a per-month basis. Hearth's monthly is
+  // roughly 2.3x the monthly rate on a per-month basis. OakTend's monthly is
   // $4.99, less than half the market monthly median, so borrowing a market
   // weekly price would put weekly at 5x monthly and read as a trap rather than
   // as a low-commitment way in. Holding the same 1.5x-2.5x band against OUR
@@ -558,7 +558,7 @@ export function yearlyAsMonthly(plan: Pick<PlanPrices, "yearly">): number {
 // the same number.
 export const PLUS_INCLUDED_HOMES = 5;
 
-// Ask Hearth questions a day on Plus. MIRRORS ASK_DAILY_PLUS in
+// Ask OakTend questions a day on Plus. MIRRORS ASK_DAILY_PLUS in
 // src/lib/aiUsage.ts, which is the value the server actually enforces and
 // cannot be imported here: aiUsage.ts pulls in the service-role Supabase
 // client, which is "server-only" and fails the build the moment a client
@@ -567,14 +567,14 @@ export const PLUS_INCLUDED_HOMES = 5;
 // never quietly drift.
 export const PLUS_ASK_PER_DAY = 15;
 
-// Ask Hearth questions a day on the FREE tier. Mirrors ASK_DAILY_FREE in
+// Ask OakTend questions a day on the FREE tier. Mirrors ASK_DAILY_FREE in
 // src/lib/aiUsage.ts for exactly the reason above, and src/lib/constants.test.ts
 // fails if the two drift. This is the number every comparison table and pricing
 // page quotes in its "Free" column, all of which used to type the digit by hand
 // in four separate places.
 export const FREE_ASK_PER_DAY = 3;
 
-// Ask Hearth questions a day during the 3-day Plus trial, with photos. Mirrors
+// Ask OakTend questions a day during the 3-day Plus trial, with photos. Mirrors
 // ASK_DAILY_TRIAL in src/lib/aiUsage.ts for exactly the reason above, and
 // src/lib/constants.test.ts fails if the two drift.
 //
@@ -641,8 +641,8 @@ export const PRO_DEPOSIT_BOOST_PTS = 5;
 // apply_to_lead (supabase/migrations/0031_ghost_protection.sql).
 export const MAX_APPLICANTS_PER_JOB = 3;
 
-// Earn-in for the Hearth-funded Checkr background check. Every check costs
-// Hearth real money, so it unlocks after the pro has this many PAID lead
+// Earn-in for the OakTend-funded Checkr background check. Every check costs
+// OakTend real money, so it unlocks after the pro has this many PAID lead
 // applications (lead_applications rows with refunded_at null - a refunded
 // application was never a paid lead). Mirrored in the gate inside
 // startBackgroundCheckAction and in the progress line on BackgroundCheckCard,

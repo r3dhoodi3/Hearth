@@ -25,7 +25,7 @@ describe("reasonToClientPayload", () => {
     expect(payload.error).not.toMatch(/limit|out of|used/i);
   });
 
-  it("an owner-wide ceiling is Hearth being busy, never the person's fault", () => {
+  it("an owner-wide ceiling is OakTend being busy, never the person's fault", () => {
     const payload = reasonToClientPayload("global");
     expect(payload.reason).toBe("busy");
     expect(payload.error).toMatch(/busy/i);

@@ -216,11 +216,11 @@ describe("launch-area copy", () => {
   it("reads as one sentence with the county label", () => {
     expect(LAUNCH_AREA_LABEL).toBe("all of Orange County");
     expect(LAUNCH_ONLY_MESSAGE).toBe(
-      "Hearth serves all of Orange County right now. We added you to the " +
+      "OakTend serves all of Orange County right now. We added you to the " +
         "waitlist and will email you the moment we expand to your area."
     );
     expect(OUT_OF_AREA_POST_MESSAGE).toBe(
-      "Hearth pros serve all of Orange County right now, and this home is " +
+      "OakTend pros serve all of Orange County right now, and this home is " +
         "outside that area. We'll email you the moment we expand."
     );
   });

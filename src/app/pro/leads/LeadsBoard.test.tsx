@@ -167,7 +167,7 @@ describe("LeadsBoard sort", () => {
   });
 });
 
-// Migration 0149: Hearth Pro members get 10% off every lead fee, never
+// Migration 0149: OakTend Pro members get 10% off every lead fee, never
 // stacked with the aging markdown. One card, one discount, one label.
 describe("LeadsBoard: member vs aging discount labels (0149)", () => {
   afterEach(() => cleanup());

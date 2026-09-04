@@ -23,12 +23,12 @@ import { encodeDelta, encodeDone, ndjsonBody } from "@/lib/askStream";
 // `controller.enqueue`, and enqueue on a stream the client has cancelled
 // throws `TypeError: Invalid state: Controller is already closed`. So the
 // moment the browser goes away - a closed tab, a navigation, the client's own
-// `reader.cancel()` in AskHearth.consumeStream's `finally`, or a deliberate
+// `reader.cancel()` in AskOakTend.consumeStream's `finally`, or a deliberate
 // AbortController - the producer takes the disconnect as a model failure and
 // hands the question back.
 //
 // Read every delta, abort just before the terminal line, and you have the
-// whole answer AND your daily question returned: Ask Hearth's 3/day free tier
+// whole answer AND your daily question returned: Ask OakTend's 3/day free tier
 // (and the trial's 8/day) becomes unlimited, bounded only by the 6/minute
 // burst window, while Anthropic still bills every call in full.
 //
@@ -109,7 +109,7 @@ describe("red-team A: ndjsonBody and a client that hangs up", () => {
         throw new Error("429 from the model");
       } catch (e) {
         producerSawError = e;
-        emit(encodeDone({ answer: "Ask Hearth is busy right now." }));
+        emit(encodeDone({ answer: "Ask OakTend is busy right now." }));
       }
     });
 

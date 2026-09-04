@@ -72,8 +72,8 @@ export default function PostJobDoneReferralAsk({
     try {
       const url = inviteUrl();
       const shareData = {
-        title: "Hearth",
-        text: "Know a neighbour with the same problem? Share Hearth:",
+        title: "OakTend",
+        text: "Know a neighbour with the same problem? Share OakTend:",
         url,
       };
       if (typeof navigator !== "undefined" && navigator.share) {
@@ -102,7 +102,7 @@ export default function PostJobDoneReferralAsk({
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm dark:border-white/10 dark:bg-stone-700">
       <p className="text-stone-700 dark:text-stone-300">
-        Know a neighbour with the same problem? Share Hearth.
+        Know a neighbour with the same problem? Share OakTend.
       </p>
       <button
         type="button"

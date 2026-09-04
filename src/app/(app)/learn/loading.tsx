@@ -2,7 +2,7 @@ import { Skeleton, SkeletonLine, SkeletonRow } from "@/components/Skeleton";
 
 // Mirrors learn/page.tsx: heading, then the "Maintenance basics" block - its
 // search box, category filter chips, and a few guide rows (each guide is an
-// icon + label + status chip card). The Ask Hearth card that used to sit
+// icon + label + status chip card). The Ask OakTend card that used to sit
 // between them is gone from the page, so its placeholder is gone too.
 export default function Loading() {
   return (

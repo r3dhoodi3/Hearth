@@ -21,7 +21,7 @@ const LeadChat = dynamic(() => import("@/components/LeadChat"), {
 type ActiveChat = { leadId: string; name: string };
 
 // A right-side, full-height slide-in chat panel. Opens when an
-// "hearth:open-chat" event fires (see OpenChatButton). Render once per page;
+// "oaktend:open-chat" event fires (see OpenChatButton). Render once per page;
 // the page sets the role. Closes on the backdrop, the X, or Escape.
 export default function ChatDrawer({
   role = "contractor",
@@ -37,10 +37,10 @@ export default function ChatDrawer({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setChat(null);
     }
-    window.addEventListener("hearth:open-chat", onOpen);
+    window.addEventListener("oaktend:open-chat", onOpen);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("hearth:open-chat", onOpen);
+      window.removeEventListener("oaktend:open-chat", onOpen);
       window.removeEventListener("keydown", onKey);
     };
   }, []);

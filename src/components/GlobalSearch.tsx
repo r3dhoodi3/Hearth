@@ -112,15 +112,15 @@ export default function GlobalSearch({
   const askHref =
     side === "pro"
       ? `/pro/ask?q=${encodeURIComponent(trimmed)}`
-      : `/chats?lead=ask-hearth&q=${encodeURIComponent(trimmed)}`;
-  // The two shells keep their own accents: bark on the homeowner side, Hearth
+      : `/chats?lead=ask-oaktend&q=${encodeURIComponent(trimmed)}`;
+  // The two shells keep their own accents: bark on the homeowner side, OakTend
   // ember on the pro side, matching each header's palette.
   const focusBorder =
     side === "pro"
-      ? "focus:border-hearth-500 dark:focus:border-hearth-500"
+      ? "focus:border-oaktend-500 dark:focus:border-oaktend-500"
       : "focus:border-bark-500 dark:focus:border-bark-500";
-  const rowHover = side === "pro" ? "hover:bg-hearth-50" : "hover:bg-bark-50";
-  const rowActive = side === "pro" ? "bg-hearth-50" : "bg-bark-50";
+  const rowHover = side === "pro" ? "hover:bg-oaktend-50" : "hover:bg-bark-50";
+  const rowActive = side === "pro" ? "bg-oaktend-50" : "bg-bark-50";
 
   function close() {
     setFocused(false);
@@ -344,7 +344,7 @@ export default function GlobalSearch({
           {trimmed !== "" && settled && items.length === 0 && (
             <div className="px-2 py-1.5">
               <p className="text-sm text-stone-600 dark:text-stone-300">
-                No matches. Try the FAQ or ask Hearth.
+                No matches. Try the FAQ or ask OakTend.
               </p>
               <button
                 type="button"
@@ -352,7 +352,7 @@ export default function GlobalSearch({
                 onClick={() => navigate(askHref)}
                 className={`${rowBase} ${rowHover} -mx-2 mt-1 w-[calc(100%+1rem)] font-medium text-stone-700 dark:text-stone-300 dark:hover:bg-stone-600`}
               >
-                Ask Hearth: &ldquo;{trimmed}&rdquo;
+                Ask OakTend: &ldquo;{trimmed}&rdquo;
               </button>
               <button
                 type="button"

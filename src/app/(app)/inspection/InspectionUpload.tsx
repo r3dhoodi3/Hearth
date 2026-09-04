@@ -45,7 +45,7 @@ const ALLOWED_API_ERRORS: RegExp[] = [
   /^That PDF has too many pages \(max \d+\)\. Please upload just the inspection report's pages\.$/,
 ];
 
-// Returns the server's message only when it is one Hearth wrote, otherwise
+// Returns the server's message only when it is one OakTend wrote, otherwise
 // null so the caller uses its own fallback. Exported for
 // InspectionUpload.errors.test.tsx, which covers both branches directly.
 export function knownApiError(raw: unknown): string | null {
@@ -137,7 +137,7 @@ function pdfToBase64(file: File): Promise<string> {
 }
 
 // Add an inspection report an owner already has: photos of its pages or
-// pasted text go to Hearth, which proposes systems and issues. Nothing is
+// pasted text go to OakTend, which proposes systems and issues. Nothing is
 // saved until the owner reviews the checklist and confirms.
 //
 // `freeReadsLeft` is the meter: how many of the 1 lifetime free report reads
@@ -304,7 +304,7 @@ export default function InspectionUpload({
         setPhase("review");
       } else if (data?.reason === "rate_limited") {
         setPhase("idle");
-        setError("Hearth has hit today's free usage limit. Please try again later.");
+        setError("OakTend has hit today's free usage limit. Please try again later.");
       } else if (data?.reason === "no_key") {
         setPhase("idle");
         setError("Report reading isn't set up yet.");
@@ -507,7 +507,7 @@ export default function InspectionUpload({
 
         {result.systems.length === 0 && result.issues.length === 0 && (
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            Hearth couldn&apos;t find any specific systems or issues in that
+            OakTend couldn&apos;t find any specific systems or issues in that
             report.
           </p>
         )}
@@ -678,7 +678,7 @@ export default function InspectionUpload({
           href="/ai-disclosure"
           className="underline decoration-dotted hover:text-stone-600 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:hover:text-stone-300"
         >
-          How Hearth uses AI
+          How OakTend uses AI
         </Link>
       </p>
 
@@ -695,7 +695,7 @@ export default function InspectionUpload({
             href={FREE_TASTE_PAYWALL.inspection.link}
             className="btn-primary inline-block"
           >
-            Get Hearth Plus
+            Get OakTend Plus
           </Link>
         </div>
       ) : (

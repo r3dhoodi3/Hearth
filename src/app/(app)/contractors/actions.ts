@@ -721,7 +721,7 @@ export async function postJobAction(formData: FormData) {
   }
 
   // Instant new-job alerts through the full notification stack (in-app now,
-  // email/SMS once those providers are configured). Normally a Hearth Pro
+  // email/SMS once those providers are configured). Normally a OakTend Pro
   // member perk; while COLD_START_FREE_ALERTS is on, every category-matched
   // pro gets one. Pros not alerted keep the nudge below unchanged.
   // alertProsForNewLead catches everything internally and returns the ids it
@@ -1429,7 +1429,7 @@ export async function requestProAction(
   // public shareable link, so a request could otherwise target a pro who
   // never confirmed they serve Orange County.
   if (!pro.serves_orange_county) {
-    return err("That pro isn't taking Hearth jobs in your area yet.");
+    return err("That pro isn't taking OakTend jobs in your area yet.");
   }
   const serves =
     !pro.categories ||

@@ -1,5 +1,5 @@
 // Pure forecasting math for the "Home Cost Forecast + Repair Fund" feature
-// (Hearth Plus). No DB access here - the page loads home_systems and passes
+// (OakTend Plus). No DB access here - the page loads home_systems and passes
 // them in, along with the current year (never call argless `new Date()`).
 //
 // Reuses the same lifespan and cost tables the Home Health score is built on

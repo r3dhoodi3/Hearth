@@ -159,7 +159,7 @@ export default function HomeownerSignUpPage(props: {
     // What we say back is deliberately the SAME sentence either way. Saying
     // "an account with this email already exists" undid Supabase's own
     // enumeration protection in one line: anybody could type an address here
-    // and read off whether that person is a Hearth customer. See
+    // and read off whether that person is a OakTend customer. See
     // SIGNUP_EMAIL_NEUTRAL for the reasoning and the wording.
     if (data.user && data.user.identities && data.user.identities.length === 0) {
       setBusy(false);
@@ -268,7 +268,7 @@ export default function HomeownerSignUpPage(props: {
             Create your account
           </h1>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            Start tracking your home with Hearth.
+            Start tracking your home with OakTend.
           </p>
         </div>
 
@@ -443,7 +443,7 @@ export default function HomeownerSignUpPage(props: {
           href={`/contractor-signup${nextQuery}`}
           className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300"
         >
-          Sign up for Hearth for Pros
+          Sign up for OakTend for Pros
         </Link>
         .
       </p>

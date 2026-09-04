@@ -73,13 +73,13 @@ function baseSubItem(sub: Stripe.Subscription): Stripe.SubscriptionItem {
 
 // NOTE ON PRICES BELOW. The plan-switch paths used to build inline `price_data`
 // pointing at the product the subscription item already carried. That is what
-// broke "Switch to yearly" live: the "Hearth Plus" product on the connected
+// broke "Switch to yearly" live: the "OakTend Plus" product on the connected
 // account had been archived, and Stripe will not attach a new price to an
 // inactive product. Every price on an existing subscription now comes from
 // src/lib/stripePlanPrice.ts, which returns the configured STRIPE_PRICE_* id
 // when there is one and otherwise find-or-creates an ACTIVE product and price.
 
-// Start a Hearth Plus checkout on any of the three sold cadences: weekly,
+// Start a OakTend Plus checkout on any of the three sold cadences: weekly,
 // monthly, or yearly. Uses the pre-created Stripe Price if one is configured,
 // otherwise falls back to inline price_data so the flow works before
 // Products/Prices are set up in Stripe.
@@ -154,7 +154,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
           currency: "usd",
           unit_amount: Math.round(planAmount * 100),
           recurring: { interval: planInterval },
-          product_data: { name: "Hearth Plus" },
+          product_data: { name: "OakTend Plus" },
         },
       };
 
@@ -185,7 +185,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
   // Stripe webhook fires, so two checkouts opened back-to-back could each
   // mint a live Stripe subscription (and a trial). When we already know the
   // Stripe customer, ask Stripe directly whether they have a live Plus
-  // subscription before creating another one. A live Hearth Pro membership
+  // subscription before creating another one. A live OakTend Pro membership
   // doesn't count (that sub is a different membership), so the pro-side
   // row's subscription id is excluded from the check. If no customer id
   // exists yet, the webhook's upsert-by-(user_id, side), fed by the metadata
@@ -233,7 +233,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
     }
     if (alreadySubscribed) {
       await setFlash(
-        "You already have a Hearth Plus membership. No need to buy it twice.",
+        "You already have a OakTend Plus membership. No need to buy it twice.",
         "info"
       );
       redirect("/plus");
@@ -599,7 +599,7 @@ export async function setExtraHomesAction(formData: FormData) {
 
   const sub = await getSubscription();
   if (!sub?.stripe_subscription_id) {
-    await setFlash("Start Hearth Plus first, then you can add extra homes.", "error");
+    await setFlash("Start OakTend Plus first, then you can add extra homes.", "error");
     redirect("/plus");
   }
 

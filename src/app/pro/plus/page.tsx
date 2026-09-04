@@ -36,18 +36,18 @@ import {
 // ("nudge"), the feedback card ("feedback") and the setup checklist's logo
 // step ("logo").
 const REASON_COPY: Record<string, string> = {
-  tools: `You've used your ${FREE_PRO_DRAFTS} free drafts. Hearth Pro includes unlimited drafts: estimates, invoices, follow-ups, review responses, and overdue reminders.`,
-  ask: "Hearth Pro raises your daily limit on Ask Hearth, so you can keep asking on the days you actually need it.",
+  tools: `You've used your ${FREE_PRO_DRAFTS} free drafts. OakTend Pro includes unlimited drafts: estimates, invoices, follow-ups, review responses, and overdue reminders.`,
+  ask: "OakTend Pro raises your daily limit on Ask OakTend, so you can keep asking on the days you actually need it.",
   // The lead discount leads this banner (moved first, 2026-08-30): it is the
   // most direct incentive to subscribe from the exact screen where a pro is
   // about to pay a lead fee. "does not stack with age discounts" is stated in
   // the banner itself, not just on the perks page below, since this is the
   // door a pro reaches by tapping straight off a job card's price line.
   leads: `Membership never changes which jobs you can see or apply to. What it changes is the money around them: ${PRO_LEAD_DISCOUNT_PCT}% off every lead fee (does not stack with age discounts), $10 of lead credit every month, and +${PRO_DEPOSIT_BOOST_PTS}% on every deposit.`,
-  nudge: `Hearth Pro: +${PRO_DEPOSIT_BOOST_PTS}% bonus on every deposit and $10 of lead credit every month, once your membership is paid.`,
+  nudge: `OakTend Pro: +${PRO_DEPOSIT_BOOST_PTS}% bonus on every deposit and $10 of lead credit every month, once your membership is paid.`,
   feedback:
-    "Thanks for the feedback. Hearth Pro is the paid side of the app: the AI back office, win-rate analytics, a richer public page, and credit on every deposit.",
-  logo: "Your logo, work photos, and an about section are part of Hearth Pro, so your public page looks like your business rather than a listing.",
+    "Thanks for the feedback. OakTend Pro is the paid side of the app: the AI back office, win-rate analytics, a richer public page, and credit on every deposit.",
+  logo: "Your logo, work photos, and an about section are part of OakTend Pro, so your public page looks like your business rather than a listing.",
 };
 
 export default async function ProPlusPage(

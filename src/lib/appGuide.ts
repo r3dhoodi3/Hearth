@@ -1,7 +1,7 @@
 // Pure helpers for the first-run app guide (src/components/AppGuide.tsx).
 //
 // WHY THIS EXISTS AT ALL: the phone landing page is being cut down to almost
-// nothing - somebody who installed the app already knows what Hearth is, and
+// nothing - somebody who installed the app already knows what OakTend is, and
 // every extra word between them and a sign-in button is a word in the way. The
 // explaining has to happen somewhere though, so it moves to the first screen
 // AFTER sign-in: four short cards, once, then never again.
@@ -76,7 +76,7 @@ export function appGuideSnoozeKey(side: GuideSide): string {
 // The window event the "Show the app guide again" links dispatch (help pages,
 // both sides). The component is always mounted and simply renders null when
 // closed, so replaying it costs no extra fetch and no navigation.
-export const APP_GUIDE_EVENT = "hearth:show-app-guide";
+export const APP_GUIDE_EVENT = "oaktend:show-app-guide";
 
 // The whole gate, in one pure function.
 //

@@ -14,7 +14,7 @@ are the free public record that turns those guesses into facts: a reroof,
 HVAC changeout, water heater swap, repipe, or panel upgrade almost always has
 a dated permit.
 
-HOW, v1 (free, no vendors). Goal is ALL of Orange County (Hearth serves the
+HOW, v1 (free, no vendors). Goal is ALL of Orange County (OakTend serves the
 whole county since 0129; FV/HB is only the marketing order, never a product
 boundary). Do NOT build one scraper per city: most OC cities run one of a few
 permit-portal platforms (Accela Citizen Access, eTRAKiT/CentralSquare, Tyler
@@ -60,7 +60,7 @@ Where things stand as of tonight, so the list below reads against reality:
 - **A production redeploy on 09-01 activated env vars that had been sitting
   unapplied**: `ANTHROPIC_API_KEY` (re-entered as a shared variable), the
   three VAPID push keys, `RISK_HASH_SALT`, `RISK_ENFORCE`. Env edits in
-  Vercel do nothing until a redeploy; that is what had Ask Hearth down.
+  Vercel do nothing until a redeploy; that is what had Ask OakTend down.
 - **Stripe is in TEST mode in production ON PURPOSE** (Landen, 09-01: still
   testing, switches to the live key at go-live). The env-separation alert in
   the logs fires on every request until then; that is expected. At go-live:
@@ -126,7 +126,7 @@ House rules Landen holds every session to; they apply to yours too:
 3. **Signup captcha.** Supabase -> Authentication -> Attack Protection ->
    enable captcha, provider Cloudflare Turnstile. Needs a free Turnstile site
    key + secret from dash.cloudflare.com (Turnstile -> Add site, domain =
-   the Hearth domain). The secret goes in Supabase; the site key goes in
+   the OakTend domain). The secret goes in Supabase; the site key goes in
    Vercel as `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (the signup forms read it; if
    the forms do not yet render the widget, tell Landen and it is a small code
    change).
@@ -160,7 +160,7 @@ House rules Landen holds every session to; they apply to yours too:
     Calendar reminder for mid-January 2027 to regenerate
     (`C:\Users\lande\apple-secret\make-secret.js`, needs the .p8). Also
     rotate the Apple key `34UDQ3MTXM`: it was pasted into a chat on 08-21.
-12. Register Hearth's sending domain for Apple private relay email (Apple
+12. Register OakTend's sending domain for Apple private relay email (Apple
     portal -> Services -> Sign in with Apple for Email Communication) once
     Resend is live, or Hide-My-Email users never get mail.
 13. Block disposable email domains at signup (Supabase has no built-in list;

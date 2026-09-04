@@ -12,7 +12,7 @@ import type { NextRequest, NextResponse } from "next/server";
 // left alone for 400 days (the ceiling Chrome will honour for a Set-Cookie
 // expiry).
 //
-// IT IS USED FOR EXACTLY ONE THING: telling whether several Hearth accounts
+// IT IS USED FOR EXACTLY ONE THING: telling whether several OakTend accounts
 // have been created or paid for from the same browser. It is not an analytics
 // id, it is not joined to page views, it is never sent anywhere, and nothing
 // outside src/lib/risk reads it. httpOnly means page scripts cannot read it

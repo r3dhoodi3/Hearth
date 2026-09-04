@@ -3,7 +3,7 @@
 // POSITIVE-ONLY, shareable "home wins" for a property. Deliberately NOT the
 // 0-100 Home Health Score (src/lib/health.ts): a score shames a home with a low
 // number, and the point of this card is to make a homeowner feel good and pass
-// Hearth along to a neighbor. So everything here is framed as something the
+// OakTend along to a neighbor. So everything here is framed as something the
 // owner has ALREADY done well, and there is always an encouraging "just getting
 // started" fallback so the card is never a bad number.
 //
@@ -14,7 +14,7 @@
 // ON THE DOLLAR FIGURE (an explicit product decision): the brief allowed an
 // OPTIONAL banded "$X-$Y caught early" line IF a clean, defensible source
 // exists, and said to OMIT it if the methodology is murky. It is murky, so it
-// is omitted. Hearth stores no ledger of money saved by acting early: the
+// is omitted. OakTend stores no ledger of money saved by acting early: the
 // reserve math (forecastReserve.ts) is a FUTURE savings target, not realized
 // savings; REPLACEMENT_INFO bands are the cost to REPLACE a system, not money a
 // healthy system saved; and maintenance_tasks carry no cost. Any figure built
@@ -65,7 +65,7 @@ export interface HomeWinsInput {
   // First name only, or null. Never a last name, never anything else - this is
   // the one piece of PII that can reach the public card.
   firstName: string | null;
-  // properties.created_at (ISO string) - drives "years on Hearth".
+  // properties.created_at (ISO string) - drives "years on OakTend".
   createdAt: string | null;
   systems: HomeSystem[];
   // Count of maintenance_tasks with status "done" for this property.
@@ -175,9 +175,9 @@ export function selectHomeWins(input: HomeWinsInput): HomeWins {
   if (years >= 1) {
     candidates.push({
       key: "years",
-      text: `${plural(years, "year")} on Hearth`,
+      text: `${plural(years, "year")} on OakTend`,
       stat: String(years),
-      statLabel: years === 1 ? "year on Hearth" : "years on Hearth",
+      statLabel: years === 1 ? "year on OakTend" : "years on OakTend",
     });
   }
 
@@ -211,7 +211,7 @@ export function selectHomeWins(input: HomeWinsInput): HomeWins {
     return {
       variant: "starter",
       firstName: input.firstName,
-      wins: [{ key: "starter", text: "Home set up on Hearth" }],
+      wins: [{ key: "starter", text: "Home set up on OakTend" }],
       hasRealWin: false,
     };
   }
@@ -241,9 +241,9 @@ export function isValidWinsCode(code: string): boolean {
 // contains a link and never promises a reward.
 export function homeWinsCaption(wins: HomeWins): string {
   if (wins.variant === "starter") {
-    return "Just put my home on Hearth so nothing sneaks up on me. Handy for keeping a house in shape:";
+    return "Just put my home on OakTend so nothing sneaks up on me. Handy for keeping a house in shape:";
   }
   const top = wins.wins[0]?.text ?? "";
   const topSentence = top ? ` ${top.charAt(0).toUpperCase()}${top.slice(1)}.` : "";
-  return `A little proud of my house right now.${topSentence} Hearth keeps me on top of it, worth a look for yours:`;
+  return `A little proud of my house right now.${topSentence} OakTend keeps me on top of it, worth a look for yours:`;
 }

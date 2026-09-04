@@ -53,7 +53,7 @@ export default function PhotoUpload({
     // allowed_mime_types (migration 0079). `accept="image/*"` is only a
     // browser hint; without this check, a client `file.type.startsWith(
     // "image/")` test would still let image/svg+xml through, which can carry
-    // a <script> and gets served back off Hearth's own storage origin
+    // a <script> and gets served back off OakTend's own storage origin
     // (security audit finding #7). The bucket-level allow-list is the real
     // backstop once 0079 is applied live; this is defense-in-depth so the
     // upload never even starts and the rejection message is clear.

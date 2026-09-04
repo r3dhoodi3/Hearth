@@ -112,7 +112,7 @@ describe("POST /api/twilio/inbound", () => {
       const response = await POST(inbound(keyword));
       expect(response.status).toBe(200);
       const xml = await textOf(response);
-      expect(xml).toContain("You have opted out of Hearth text messages");
+      expect(xml).toContain("You have opted out of OakTend text messages");
       expect(xml).toContain("Reply START to opt back in");
       // Exactly one <Message>, never bundled with HELP or anything else.
       expect((xml.match(/<Message>/g) ?? []).length).toBe(1);
@@ -127,7 +127,7 @@ describe("POST /api/twilio/inbound", () => {
       const response = await POST(inbound(keyword));
       expect(response.status).toBe(200);
       const xml = await textOf(response);
-      expect(xml).toContain("You have opted in to Hearth text messages");
+      expect(xml).toContain("You have opted in to OakTend text messages");
       expect(xml).toContain("Msg&amp;data rates may apply");
       expect(xml).toContain("Reply STOP to opt out, HELP for help");
       expect(updates).toHaveLength(1);
@@ -141,7 +141,7 @@ describe("POST /api/twilio/inbound", () => {
     const response = await POST(inbound("HELP"));
     expect(response.status).toBe(200);
     const xml = await textOf(response);
-    expect(xml).toContain("Hearth: home maintenance help");
+    expect(xml).toContain("OakTend: home maintenance help");
     expect(xml).toContain("Msg&amp;data rates may apply");
     expect(updates).toEqual([]);
   });
@@ -149,7 +149,7 @@ describe("POST /api/twilio/inbound", () => {
   it("answers INFO the same as HELP", async () => {
     const response = await POST(inbound("INFO"));
     const xml = await textOf(response);
-    expect(xml).toContain("Hearth: home maintenance help");
+    expect(xml).toContain("OakTend: home maintenance help");
   });
 
   it("still sends the STOP confirmation when no matching user is found", async () => {
@@ -157,7 +157,7 @@ describe("POST /api/twilio/inbound", () => {
     const response = await POST(inbound("STOP"));
     expect(response.status).toBe(200);
     const xml = await textOf(response);
-    expect(xml).toContain("You have opted out of Hearth text messages");
+    expect(xml).toContain("You have opted out of OakTend text messages");
     expect(updates).toEqual([]);
   });
 
@@ -166,7 +166,7 @@ describe("POST /api/twilio/inbound", () => {
     const response = await POST(inbound("STOP"));
     expect(response.status).toBe(200);
     const xml = await textOf(response);
-    expect(xml).toContain("You have opted out of Hearth text messages");
+    expect(xml).toContain("You have opted out of OakTend text messages");
   });
 
   it("replies with an empty TwiML ack for an unrecognized message", async () => {

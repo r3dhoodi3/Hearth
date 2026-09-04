@@ -325,7 +325,7 @@ export async function savePublicPageAction(formData: FormData) {
   if (!contractor) redirect("/pro/onboarding");
 
   if (!(await hasProPlan())) {
-    setFlash("Page extras are a Hearth Pro member perk.", "error");
+    setFlash("Page extras are a OakTend Pro member perk.", "error");
     redirect("/pro/profile");
   }
 
@@ -534,8 +534,8 @@ export async function deleteAccountAction(formData: FormData) {
 // both need a human, not a retry button:
 //   - name_mismatch: CSLB registered the license under a name that doesn't
 //     line up with this account (a legal entity name, a married name, a dba
-//     Hearth doesn't know about);
-//   - duplicate_license: the number is already verified on another Hearth
+//     OakTend doesn't know about);
+//   - duplicate_license: the number is already verified on another OakTend
 //     account, which is either an honest mix-up or somebody using this pro's
 //     license.
 // Either way the pro writes to support and a person rules on it. There is NO

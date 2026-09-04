@@ -33,7 +33,7 @@ describe("GlobalSearch suggestions", () => {
     type("trial");
 
     // The FAQ entry seeded from the pricing page surfaces as a suggestion.
-    const faqRow = await screen.findByText("How does the Hearth Plus trial work?");
+    const faqRow = await screen.findByText("How does the OakTend Plus trial work?");
     // Selecting it expands the answer inline rather than navigating.
     fireEvent.click(faqRow);
     expect(
@@ -79,15 +79,15 @@ describe("GlobalSearch suggestions", () => {
     expect(push).toHaveBeenCalledWith("/pro/search?q=leads");
   });
 
-  it("offers Ask Hearth when nothing matches", async () => {
+  it("offers Ask OakTend when nothing matches", async () => {
     render(<GlobalSearch />);
     type("zzzz qqqq");
 
     await screen.findByText(/No matches/);
-    const ask = screen.getByText(/Ask Hearth: /);
+    const ask = screen.getByText(/Ask OakTend: /);
     fireEvent.click(ask);
     expect(push).toHaveBeenCalledWith(
-      `/chats?lead=ask-hearth&q=${encodeURIComponent("zzzz qqqq")}`
+      `/chats?lead=ask-oaktend&q=${encodeURIComponent("zzzz qqqq")}`
     );
   });
 });

@@ -15,7 +15,7 @@ import { generateJson, hasClaudeKey } from "@/lib/claude";
 export const runtime = "nodejs";
 
 // Compliance calendar upload: a pro uploads their contractor license or
-// certificate of insurance once, and Hearth reads the expiration date off it
+// certificate of insurance once, and OakTend reads the expiration date off it
 // with the same vision model /api/extract-document uses. Reading a date off
 // a document is not verification. Nothing here claims the license or policy
 // itself was checked: license_verified_status (migration 0037) is untouched,
@@ -83,17 +83,17 @@ function str(v: FormDataEntryValue | null): string {
 
 // Why the vision read was skipped, when it was. The route already returned
 // needs_manual_date, but that one boolean covered three different situations
-// and the client rendered the same sentence for all of them: "Hearth couldn't
+// and the client rendered the same sentence for all of them: "OakTend couldn't
 // read a date off that document." For a PDF nothing ever looked at, and for a
 // pro who is simply over their daily AI cap, that sentence is false and sends
 // them off to retake a photo that was fine.
 type SkipReason = "not_an_image" | AiClientReason | null;
 
 const SKIP_COPY: Record<NonNullable<SkipReason>, string> = {
-  not_an_image: "Hearth only reads dates off photos, not PDFs. Enter it:",
+  not_an_image: "OakTend only reads dates off photos, not PDFs. Enter it:",
   rate_limited: "You've hit today's AI limit. Enter the date:",
-  busy: "Hearth's AI is busy right now. Enter the date:",
-  unavailable: "Hearth couldn't read this one just now. Enter the date:",
+  busy: "OakTend's AI is busy right now. Enter the date:",
+  unavailable: "OakTend couldn't read this one just now. Enter the date:",
 };
 
 // Sanity-bound a printed expiry date. DATE_RE only checks the shape, so a

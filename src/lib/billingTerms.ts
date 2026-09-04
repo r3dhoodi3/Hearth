@@ -63,7 +63,7 @@ export const AUTO_RENEWAL_CONSENT_LINE =
   "By checking the box below, you agree to these automatic renewal terms.";
 
 export type BillingTerms = {
-  // "Hearth Plus", "Hearth Pro" - the thing being bought.
+  // "OakTend Plus", "OakTend Pro" - the thing being bought.
   product: string;
   // What is charged right now, at checkout.
   chargedToday: string;
@@ -136,7 +136,7 @@ export function billingTerms(
   // page it names is the one cancelPath links to, so the fact is identical.
   const cancel = `Cancel anytime from your ${product} page using the Cancel membership button. Cancelling takes effect at the end of the period you have already paid for, and there is nothing to call or email.`;
 
-  // Hearth Pro: every brand-new member, on either cadence, starts on the same
+  // OakTend Pro: every brand-new member, on either cadence, starts on the same
   // free trial (a Stripe trial, so the card is collected at checkout but
   // nothing is charged until it ends). `introEligible` mirrors the exact "no
   // existing Pro subscription" signal startProCheckoutAction uses, so a
@@ -179,7 +179,7 @@ export function billingTerms(
     };
   }
 
-  // Hearth Plus: weekly, monthly, or yearly. Every one of the three carries the
+  // OakTend Plus: weekly, monthly, or yearly. Every one of the three carries the
   // same 3 free days for an eligible account (see trialApplies above), and
   // Stripe then renews at the cadence the buyer picked, so the step-up sentence
   // below is built per cadence rather than hard-coded to weekly.

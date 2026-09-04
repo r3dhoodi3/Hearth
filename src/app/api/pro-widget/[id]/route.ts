@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 //
 // COMPLIANCE (FTC consumer review rules): this widget is strictly read-only
 // presentation of the pro's TRUE aggregate: the overall rating and the total
-// review count across ALL of their Hearth reviews, exactly as computed
+// review count across ALL of their OakTend reviews, exactly as computed
 // everywhere else. No cherry-picking: it must never show a filtered,
 // reordered, or otherwise flattering subset, and nothing here touches the
 // rating math or ordering.
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
   if (!UUID_RE.test(id)) {
     return htmlResponse(
-      shell("Not found", `<p class="m">This Hearth widget link is invalid.</p>`),
+      shell("Not found", `<p class="m">This OakTend widget link is invalid.</p>`),
       404
     );
   }
@@ -139,10 +139,10 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   if (error) {
     return htmlResponse(
       shell(
-        "Reviews on Hearth",
-        `<p class="n">Reviews on Hearth</p>
+        "Reviews on OakTend",
+        `<p class="n">Reviews on OakTend</p>
          <p class="m">This widget is being set up. Check back soon.</p>
-         <a href="${esc(site)}" target="_blank" rel="noopener">Hearth</a>`
+         <a href="${esc(site)}" target="_blank" rel="noopener">OakTend</a>`
       )
     );
   }
@@ -155,7 +155,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
   if (!profile) {
     return htmlResponse(
-      shell("Not found", `<p class="m">This Hearth widget link is invalid.</p>`),
+      shell("Not found", `<p class="m">This OakTend widget link is invalid.</p>`),
       404
     );
   }
@@ -174,13 +174,13 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       `<span class="off">${"★".repeat(5 - full)}</span>`;
     body = `<p class="n">${name}</p>
 <div class="row"><span class="s">${stars}</span><span class="r">${profile.rating}</span><span class="c">${count} review${count === 1 ? "" : "s"}</span></div>
-<a href="${esc(pageUrl)}" target="_blank" rel="noopener">See all reviews on Hearth</a>`;
+<a href="${esc(pageUrl)}" target="_blank" rel="noopener">See all reviews on OakTend</a>`;
   } else {
     // Honest empty state: no reviews yet, say so.
     body = `<p class="n">${name}</p>
-<p class="m">No reviews yet. Reviews come from real Hearth jobs only.</p>
-<a href="${esc(pageUrl)}" target="_blank" rel="noopener">See ${name} on Hearth</a>`;
+<p class="m">No reviews yet. Reviews come from real OakTend jobs only.</p>
+<a href="${esc(pageUrl)}" target="_blank" rel="noopener">See ${name} on OakTend</a>`;
   }
 
-  return htmlResponse(shell(`${profile.name} on Hearth`, body));
+  return htmlResponse(shell(`${profile.name} on OakTend`, body));
 }

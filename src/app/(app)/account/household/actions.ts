@@ -67,7 +67,7 @@ export async function inviteMemberAction(formData: FormData) {
   }
 
   // An invite sends mail to an address the caller typed, so an unlimited invite
-  // loop is a way to send mail to strangers with Hearth's name on it. The
+  // loop is a way to send mail to strangers with OakTend's name on it. The
   // per-home member cap above doesn't stop that on its own: a rejected or
   // deleted invite frees the slot again. Charged HERE, immediately before the
   // insert and only after every cheap check (property, email shape, not-self,
@@ -108,7 +108,7 @@ export async function inviteMemberAction(formData: FormData) {
   }
 
   setFlash(
-    `Invited ${email}. If they don't have a Hearth account yet, the invite waits until they sign up with that email.`
+    `Invited ${email}. If they don't have a OakTend account yet, the invite waits until they sign up with that email.`
   );
   revalidatePath(HOUSEHOLD_PATH);
   redirect(HOUSEHOLD_PATH);

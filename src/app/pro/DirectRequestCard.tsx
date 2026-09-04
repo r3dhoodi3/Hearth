@@ -183,7 +183,7 @@ export default function DirectRequestCard({
               </span>
             ) : null}
           </span>
-          <span className="chip border border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+          <span className="chip border border-oaktend-200 bg-oaktend-50 text-oaktend-700 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300">
             Direct request
           </span>
           {d.issue_severity && (
@@ -195,7 +195,7 @@ export default function DirectRequestCard({
           )}
           <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
             {introFee !== null && (
-              <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+              <span className="chip border border-oaktend-200 bg-oaktend-50 font-semibold text-oaktend-700 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300">
                 First big-ticket lead
               </span>
             )}
@@ -217,7 +217,7 @@ export default function DirectRequestCard({
           <details> disclosure, always visible above sm. */}
       <div>
         <details className="group sm:hidden">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-medium text-hearth-700 [&::-webkit-details-marker]:hidden dark:text-hearth-300">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-medium text-oaktend-700 [&::-webkit-details-marker]:hidden dark:text-oaktend-300">
             Details
             <svg
               viewBox="0 0 20 20"

@@ -18,7 +18,7 @@
 // even a resolved one reveals only that low-sensitivity first-name-plus-wins.
 //
 // DESIGN: a flat, Wrapped-style brag card meant to survive a group chat. One
-// full-bleed ember canvas (hearth-600), a paper-ink wordmark, a single
+// full-bleed ember canvas (oaktend-600), a paper-ink wordmark, a single
 // oversized hero number (the best win), the remaining wins as smaller checked
 // rows, and a deep bark baseboard strip. Solid color blocks only - the design
 // system bans gradients and glass, and satori is happiest that way too. All
@@ -75,7 +75,7 @@ function Check() {
   );
 }
 
-// Small flame for the wordmark (Hearth = the fire that gets kept going).
+// Small flame for the wordmark (OakTend = the fire that gets kept going).
 function Flame({ px }: { px: number }) {
   return (
     <svg width={px} height={px} viewBox="0 0 24 24" fill="none">
@@ -154,7 +154,7 @@ export async function GET(
         .maybeSingle();
       if (owner?.id) {
         firstName = firstNameOnly(owner.full_name);
-        // The owner's oldest home only. created_at drives "years on Hearth".
+        // The owner's oldest home only. created_at drives "years on OakTend".
         // NEVER selects address, city, value, or any location column.
         const { data: prop } = await admin
           .from("properties")
@@ -202,8 +202,8 @@ export async function GET(
   // Third-person headline, first name only. No name resolved => generic.
   const headline = starter
     ? firstName
-      ? `${firstName} just put this home on Hearth`
-      : "This home just landed on Hearth"
+      ? `${firstName} just put this home on OakTend`
+      : "This home just landed on OakTend"
     : firstName
       ? `${firstName} takes care of this place`
       : "This place is taken care of";
@@ -251,7 +251,7 @@ export async function GET(
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Flame px={34} />
             <div style={{ fontSize: 36, fontWeight: 700, color: BARK_50 }}>
-              Hearth
+              OakTend
             </div>
           </div>
           <div
@@ -313,7 +313,7 @@ export async function GET(
                   maxWidth: 760,
                 }}
               >
-                {hero?.text ?? "Home set up on Hearth"}
+                {hero?.text ?? "Home set up on OakTend"}
               </div>
             </div>
           ) : heroStat ? (

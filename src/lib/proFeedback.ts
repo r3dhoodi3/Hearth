@@ -18,7 +18,7 @@
 // FTC treats an undisclosed incentivised review as deceptive - see the long
 // note in src/lib/reviewPrompt.ts, which says exactly this and names this
 // idea. What is paid for here is a private note to us about the product, sent
-// through a form only the pro and Hearth ever see, on a table of its own
+// through a form only the pro and OakTend ever see, on a table of its own
 // (public.pro_feedback, migrations 0144 and 0152). No copy on this feature may
 // use the word "rating", and nothing here may ever read or write a
 // store-review row.
@@ -127,7 +127,7 @@ export function validateFeedback(input: {
   return null;
 }
 
-// The five answers to "How is Hearth working for you?". Numbers with words, so
+// The five answers to "How is OakTend working for you?". Numbers with words, so
 // nobody has to guess whether 1 is good or bad.
 export const FEEDBACK_SCORE_LABELS: Array<{ value: number; label: string }> = [
   { value: 1, label: "Badly" },

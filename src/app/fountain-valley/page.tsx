@@ -26,7 +26,7 @@ const SITE_URL =
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: "Home maintenance and local pros in Fountain Valley, CA",
   description:
     "A maintenance plan built for your Fountain Valley home, answers about your own systems, and license-checked local pros when something breaks. Free to start.",

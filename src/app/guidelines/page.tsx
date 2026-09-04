@@ -13,7 +13,7 @@ const SITE_URL =
 export const metadata: Metadata = {
   title: "Community Guidelines",
   description:
-    "How to treat people on Hearth, what we moderate automatically, and our reviews policy: reviews are never paid for, gated, or removed for being negative.",
+    "How to treat people on OakTend, what we moderate automatically, and our reviews policy: reviews are never paid for, gated, or removed for being negative.",
   alternates: {
     canonical: `${SITE_URL}/guidelines`,
   },

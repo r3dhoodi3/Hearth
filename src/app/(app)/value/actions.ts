@@ -89,7 +89,7 @@ export async function saveHomeValueAction(
 // WHERE THE PLUS LINE SITS ON HOME VALUE
 //
 // The FIRST estimate for a home is free, forever, and stays free: it is the
-// hook, and taking it away would gate the moment someone first sees Hearth do
+// hook, and taking it away would gate the moment someone first sees OakTend do
 // something for them. That is fetchAndSaveMarketValueAction below, which only
 // ever fires when there is no value on file (the auto-fetch on claim or first
 // visit), and it has no membership check on purpose.
@@ -237,7 +237,7 @@ export async function refreshMarketValueAction(): Promise<ActionResult> {
 
   if (!(await hasPlus())) {
     return err(
-      "Refreshing your estimate is part of Hearth Plus. Your first estimate stays free."
+      "Refreshing your estimate is part of OakTend Plus. Your first estimate stays free."
     );
   }
 

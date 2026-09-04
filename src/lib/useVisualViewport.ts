@@ -13,14 +13,14 @@ import { useEffect, useState, type RefObject } from "react";
 //
 // window.visualViewport is the only thing that actually knows how much screen
 // is left. This hook mirrors it onto <html> as custom properties so plain CSS
-// can size a chat panel from it (see .hearth-chat-frame in globals.css), and
+// can size a chat panel from it (see .oaktend-chat-frame in globals.css), and
 // marks the body while the keyboard is up so the bottom tab bar can get out of
 // the way, the way iMessage's does.
 //
-//   --hearth-vvh          visual viewport height, px
-//   --hearth-kb           how much of the layout viewport the keyboard covers
-//   --hearth-chat-top     measured height of the sticky app header
-//   --hearth-chat-bottom  measured height of the phone tab bar, 0 with a keyboard
+//   --oaktend-vvh          visual viewport height, px
+//   --oaktend-kb           how much of the layout viewport the keyboard covers
+//   --oaktend-chat-top     measured height of the sticky app header
+//   --oaktend-chat-bottom  measured height of the phone tab bar, 0 with a keyboard
 //
 // Every one of those is MEASURED, never hardcoded: the two headers (Nav.tsx
 // and ProNav.tsx) are different heights and both grow with the text size the
@@ -53,7 +53,7 @@ export function useChatViewport() {
       // scrolled past. Never negative (pinch-zoom can make it look that way).
       const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       const open = kb > KEYBOARD_MIN_PX;
-      document.body.classList.toggle("hearth-kb-open", open);
+      document.body.classList.toggle("oaktend-kb-open", open);
 
       const header = document.querySelector("header");
       const headerH = header ? header.getBoundingClientRect().height : 0;
@@ -63,10 +63,10 @@ export function useChatViewport() {
       const tabs = open ? null : document.querySelector("nav.fixed.bottom-0");
       const tabsH = tabs ? tabs.getBoundingClientRect().height : 0;
 
-      root.style.setProperty("--hearth-vvh", `${Math.round(vv.height)}px`);
-      root.style.setProperty("--hearth-kb", `${Math.round(kb)}px`);
-      root.style.setProperty("--hearth-chat-top", `${Math.round(headerH)}px`);
-      root.style.setProperty("--hearth-chat-bottom", `${Math.round(tabsH)}px`);
+      root.style.setProperty("--oaktend-vvh", `${Math.round(vv.height)}px`);
+      root.style.setProperty("--oaktend-kb", `${Math.round(kb)}px`);
+      root.style.setProperty("--oaktend-chat-top", `${Math.round(headerH)}px`);
+      root.style.setProperty("--oaktend-chat-bottom", `${Math.round(tabsH)}px`);
 
       // Undo Safari's document shove. The panel is fixed and already sized to
       // the visual viewport, so the scroll it performed to "reveal" the field
@@ -85,11 +85,11 @@ export function useChatViewport() {
       vv.removeEventListener("resize", measure);
       vv.removeEventListener("scroll", measure);
       window.removeEventListener("orientationchange", measure);
-      document.body.classList.remove("hearth-kb-open");
-      root.style.removeProperty("--hearth-vvh");
-      root.style.removeProperty("--hearth-kb");
-      root.style.removeProperty("--hearth-chat-top");
-      root.style.removeProperty("--hearth-chat-bottom");
+      document.body.classList.remove("oaktend-kb-open");
+      root.style.removeProperty("--oaktend-vvh");
+      root.style.removeProperty("--oaktend-kb");
+      root.style.removeProperty("--oaktend-chat-top");
+      root.style.removeProperty("--oaktend-chat-bottom");
     };
   }, []);
 }

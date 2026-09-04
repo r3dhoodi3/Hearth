@@ -345,7 +345,7 @@ describe("ProTrialNudge: the paywall experiment's hard arm", () => {
       screen.getByRole("checkbox", { name: /automatic renewal terms/i })
     );
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Get Hearth Pro" }));
+      fireEvent.click(screen.getByRole("button", { name: "Get OakTend Pro" }));
     });
     expect(mockStartCheckout).toHaveBeenCalledTimes(1);
     const posted = mockStartCheckout.mock.calls[0][0] as FormData;

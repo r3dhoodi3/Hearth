@@ -196,7 +196,7 @@ export default async function ProCrmPage(
         // "A row exists" is what makes CrmView drop the trial wording, and the
         // paywall experiment's "hard" arm must read the same way: no trial is
         // on offer for that account, so the teaser's CTA takes the plain
-        // "See Hearth Pro" branch (src/lib/paywallExperiment.ts).
+        // "See OakTend Pro" branch (src/lib/paywallExperiment.ts).
         hasProSubscriptionRow={
           Boolean(proSub) ||
           variantForUser(contractor.user_id ?? null) === "hard"

@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "article",
   },
   twitter: {
@@ -208,7 +208,7 @@ export default function ElectricalPanelUpgradeCostGuide() {
 
         <div className="rounded-xl border border-stone-200 bg-white p-5 text-center dark:border-stone-700 dark:bg-stone-800/40">
           <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-300">
-            Not sure whether your panel is due? Hearth can track your
+            Not sure whether your panel is due? OakTend can track your
             panel&apos;s age alongside the rest of your home&apos;s systems.
           </p>
           <Link
@@ -276,10 +276,10 @@ export default function ElectricalPanelUpgradeCostGuide() {
 
         <section>
           <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-500">
-            Data as of July 2026. The cost range reflects Hearth&apos;s in-app
+            Data as of July 2026. The cost range reflects OakTend&apos;s in-app
             planning figure for an electrical panel upgrade. All figures are
             general estimates, not quotes, and actual prices vary by home,
-            scope, and contractor. Hearth does not set or guarantee prices and
+            scope, and contractor. OakTend does not set or guarantee prices and
             is not a contractor. For safety and permit requirements, rely on a
             licensed electrician and your local building department.
           </p>

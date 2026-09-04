@@ -88,7 +88,7 @@ const message = (text: string) => ({
 
 // The options both chat routes pass, in the shape they pass them.
 const ASK_OPTIONS = {
-  system: "You are Hearth.",
+  system: "You are OakTend.",
   systemSuffix: "<<HOME DETAILS nonce>>\nRoof, 2004\n<</HOME DETAILS>>",
   messages: [{ role: "user" as const, text: "Why is my heater loud?" }],
   thinking: false,

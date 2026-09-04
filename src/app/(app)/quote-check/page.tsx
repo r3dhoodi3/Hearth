@@ -6,8 +6,8 @@ import { variantForUser } from "@/lib/paywallExperiment";
 import QuoteAnalyzer from "@/components/QuoteAnalyzer";
 import Breadcrumbs from "@/components/Breadcrumbs";
 
-// Quote analyzer (Hearth Plus): the homeowner hands over a photo or
-// the text of a contractor's quote, and Hearth reads it, checks the total and
+// Quote analyzer (OakTend Plus): the homeowner hands over a photo or
+// the text of a contractor's quote, and OakTend reads it, checks the total and
 // every line item against typical costs, flags anything padded or vague, and
 // writes a negotiation message, all for a couple minutes of reading.
 //
@@ -54,7 +54,7 @@ export default async function QuoteCheckPage() {
           Quote analyzer
         </h1>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-          Upload a photo of a quote, or paste the text. Hearth checks every
+          Upload a photo of a quote, or paste the text. OakTend checks every
           line, flags anything padded or vague, and drafts a message you can
           send back. Takes a minute. Know where you stand before you sign.
         </p>
@@ -63,7 +63,7 @@ export default async function QuoteCheckPage() {
       {freeTaste && (
         <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
           <p className="text-sm text-bark-700 dark:text-stone-300">
-            This one&apos;s on us. Your first quote check is free, Hearth Plus
+            This one&apos;s on us. Your first quote check is free, OakTend Plus
             makes it unlimited. It only counts as used once an analysis
             actually succeeds, so a failed upload never burns it.
           </p>

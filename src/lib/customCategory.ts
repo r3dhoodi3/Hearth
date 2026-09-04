@@ -6,7 +6,7 @@
 // front of homeowners on the public /p/<slug> page and on the browse cards.
 // The 100-character cap bounded its LENGTH, and nothing bounded its CONTENT,
 // so the field doubled as a free billboard on a public page - a phone number
-// or a URL routed homeowners off-platform before Hearth ever saw the job, and
+// or a URL routed homeowners off-platform before OakTend ever saw the job, and
 // a slur sat next to a pro's name with no review step in between.
 //
 // This is a plain-text filter, not real moderation. It is deliberately

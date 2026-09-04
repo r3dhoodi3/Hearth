@@ -108,7 +108,7 @@ describe("findEnvSeparationProblems", () => {
     }
   });
 
-  // Until the owner creates hearth-staging there is no ref to compare against.
+  // Until the owner creates oaktend-staging there is no ref to compare against.
   // The check must stay quiet rather than guess.
   it("says nothing about Supabase when no staging project is named", () => {
     expect(

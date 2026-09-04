@@ -197,7 +197,7 @@ export default function HomeView({
           Same classes, same grid, same tile shape. Titles shorten below sm so
           three fit across at 390px without wrapping to three lines.
           `chip` says what a non-member sees before tapping, never after:
-          "pro" is the Hearth-accent gate for a tile that is truly member-only
+          "pro" is the OakTend-accent gate for a tile that is truly member-only
           (the insights trend on /pro/business), "free" is the green two-free-
           drafts tag for the back office (0145 gave every contractor two free
           drafts before it gates, so a "Pro" chip there overstated the door),
@@ -282,7 +282,7 @@ export default function HomeView({
               {showSeeAll && (
                 <Link
                   href={PRO_LEADS_HREF}
-                  className="text-sm font-medium text-hearth-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                  className="text-sm font-medium text-oaktend-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
                 >
                   See all
                 </Link>
@@ -316,7 +316,7 @@ export default function HomeView({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Link
               href="/pro/billing"
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
+              className="card-link hover:border-oaktend-400 dark:hover:border-oaktend-400"
             >
               <p className="stat-label">Wallet</p>
               <p className="stat-number mt-1 text-2xl text-stone-900 dark:text-stone-100">
@@ -325,7 +325,7 @@ export default function HomeView({
             </Link>
             <Link
               href={PRO_LEADS_HREF}
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
+              className="card-link hover:border-oaktend-400 dark:hover:border-oaktend-400"
             >
               <p className="stat-label">Open jobs</p>
               <p className="stat-number mt-1 text-2xl text-stone-900 dark:text-stone-100">
@@ -340,7 +340,7 @@ export default function HomeView({
                 leads board instead, the list this stat actually counts. */}
             <Link
               href={`${PRO_LEADS_HREF}#your-jobs`}
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
+              className="card-link hover:border-oaktend-400 dark:hover:border-oaktend-400"
             >
               <p className="stat-label">Active jobs</p>
               <p className="stat-number mt-1 text-2xl text-stone-900 dark:text-stone-100">
@@ -353,7 +353,7 @@ export default function HomeView({
                 leads board's results hero uses. */}
             <Link
               href="/pro/business"
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
+              className="card-link hover:border-oaktend-400 dark:hover:border-oaktend-400"
             >
               <p className="stat-label">
                 {appliedCount >= 3 ? "Win rate" : "Applications"}
@@ -388,7 +388,7 @@ export default function HomeView({
               </p>
               <Link
                 href="/pro/business"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                className="inline-flex text-sm font-medium text-oaktend-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
               >
                 See the breakdown
               </Link>
@@ -401,9 +401,9 @@ export default function HomeView({
               </p>
               <Link
                 href="/pro/plus?reason=leads"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                className="inline-flex text-sm font-medium text-oaktend-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
               >
-                See Hearth Pro
+                See OakTend Pro
               </Link>
             </>
           )}
@@ -422,7 +422,7 @@ export default function HomeView({
               </p>
               <Link
                 href="/pro/billing"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                className="inline-flex text-sm font-medium text-oaktend-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
               >
                 See it in your wallet
               </Link>
@@ -430,7 +430,7 @@ export default function HomeView({
                   to /pro/feedback open after the credit is collected. */}
               <Link
                 href="/pro/feedback"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                className="inline-flex text-sm font-medium text-oaktend-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
               >
                 Report a bug
               </Link>
@@ -449,7 +449,7 @@ export default function HomeView({
               </p>
               <Link
                 href="/pro/feedback"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                className="inline-flex text-sm font-medium text-oaktend-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
               >
                 Report another bug
               </Link>

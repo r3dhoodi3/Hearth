@@ -65,7 +65,7 @@ describe("ProNudge", () => {
     expect(screen.getByText(/Try Pro free for/)).toBeInTheDocument();
   });
 
-  it("says 'See Hearth Pro' when there is no trial to offer", () => {
+  it("says 'See OakTend Pro' when there is no trial to offer", () => {
     render(
       <ProNudge
         userId="u1"
@@ -74,7 +74,7 @@ describe("ProNudge", () => {
         monthlyCreditDollars={10}
       />
     );
-    expect(screen.getByText("See Hearth Pro")).toBeInTheDocument();
+    expect(screen.getByText("See OakTend Pro")).toBeInTheDocument();
   });
 
   it("hides itself for the rest of the day when dismissed, and stamps the day", () => {
@@ -87,7 +87,7 @@ describe("ProNudge", () => {
       />
     );
     fireEvent.click(screen.getByLabelText("Hide this for today"));
-    expect(screen.queryByText("Hearth Pro")).toBeNull();
+    expect(screen.queryByText("OakTend Pro")).toBeNull();
     expect(window.localStorage.getItem(nudgeKey("u1"))).toBe(
       String(epochDay())
     );
@@ -103,7 +103,7 @@ describe("ProNudge", () => {
         monthlyCreditDollars={10}
       />
     );
-    expect(screen.queryByText("Hearth Pro")).toBeNull();
+    expect(screen.queryByText("OakTend Pro")).toBeNull();
   });
 
   it("comes back the next day", () => {
@@ -116,7 +116,7 @@ describe("ProNudge", () => {
         monthlyCreditDollars={10}
       />
     );
-    expect(screen.getByText("Hearth Pro")).toBeInTheDocument();
+    expect(screen.getByText("OakTend Pro")).toBeInTheDocument();
   });
 
   it("keeps one pro's dismissal out of another's", () => {
@@ -129,7 +129,7 @@ describe("ProNudge", () => {
         monthlyCreditDollars={10}
       />
     );
-    expect(screen.getByText("Hearth Pro")).toBeInTheDocument();
+    expect(screen.getByText("OakTend Pro")).toBeInTheDocument();
   });
 
   it("gives the dismiss control a real tap target", () => {

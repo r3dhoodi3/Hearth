@@ -99,7 +99,7 @@ describe("PlanToggle plan selection", () => {
     // One button, and it says what it does rather than naming free days a
     // returning subscriber will not get.
     expect(
-      within(pickerForm()).getByRole("button", { name: "Start Hearth Plus" })
+      within(pickerForm()).getByRole("button", { name: "Start OakTend Plus" })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
@@ -255,7 +255,7 @@ describe("PlanToggle checkout disclosure", () => {
   // getAllByText(...) with a length assertion is that: it also pins the count,
   // so a future edit that quietly drops one breakpoint's copy fails here.
   it("keeps the auto-renewal terms inside the checkout form, next to the button", () => {
-    // No trial, so the one button says what it does ("Start Hearth Plus")
+    // No trial, so the one button says what it does ("Start OakTend Plus")
     // without needing to tap a card first.
     render(<PlanToggle trialEligible={false} />);
     const form = pickerForm();
@@ -264,7 +264,7 @@ describe("PlanToggle checkout disclosure", () => {
     );
     expect(terms).toHaveLength(2);
     const button = within(form).getByRole("button", {
-      name: "Start Hearth Plus",
+      name: "Start OakTend Plus",
     });
     expect(button).toBeInTheDocument();
     // The desktop disclosure is still the element immediately before the
@@ -396,7 +396,7 @@ describe("PlanToggle phone checkout bar", () => {
   it("wraps the submit button in a sticky bottom bar, phone only", () => {
     render(<PlanToggle trialEligible={false} />);
     const button = within(pickerForm()).getByRole("button", {
-      name: "Start Hearth Plus",
+      name: "Start OakTend Plus",
     });
     const wrapper = button.parentElement as HTMLElement;
     expect(wrapper.className).toContain("max-sm:sticky");

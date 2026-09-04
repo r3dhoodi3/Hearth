@@ -12,7 +12,7 @@ const SITE_URL =
 export const metadata: Metadata = {
   title: "Cookie and Tracking Notice",
   description:
-    "The first-party cookies Hearth sets, what's kept only in your browser's local storage, and why there's no ad tracker anywhere in the app.",
+    "The first-party cookies OakTend sets, what's kept only in your browser's local storage, and why there's no ad tracker anywhere in the app.",
   alternates: {
     canonical: `${SITE_URL}/cookies`,
   },

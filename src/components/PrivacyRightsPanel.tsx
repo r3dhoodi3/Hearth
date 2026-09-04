@@ -44,7 +44,7 @@ export default function PrivacyRightsPanel({
           Your privacy rights
         </h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          What Hearth collects, who we send it to, and how to get it, fix it, or
+          What OakTend collects, who we send it to, and how to get it, fix it, or
           delete it. For the full policy, see our{" "}
           <Link
             href="/privacy"
@@ -142,11 +142,11 @@ export default function PrivacyRightsPanel({
           />
           <Right
             term="Opt out of sale or sharing"
-            detail="Hearth does not sell your personal information, and does not share it for cross-context behavioural advertising. There are no advertising or analytics trackers on this site. Because there is nothing to opt out of, there is no Do Not Sell or Share link."
+            detail="OakTend does not sell your personal information, and does not share it for cross-context behavioural advertising. There are no advertising or analytics trackers on this site. Because there is nothing to opt out of, there is no Do Not Sell or Share link."
           />
           <Right
             term="Limit how we use sensitive information"
-            detail="Some of what you give us is sensitive: your home's precise location, financial details, and the contents of your messages. We use these only to provide Hearth itself - matching you with pros, running your maintenance plan, delivering your messages - never to infer characteristics about you and never for advertising. That is already the limited use this right entitles you to."
+            detail="Some of what you give us is sensitive: your home's precise location, financial details, and the contents of your messages. We use these only to provide OakTend itself - matching you with pros, running your maintenance plan, delivering your messages - never to infer characteristics about you and never for advertising. That is already the limited use this right entitles you to."
           />
           <Right
             term="No retaliation"
@@ -199,7 +199,7 @@ export default function PrivacyRightsPanel({
           </h2>
         </div>
         <p className="mt-4 text-sm text-stone-600 dark:text-stone-400">
-          These companies process data on Hearth&apos;s behalf so the product can
+          These companies process data on OakTend&apos;s behalf so the product can
           work. Each is limited by contract to doing only what we ask. None of
           them buys your data, and none of them is an advertising network.
         </p>

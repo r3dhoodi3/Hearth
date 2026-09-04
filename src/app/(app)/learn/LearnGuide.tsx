@@ -6,8 +6,8 @@ import { useEffect, useId, useState } from "react";
 // inline, a short summary that's always visible, and checkable upkeep steps
 // (remembered per system) once expanded.
 //
-// It used to end with two buttons that fired a question into the Ask Hearth box
-// at the top of this page. Both are gone with that box: Ask Hearth lives in the
+// It used to end with two buttons that fired a question into the Ask OakTend box
+// at the top of this page. Both are gone with that box: Ask OakTend lives in the
 // Messages tab now, and Learn is the guides on their own.
 export default function LearnGuide({
   systemType,

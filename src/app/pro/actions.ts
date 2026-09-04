@@ -102,7 +102,7 @@ type LicenseVerifyResult = CslbLookupResult & {
 
 // The account holder's own name, for the identity check below. A sole
 // proprietor's CSLB record is registered to the PERSON ("DOE JOHN"), not to
-// the trade name they typed into Hearth, so the personal name has to be one
+// the trade name they typed into OakTend, so the personal name has to be one
 // of the candidates or every legitimate sole proprietor would fail. Reads the
 // users table with the admin client (0067 stripped column-level SELECT on
 // several tables and this runs server-side off an id resolved from the
@@ -125,7 +125,7 @@ async function accountFullName(
   }
 }
 
-// Is this license number already VERIFIED on some other Hearth account?
+// Is this license number already VERIFIED on some other OakTend account?
 //
 // One license, one account (migration 0125). This is the app-side half: it
 // gives the second claimant an honest, explainable "already verified
@@ -184,7 +184,7 @@ async function verifiedElsewhere(
 // fetch failure must never be treated as a failed license check.
 //
 // 0125: an 'active' license is not enough on its own. The CSLB-registered
-// name has to line up with a name Hearth knows for this account
+// name has to line up with a name OakTend knows for this account
 // (src/lib/licenseMatch.ts), and the number must not already be verified on
 // another account. Either gate failing writes 'failed' with a failure_reason
 // the profile page turns into plain-English copy plus a dispute form.
@@ -194,7 +194,7 @@ async function verifyContractorLicense(
   licenseNumber: string,
   currentVerifiedAt: string | null | undefined,
   currentDetail?: unknown,
-  // Every name Hearth knows for this account: the company name on the
+  // Every name OakTend knows for this account: the company name on the
   // contractors row and the account holder's own full name. A CSLB record
   // that matches NONE of them is somebody else's license (0125). Callers pass
   // what they have; nulls are ignored.
@@ -718,7 +718,7 @@ export async function saveCompanyAction(formData: FormData) {
   }
 
   // Trial-abuse signals (src/lib/risk, migration 0130). A pro who burned a free
-  // Hearth Pro trial and came back under a new email usually brings the same
+  // OakTend Pro trial and came back under a new email usually brings the same
   // two things with them: the company's phone number and the company's name.
   // Both are normalized before hashing (digits only for the phone, punctuation
   // and legal suffixes stripped for the name, see normalizeSignalValue), so
@@ -807,7 +807,7 @@ export async function saveCompanyAction(formData: FormData) {
 
   // TCPA SMS CONSENT (users.sms_consent / sms_consent_at, migration 0075).
   //
-  // Why it is here at all: every pro-side text Hearth already builds and pays
+  // Why it is here at all: every pro-side text OakTend already builds and pays
   // for - the new-job alert, the winback credit, the weekly digest, the
   // compliance reminder - is dropped on the floor by the gate in
   // src/lib/notify.ts unless this column is true, and until now the pro side
@@ -1128,7 +1128,7 @@ export async function saveCompanyAction(formData: FormData) {
 
   // Orange County launch gate (0074), first-time company creation only. A pro
   // who didn't check the box never gets a contractors row at all: instead
-  // they land on a waitlist so Hearth can reach out when it opens in their
+  // they land on a waitlist so OakTend can reach out when it opens in their
   // area. The signup form no longer routes here (its two city checkboxes
   // require at least one, and the guard above catches an empty answer), so
   // this now only catches a post that carries no service-area answer at all.
@@ -1651,7 +1651,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
     );
   } else if (result.failureReason === "duplicate_license") {
     await setFlash(
-      "This license number is already verified on a different Hearth account. If that's not you, file a dispute below and we'll look into it.",
+      "This license number is already verified on a different OakTend account. If that's not you, file a dispute below and we'll look into it.",
       "error"
     );
   } else if (result.decision === "verified") {
@@ -1680,12 +1680,12 @@ export async function verifyLicenseNowAction(formData: FormData) {
 // "Start my background check" button on /pro/profile (0057): opt-in only,
 // never auto-run. Creates a Checkr candidate + invitation and saves the
 // candidate id so the webhook (src/app/api/checkr/webhook) can match Checkr's
-// events back to this contractor. Checkr does the rest by email - Hearth
+// events back to this contractor. Checkr does the rest by email - OakTend
 // never collects the candidate's sensitive info itself.
 export async function startBackgroundCheckAction(formData: FormData) {
   const contractor = await assertContractor();
 
-  // Every check costs Hearth real money, so only the two states that
+  // Every check costs OakTend real money, so only the two states that
   // legitimately allow a (re)start may reach the Checkr API: 'none' (never
   // started) and 'consider' (retry after a non-clear result). 'invited',
   // 'pending', and 'clear' all bail out here as the cheap early exit; the
@@ -1713,9 +1713,9 @@ export async function startBackgroundCheckAction(formData: FormData) {
     return;
   }
 
-  // Earn-in gate: Hearth pays Checkr for every check, so the perk unlocks
+  // Earn-in gate: OakTend pays Checkr for every check, so the perk unlocks
   // after BACKGROUND_CHECK_MIN_PAID_LEADS paid lead applications rather than
-  // at signup. Without this, an account could be created, verified on Hearth's
+  // at signup. Without this, an account could be created, verified on OakTend's
   // dime, and abandoned the same afternoon.
   //
   // FAILS CLOSED on a count error (countPaidLeadApplications returns null):
@@ -1733,7 +1733,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
   }
   if (paidLeads < BACKGROUND_CHECK_MIN_PAID_LEADS) {
     await setFlash(
-      `Hearth covers your background check after ${BACKGROUND_CHECK_MIN_PAID_LEADS} paid leads - you're at ${paidLeads} of ${BACKGROUND_CHECK_MIN_PAID_LEADS}.`,
+      `OakTend covers your background check after ${BACKGROUND_CHECK_MIN_PAID_LEADS} paid leads - you're at ${paidLeads} of ${BACKGROUND_CHECK_MIN_PAID_LEADS}.`,
       "info"
     );
     revalidatePath("/pro/profile");
@@ -1743,7 +1743,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
   // The check runs against a PERSON, so it needs their legal name, not the
   // business name ("Bob's Plumbing LLC" split into first/last would risk a
   // check against a garbled identity). The card's form collects it
-  // explicitly and it goes only to Checkr, never stored by Hearth.
+  // explicitly and it goes only to Checkr, never stored by OakTend.
   const firstName = String(formData.get("legal_first_name") ?? "")
     .trim()
     .slice(0, 80);
@@ -1758,7 +1758,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
 
   // Checkr requires a work location state. contractors.service_state (0046)
   // isn't in the generated types, so it's read off an any-cast; a pro who
-  // left it blank ("all states") falls back to CA, matching Hearth's
+  // left it blank ("all states") falls back to CA, matching OakTend's
   // current Orange County, CA launch markets.
   const workLocationState =
     (contractor as any).service_state || "CA";
@@ -1883,7 +1883,7 @@ export async function updateLeadStatusAction(formData: FormData) {
   const baseFlash = `Lead marked ${leadStatusLabel(status)}`;
   await setFlash(baseFlash);
 
-  // Hearth Pro perk: when a member marks a job Won, ask the homeowner for a
+  // OakTend Pro perk: when a member marks a job Won, ask the homeowner for a
   // review automatically. Only on the closed transition (never for lost /
   // accepted / new), only for live Pro plans, and best-effort throughout: a
   // hiccup here must never break the status update. `before` also proves the

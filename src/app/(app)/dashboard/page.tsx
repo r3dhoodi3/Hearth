@@ -363,7 +363,7 @@ export default async function HomePage(
   const season = seasonForMonth(now.getMonth());
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  // Proactive briefing: the top few things Hearth would flag right now, ranked
+  // Proactive briefing: the top few things OakTend would flag right now, ranked
   // the same way the systems list is - open issues first (urgent on top), then
   // systems past/near their life, then aging ones, with a seasonal nudge to
   // round it out. Each item carries a prefilled action so it's one tap to act.
@@ -721,7 +721,7 @@ export default async function HomePage(
       {/* Proactive weather + safety-recall alerts; self-hides when there's none */}
       <HomeAlerts propertyId={property.id} />
 
-      {/* A phone-only "Ask Hearth anything" row used to sit here. Ask Hearth
+      {/* A phone-only "Ask OakTend anything" row used to sit here. Ask OakTend
           has one home now, the Messages tab: the pinned row at the top of
           /chats. Scattering doors to it across the app is what made it feel
           like the whole product, and it is not. */}
@@ -1162,10 +1162,10 @@ export default async function HomePage(
         </div>
       </section>
 
-      {/* Hearth Plus: one cohesive "plan ahead" block (plan + premium tools) */}
+      {/* OakTend Plus: one cohesive "plan ahead" block (plan + premium tools) */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-          {plus ? "Your Hearth Plus tools" : "Plan ahead with Hearth Plus"}
+          {plus ? "Your OakTend Plus tools" : "Plan ahead with OakTend Plus"}
         </h2>
         <div className="card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">

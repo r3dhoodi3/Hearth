@@ -122,7 +122,7 @@ describe("selectLaunchCities", () => {
     });
   });
 
-  it("drops a place Hearth does not list rather than storing it", () => {
+  it("drops a place OakTend does not list rather than storing it", () => {
     // Corona del Mar is inside Newport Beach; Long Beach is another county;
     // North Tustin, Rossmoor and Coto de Caza share a ZIP with a city and are
     // deliberately not pickable (see LAUNCH_COMMUNITIES in serviceArea.ts).

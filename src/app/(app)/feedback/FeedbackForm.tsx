@@ -11,7 +11,7 @@ import { submitFeedbackAction } from "./actions";
 // gripe. Everything goes straight into app_feedback (migration 0133), which
 // nobody but the service role can read back, ever.
 //
-// NO credit language here, on purpose: Hearth has no homeowner wallet or
+// NO credit language here, on purpose: OakTend has no homeowner wallet or
 // credit to pay a bounty out of (the $5 first-report credit is a pro-side
 // thing, src/lib/proFeedback.ts), so promising one would be a bug of its own.
 //

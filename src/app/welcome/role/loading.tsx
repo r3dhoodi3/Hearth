@@ -1,7 +1,7 @@
 import { Skeleton, SkeletonLine } from "@/components/Skeleton";
 
 // Mirrors welcome/role/page.tsx: the centered card with the "Welcome to
-// Hearth" heading and the two role buttons. The page awaits the signed-in
+// OakTend" heading and the two role buttons. The page awaits the signed-in
 // user and their sides before it knows whether to render the picker at all.
 export default function Loading() {
   return (

@@ -54,7 +54,7 @@ function toBase64(file: File): Promise<string> {
 type Note = { text: string; tone: "error" | "ok" | "working" };
 
 // The vault's "add" surface: pick a photo/PDF of a warranty, manual, receipt,
-// or an appliance data plate; Hearth reads the facts off it; the owner confirms
+// or an appliance data plate; OakTend reads the facts off it; the owner confirms
 // and saves. Then the saved card offers a one-tap "Add to my home".
 //
 // The file itself is only uploaded to storage once the owner actually saves
@@ -120,7 +120,7 @@ export default function DocumentUpload({
     // SVG). accept="image/*,application/pdf" is only a browser hint; a naive
     // client check like `type.startsWith("image/")` would still let
     // image/svg+xml through, which can carry a <script> and gets served back
-    // off Hearth's own storage origin (security audit finding #7).
+    // off OakTend's own storage origin (security audit finding #7).
     if (picked.type === "image/svg+xml") {
       setPhase("idle");
       setNote({
@@ -159,7 +159,7 @@ export default function DocumentUpload({
     const objectUrl = URL.createObjectURL(picked);
     setPreview(objectUrl);
 
-    // Ask Hearth to read the facts off it. The controller lets the Cancel
+    // Ask OakTend to read the facts off it. The controller lets the Cancel
     // affordance below abort this mid-flight; fetchWithTimeout also aborts
     // it on its own after 90s so a hung endpoint can't strand the picker.
     const controller = new AbortController();
@@ -246,7 +246,7 @@ export default function DocumentUpload({
     );
     setNote({
       text: extracted
-        ? "Here's what Hearth read. Check it and save."
+        ? "Here's what OakTend read. Check it and save."
         : "Couldn't read it automatically. Fill in what you like and save.",
       tone: "working",
     });
@@ -342,7 +342,7 @@ export default function DocumentUpload({
             href={FREE_TASTE_PAYWALL.document.link}
             className="btn-primary inline-block"
           >
-            Get Hearth Plus
+            Get OakTend Plus
           </Link>
         </div>
       )}
@@ -354,7 +354,7 @@ export default function DocumentUpload({
               Add a warranty, manual, receipt, or a photo of a model label
             </span>
             <span className="text-xs text-stone-500 dark:text-stone-400">
-              Hearth reads it and fills in your home details for you
+              OakTend reads it and fills in your home details for you
             </span>
             <input
               type="file"

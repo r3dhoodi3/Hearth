@@ -101,7 +101,7 @@ export default function BillingView({
           each one works.{" "}
           <Link
             href="/pro/help#lead-pricing"
-            className="font-medium text-hearth-700 underline dark:text-hearth-300"
+            className="font-medium text-oaktend-700 underline dark:text-oaktend-300"
           >
             How lead pricing works
           </Link>
@@ -147,11 +147,11 @@ export default function BillingView({
           with no scroll. */}
       <section className="grid gap-4 max-sm:grid-cols-2 max-sm:gap-2 sm:grid-cols-2">
         <div className="card-hero max-sm:p-2.5">
-          <p className="stat-label text-hearth-800 dark:text-hearth-400">Lead credit</p>
-          <p className="stat-number mt-1 text-4xl max-sm:text-xl text-hearth-900 dark:text-hearth-200">
+          <p className="stat-label text-oaktend-800 dark:text-oaktend-400">Lead credit</p>
+          <p className="stat-number mt-1 text-4xl max-sm:text-xl text-oaktend-900 dark:text-oaktend-200">
             {cashLabel}
           </p>
-          <p className="mt-1 text-xs text-hearth-700">Never expires.</p>
+          <p className="mt-1 text-xs text-oaktend-700">Never expires.</p>
         </div>
         <div className="card border-amber-200 bg-amber-50 max-sm:p-2.5 dark:border-amber-500/30 dark:bg-amber-500/15">
           <p className="stat-label text-amber-800 dark:text-amber-400">Bonus credit</p>
@@ -180,7 +180,7 @@ export default function BillingView({
           // Trialing member: the form above is deliberately showing the plain
           // tier bonus, because that is what this deposit will actually earn.
           // Say when the match starts rather than let the number look broken.
-          <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-3 text-xs text-hearth-800 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+          <div className="rounded-xl border border-oaktend-200 bg-oaktend-50 p-3 text-xs text-oaktend-800 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300">
             <span className="font-semibold">
               Your +{PRO_DEPOSIT_BOOST_PTS}% deposit match and your $10 monthly
               lead credit start when your free trial converts.
@@ -189,7 +189,7 @@ export default function BillingView({
             above. Every other Pro perk is already on.
           </div>
         ) : proMember ? (
-          <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-3 text-xs text-hearth-800 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+          <div className="rounded-xl border border-oaktend-200 bg-oaktend-50 p-3 text-xs text-oaktend-800 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300">
             <span className="font-semibold">Pro member bonus applied:</span>{" "}
             every tier below earns +{PRO_DEPOSIT_BOOST_PTS} pts
             {tiers.length > 0 && (
@@ -215,11 +215,11 @@ export default function BillingView({
           // card next to the form. The button leads with the free trial only
           // when this pro will actually get one; /pro/plus still owns the
           // full auto-renewal disclosure and the checkout itself.
-          <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-4 dark:border-hearth-500/30 dark:bg-hearth-500/15">
-            <p className="text-sm font-semibold text-hearth-800 dark:text-hearth-200">
+          <div className="rounded-xl border border-oaktend-200 bg-oaktend-50 p-4 dark:border-oaktend-500/30 dark:bg-oaktend-500/15">
+            <p className="text-sm font-semibold text-oaktend-800 dark:text-oaktend-200">
               Pro members get +{PRO_DEPOSIT_BOOST_PTS}% on every deposit
             </p>
-            <p className="mt-1 text-sm text-hearth-700 dark:text-hearth-300">
+            <p className="mt-1 text-sm text-oaktend-700 dark:text-oaktend-300">
               Same money in, more lead credit out. Membership never changes
               which jobs you can see or apply to.
             </p>
@@ -230,7 +230,7 @@ export default function BillingView({
                 (trialEligible false) starts paying right away, so their match
                 is live from day one and they don't see this line. */}
             {trialEligible && (
-              <p className="mt-1 text-xs text-hearth-700 dark:text-hearth-300">
+              <p className="mt-1 text-xs text-oaktend-700 dark:text-oaktend-300">
                 Your +{PRO_DEPOSIT_BOOST_PTS}% match starts when your free trial
                 converts and your first payment goes through. Deposits during
                 the trial earn the normal tier bonus.
@@ -239,7 +239,7 @@ export default function BillingView({
             <ProUpgradeCta
               trialEligible={trialEligible}
               className="btn-primary mt-3 inline-block"
-              sublineClassName="mt-2 text-xs text-hearth-700 dark:text-hearth-300"
+              sublineClassName="mt-2 text-xs text-oaktend-700 dark:text-oaktend-300"
             />
           </div>
         )}

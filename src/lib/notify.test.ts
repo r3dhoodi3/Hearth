@@ -91,7 +91,7 @@ describe("email opt-out exemption", () => {
 
   beforeEach(() => {
     vi.stubEnv("RESEND_API_KEY", "test-key");
-    vi.stubEnv("RESEND_FROM", "Hearth <hello@example.com>");
+    vi.stubEnv("RESEND_FROM", "OakTend <hello@example.com>");
     // sendEmail signs an unsubscribe link with this secret; a real value here
     // is what lets execution reach the fetch() call at all instead of the
     // outer try/catch silently swallowing a thrown signing error.
@@ -127,7 +127,7 @@ describe("email opt-out exemption", () => {
       {
         userId: "user-1",
         kind: "renewal_acknowledgment",
-        title: "Your Hearth Plus subscription",
+        title: "Your OakTend Plus subscription",
         email,
       },
       /* knownOptOut */ true

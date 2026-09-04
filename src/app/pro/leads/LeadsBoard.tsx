@@ -71,7 +71,7 @@ import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 import { STATUS_LABEL } from "../leadStatusLabel";
 
 const STATUS_STYLE: Record<string, string> = {
-  new: "border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300",
+  new: "border-oaktend-200 bg-oaktend-50 text-oaktend-700 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300",
   accepted: "border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300",
   // Done-and-dusted reads muted so it can't be confused with the active green.
   closed: "border-stone-200 bg-stone-100 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300",
@@ -341,7 +341,7 @@ export default function LeadsBoard({
                   aria-pressed={activeSort === o.value}
                   className={`inline-flex min-h-[44px] touch-manipulation items-center rounded-full border px-3 py-1.5 text-xs transition-colors active:bg-stone-100 sm:inline-block sm:min-h-0 dark:active:bg-white/10 ${
                     activeSort === o.value
-                      ? "border-hearth-300 bg-hearth-50 font-medium text-hearth-700 dark:border-hearth-500/40 dark:bg-hearth-500/15 dark:text-hearth-300"
+                      ? "border-oaktend-300 bg-oaktend-50 font-medium text-oaktend-700 dark:border-oaktend-500/40 dark:bg-oaktend-500/15 dark:text-oaktend-300"
                       : "border-stone-200 text-stone-500 hover:border-stone-300 dark:border-white/10 dark:text-stone-400 dark:hover:border-stone-600"
                   }`}
                 >
@@ -361,17 +361,17 @@ export default function LeadsBoard({
               No open jobs in your trades right now.
             </p>
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-              Hearth is growing; new jobs land here the moment homeowners post
+              OakTend is growing; new jobs land here the moment homeowners post
               them.
             </p>
             <ul className="mx-auto mt-4 max-w-md space-y-2 text-left text-sm">
               <li className="flex items-start gap-2 text-stone-600 dark:text-stone-400">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-oaktend-600" aria-hidden="true" />
                 <span>
                   Make your page worth picking:{" "}
                   <Link
                     href="/pro/profile"
-                    className="font-medium text-hearth-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                    className="font-medium text-oaktend-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
                   >
                     complete your public page
                   </Link>{" "}
@@ -381,14 +381,14 @@ export default function LeadsBoard({
               </li>
               {!hasApplied && (
                 <li className="flex items-start gap-2 text-stone-600 dark:text-stone-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-oaktend-600" aria-hidden="true" />
                   <span>
                     Not chosen? The fee comes back on its own as wallet
                     credit, not cash, spendable on any lead, and it expires
                     after 60 days.{" "}
                     <Link
                       href="/pro/billing"
-                      className="font-medium text-hearth-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                      className="font-medium text-oaktend-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
                     >
                       Fund your wallet
                     </Link>{" "}
@@ -401,7 +401,7 @@ export default function LeadsBoard({
                   The membership upsell version returns when the flag flips. */}
               {COLD_START_FREE_ALERTS ? (
                 <li className="flex items-start gap-2 text-stone-600 dark:text-stone-400">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-oaktend-600" aria-hidden="true" />
                   <span>
                     You&apos;ll be alerted the moment a job posts in your
                     trades, so you never check an empty board.
@@ -410,11 +410,11 @@ export default function LeadsBoard({
               ) : (
                 !isProMember && (
                   <li className="flex items-start gap-2 text-stone-600 dark:text-stone-400">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-hearth-600" aria-hidden="true" />
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-oaktend-600" aria-hidden="true" />
                     <span>
                       <Link
                         href="/pro/plus"
-                        className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                        className="font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
                       >
                         {proTrialEligible
                           ? proCtaLabel(true)
@@ -532,7 +532,7 @@ export default function LeadsBoard({
                           )}
                           {j.feeGlance}
                           {j.discountKind === "member" && (
-                            <span className="chip ml-1 border border-hearth-200 bg-hearth-50 align-middle font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                            <span className="chip ml-1 border border-oaktend-200 bg-oaktend-50 align-middle font-semibold text-oaktend-700 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300">
                               Pro
                             </span>
                           )}
@@ -576,7 +576,7 @@ export default function LeadsBoard({
                       )}
                       <span className="ml-auto flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
                         {j.introPrice && (
-                          <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                          <span className="chip border border-oaktend-200 bg-oaktend-50 font-semibold text-oaktend-700 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300">
                             First big-ticket lead
                           </span>
                         )}
@@ -585,7 +585,7 @@ export default function LeadsBoard({
                             whichever actually won - never both, and never the
                             loser silently applied underneath. */}
                         {j.discountKind === "member" && (
-                          <span className="chip border border-hearth-200 bg-hearth-50 font-semibold text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                          <span className="chip border border-oaktend-200 bg-oaktend-50 font-semibold text-oaktend-700 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300">
                             Pro
                           </span>
                         )}
@@ -633,7 +633,7 @@ export default function LeadsBoard({
                       above sm. */}
                   <div>
                     <details className="group sm:hidden">
-                      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-medium text-hearth-700 [&::-webkit-details-marker]:hidden dark:text-hearth-300">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-medium text-oaktend-700 [&::-webkit-details-marker]:hidden dark:text-oaktend-300">
                         Details
                         <svg
                           viewBox="0 0 20 20"
@@ -658,7 +658,7 @@ export default function LeadsBoard({
                       the cap is already hit. CR5 remove #3: "X of N spots
                       taken" read as the same blind-bidding pressure pros
                       resent about Angi/HomeAdvisor (pay for a lead, then find
-                      out how many others also bought it); Hearth's own
+                      out how many others also bought it); OakTend's own
                       guarantees already soften the real risk, so this now
                       reads as transparency, not a countdown - red only once
                       the job is actually full, same as before. */}
@@ -679,7 +679,7 @@ export default function LeadsBoard({
                     // Messages for this trade, so buying a second lead would
                     // just double-charge them for the same relationship. The
                     // card reopens for applying once that job wraps up.
-                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-hearth-200 bg-hearth-50 px-3 py-2 text-sm text-hearth-800 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-oaktend-200 bg-oaktend-50 px-3 py-2 text-sm text-oaktend-800 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300">
                       <span>
                         You already have an active {j.conflict.categoryLabel} job
                         with this homeowner.

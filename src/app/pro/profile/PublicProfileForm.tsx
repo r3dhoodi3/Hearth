@@ -147,7 +147,7 @@ export default function PublicProfileForm({
   const licenseLocked = hasLicense && verifyStatus === "verified";
   const verifiedAt = contractor.license_verified_at ?? null;
   const verifyDetail = contractor.license_verify_detail ?? null;
-  // 0125: a failure Hearth caused (identity), not one CSLB reported. These two
+  // 0125: a failure OakTend caused (identity), not one CSLB reported. These two
   // are the only ones a pro can appeal, because they're the only ones a human
   // can resolve - a canceled or expired license is fixed with the state, not
   // with support.
@@ -294,7 +294,7 @@ export default function PublicProfileForm({
                   hidden marker beside it is what tells saveCompanyAction
                   "unticked" apart from "this form did not ask" (an unticked
                   checkbox posts nothing at all). Without this box every pro
-                  text Hearth already builds is dropped by the gate in
+                  text OakTend already builds is dropped by the gate in
                   src/lib/notify.ts. See saveProSmsConsent in
                   src/app/pro/actions.ts.
                   TODO(legal): have counsel review this consent copy before
@@ -305,7 +305,7 @@ export default function PublicProfileForm({
                   type="checkbox"
                   name="sms_consent"
                   defaultChecked={smsConsent}
-                  className="mt-1 h-6 w-6 shrink-0 rounded border-stone-300 text-hearth-600 focus:ring-hearth-600 dark:border-white/20"
+                  className="mt-1 h-6 w-6 shrink-0 rounded border-stone-300 text-oaktend-600 focus:ring-oaktend-600 dark:border-white/20"
                 />
                 <span className="text-sm text-stone-600 dark:text-stone-400">
                   Text me when a job matches or a homeowner replies. Message
@@ -341,7 +341,7 @@ export default function PublicProfileForm({
                   }
                 />
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Hearth serves all of Orange County. You only see, and only
+                  OakTend serves all of Orange County. You only see, and only
                   pay for, jobs in the cities you keep checked here.
                 </p>
               </div>
@@ -352,7 +352,7 @@ export default function PublicProfileForm({
                   <FieldIcon>
                     <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
                   </FieldIcon>
-                  {/* Locked to California while Hearth serves CA only. The
+                  {/* Locked to California while OakTend serves CA only. The
                       hidden input still posts service_state=CA, the two-letter
                       code saveCompanyAction and the CSLB check expect. */}
                   <div className="input cursor-not-allowed select-none bg-stone-100 pl-9 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
@@ -361,7 +361,7 @@ export default function PublicProfileForm({
                   <input type="hidden" name="service_state" value="CA" />
                 </div>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Hearth serves California only right now, so this is set for
+                  OakTend serves California only right now, so this is set for
                   you.
                 </p>
               </div>
@@ -456,7 +456,7 @@ export default function PublicProfileForm({
                           <p className="mt-1 text-xs text-red-500 dark:text-red-400">
                             {disputableReason === "name_mismatch"
                               ? "The CSLB lists this license under a different name than your account. If this is your license, tell us and we will review it."
-                              : "This license number is already verified on another Hearth account. If someone else used your license, file a dispute and we will investigate."}
+                              : "This license number is already verified on another OakTend account. If someone else used your license, file a dispute and we will investigate."}
                           </p>
                         ) : (
                           <p className="mt-1 text-xs text-red-500 dark:text-red-400">

@@ -9,7 +9,7 @@ import { LEGAL } from "@/lib/legal";
 // off, regardless of what the /account checkbox says, or the "Reply STOP to
 // opt out." line on every text we send would be a lie.
 //
-// PUBLIC route: Twilio calls this with no Hearth session, so it must be
+// PUBLIC route: Twilio calls this with no OakTend session, so it must be
 // reachable with no auth. The middleware allowlist entry for
 // /api/twilio/inbound is added elsewhere (not this file).
 //

@@ -1,4 +1,4 @@
-# Hearth Security Audit — 2026-07-19
+# OakTend Security Audit — 2026-07-19
 
 Consolidated findings from an 8-agent red-team pass + a manual ("Fable") deep-verification
 pass. READ-ONLY audit; **no code was changed and nothing was committed.** Branch
@@ -124,7 +124,7 @@ Severity legend: CRITICAL / HIGH = fix before launch. MED = fix soon. LOW = hard
 ### 10. AI + promo features fail CLOSED if code ships before migrations 0070/0071 — DEPLOY-ORDER
 - **CONFIRMED.** `aiUsage.ts` fails closed without `bump_ai_usage` (0070) → all AI routes go
   dark; `hasClaimedPromo` fails closed without 0071. Given the live-DB lag, deploying app code
-  first bricks Ask Hearth, quote analyzer, etc.
+  first bricks Ask OakTend, quote analyzer, etc.
 - **Fix:** apply the 0067–0081 bundle before/with the deploy; gate the deploy on it.
 
 ---

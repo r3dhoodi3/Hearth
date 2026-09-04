@@ -220,7 +220,7 @@ describe("/pro-terms: the insurance and venue clause (source pin)", () => {
 
   it("states the venue relationship and sole responsibility", () => {
     expect(terms).toContain(
-      "Hearth is a venue that connects homeowners with independent"
+      "OakTend is a venue that connects homeowners with independent"
     );
     expect(terms).toContain("does not perform, supervise, or guarantee the");
     expect(terms).toContain("solely responsible for the work you perform");

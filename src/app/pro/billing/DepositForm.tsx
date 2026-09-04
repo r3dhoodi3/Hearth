@@ -156,8 +156,8 @@ export default function DepositForm({
               // chip on a desktop is exactly the chip that was here before.
               className={`rounded-lg border px-3 py-1.5 text-sm max-sm:inline-flex max-sm:min-h-11 max-sm:items-center ${
                 active
-                  ? "border-hearth-500 bg-hearth-50 text-hearth-800 dark:border-hearth-400 dark:bg-hearth-900/40 dark:text-hearth-200"
-                  : "border-stone-200 text-stone-600 hover:border-hearth-300 dark:border-white/10 dark:text-stone-300 dark:hover:border-hearth-400"
+                  ? "border-oaktend-500 bg-oaktend-50 text-oaktend-800 dark:border-oaktend-400 dark:bg-oaktend-900/40 dark:text-oaktend-200"
+                  : "border-stone-200 text-stone-600 hover:border-oaktend-300 dark:border-white/10 dark:text-stone-300 dark:hover:border-oaktend-400"
               }`}
             >
               ${p}
@@ -167,7 +167,7 @@ export default function DepositForm({
         <button
           type="button"
           onClick={() => inputRef.current?.focus()}
-          className="rounded-lg border border-dashed border-stone-300 px-3 py-1.5 text-sm text-stone-500 hover:border-hearth-300 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400"
+          className="rounded-lg border border-dashed border-stone-300 px-3 py-1.5 text-sm text-stone-500 hover:border-oaktend-300 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-stone-400"
         >
           Custom
         </button>
@@ -230,7 +230,7 @@ export default function DepositForm({
           type="checkbox"
           checked={agreed}
           onChange={(e) => setAgreed(e.target.checked)}
-          className="accent-hearth-600 max-sm:h-5 max-sm:w-5"
+          className="accent-oaktend-600 max-sm:h-5 max-sm:w-5"
         />
         I understand and agree.
       </label>

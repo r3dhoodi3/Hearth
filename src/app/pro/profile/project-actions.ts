@@ -144,7 +144,7 @@ export async function saveProjectAction(formData: FormData) {
     if (existingCount >= FREE_PROJECT_LIMIT && !(await hasProPlan())) {
       await fail(
         `Free accounts can showcase up to ${FREE_PROJECT_LIMIT} projects. ` +
-          "Hearth Pro members get unlimited projects: see /pro/plus."
+          "OakTend Pro members get unlimited projects: see /pro/plus."
       );
     }
 

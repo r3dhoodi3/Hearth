@@ -1,7 +1,7 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 // =============================================================================
-// Hearth - per-user rate limit on the SMS opt-in confirmation text.
+// OakTend - per-user rate limit on the SMS opt-in confirmation text.
 //
 // users.phone is unverified and freely editable (see the header comment on
 // src/lib/privacy.ts for the same fact biting a different feature), so the

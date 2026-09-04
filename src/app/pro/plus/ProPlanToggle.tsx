@@ -88,7 +88,7 @@ const FREE_INCLUDES = [
   "A public page with your services, reviews, and contact info",
   "Up to 3 showcase projects",
   ...(COLD_START_FREE_ALERTS
-    ? ["Instant job alerts, free for every pro while Hearth is new"]
+    ? ["Instant job alerts, free for every pro while OakTend is new"]
     : []),
 ];
 
@@ -233,10 +233,10 @@ export default function ProPlanToggle({
     [
       "flex h-full flex-col rounded-xl border p-4 text-left transition-colors",
       plan === key
-        ? "border-hearth-600 ring-2 ring-hearth-600 ring-offset-1 ring-offset-hearth-50 dark:ring-offset-stone-900"
+        ? "border-oaktend-600 ring-2 ring-oaktend-600 ring-offset-1 ring-offset-oaktend-50 dark:ring-offset-stone-900"
         : "border-stone-200 hover:border-stone-300 dark:border-white/10 dark:hover:border-white/20",
       key === "yearly"
-        ? "bg-hearth-50 shadow-lift dark:bg-hearth-900/30"
+        ? "bg-oaktend-50 shadow-lift dark:bg-oaktend-900/30"
         : "bg-white dark:bg-stone-800",
     ].join(" ");
 
@@ -337,7 +337,7 @@ export default function ProPlanToggle({
           )}
           className={`relative order-1 sm:order-2 ${columnClass("yearly")}`}
         >
-          <span className="absolute -top-2.5 left-4 whitespace-nowrap rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-medium text-white max-sm:text-xs">
+          <span className="absolute -top-2.5 left-4 whitespace-nowrap rounded-full bg-oaktend-600 px-2 py-0.5 text-[10px] font-medium text-white max-sm:text-xs">
             Best value
           </span>
           <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
@@ -354,7 +354,7 @@ export default function ProPlanToggle({
           <span className="mt-0.5 block text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
             About {YEARLY_PER_DAY} a day
           </span>
-          <span className="mt-2 block text-xs font-medium text-hearth-700 max-sm:text-sm dark:text-hearth-300">
+          <span className="mt-2 block text-xs font-medium text-oaktend-700 max-sm:text-sm dark:text-oaktend-300">
             Save {YEARLY_SAVING} vs monthly
           </span>
           <span className="mt-0.5 block text-[11px] text-stone-500 max-sm:text-sm dark:text-stone-400">
@@ -412,7 +412,7 @@ export default function ProPlanToggle({
       <div className="card-hero space-y-4 text-center">
         <div className="space-y-0.5">
           {trialEligible && (
-            <p className="text-sm font-medium text-hearth-700 dark:text-hearth-300">
+            <p className="text-sm font-medium text-oaktend-700 dark:text-oaktend-300">
               Free for {PRO_PLAN.trialDays} days
             </p>
           )}

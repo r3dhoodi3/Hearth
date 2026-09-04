@@ -66,7 +66,7 @@ export default async function ProProfilePage() {
   // gates the whole card, not just the button inside it.
   const checkrEnabled = isCheckrConfigured();
 
-  // Earn-in progress for the Hearth-funded check. Only counted when the card
+  // Earn-in progress for the OakTend-funded check. Only counted when the card
   // can actually render, so a database without Checkr configured pays for no
   // extra query. Null (an unreadable count) shows as 0 of 3 and offers no
   // button, matching how the server action fails closed.

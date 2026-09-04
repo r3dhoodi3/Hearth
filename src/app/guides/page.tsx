@@ -119,7 +119,7 @@ const SITE_URL =
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: "Home maintenance guides",
   description:
     "Plain-English guides to common home maintenance questions: replacement costs, slab leak warning signs, maintenance schedules, and how to read a contractor's quote.",

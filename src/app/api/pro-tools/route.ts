@@ -16,7 +16,7 @@ import { trackServerEvent } from "@/lib/trackServer";
 
 export const runtime = "nodejs";
 
-// AI back office (Hearth Pro membership): five writing tools for the
+// AI back office (OakTend Pro membership): five writing tools for the
 // paperwork pros hate. The pro describes the job in plain words and Claude
 // drafts a clean estimate, invoice, follow-up message, review response, or
 // overdue invoice reminder they can copy and send.
@@ -231,7 +231,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       result: null,
       reason: "locked",
-      error: "Drafting opens once your business is verified: add a California license number we can confirm, or place your first lead. Hearth Pro members get it right away.",
+      error: "Drafting opens once your business is verified: add a California license number we can confirm, or place your first lead. OakTend Pro members get it right away.",
     });
   }
   const isMember = await hasProPlan();

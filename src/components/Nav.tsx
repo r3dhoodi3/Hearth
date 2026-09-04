@@ -50,10 +50,10 @@ export default function Nav({
   ];
 
   // Phone AND TABLET bottom bar: the same four destinations as the top strip.
-  // Ask Hearth briefly had a tab of its own here, which made five tabs on a
+  // Ask OakTend briefly had a tab of its own here, which made five tabs on a
   // 390px screen and gave the assistant a top-level home it doesn't need. It
   // lives inside Messages instead - a pinned conversation at the top of /chats
-  // that opens the full-screen /ask view (see AskHearthRow), with NavLinks
+  // that opens the full-screen /ask view (see AskOakTendRow), with NavLinks
   // treating /ask as a child of Messages so the tab stays lit while you're in
   // there. There is no floating pill any more, at any width: Messages is the
   // only door.
@@ -61,7 +61,7 @@ export default function Nav({
   // THE SHELL BREAKPOINT IS `lg`, NOT `sm` (changed 2026-08-30). The top strip
   // used to switch on at sm (640px) but only had room for itself from about
   // 1024px up, so between those two widths the nav pills painted straight over
-  // the "Hearth" wordmark and the home address. Everything that used to say
+  // the "OakTend" wordmark and the home address. Everything that used to say
   // "below sm the tab bar exists" now says "below lg". Desktop at 1024px and
   // up is unchanged; tablets get the phone-style bottom bar instead of a
   // colliding top strip.
@@ -100,7 +100,7 @@ export default function Nav({
             <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" />
             {/* Wordmark is desktop-only: on a phone the address is the more
                 useful label and the logo alone identifies the app. */}
-            <span className="hidden sm:inline">Hearth</span>
+            <span className="hidden sm:inline">OakTend</span>
           </Link>
           {/* Which side of the account you're on. Only for accounts that
               hold both sides (hasPro) - a homeowner-only account has nothing
@@ -128,7 +128,7 @@ export default function Nav({
             was not: with the switcher pinned to min-width:auto from sm up,
             the left group held its full content width, this group refused to
             give any back, and between roughly 1024 and 1680px the address ran
-            underneath the nav pills - "Hearth · 3831 [Home]ve[Browse Pros]".
+            underneath the nav pills - "OakTend · 3831 [Home]ve[Browse Pros]".
             If either half is ever made unshrinkable again, that returns. */}
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {/* Primary destinations. Desktop (lg and up) keeps this exact top

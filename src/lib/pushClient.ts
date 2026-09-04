@@ -24,7 +24,7 @@ export type PushEnableResult =
   | "denied"
   // Dismissed the browser prompt without choosing. Ask again another day.
   | "dismissed"
-  // iPhone in a Safari tab: there is nothing to ask for until Hearth is on the
+  // iPhone in a Safari tab: there is nothing to ask for until OakTend is on the
   // Home Screen.
   | "needs-install"
   // No service worker or no PushManager at all (an old browser, a private
@@ -160,7 +160,7 @@ async function saveSubscription(payload: SubscriptionPayload): Promise<boolean> 
 export async function enablePush(side?: PushSide): Promise<PushEnableResult> {
   if (!pushSupported()) {
     // On an iPhone this is the normal state in a Safari tab: none of the APIs
-    // exist until Hearth is on the Home Screen. Report that, not "unsupported",
+    // exist until OakTend is on the Home Screen. Report that, not "unsupported",
     // because it is fixable in about fifteen seconds.
     return needsHomeScreenInstallForPush() ? "needs-install" : "unsupported";
   }

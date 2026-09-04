@@ -1,4 +1,4 @@
-# Hearth pricing and growth playbook
+# OakTend pricing and growth playbook
 
 This records the pricing decisions and the go-to-market plan. Numbers here are
 the source of truth for what the code implements.
@@ -7,7 +7,7 @@ the source of truth for what the code implements.
 
 Priced in three tiers keyed to job value and what a pro can bear (a lead is
 worth only a slice of expected job profit). Benchmarked BELOW the big lead
-marketplaces so Hearth undercuts them, with no annual fee.
+marketplaces so OakTend undercuts them, with no annual fee.
 
 | Tier | Fee | Trades |
 |------|-----|--------|
@@ -23,7 +23,7 @@ restore intro eligibility.
 
 Market context (2025-26): Angi/HomeAdvisor charge roughly $15-85+ per lead PLUS
 a ~$300/yr fee, roofing/HVAC/remodel at the top ($80-200 for roofing). Thumbtack
-runs ~$20-75 per lead. Hearth is pay-to-apply (Thumbtack-like), so fees sit at
+runs ~$20-75 per lead. OakTend is pay-to-apply (Thumbtack-like), so fees sit at
 the accessible end and there is no annual fee, which is a concrete selling point
 when recruiting pros.
 
@@ -53,10 +53,10 @@ Effective discount you are funding (collect cash, grant bonus credit):
 Where it lives: `deposit_tiers` + `wallet_config.min_bonus_deposit_cents`
 (migration `0020`), client fallback + copy in `DepositForm.tsx`.
 
-## 3. Homeowner subscription (Hearth Plus)
+## 3. Homeowner subscription (OakTend Plus)
 
 Base app (home tracking, AI chat, document vault, proactive alerts) is FREE.
-Finding/contacting pros requires Hearth Plus.
+Finding/contacting pros requires OakTend Plus.
 
 - **$9 / month** or **$59 / year** (annual saves ~45%, nudges the yearly commit).
 
@@ -97,7 +97,7 @@ BEFORE scaling demand:
 
 ## 5. What the AI already does for conversion
 
-Ask Hearth emits a `[[POSTJOB]]` block that becomes a "Get 3 free quotes" CTA.
+Ask OakTend emits a `[[POSTJOB]]` block that becomes a "Get 3 free quotes" CTA.
 That is your best free-advice-to-GMV path: every cost answer should end with the
 option to post the job. The vault (scanning warranties/receipts/model plates) is
 the retention hook and the thing a search engine cannot do for a specific home,

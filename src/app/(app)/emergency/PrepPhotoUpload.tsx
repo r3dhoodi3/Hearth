@@ -43,7 +43,7 @@ export default function PrepPhotoUpload({
     // allowed_mime_types (migration 0079). accept="image/*" is only a browser
     // hint; the old `type.startsWith("image/")` check would still let
     // image/svg+xml through, which can carry a <script> and gets served back
-    // off Hearth's own storage origin (security audit finding #7).
+    // off OakTend's own storage origin (security audit finding #7).
     const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
     if (file.type === "image/svg+xml") {
       setErr("SVG images aren't supported. Please use a PNG, JPEG, or WEBP photo.");

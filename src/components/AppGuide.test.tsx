@@ -135,7 +135,7 @@ describe("AppGuide - homeowner", () => {
   });
 
   // A claim the copy is not allowed to make, because the code does not back
-  // it: Hearth does not staff human answers. The people in this product are
+  // it: OakTend does not staff human answers. The people in this product are
   // the pros, and the way to reach one is to post a job.
   it("does not promise a human on our team", () => {
     renderHomeownerGuide();

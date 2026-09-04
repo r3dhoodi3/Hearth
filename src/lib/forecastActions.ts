@@ -59,7 +59,7 @@ export interface ForecastAction {
 // for, and the test fails if a new system type ever lands without one.
 //
 // Two notes on the owner's original list:
-//   "exterior paint" lives under `siding` - Hearth has no separate paint
+//   "exterior paint" lives under `siding` - OakTend has no separate paint
 //   system, and repainting/resealing IS the step that keeps siding alive.
 //   "water softener" has no system type at all, so there is nothing to key it
 //   to. If one is ever added to SYSTEM_TYPES, this table must grow a row or

@@ -4,8 +4,8 @@
 // render: markdown emphasis, and the machine-readable [[TAG]]{...}[[/TAG]]
 // blocks the assistant appends for actions (POSTJOB, LOGISSUE, REMINDER,
 // OPTIONS). The bubble strips those before rendering (parseAssistant in
-// src/components/AskHearth.tsx). The Messages list did not, so the pinned
-// Ask Hearth row showed a preview reading
+// src/components/AskOakTend.tsx). The Messages list did not, so the pinned
+// Ask OakTend row showed a preview reading
 // `**Here's what I'd do:** [[OPTIONS]]{"options":["Call a pro"]}[[/OPTIONS]]`.
 //
 // parseAssistant itself is not reusable here: it lives in a "use client"

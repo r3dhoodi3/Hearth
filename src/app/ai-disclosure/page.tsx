@@ -11,10 +11,10 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: "AI Disclosure",
   description:
-    "You're talking to an AI, not a person: what Ask Hearth can and can't do, what data goes to Anthropic, and how to reach a human instead.",
+    "You're talking to an AI, not a person: what Ask OakTend can and can't do, what data goes to Anthropic, and how to reach a human instead.",
   alternates: {
     canonical: `${SITE_URL}/ai-disclosure`,
   },

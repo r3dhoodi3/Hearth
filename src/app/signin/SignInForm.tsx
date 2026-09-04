@@ -46,7 +46,7 @@ export default function SignInForm({
   sessionExpired?: boolean;
 }) {
   const supabase = createClient();
-  // "New to Hearth?" sends visitors to the home page (the landing with the
+  // "New to OakTend?" sends visitors to the home page (the landing with the
   // hero photos and both role doors), which is now the single front door for
   // new users. It does not carry ?next= - the landing has no destination to
   // thread on - so a signed-out visitor who arrived via a gated CTA and then
@@ -82,7 +82,7 @@ export default function SignInForm({
       <div className="card">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-            Sign in to Hearth
+            Sign in to OakTend
           </h1>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Homeowners and contractors, same sign-in.
@@ -94,7 +94,7 @@ export default function SignInForm({
             role="status"
             className="mb-4 rounded-lg border border-stone-200 bg-stone-50 p-3 text-center text-sm text-stone-700 dark:border-white/10 dark:bg-white/5 dark:text-stone-300"
           >
-            You were signed out because this device had not used Hearth in a
+            You were signed out because this device had not used OakTend in a
             while. Sign in again to pick up where you left off.
           </p>
         )}
@@ -178,7 +178,7 @@ export default function SignInForm({
         </div>
 
         <div className="mt-6 border-t border-stone-100 pt-4 text-center dark:border-white/10">
-          <p className="text-sm text-stone-500 dark:text-stone-400">New to Hearth?</p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">New to OakTend?</p>
           <Link
             href="/"
             className="btn-secondary mt-2 inline-block w-full"

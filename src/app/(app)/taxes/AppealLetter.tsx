@@ -13,7 +13,7 @@ const APPEAL_STAGES = ["Gathering your home's facts", "Drafting the letter"];
 // The "give me a head start" button on the "looks high" state. Plus members
 // get an AI-drafted appeal letter they can adapt and file themselves; free
 // users see what they'd get and a path to Plus. The letter is rendered in a
-// copyable block because the whole point is taking it OUT of Hearth and into
+// copyable block because the whole point is taking it OUT of OakTend and into
 // the county's appeal form or mailbox.
 export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
   const [loading, setLoading] = useState(false);
@@ -29,13 +29,13 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
           Want a head start on an appeal?
         </h2>
         <p className="text-sm text-stone-600 dark:text-stone-300">
-          Hearth Plus can draft a respectful appeal letter using your
+          OakTend Plus can draft a respectful appeal letter using your
           home&apos;s facts. Review it, fill in your parcel number, and file it
-          with your county. You stay in control, Hearth never files anything
+          with your county. You stay in control, OakTend never files anything
           for you.
         </p>
         <Link href="/plus?reason=tax" className="btn-primary inline-block">
-          Unlock with Hearth Plus
+          Unlock with OakTend Plus
         </Link>
       </div>
     );
@@ -54,9 +54,9 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
       if (typeof data?.letter === "string" && data.letter) {
         setLetter(data.letter);
       } else if (data?.error === "plus_required") {
-        setError("An active Hearth Plus subscription is needed to draft the letter.");
+        setError("An active OakTend Plus subscription is needed to draft the letter.");
       } else if (data?.reason === "rate_limited") {
-        setError("Hearth has hit today's usage limit. Please try again later.");
+        setError("OakTend has hit today's usage limit. Please try again later.");
       } else if (data?.reason === "no_key") {
         setError("The letter drafter isn't set up yet.");
       } else {
@@ -91,7 +91,7 @@ export default function AppealLetter({ isPlus }: { isPlus: boolean }) {
         Draft an appeal letter
       </h2>
       <p className="text-sm text-stone-600 dark:text-stone-300">
-        Hearth drafts a respectful, factual letter using your home&apos;s
+        OakTend drafts a respectful, factual letter using your home&apos;s
         details. Fill in the placeholders, like your parcel number, and file it
         with your county. Every county has its own form and deadline, check
         your assessment notice for the exact steps.

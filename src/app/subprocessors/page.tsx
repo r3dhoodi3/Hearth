@@ -12,7 +12,7 @@ const SITE_URL =
 export const metadata: Metadata = {
   title: "Subprocessors",
   description:
-    "Every outside company that processes personal information on Hearth's behalf, what they receive, and where they operate.",
+    "Every outside company that processes personal information on OakTend's behalf, what they receive, and where they operate.",
   alternates: {
     canonical: `${SITE_URL}/subprocessors`,
   },

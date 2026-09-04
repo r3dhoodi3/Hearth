@@ -173,7 +173,7 @@ export async function depositAction(formData: FormData) {
           price_data: {
             currency: "usd",
             unit_amount: cents,
-            product_data: { name: "Hearth wallet deposit" },
+            product_data: { name: "OakTend wallet deposit" },
           },
         },
       ],

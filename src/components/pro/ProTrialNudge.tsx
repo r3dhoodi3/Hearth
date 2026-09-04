@@ -42,13 +42,13 @@ import {
   type ReviewSessionPlan,
 } from "@/lib/reviewPrompt";
 
-// A full-screen "3 Day Free Trial" takeover for Hearth Pro, in the same
+// A full-screen "3 Day Free Trial" takeover for OakTend Pro, in the same
 // native-app-paywall shape as the App Store's own trial screens: an X to
 // close top-left, the wordmark, a big headline, two plan cards (yearly
 // preselected, monthly beside it), one primary button, and the legal renewal
 // disclosure directly above that button.
 //
-// WHEN IT APPEARS: the same smart-timing algorithm as "Enjoying Hearth?"
+// WHEN IT APPEARS: the same smart-timing algorithm as "Enjoying OakTend?"
 // (src/components/ReviewPrompt.tsx / src/lib/reviewPrompt.ts) - not on the
 // browser's first-ever app open, only in a session the same random pool
 // picked as an "ask" session, and only once real active use in this tab has
@@ -78,7 +78,7 @@ import {
 // checks isAnyFloatingPromptClaimedThisSession before opening (yields if the
 // review card got there first), and the moment this takeover DOES open it
 // calls claimFloatingPromptSlotForTrial, which marks the review card's own
-// "asked this session" flag too - so "Enjoying Hearth?" cannot open on top of
+// "asked this session" flag too - so "Enjoying OakTend?" cannot open on top of
 // it later in the same app open either. Both flags live in sessionStorage:
 // nothing here mutates ReviewPrompt.tsx, and nothing about what those flags
 // mean to ReviewPrompt.tsx changes.
@@ -363,9 +363,9 @@ export default function ProTrialNudge({
         </div>
 
         <div className="mt-2 flex flex-col items-center text-center">
-          <Logo className="h-9 w-9 text-hearth-700 dark:text-hearth-400" />
+          <Logo className="h-9 w-9 text-oaktend-700 dark:text-oaktend-400" />
           <p className="mt-2 text-sm font-medium text-stone-500 dark:text-stone-400">
-            Hearth Pro
+            OakTend Pro
           </p>
           <h1
             id={headingId}
@@ -398,12 +398,12 @@ export default function ProTrialNudge({
             className={[
               "relative flex h-full flex-col rounded-xl border p-3 text-left transition-colors",
               plan === "yearly"
-                ? "border-hearth-600 bg-hearth-50 ring-2 ring-hearth-600 ring-offset-1 ring-offset-white dark:bg-hearth-900/30 dark:ring-offset-stone-900"
+                ? "border-oaktend-600 bg-oaktend-50 ring-2 ring-oaktend-600 ring-offset-1 ring-offset-white dark:bg-oaktend-900/30 dark:ring-offset-stone-900"
                 : "border-stone-200 bg-white hover:border-stone-300 dark:border-white/10 dark:bg-stone-800 dark:hover:border-white/20",
             ].join(" ")}
           >
             {YEARLY_SAVE_PCT > 0 && (
-              <span className="absolute -top-2.5 left-3 whitespace-nowrap rounded-full bg-hearth-600 px-2 py-0.5 text-[10px] font-medium text-white">
+              <span className="absolute -top-2.5 left-3 whitespace-nowrap rounded-full bg-oaktend-600 px-2 py-0.5 text-[10px] font-medium text-white">
                 Save {YEARLY_SAVE_PCT}%
               </span>
             )}
@@ -430,7 +430,7 @@ export default function ProTrialNudge({
             className={[
               "flex h-full flex-col rounded-xl border p-3 text-left transition-colors",
               plan === "monthly"
-                ? "border-hearth-600 bg-hearth-50 ring-2 ring-hearth-600 ring-offset-1 ring-offset-white dark:bg-hearth-900/30 dark:ring-offset-stone-900"
+                ? "border-oaktend-600 bg-oaktend-50 ring-2 ring-oaktend-600 ring-offset-1 ring-offset-white dark:bg-oaktend-900/30 dark:ring-offset-stone-900"
                 : "border-stone-200 bg-white hover:border-stone-300 dark:border-white/10 dark:bg-stone-800 dark:hover:border-white/20",
             ].join(" ")}
           >
@@ -465,7 +465,7 @@ export default function ProTrialNudge({
               label={
                 introEligible
                   ? `Start ${PRO_PLAN.trialDays}-day free trial`
-                  : "Get Hearth Pro"
+                  : "Get OakTend Pro"
               }
               disabled={!consent}
             />

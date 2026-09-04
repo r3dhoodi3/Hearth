@@ -12,7 +12,7 @@ const SITE_URL =
 export const metadata: Metadata = {
   title: "Accessibility Statement",
   description:
-    "Where Hearth stands on WCAG 2.2 AA today, what's already in place, known gaps, and how to reach us if something isn't usable.",
+    "Where OakTend stands on WCAG 2.2 AA today, what's already in place, known gaps, and how to reach us if something isn't usable.",
   alternates: {
     canonical: `${SITE_URL}/accessibility`,
   },

@@ -42,7 +42,7 @@ export const FIRST_APPLICATION_GUARANTEE =
   "If they do respond but pick someone else, you get 100% of that fee back too, every time, no limit. It lands in your wallet as credit, not cash, and is good for 60 days.";
 
 export const CREDIT_NOT_CASH_LINE =
-  "Either way it is Hearth credit in your wallet, not money back to your card.";
+  "Either way it is OakTend credit in your wallet, not money back to your card.";
 
 // Shown to a pro who has no license number saved yet: the same rule, said as
 // the thing they can do about it.
@@ -130,7 +130,7 @@ export function firstApplicationGuaranteeRich(): ReactNode {
 
 export function creditNotCashLineRich(): ReactNode {
   return boldPhrases(CREDIT_NOT_CASH_LINE, [
-    "Hearth credit in your wallet",
+    "OakTend credit in your wallet",
     "not money back to your card",
   ]);
 }

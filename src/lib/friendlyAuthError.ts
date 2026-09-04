@@ -19,9 +19,9 @@
 //
 // Telling the visitor that an account already exists for the address they
 // typed is an enumeration oracle: type an address, read the answer, and you
-// know whether that person is a Hearth customer. Repeat down a list and you
+// know whether that person is an OakTend customer. Repeat down a list and you
 // have a targeted phishing
-// set ("your Hearth account needs attention") plus, for the pro side, a map of
+// set ("your OakTend account needs attention") plus, for the pro side, a map of
 // which local contractors are on the platform. Supabase's own enumeration
 // protection is what makes signUp return success-with-no-identities instead of
 // an error for an existing address; answering that with a sentence that says
@@ -31,7 +31,7 @@
 // the same way the reset flow's "If an account exists for X, a reset link is
 // on its way" does. It still gives the next step for either reader.
 export const SIGNUP_EMAIL_NEUTRAL =
-  "If that email is new to Hearth, a confirmation link is on its way. If it already has an account, sign in or reset your password instead. Check spam if nothing arrives in a minute or two.";
+  "If that email is new to OakTend, a confirmation link is on its way. If it already has an account, sign in or reset your password instead. Check spam if nothing arrives in a minute or two.";
 
 type AuthErrorLike =
   | { message?: string | null; status?: number | null }
@@ -94,7 +94,7 @@ export function friendlyAuthError(error: AuthErrorLike): string {
 
   // The request never reached the server (offline, dropped connection).
   if (/failed to fetch|network|load failed|fetch failed|networkerror/.test(m)) {
-    return "Couldn't reach Hearth just now. Check your connection and try again.";
+    return "Couldn't reach OakTend just now. Check your connection and try again.";
   }
 
   // Anything we don't recognize: a warm generic that never echoes raw text.

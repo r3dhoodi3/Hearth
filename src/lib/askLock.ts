@@ -1,4 +1,4 @@
-// The Ask Hearth daily lock, remembered across mounts.
+// The Ask OakTend daily lock, remembered across mounts.
 //
 // The composer swaps for a locked bar the moment the server says the day's
 // questions are spent, but that verdict only ever lived in component state:
@@ -7,7 +7,7 @@
 // it: "it doesn't allow you to enter a message, but can we just lock it".
 //
 // So the lock is written down. Keys are namespaced per user like the
-// conversation itself (see AskHearth.tsx), and per chat surface, so the
+// conversation itself (see AskOakTend.tsx), and per chat surface, so the
 // homeowner chat and the pro copilot on one device never share a lock.
 //
 // WHEN IT LIFTS. The server's day is a fixed 24 hour window aligned to the

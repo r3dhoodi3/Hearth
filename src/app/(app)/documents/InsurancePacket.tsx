@@ -20,7 +20,7 @@ const PACKET_STAGES = [
 // the home's facts and recent upkeep they can hand to insurance agents when
 // shopping for quotes. Free users see what they'd get and a path to Plus.
 // Rendered in a copyable block because the whole point is taking it OUT of
-// Hearth and into an email or a call with an agent. Mirrors AppealLetter on
+// OakTend and into an email or a call with an agent. Mirrors AppealLetter on
 // /taxes.
 export default function InsurancePacket({
   isPlus,
@@ -60,13 +60,13 @@ export default function InsurancePacket({
           </p>
         )}
         <p className="text-sm text-stone-600 dark:text-stone-300">
-          Hearth Plus can build a requote packet from your home&apos;s facts:
+          OakTend Plus can build a requote packet from your home&apos;s facts:
           the details agents always ask for, your recent maintenance and
           upgrades, and the questions worth asking beyond price. You stay in
-          control: Hearth never contacts insurers for you.
+          control: OakTend never contacts insurers for you.
         </p>
         <Link href="/plus?reason=insurance" className="btn-primary inline-block">
-          Unlock with Hearth Plus
+          Unlock with OakTend Plus
         </Link>
       </div>
     );
@@ -88,10 +88,10 @@ export default function InsurancePacket({
         setPacket(data.packet);
       } else if (data?.error === "plus_required") {
         setError(
-          "An active Hearth Plus subscription is needed to build the packet."
+          "An active OakTend Plus subscription is needed to build the packet."
         );
       } else if (data?.reason === "rate_limited") {
-        setError("Hearth has hit today's usage limit. Please try again later.");
+        setError("OakTend has hit today's usage limit. Please try again later.");
       } else if (data?.reason === "no_key") {
         setError("The packet builder isn't set up yet.");
       } else {
@@ -129,7 +129,7 @@ export default function InsurancePacket({
         Build my requote packet
       </h3>
       <p className="text-sm text-stone-600 dark:text-stone-300">
-        Hearth puts your home&apos;s facts and recent upkeep into one plain
+        OakTend puts your home&apos;s facts and recent upkeep into one plain
         summary, ready to hand to insurance agents. It also lists coverage
         questions worth asking. Review it and add anything only you know, like
         your current limits.

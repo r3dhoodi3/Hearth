@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 // Review share card: an image a pro can post when a homeowner leaves them a
 // strong review. Modeled directly on src/app/api/win-card/[leadId]/route.tsx:
-// same 1200x630 size, same warm Hearth palette, same "no more homeowner data
+// same 1200x630 size, same warm OakTend palette, same "no more homeowner data
 // than the win card already shows" rule. The only homeowner detail here is a
 // first name (never a last name, never an address or city), read off
 // contractor_leads.homeowner_name - the same contact snapshot column the win
@@ -20,12 +20,12 @@ export const runtime = "nodejs";
 
 const size = { width: 1200, height: 630 };
 
-// Warm Hearth palette (tailwind.config.ts), copied from win-card so both
+// Warm OakTend palette (tailwind.config.ts), copied from win-card so both
 // share cards read as the same product.
-const HEARTH_50 = "#fbf7f2";
-const HEARTH_500 = "#a9743f";
-const HEARTH_700 = "#73482b";
-const HEARTH_900 = "#4f3324";
+const OAKTEND_50 = "#fbf7f2";
+const OAKTEND_500 = "#a9743f";
+const OAKTEND_700 = "#73482b";
+const OAKTEND_900 = "#4f3324";
 const STONE_300 = "#d6d3d1";
 const AMBER_500 = "#f59e0b";
 
@@ -59,11 +59,11 @@ function Wordmark() {
           width: 14,
           height: 14,
           borderRadius: 9999,
-          backgroundColor: HEARTH_500,
+          backgroundColor: OAKTEND_500,
         }}
       />
-      <div style={{ fontSize: 34, fontWeight: 700, color: HEARTH_700 }}>
-        Hearth
+      <div style={{ fontSize: 34, fontWeight: 700, color: OAKTEND_700 }}>
+        OakTend
       </div>
     </div>
   );
@@ -233,7 +233,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ reviewId:
           flexDirection: "column",
           justifyContent: "center",
           padding: "0 80px",
-          background: HEARTH_50,
+          background: OAKTEND_50,
           position: "relative",
           fontFamily: "sans-serif",
         }}
@@ -254,7 +254,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ reviewId:
             style={{
               fontSize: contractor.name.length > 28 ? 46 : 56,
               fontWeight: 700,
-              color: HEARTH_900,
+              color: OAKTEND_900,
               lineHeight: 1.1,
               maxWidth: 900,
             }}
@@ -273,11 +273,11 @@ export async function GET(req: NextRequest, props: { params: Promise<{ reviewId:
           style={{
             fontSize: 34,
             fontWeight: 700,
-            color: HEARTH_700,
+            color: OAKTEND_700,
             marginTop: 16,
           }}
         >
-          {review.rating}-star review on Hearth
+          {review.rating}-star review on OakTend
         </div>
 
         {reviewExcerpt && (
@@ -285,7 +285,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ reviewId:
             style={{
               fontSize: 40,
               fontWeight: 700,
-              color: HEARTH_900,
+              color: OAKTEND_900,
               lineHeight: 1.3,
               marginTop: 28,
               maxWidth: 1000,
@@ -299,7 +299,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ reviewId:
         <div
           style={{
             fontSize: 30,
-            color: HEARTH_700,
+            color: OAKTEND_700,
             fontWeight: 600,
             marginTop: 24,
           }}
@@ -307,7 +307,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ reviewId:
           - {reviewerFirstName}
         </div>
 
-        <div style={{ fontSize: 28, color: HEARTH_700, marginTop: 40 }}>
+        <div style={{ fontSize: 28, color: OAKTEND_700, marginTop: 40 }}>
           {publicPageUrl}
         </div>
 
@@ -318,7 +318,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ reviewId:
             left: 0,
             width: "100%",
             height: 14,
-            backgroundColor: HEARTH_500,
+            backgroundColor: OAKTEND_500,
           }}
         />
       </div>

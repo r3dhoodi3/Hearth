@@ -13,7 +13,7 @@ const SITE_URL =
 export const metadata: Metadata = {
   title: "Security & Responsible Disclosure",
   description:
-    "How Hearth protects your data, and how to report a security vulnerability to us in good faith.",
+    "How OakTend protects your data, and how to report a security vulnerability to us in good faith.",
   alternates: {
     canonical: `${SITE_URL}/security`,
   },

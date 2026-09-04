@@ -98,7 +98,7 @@ export default async function BrowseProsPage(
         <div className="card text-sm text-stone-500 dark:text-stone-400">
           {filter ? (
             <p>
-              No pros listed for {labelFor(JOB_CATEGORIES, filter)} yet. Hearth
+              No pros listed for {labelFor(JOB_CATEGORIES, filter)} yet. OakTend
               is still new in some areas, so pro coverage is catching up. Try
               another category, or{" "}
               <Link href="/contractors" className="text-bark-700 hover:underline dark:text-stone-300">
@@ -108,7 +108,7 @@ export default async function BrowseProsPage(
             </p>
           ) : (
             <p>
-              No pros are listed here yet. Hearth is still new in some areas, so
+              No pros are listed here yet. OakTend is still new in some areas, so
               pro coverage is catching up. You can still{" "}
               <Link href="/contractors" className="text-bark-700 hover:underline dark:text-stone-300">
                 post a job
@@ -411,7 +411,7 @@ function ProCard({ pro }: { pro: BrowsePro }) {
 
           {memberSince && (
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-500">
-              On Hearth since {memberSince}
+              On OakTend since {memberSince}
             </p>
           )}
 

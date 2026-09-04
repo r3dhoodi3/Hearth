@@ -15,11 +15,11 @@ function money(n: number): string {
   return `$${Math.round(Math.abs(n)).toLocaleString()}`;
 }
 
-// How far the assessment sits from its comparison basis (Hearth's estimate,
+// How far the assessment sits from its comparison basis (OakTend's estimate,
 // or the Prop 13 trajectory in CA) before the page calls it out. Above by
 // more than this fraction reads "looks high"; below it by more than this
 // reads "looks favorable"; anything in between is "looks in line". 10% is
-// deliberately conservative: Hearth's estimate is a statewide-model
+// deliberately conservative: OakTend's estimate is a statewide-model
 // ballpark, so a smaller gap is just noise.
 const HIGH_THRESHOLD = 0.1;
 const LOW_THRESHOLD = -0.1;
@@ -116,7 +116,7 @@ export default async function TaxesPage() {
   // CALIFORNIA (Prop 13): assessed values are capped at roughly 2% growth a
   // year from the purchase price, so market value is the wrong yardstick
   // there. A long-held CA home is supposed to be assessed far below market,
-  // and comparing against Hearth's market estimate would call nearly every
+  // and comparing against OakTend's market estimate would call nearly every
   // one "favorable" while missing a genuinely high assessment. For CA the
   // baseline is the purchase price compounded at 2%/yr to the assessed year,
   // and "looks high" means the county is above even that capped trajectory.
@@ -129,7 +129,7 @@ export default async function TaxesPage() {
       : null;
 
   // What the assessment is judged against: the Prop 13 trajectory in CA,
-  // Hearth's market estimate everywhere else.
+  // OakTend's market estimate everywhere else.
   const comparisonBasis = prop13Baseline ?? estimatedValue;
 
   // How far the assessment sits above (positive) or below (negative) the
@@ -158,7 +158,7 @@ export default async function TaxesPage() {
       </header>
       <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
         Your property tax bill is based on what the county says your home is
-        worth. Enter the assessed value from your notice and Hearth will
+        worth. Enter the assessed value from your notice and OakTend will
         compare it against its own estimate, so you can spot an assessment
         that looks too high before the appeal deadline passes.
       </p>
@@ -177,7 +177,7 @@ export default async function TaxesPage() {
             <p className="text-sm text-stone-600 dark:text-stone-300">
               Grab your county assessment notice (or your most recent
               property tax bill). It lists an assessed value for your home
-              and the tax year it covers. Enter those two numbers and Hearth
+              and the tax year it covers. Enter those two numbers and OakTend
               will keep an eye on how they stack up.
             </p>
           </div>
@@ -196,7 +196,7 @@ export default async function TaxesPage() {
             <p className="text-sm text-stone-600 dark:text-stone-300">
               Your {assessedYear} assessment of {money(assessedValue!)} is
               saved. To compare it against an estimate of what your home is
-              actually worth, Hearth needs what you paid and the year you
+              actually worth, OakTend needs what you paid and the year you
               bought, which live on the home value page.
             </p>
             {/* The purchase price the county has IS on file here; it just
@@ -226,7 +226,7 @@ export default async function TaxesPage() {
               what kind of number they're about to see before the colored
               card makes its call. */}
           <p className="mb-4 text-xs text-stone-500 dark:text-stone-400">
-            Hearth&apos;s number is an estimate: an automated valuation when one exists for your address, otherwise statewide price trends applied to your purchase price. It is not
+            OakTend&apos;s number is an estimate: an automated valuation when one exists for your address, otherwise statewide price trends applied to your purchase price. It is not
             an appraisal, and this page is not tax or legal advice. Assessment rules, ratios, and appeal processes vary a lot
             by county, and some counties assess at a fraction of market value
             by design, so a gap here doesn&apos;t always mean something is
@@ -265,13 +265,13 @@ export default async function TaxesPage() {
                 )}% above ${
                   prop13Baseline != null
                     ? "the trajectory Prop 13 allows (your purchase price growing about 2% a year)"
-                    : "Hearth's estimate"
+                    : "OakTend's estimate"
                 }. A successful appeal lowers your bill every year until reassessment, and appealing is usually free.`}
               {verdict === "in_line" &&
                 `The county's number sits within about 10% of ${
                   prop13Baseline != null
                     ? "the trajectory Prop 13 allows (your purchase price growing about 2% a year)"
-                    : "Hearth's estimate"
+                    : "OakTend's estimate"
                 }, which is normal. An appeal probably isn't worth your time this year.`}
               {verdict === "favorable" &&
                 `The county assessed your home about ${Math.round(
@@ -279,7 +279,7 @@ export default async function TaxesPage() {
                 )}% below ${
                   prop13Baseline != null
                     ? "the trajectory Prop 13 allows"
-                    : "Hearth's estimate"
+                    : "OakTend's estimate"
                 }, which works in your favor at tax time. Appealing could backfire: drawing the assessor's attention might raise your assessment, not lower it.`}
             </p>
           </div>
@@ -297,7 +297,7 @@ export default async function TaxesPage() {
               </p>
             </div>
             {/* Show the number the verdict was actually judged against: the
-                Prop 13 trajectory in CA, Hearth's market estimate elsewhere. */}
+                Prop 13 trajectory in CA, OakTend's market estimate elsewhere. */}
             {prop13Baseline != null ? (
               <div className="card space-y-1 text-center">
                 <p className="stat-label">
@@ -314,7 +314,7 @@ export default async function TaxesPage() {
             ) : (
               <div className="card space-y-1 text-center">
                 <p className="stat-label">
-                  Hearth&apos;s estimated value
+                  OakTend&apos;s estimated value
                 </p>
                 <p className="stat-number text-2xl">
                   {money(estimatedValue)}

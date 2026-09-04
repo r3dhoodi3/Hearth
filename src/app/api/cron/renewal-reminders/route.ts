@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 // Daily job (Vercel Cron, see vercel.json) that warns paying members BEFORE a
 // charge they might not be expecting. Four cases:
 //
-//   1. Trial ending. A brand-new Hearth Plus subscriber gets a 3-day Stripe
+//   1. Trial ending. A brand-new OakTend Plus subscriber gets a 3-day Stripe
 //      free trial on whichever cadence they picked (weekly, monthly or
 //      yearly all carry it now), and the notice
 //      fires about a day before that trial ends and the first real charge
@@ -22,7 +22,7 @@ export const runtime = "nodejs";
 //      best-practice heads-up and a chargeback defense. A legacy month-long
 //      trial is long enough to fall inside that statutory window, so it
 //      keeps the same 5-day lead the step-up case below uses.
-//   2. Step-up. The current period is running on an intro month (Hearth
+//   2. Step-up. The current period is running on an intro month (OakTend
 //      Pro), and the next charge is at the higher standard price. This is
 //      the case regulators care most about, because the amount changes
 //      without the member doing anything.
@@ -351,8 +351,8 @@ async function runCron(req: NextRequest) {
           }
           if (stripeSub.cancel_at_period_end || stripeSub.cancel_at) return;
 
-          // Is the CURRENT period the cheap one? A live trial (Hearth Plus's
-          // free month) or a discount on the subscription (Hearth Pro's intro
+          // Is the CURRENT period the cheap one? A live trial (OakTend Plus's
+          // free month) or a discount on the subscription (OakTend Pro's intro
           // month) both mean the next charge is higher than the last.
           const trialing =
             stripeSub.status === "trialing" ||
@@ -396,7 +396,7 @@ async function runCron(req: NextRequest) {
             : Boolean(discountList ?? stripeSub.discount);
 
           // The durable signal, stamped at checkout (see both checkout
-          // actions). It exists because Hearth Pro's intro month is a
+          // actions). It exists because OakTend Pro's intro month is a
           // duration:"once" coupon: Stripe consumes it on the first invoice
           // and detaches it, so by the time this cron runs - days before the
           // intro month ends - `discounted` above is already false and the

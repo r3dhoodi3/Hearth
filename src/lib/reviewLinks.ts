@@ -1,7 +1,7 @@
 // Server-side validation for a pro's optional outbound review-page links
 // (0110). A pro may link their existing Yelp and Google review pages; the
 // public page shows them only as plain "See our reviews" buttons that link
-// OUT. Hearth never embeds or imports review content, never shows star counts
+// OUT. OakTend never embeds or imports review content, never shows star counts
 // from those sites - a link is the entire feature, which is the zero-ToS-risk
 // pattern. This helper is the gatekeeper: it accepts only real business-page
 // URLs on the expected hosts and rejects everything else with a friendly

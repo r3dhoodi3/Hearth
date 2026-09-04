@@ -474,7 +474,7 @@ export default function AccountSecurityPanel({
                     />
                   </div>
                   <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                    You&apos;re deleting the Hearth account for{" "}
+                    You&apos;re deleting the OakTend account for{" "}
                     <span className="font-medium text-stone-900 dark:text-stone-100">
                       {email ?? "this address"}
                     </span>

@@ -407,7 +407,7 @@ async function creditDepositSession(
   }
   const admin = createAdminClient();
 
-  // Hearth Pro members earn extra points on the deposit bonus. The
+  // OakTend Pro members earn extra points on the deposit bonus. The
   // lookup is best-effort: any hiccup here means "no boost", never a
   // failed deposit. Also the only place this function learns the pro's
   // OWN account id (contractors.user_id), which deposit_made below needs -
@@ -833,7 +833,7 @@ async function sendRenewalAcknowledgment(
 }
 
 // True when the subscription's current period is running on a discount, i.e.
-// the Hearth Pro intro month. Read off the subscription rather than the plan
+// the OakTend Pro intro month. Read off the subscription rather than the plan
 // name because the intro is a one-time coupon that can silently fail to apply
 // (see proIntroCouponId): if it didn't apply, there is no step-up to disclose
 // and the acknowledgment must not claim one. `discounts` is the newer Stripe
@@ -1407,7 +1407,7 @@ export async function POST(req: NextRequest) {
   // credits, membership rows, wallet reversals) runs on attacker-chosen JSON.
   // A deployment with no secret must be dead to this route, not open to it.
   //
-  // 500, not 400: this is Hearth's own misconfiguration, and a 5xx makes Stripe
+  // 500, not 400: this is OakTend's own misconfiguration, and a 5xx makes Stripe
   // keep the event queued and redeliver once the secret is set, instead of
   // marking real events permanently failed.
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -1524,7 +1524,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Card fingerprint, for the trial-abuse score. This is the first moment
-      // Hearth ever learns which physical card is behind an account, so it is
+      // OakTend ever learns which physical card is behind an account, so it is
       // the moment to record it: a farmer's fifth throwaway email paying with
       // the same card as the first is exactly what this catches.
       await recordSubscriptionCard(meta.user_id, subscription, "pro_checkout");

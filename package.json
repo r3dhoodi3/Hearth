@@ -1,8 +1,8 @@
 {
-  "name": "hearth",
+  "name": "oaktend",
   "version": "0.1.0",
   "private": true,
-  "description": "Hearth: a homeowner tool. Keep your house in good shape, know what needs attention, and reach a trustworthy pro when something breaks.",
+  "description": "OakTend: a homeowner tool. Keep your house in good shape, know what needs attention, and reach a trustworthy pro when something breaks.",
   "scripts": {
     "dev": "next dev",
     "dev:turbo": "next dev --turbo -H 0.0.0.0 -p 3000",

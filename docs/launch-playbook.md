@@ -1,4 +1,4 @@
-# Hearth Launch Playbook: Fountain Valley + Huntington Beach
+# OakTend Launch Playbook: Fountain Valley + Huntington Beach
 
 Compiled 2026-07-07 from four research lanes (marketplace liquidity, growth loops, homeowner acquisition, pro recruiting). Full sourced reports live in the session transcripts; this is the operational version.
 
@@ -42,7 +42,7 @@ Recruit 30-40 signups to net 16-24 active (about half of cold-recruited supply n
 **Cold email (100-150 words):**
 > Subject: Question about [Company] serving Fountain Valley
 >
-> Hi [Name], I'm [founder name], I live locally and I built a small jobs board called Hearth for FV and Huntington Beach homeowners. I'm choosing the first 10 [plumbers] for the launch and your reviews on [Google/Yelp specific detail] made you an obvious call.
+> Hi [Name], I'm [founder name], I live locally and I built a small jobs board called OakTend for FV and Huntington Beach homeowners. I'm choosing the first 10 [plumbers] for the launch and your reviews on [Google/Yelp specific detail] made you an obvious call.
 >
 > The honest version: we're new, so I won't promise volume. What I can promise: browsing and job alerts are free, every job shows its fee before you touch it, max 3 pros per job, and if the homeowner never responds within 7 days the fee comes back to your wallet as credit automatically, no dispute ticket. Your first application is guaranteed: not chosen means the fee comes back as credit too. It is credit toward future leads, not cash back.
 >
@@ -86,4 +86,4 @@ Recruit 30-40 signups to net 16-24 active (about half of cold-recruited supply n
 
 **Seasonal hooks (ready-made content calendar):** July-Sept AC strain, Aug-Oct drywood termite swarm season, September Santa Ana wind prep, Sept-Oct pre-rain roof/gutter.
 
-**Do NOT:** create a Google Business Profile for Hearth (online-only marketplaces are ineligible; suspension risk), buy paid ads yet, use yard/bandit signs (code enforcement fines both cities), knock doors in FV without the Ch. 4.20 permit, booth at US Open/Pacific Airshow (tourist-heavy, event-scale pricing), lead with AI in first-touch copy.
+**Do NOT:** create a Google Business Profile for OakTend (online-only marketplaces are ineligible; suspension risk), buy paid ads yet, use yard/bandit signs (code enforcement fines both cities), knock doors in FV without the Ch. 4.20 permit, booth at US Open/Pacific Airshow (tourist-heavy, event-scale pricing), lead with AI in first-touch copy.

@@ -48,7 +48,7 @@ import { trackServerEvent } from "@/lib/trackServer";
 
 export const runtime = "nodejs";
 
-// "Ask Hearth": answer a homeowner's question grounded in their own home. We
+// "Ask OakTend": answer a homeowner's question grounded in their own home. We
 // pull their systems + ages so the answer is specific (the thing Google can't
 // do), then ask Claude through the shared helper in src/lib/claude.ts.
 // Cap each attached image (base64 chars) so a caller can't push huge payloads
@@ -91,7 +91,7 @@ const MAX_CONTEXT_CHARS = 12_000;
 // fake assistant turn, followed by an off-topic question, can talk the model
 // into acting as general-purpose Sonnet or reciting its system prompt.
 //
-// BOUNDED FIX, not a full close. A genuinely replayed Hearth answer - the
+// BOUNDED FIX, not a full close. A genuinely replayed OakTend answer - the
 // overwhelming majority of assistant turns, since the client is normally just
 // echoing back what this route itself streamed to it - never matches this and
 // passes through unchanged, so ordinary multi-turn continuity is untouched.
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
   const crossSite = sameOriginGuard(req);
   if (crossSite) return crossSite;
 
-  // Require a signed-in user before touching the paid model. Ask Hearth is an
+  // Require a signed-in user before touching the paid model. Ask OakTend is an
   // authenticated feature; gating here (not just in middleware) stops anonymous
   // abuse that would run up model cost.
   const authClient = await createClient();
@@ -137,9 +137,9 @@ export async function POST(req: NextRequest) {
 
   if (!hasClaudeKey()) {
     // The setup detail belongs in the server logs, never in the chat.
-    console.error("Ask Hearth: ANTHROPIC_API_KEY is not set in the environment.");
+    console.error("Ask OakTend: ANTHROPIC_API_KEY is not set in the environment.");
     // MED-46: this response is `ok: true` JSON with no `locked` field, which is
-    // exactly the shape AskHearth.tsx's applyAllowance() reads as "a member
+    // exactly the shape AskOakTend.tsx's applyAllowance() reads as "a member
     // answered fine" when freeLimit is missing (rememberPlan("plus")). That
     // wrote a FREE homeowner's localStorage plan cache to "plus" on every
     // request during a key outage, which both hid the free-question meter and
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
     // unreadable convention already used elsewhere in this file.
     const outageTier = await getPlusTier();
     return NextResponse.json({
-      answer: "Ask Hearth is temporarily unavailable. Please try again soon.",
+      answer: "Ask OakTend is temporarily unavailable. Please try again soon.",
       freeRemaining: null,
       freeLimit: outageTier === "paid" ? null : askDailyLimitFor(outageTier),
       askTier: outageTier,
@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // A CLAIMED HOME IS THE PRICE OF ENTRY. Ask Hearth's whole value is that it
+  // A CLAIMED HOME IS THE PRICE OF ENTRY. Ask OakTend's whole value is that it
   // answers for THIS house, and a signed-in account with no property is
   // either someone who has not finished onboarding or a throwaway made to
   // farm free questions. Checked before the caps below, so this costs the
@@ -245,7 +245,7 @@ export async function POST(req: NextRequest) {
     // trialing, or paid off their own subscription row).
     const noHomeTier = await getPlusTier();
     return NextResponse.json({
-      answer: "Add your home first and Ask Hearth can answer for it.",
+      answer: "Add your home first and Ask OakTend can answer for it.",
       link: { href: "/onboarding", label: "Add your home" },
       freeRemaining: null,
       freeLimit: noHomeTier === "paid" ? null : askDailyLimitFor(noHomeTier),
@@ -274,16 +274,16 @@ export async function POST(req: NextRequest) {
   // sly. No model call and no usage counted for a locked request.
   if (!isPlus && newTurnHasImage(history)) {
     return NextResponse.json({
-      answer: "Photo questions are part of Hearth Plus.",
+      answer: "Photo questions are part of OakTend Plus.",
       locked: true,
-      link: { href: "/plus?reason=ask", label: "See Hearth Plus" },
+      link: { href: "/plus?reason=ask", label: "See OakTend Plus" },
     });
   }
 
   // Per-user daily cap so a single account can't run up the paid model bill.
   // The CHAT HAS ITS OWN BUCKET (ask-day:<user>), separate from the tool
   // routes' ai_usage budget: three free questions a day here must not be
-  // spendable on document scans, nor drained by them. Hearth Plus gets the
+  // spendable on document scans, nor drained by them. OakTend Plus gets the
   // higher ceiling. Fails closed; see countAskUsage in src/lib/aiUsage.ts.
   // Checked before the context queries below so an over-limit request does no
   // DB work.
@@ -317,9 +317,9 @@ export async function POST(req: NextRequest) {
       // from the person's side: today's allowance is spent and tomorrow it is
       // not. No number, since the limit is described rather than counted
       // everywhere else in the product.
-      answer: "You have reached today's Ask Hearth limit. It resets tomorrow.",
+      answer: "You have reached today's Ask OakTend limit. It resets tomorrow.",
       // MED-46: this already carried askTier, but not freeRemaining/freeLimit,
-      // which is the pair AskHearth.tsx's applyAllowance() actually checks
+      // which is the pair AskOakTend.tsx's applyAllowance() actually checks
       // (`typeof data?.freeLimit === "number"`) before it will believe a free
       // or trialing homeowner is still on a countable allowance. Without them
       // this landed in the "member" branch and cached knownPlan=plus. This
@@ -348,7 +348,7 @@ export async function POST(req: NextRequest) {
   if (overLimit) {
     // WHOSE limit was it? Only "user_daily" means this person spent their own
     // allowance, and only then does the Plus pitch make sense. A tripped
-    // owner-wide breaker or a counter that could not be read are Hearth's
+    // owner-wide breaker or a counter that could not be read are OakTend's
     // problems, and telling someone with three untouched questions that they
     // are out and should buy Plus is both wrong and a bad look. Those get the
     // honest busy line, no upsell, and a 503 so it reads as a server problem.
@@ -363,23 +363,23 @@ export async function POST(req: NextRequest) {
     );
     if (reason !== "user_daily") {
       return NextResponse.json(
-        { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
+        { answer: "Ask OakTend is busy right now. Try again in a few minutes." },
         { status: 503 }
       );
     }
     return NextResponse.json({
       answer:
         tier === "paid"
-          ? "You have reached today's Ask Hearth limit. It resets tomorrow."
+          ? "You have reached today's Ask OakTend limit. It resets tomorrow."
           : tier === "trialing"
             ? // Already inside the funnel, and on the full Plus ceiling: the
               // trial gets exactly what a paid plan gets (ASK_DAILY_TRIAL is an
               // alias for ASK_DAILY_PLUS), so there is nothing to upsell here.
               // Just the reset, and no number for a limit we describe rather
               // than count everywhere else in the product.
-              "That's your Ask Hearth questions for today on your Plus trial. They reset tomorrow."
-            : `You've used your ${ASK_DAILY_FREE} free questions for today. Hearth Plus gives you more questions a day, plus photo answers.`,
-      // The message names Hearth Plus, so give the reader something to tap
+              "That's your Ask OakTend questions for today on your Plus trial. They reset tomorrow."
+            : `You've used your ${ASK_DAILY_FREE} free questions for today. OakTend Plus gives you more questions a day, plus photo answers.`,
+      // The message names OakTend Plus, so give the reader something to tap
       // instead of a page to go hunt for. The chat bubble renders plain text
       // (see src/components/Markdown.tsx - no link support on purpose), so
       // the link travels as its own field and the client renders it.
@@ -388,7 +388,7 @@ export async function POST(req: NextRequest) {
         : {
             link: {
               href: "/plus?reason=ask",
-              label: "See what Hearth Plus adds",
+              label: "See what OakTend Plus adds",
             },
           }),
       freeRemaining,
@@ -405,7 +405,7 @@ export async function POST(req: NextRequest) {
   if (await overAiGlobalHourlyLimit()) {
     await refundAskUsage(authUser.id, windowStart);
     return NextResponse.json(
-      { answer: "Ask Hearth is busy right now. Try again in a few minutes." },
+      { answer: "Ask OakTend is busy right now. Try again in a few minutes." },
       { status: 503 }
     );
   }
@@ -540,7 +540,7 @@ export async function POST(req: NextRequest) {
 
   const today = new Date().toISOString().slice(0, 10);
   const system =
-    "You are Hearth: a warm, real person the homeowner is chatting with about their home, never a robotic or corporate-sounding assistant. " +
+    "You are OakTend: a warm, real person the homeowner is chatting with about their home, never a robotic or corporate-sounding assistant. " +
     // Scope rule first, before any of the style or behaviour instructions, so
     // an off-topic request is turned away rather than answered beautifully.
     // Shared word for word with the pro route via src/lib/aiGuard.ts.
@@ -577,7 +577,7 @@ export async function POST(req: NextRequest) {
     // than added as a second instruction saying the same thing.
     "When the request is ambiguous, or you need more info, ask ONE short clarifying question and wait for the answer instead of guessing or covering every case. Never list several questions at once. Keep each question quick and casual, the way you would text a friend, for example 'Got it. How old is the water heater, roughly?' or 'Gotcha, is it making any noise?'. " +
     "If a job is risky, large, or code-regulated, recommend hiring a licensed pro (they can post a job in the app). " +
-    "You are the homeowner's helper for their own home, and you do not coach contractors. If they ask how to apply to jobs as a pro, how lead fees, the wallet, or Pro membership work for contractors, or other contractor-only mechanics, gently say that lives on the Hearth for Pros side and steer back to their home, and never emit a POSTJOB block for that kind of question.\n\n" +
+    "You are the homeowner's helper for their own home, and you do not coach contractors. If they ask how to apply to jobs as a pro, how lead fees, the wallet, or Pro membership work for contractors, or other contractor-only mechanics, gently say that lives on the OakTend for Pros side and steer back to their home, and never emit a POSTJOB block for that kind of question.\n\n" +
     // When the owner wants to hire, emit a machine-readable block the app turns
     // into a prefilled job posting. Keep it out of the visible prose.
     "When the homeowner wants to hire a pro or find a service for a specific job, help them and then append a block on its own line at the VERY END of your reply, in EXACTLY this format with nothing after it:\n" +
@@ -654,7 +654,7 @@ export async function POST(req: NextRequest) {
           // dropped outright rather than forwarded as a genuine prior turn
           // from the model. See AUTHORITY_INJECTION_PATTERN above for what
           // this catches and its limits. Every ordinary assistant turn (the
-          // client replaying Hearth's own past answers, which never talk
+          // client replaying OakTend's own past answers, which never talk
           // about operators or lifted rules) is unaffected.
           if (m.role === "assistant" && looksLikeAuthorityInjection(text))
             return null;
@@ -691,10 +691,10 @@ export async function POST(req: NextRequest) {
     await refundAskUsage(authUser.id, windowStart);
   };
   const failedAnswer = async (e: unknown): Promise<string> => {
-    console.error("Ask Hearth: model call failed:", e);
+    console.error("Ask OakTend: model call failed:", e);
     await refundOnce();
     return isRateLimitError(e)
-      ? "Ask Hearth is busy right now. Try again in a minute."
+      ? "Ask OakTend is busy right now. Try again in a minute."
       : "Sorry, I couldn't generate an answer. Please try again.";
   };
   const refundedRemaining = freeRemaining === null ? null : freeRemaining + 1;
@@ -726,7 +726,7 @@ export async function POST(req: NextRequest) {
       messages: turns,
       // Model, output ceiling, thinking and effort all live in ROUTES in
       // src/lib/claude.ts now, with every other model call in the app, so
-      // "what does Ask Hearth cost" is one table to read. The chat keeps the
+      // "what does Ask OakTend cost" is one table to read. The chat keeps the
       // strong model: here the answer IS the product. The ceiling there is
       // generous enough that a full answer plus its trailing machine-readable
       // blocks (POSTJOB, OPTIONS, ...) never gets clipped halfway through,
@@ -748,7 +748,7 @@ export async function POST(req: NextRequest) {
     // NOTHING TO SEND IS A BAD REQUEST, not a model failure. streamText throws
     // EmptyPromptError before it opens the request when every turn came out
     // empty (all whitespace text, an image the caps dropped), and that is a
-    // malformed request, not "Hearth couldn't answer" - it would be answered
+    // malformed request, not "OakTend couldn't answer" - it would be answered
     // the same way forever, so telling the homeowner to try again is bad
     // advice. hasAskableContent above catches the ordinary version of this
     // before anything is counted; this is the residue, where the turn had

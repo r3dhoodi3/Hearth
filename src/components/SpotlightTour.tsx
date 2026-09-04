@@ -76,8 +76,8 @@ export const HOMEOWNER_STEPS: TourStep[] = [
     // bar below lg and the header strip's pill from lg up, never a stray link
     // in the page body.
     target: 'nav a[href="/chats"]',
-    title: "Messages and Ask Hearth",
-    body: "Ask Hearth lives here, pinned at the top of Messages. Ask anything about your house and it answers from your own systems and their ages.",
+    title: "Messages and Ask OakTend",
+    body: "Ask OakTend lives here, pinned at the top of Messages. Ask anything about your house and it answers from your own systems and their ages.",
     fallbackPlacement: "above",
   },
   {
@@ -113,7 +113,7 @@ export const PRO_STEPS: TourStep[] = [
     route: "/pro",
     target: 'nav a[href="/pro/chats"]',
     title: "Messages and your copilot",
-    body: "Homeowner conversations live here. Ask Hearth is pinned at the top, for pricing a job or wording a quote.",
+    body: "Homeowner conversations live here. Ask OakTend is pinned at the top, for pricing a job or wording a quote.",
     fallbackPlacement: "above",
   },
   {
@@ -431,13 +431,13 @@ export default function SpotlightTour({
     cardStyle = { top: "50%", transform: "translateY(-50%)" };
   }
 
-  // The two shells accent differently (bark on the homeowner side, Hearth on
+  // The two shells accent differently (bark on the homeowner side, OakTend on
   // the pro side), same split ShowAppGuideButton makes.
   const ringClass =
     side === "pro"
-      ? "border-hearth-600 dark:border-hearth-400"
+      ? "border-oaktend-600 dark:border-oaktend-400"
       : "border-bark-600 dark:border-bark-400";
-  const dotClass = side === "pro" ? "bg-hearth-600" : "bg-bark-600";
+  const dotClass = side === "pro" ? "bg-oaktend-600" : "bg-bark-600";
 
   return (
     // z-[60]: one tier above everything else on screen at once - the bottom

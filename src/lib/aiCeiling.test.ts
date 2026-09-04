@@ -131,12 +131,12 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("a request Hearth's own ceiling sheds is not charged to the user", () => {
+describe("a request OakTend's own ceiling sheds is not charged to the user", () => {
   it("hands back the daily usage when the owner-wide DAILY breaker refuses", async () => {
     // THE BUG. bump_ai_usage has already run by the time the global breaker is
     // consulted. Without a refund, a free homeowner who tries a document scan
     // while a swarm has the breaker tripped is charged one of their 25 for a
-    // request that never reached the model - and the client tells them Hearth
+    // request that never reached the model - and the client tells them OakTend
     // is busy, so they retry, and are charged again, until their day is gone.
     const state = fake({ buckets: { [AI_GLOBAL_BUCKET]: { limit: 5000, allowed: false } } });
     currentAdmin = fakeAdmin(state);
@@ -168,7 +168,7 @@ describe("a request Hearth's own ceiling sheds is not charged to the user", () =
   });
 
   it("does NOT hand anything back when the user spent their own allowance", async () => {
-    // Their limit, their charge. Only Hearth's own brakes are refunded.
+    // Their limit, their charge. Only OakTend's own brakes are refunded.
     const state = fake({ used: 25 });
     currentAdmin = fakeAdmin(state);
     const { countAiUsage } = await import("./aiUsage");

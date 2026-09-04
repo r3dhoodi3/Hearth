@@ -191,8 +191,8 @@ export default async function LearnPage() {
   const owned = SYSTEM_TYPES.filter((t) => byType.has(t.value));
   const types = owned.length ? owned : SYSTEM_TYPES;
 
-  // An Ask Hearth box used to sit at the top of this page, seeded with starter
-  // questions built from the owner's own systems. Both are gone: Ask Hearth
+  // An Ask OakTend box used to sit at the top of this page, seeded with starter
+  // questions built from the owner's own systems. Both are gone: Ask OakTend
   // lives in the Messages tab now, and Learn is the guides and nothing else.
 
   // Flatten each system into plain guide data for the client-side search,

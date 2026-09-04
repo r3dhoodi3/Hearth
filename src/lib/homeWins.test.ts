@@ -160,7 +160,7 @@ describe("selectHomeWins - framing", () => {
   it("gives an all-placeholder home the Tracking line, never a great line", () => {
     // A freshly claimed home: onboarding seeded every row with an estimated
     // install_year and zero owner input. Before the placeholder gate this
-    // produced "All 7 systems in great shape" on a home Hearth knows nothing
+    // produced "All 7 systems in great shape" on a home OakTend knows nothing
     // real about; now the honest "Tracking 7 home systems" carries the card.
     const seeds = Array.from({ length: 7 }, (_, i) =>
       system({ id: `seed-${i}`, install_year: THIS_YEAR - 5 })
@@ -210,11 +210,11 @@ describe("selectHomeWins - framing", () => {
     expect(w.wins.every((x) => !x.text.includes("All"))).toBe(true);
   });
 
-  it("counts whole years on Hearth from createdAt", () => {
+  it("counts whole years on OakTend from createdAt", () => {
     const w = selectHomeWins(
       input({ createdAt: "2024-01-01T00:00:00Z" }) // NOW is 2026-06 => 2 years
     );
-    expect(w.wins.some((x) => x.text === "2 years on Hearth")).toBe(true);
+    expect(w.wins.some((x) => x.text === "2 years on OakTend")).toBe(true);
   });
 
   it("does not claim a year for a home under 12 months old", () => {
@@ -306,7 +306,7 @@ describe("selectHomeWins - framing", () => {
 describe("homeWinsCaption", () => {
   it("has a first-person, no-reward starter caption", () => {
     const cap = homeWinsCaption(selectHomeWins(input()));
-    expect(cap.toLowerCase()).toContain("hearth");
+    expect(cap.toLowerCase()).toContain("oaktend");
     expect(cap.toLowerCase()).not.toContain("reward");
   });
   it("leads an active caption with the top win", () => {

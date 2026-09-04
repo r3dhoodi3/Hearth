@@ -50,7 +50,7 @@ export default function WonReferralNudge({ wonCount }: { wonCount: number }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm dark:border-white/10 dark:bg-stone-700">
       <p className="text-stone-700 dark:text-stone-300">
-        Who else should be on Hearth? Refer another pro.
+        Who else should be on OakTend? Refer another pro.
       </p>
       <Link href="/pro/business#account" className="btn-secondary shrink-0 text-sm">
         See your referral link

@@ -1,7 +1,7 @@
 import React from "react";
 
 // A tiny, dependency-free renderer for the markdown the model returns, so Ask
-// Hearth answers show as real bold text and bullet/numbered lists instead of
+// OakTend answers show as real bold text and bullet/numbered lists instead of
 // literal "**", "-", and "#" characters. Handles the common cases only:
 // **bold**, *italic*, `code`, "- "/"* " bullets, "1." lists, "#" headings,
 // and blank-line paragraph breaks. Plain text, no HTML injection.

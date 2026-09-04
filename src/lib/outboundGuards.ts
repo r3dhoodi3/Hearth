@@ -39,7 +39,7 @@ const PHONE_MAX_INPUT = 24;
 // to freely, without passing through any server action that validates it. That
 // makes "whatever is in the column" an untrusted string being handed to a paid
 // send API. Refusing to text anything that is not a plain US number keeps that
-// column from being usable to aim Hearth's Twilio account at an arbitrary
+// column from being usable to aim OakTend's Twilio account at an arbitrary
 // destination (a premium-rate number, an international one), and keeps CR/LF
 // or field-separator characters out of the form-encoded request body.
 export function toUsE164(raw: string | null | undefined): string | null {

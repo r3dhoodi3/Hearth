@@ -17,7 +17,7 @@ import HeroPhotoCycler from "@/components/HeroPhotoCycler";
 // the copy still gets indexed.
 //
 // The tour that used to live on the landing page ("How it works", "What
-// Hearth watches for you") is now the post-login guide, src/components/
+// OakTend watches for you") is now the post-login guide, src/components/
 // AppGuide.tsx, which is where it actually helps.
 //
 // SIZING: a hero photo (the same HERO_PHOTOS the desktop cycler uses, passed
@@ -82,7 +82,7 @@ export default function PhoneLanding({
           help is in the quiet row at the bottom. */}
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100">
-          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
+          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> OakTend
         </span>
         <ThemeToggle />
       </div>
@@ -95,7 +95,7 @@ export default function PhoneLanding({
         Your home, looked after.
       </h1>
       <p className="mt-3 text-base leading-relaxed text-stone-600 dark:text-stone-400">
-        Hearth checks on your home for you and warns you before things break.
+        OakTend checks on your home for you and warns you before things break.
       </p>
 
       {/* Hero photo: the visual anchor the phone screen was missing. Same

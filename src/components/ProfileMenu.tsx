@@ -101,7 +101,7 @@ export default function ProfileMenu({
   // Optional section label rendered above `links`. Omitted on both navs today,
   // which render links plain; kept as a harmless generic hook.
   linksLabel?: string;
-  // Homeowner-only: whether the signed-in user has Hearth Plus. Undefined on
+  // Homeowner-only: whether the signed-in user has OakTend Plus. Undefined on
   // the contractor side (ProNav), which has no Plus entry to show.
   hasPlus?: boolean;
   // When true, a "Dark mode" row (with a visible on/off switch) renders above
@@ -242,7 +242,7 @@ export default function ProfileMenu({
           // mid-close (shouldRender covers a 120ms fade-out, fully
           // interactive) the instant this menu opens - without this a tap
           // meant for a row here, e.g. Household, could land on the sheet's
-          // Ask Hearth tile sitting on top of it instead. Also
+          // Ask OakTend tile sitting on top of it instead. Also
           // pointer-events-none while THIS menu is only fading out
           // (open false, closing true), so a closed-looking panel can never
           // itself catch a tap meant for whatever is underneath it.
@@ -282,7 +282,7 @@ export default function ProfileMenu({
                     : "block border-b border-stone-100 bg-bark-50 px-4 py-2 text-sm font-medium text-bark-700 hover:bg-bark-100 dark:border-white/10 dark:bg-bark-700/40 dark:text-stone-300 dark:hover:bg-bark-700/60"
                 }
               >
-                {hasPlus ? "Hearth Plus ✓" : "Upgrade to Hearth Plus"}
+                {hasPlus ? "OakTend Plus ✓" : "Upgrade to OakTend Plus"}
               </Link>
             )}
             <div>

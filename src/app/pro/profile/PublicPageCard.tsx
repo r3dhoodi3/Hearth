@@ -89,8 +89,8 @@ export default function PublicPageCard({
   // Dynamic 1200x630 share card, generated at /p/<id>/opengraph-image (the
   // same image social networks pull when the link is posted).
   const shareCardUrl = `${path}/opengraph-image`;
-  const caption = `${contractor.name} is on Hearth. Real reviews from real jobs: ${fullUrl}`;
-  const widgetSnippet = `<iframe src="${origin}/api/pro-widget/${contractor.id}" width="320" height="120" style="border:0" title="Hearth rating"></iframe>`;
+  const caption = `${contractor.name} is on OakTend. Real reviews from real jobs: ${fullUrl}`;
+  const widgetSnippet = `<iframe src="${origin}/api/pro-widget/${contractor.id}" width="320" height="120" style="border:0" title="OakTend rating"></iframe>`;
   const licenseLocked = Boolean(contractor.license_number);
   const hasVault = Boolean(
     (contractor.license_number && String(contractor.license_number).trim()) ||
@@ -116,7 +116,7 @@ export default function PublicPageCard({
           <h2 className="font-semibold text-stone-900 dark:text-stone-100">Share your page</h2>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Anyone can open it, no account needed. It shows your business name,
-            services, and your real Hearth reviews.
+            services, and your real OakTend reviews.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -166,7 +166,7 @@ export default function PublicPageCard({
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Add these so your public page can show a &quot;license and insurance
             on file&quot; badge. Free for every pro. Kept private: the page shows
-            only the badge, worded as provided by you, not verified by Hearth.
+            only the badge, worded as provided by you, not verified by OakTend.
           </p>
         </div>
 
@@ -253,13 +253,13 @@ export default function PublicPageCard({
           <div>
             <h2 className="font-semibold text-stone-900 dark:text-stone-100">
               Share kit{" "}
-              <span className="ml-1 rounded-full border border-hearth-200 bg-hearth-50 px-2 py-0.5 text-xs font-medium text-hearth-700 dark:border-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-300">
+              <span className="ml-1 rounded-full border border-oaktend-200 bg-oaktend-50 px-2 py-0.5 text-xs font-medium text-oaktend-700 dark:border-oaktend-800 dark:bg-oaktend-900/40 dark:text-oaktend-300">
                 Pro member
               </span>
             </h2>
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
               Ready-made pieces for social posts and your own website. They
-              always show your real Hearth numbers.
+              always show your real OakTend numbers.
             </p>
           </div>
 
@@ -297,7 +297,7 @@ export default function PublicPageCard({
               Rating widget for your website
             </p>
             <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-              Paste this into your site. It shows your full Hearth rating and
+              Paste this into your site. It shows your full OakTend rating and
               review count, exactly as they appear here.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -321,7 +321,7 @@ export default function PublicPageCard({
           <div>
             <h2 className="font-semibold text-stone-900 dark:text-stone-100">
               Page extras{" "}
-              <span className="ml-1 rounded-full border border-hearth-200 bg-hearth-50 px-2 py-0.5 text-xs font-medium text-hearth-700 dark:border-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-300">
+              <span className="ml-1 rounded-full border border-oaktend-200 bg-oaktend-50 px-2 py-0.5 text-xs font-medium text-oaktend-700 dark:border-oaktend-800 dark:bg-oaktend-900/40 dark:text-oaktend-300">
                 Pro member
               </span>
             </h2>
@@ -357,7 +357,7 @@ export default function PublicPageCard({
       ) : (
         <section className="card space-y-3">
           <h2 className="font-semibold text-stone-900 dark:text-stone-100">
-            Make it yours with Hearth Pro
+            Make it yours with OakTend Pro
           </h2>
           <p className="text-sm text-stone-500 dark:text-stone-400">
             Your basic page is live for every pro, license and insurance badge
@@ -380,7 +380,7 @@ export default function PublicPageCard({
               <Star className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
                 An embeddable rating widget for your own website, showing your
-                full Hearth rating and review count
+                full OakTend rating and review count
               </span>
             </li>
           </ul>

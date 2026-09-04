@@ -7,7 +7,7 @@ import { useChatViewport } from "@/lib/useVisualViewport";
  *
  * On sm and up it is exactly the div those pages used to render inline: same
  * classes, same children, nothing added. Below sm it also carries
- * `hearth-chat-frame`, which globals.css turns into a fixed panel pinned
+ * `oaktend-chat-frame`, which globals.css turns into a fixed panel pinned
  * between the app header and the top of the software keyboard, sized from the
  * visual viewport by useChatViewport. The feed scrolls inside it and the
  * composer is the last flex child, so what you are typing stays on screen.
@@ -25,6 +25,6 @@ export default function PhoneChatFrame({
 }) {
   useChatViewport();
   return (
-    <div className={`hearth-chat-frame ${className}`}>{children}</div>
+    <div className={`oaktend-chat-frame ${className}`}>{children}</div>
   );
 }

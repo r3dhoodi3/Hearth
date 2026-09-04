@@ -51,7 +51,7 @@ export default function ChatListTabs({
   /** Empty-state sentence for each tab, in each side's own voice. */
   activeEmpty: string;
   closedEmpty: string;
-  /** Rows pinned above the filter (Ask Hearth and friends). Always visible. */
+  /** Rows pinned above the filter (Ask OakTend and friends). Always visible. */
   pinned: ReactNode;
   activeRows: ReactNode;
   closedRows: ReactNode;
@@ -95,7 +95,7 @@ export default function ChatListTabs({
 
       <ul className="max-h-[40vh] min-h-0 divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-stone-800 md:max-h-none md:flex-1">
         {/* Pinned rows sit above the filter and never leave, whichever tab is
-            on: Ask Hearth is an assistant, not a conversation with a status. */}
+            on: Ask OakTend is an assistant, not a conversation with a status. */}
         {pinned}
         {tab === "active" ? (
           <>

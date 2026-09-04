@@ -63,7 +63,7 @@ describe("matchDestinations", () => {
 describe("matchFaq", () => {
   it("finds the trial entry on the homeowner side", () => {
     const hits = matchFaq("trial", "homeowner");
-    expect(hits.map((h) => h.question)).toContain("How does the Hearth Plus trial work?");
+    expect(hits.map((h) => h.question)).toContain("How does the OakTend Plus trial work?");
   });
 
   it("finds ghost protection on the pro side only", () => {

@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/Skeleton";
 export default function Loading() {
   return (
     <div aria-hidden="true">
-      <h1 className="sr-only">Ask Hearth</h1>
+      <h1 className="sr-only">Ask OakTend</h1>
       <Skeleton className="mb-2 h-5 w-32 sm:hidden" />
       <div className="flex h-[calc(100dvh-14rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 dark:border-white/10 dark:bg-stone-800 sm:h-[calc(100vh-12rem)]">
         {/* Header row: title + subtitle on the left, retention/Clear controls

@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Right to know / right to data portability (Cal. Civ. Code 1798.100, 1798.110,
-// 1798.130(a)(2)): a signed-in person downloads everything Hearth holds about
+// 1798.130(a)(2)): a signed-in person downloads everything OakTend holds about
 // them, in a structured, machine-readable format, right now.
 //
 // Verification is the live session itself. Under 11 CCR 7060 a business must
@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 // original machine-readable one for people who actually want to move their
 // data somewhere else. Both read the exact same collectUserData() payload -
 // only the serialization at the bottom of this function differs, so the two
-// downloads can never say different things about what Hearth holds.
+// downloads can never say different things about what OakTend holds.
 export async function GET(request: Request) {
   const supabase = await createClient();
   const {
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
       status: 200,
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename="hearth-data-${stamp}.json"`,
+        "Content-Disposition": `attachment; filename="oaktend-data-${stamp}.json"`,
         "Cache-Control": "no-store",
       },
     });
@@ -67,7 +67,7 @@ export async function GET(request: Request) {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="hearth-data-${stamp}.pdf"`,
+        "Content-Disposition": `attachment; filename="oaktend-data-${stamp}.pdf"`,
         "Cache-Control": "no-store",
       },
     });

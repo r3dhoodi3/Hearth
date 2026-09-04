@@ -92,7 +92,7 @@ export async function saveAccountAction(formData: FormData) {
   // CONSENT IS PER NUMBER, not per account. Somebody consented to texts at the
   // number they gave; typing a different one puts a phone that has never
   // agreed to anything on the account, and carrying the old flag over would
-  // have Hearth texting a stranger who may now hold that number. TCPA damages
+  // have OakTend texting a stranger who may now hold that number. TCPA damages
   // are per text, so the flag drops with the number and has to be re-granted.
   //
   // Only when a stored row was actually read (`current`): if the select

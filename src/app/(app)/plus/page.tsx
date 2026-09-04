@@ -42,7 +42,7 @@ const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
   { label: "Cost forecast & repair fund", free: "10-year total + set-aside", plus: "Full per-system breakdown" },
   { label: "Quote analyzer", free: "-", plus: "Included" },
   { label: "Home report for resale & insurance", free: "-", plus: "Included" },
-  // Photo diagnosis is the Plus-only half of Ask Hearth; more questions a day
+  // Photo diagnosis is the Plus-only half of Ask OakTend; more questions a day
   // is the other half. The FREE number is read from src/lib/constants.ts,
   // which src/lib/constants.test.ts pins to what src/lib/aiUsage.ts actually
   // enforces, so this row cannot quote an allowance the server does not give.
@@ -52,7 +52,7 @@ const COMPARISON: Array<{ label: string; free: string; plus: string }> = [
   // plainly on /ai-disclosure. The trial is not called out separately any
   // more - it runs on the same ceiling as a paid plan.
   {
-    label: "Ask Hearth",
+    label: "Ask OakTend",
     free: `${FREE_ASK_PER_DAY} a day, text only`,
     plus: "More questions a day, with photos",
   },
@@ -191,11 +191,11 @@ export default async function PlusPage(
     return (
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Hearth Plus</h1>
+          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">OakTend Plus</h1>
         </div>
         <div className="card-hero space-y-4 text-center">
           <p className="text-lg font-medium text-bark-700 dark:text-stone-300">
-            You&apos;re on Hearth Plus
+            You&apos;re on OakTend Plus
           </p>
           <p className="text-sm text-stone-500 dark:text-stone-400">
             {sub?.plan === "yearly"
@@ -363,12 +363,12 @@ export default async function PlusPage(
       <div className="mx-auto max-w-md space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-            Hearth Plus
+            OakTend Plus
           </h1>
         </div>
         <div className="card space-y-4 text-center">
           <p className="text-sm text-stone-600 dark:text-stone-300">
-            We couldn&apos;t take your last Hearth Plus payment, so your Plus
+            We couldn&apos;t take your last OakTend Plus payment, so your Plus
             features are paused while your bank and Stripe sort it out. Update
             your payment method to switch them back on, or cancel so nothing
             further is charged.
@@ -532,7 +532,7 @@ export default async function PlusPage(
           {!COLD_START_FREE_POSTING && searchParams.reason === "job_limit" && (
             <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
               <p className="text-sm text-bark-700 dark:text-stone-300">
-                You&apos;ve used all 3 of your free job posts. Hearth Plus lets you
+                You&apos;ve used all 3 of your free job posts. OakTend Plus lets you
                 post unlimited jobs and keeps the quotes rolling.
               </p>
             </div>
@@ -541,7 +541,7 @@ export default async function PlusPage(
           {searchParams.reason === "home_limit" && (
             <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
               <p className="text-sm text-bark-700 dark:text-stone-300">
-                You&apos;ve added your free home. Hearth Plus lets you manage up
+                You&apos;ve added your free home. OakTend Plus lets you manage up
                 to 5 homes in one place.
               </p>
             </div>
@@ -550,7 +550,7 @@ export default async function PlusPage(
           {searchParams.reason === "plan" && (
             <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
               <p className="text-sm text-bark-700 dark:text-stone-300">
-                Hearth Plus builds a maintenance plan tuned to your home&apos;s
+                OakTend Plus builds a maintenance plan tuned to your home&apos;s
                 systems, a few tasks at a time, so it never piles up.
               </p>
             </div>
@@ -559,7 +559,7 @@ export default async function PlusPage(
           {searchParams.reason === "forecast" && (
             <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
               <p className="text-sm text-bark-700 dark:text-stone-300">
-                Hearth Plus forecasts what your home will need over the next 10
+                OakTend Plus forecasts what your home will need over the next 10
                 years, and how much to set aside each month. A big repair
                 becomes a plan, not a panic.
               </p>
@@ -571,7 +571,7 @@ export default async function PlusPage(
               <p className="text-sm text-bark-700 dark:text-stone-300">
                 {quoteCreditSpent
                   ? "You've used your free quote check. Plus reads every quote you get, flags padding, and writes the negotiation message, unlimited."
-                  : "Hearth Plus reads every quote you get, flags anything padded, vague, or duplicated, and writes the message you send back to negotiate."}
+                  : "OakTend Plus reads every quote you get, flags anything padded, vague, or duplicated, and writes the message you send back to negotiate."}
               </p>
             </div>
           )}
@@ -579,7 +579,7 @@ export default async function PlusPage(
           {searchParams.reason === "ask" && (
             <div className="card border-bark-100 bg-bark-50 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
               <p className="text-sm text-bark-700 dark:text-stone-300">
-                Ask Hearth photo answers and more questions come with Plus.
+                Ask OakTend photo answers and more questions come with Plus.
               </p>
             </div>
           )}
@@ -701,7 +701,7 @@ export default async function PlusPage(
                 <th className="px-1.5 py-3 font-medium sm:px-4"> </th>
                 <th className="px-1.5 py-3 font-medium sm:px-4">Free</th>
                 <th className="px-1.5 py-3 font-medium text-bark-700 sm:px-4 dark:text-stone-300">
-                  Hearth Plus
+                  OakTend Plus
                 </th>
               </tr>
             </thead>

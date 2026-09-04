@@ -43,7 +43,7 @@ describe("scoreFromFacts: individual weights", () => {
   });
 
   it("card on any other account: 40, exactly the medium edge", () => {
-    // Deliberately pinned to MEDIUM_AT. "This card is already on another Hearth
+    // Deliberately pinned to MEDIUM_AT. "This card is already on another OakTend
     // account" is the single most useful thing this system can learn, and at 35
     // it scored as low, which meant it changed nothing at all.
     expect(points({ cardSharedWithOtherAccount: true })).toBe(40);

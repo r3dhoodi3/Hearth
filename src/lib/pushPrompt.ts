@@ -29,7 +29,7 @@ export const SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
 
 // Fired by markPushMoment so a card already on screen can react immediately
 // instead of waiting for the next mount.
-export const PUSH_MOMENT_EVENT = "hearth:push-moment";
+export const PUSH_MOMENT_EVENT = "oaktend:push-moment";
 
 function snoozeKey(userId: string): string {
   return `hearth_push_snoozed_until:${userId}`;

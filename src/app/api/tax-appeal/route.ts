@@ -11,14 +11,14 @@ import { isImplausibleHomeFigure } from "@/lib/parcelSanity";
 
 export const runtime = "nodejs";
 
-// Property Tax Appeal Kit (Hearth Plus): drafts a county-generic appeal
+// Property Tax Appeal Kit (OakTend Plus): drafts a county-generic appeal
 // letter from the home's facts on file. The homeowner reviews it, fills in
 // the placeholders (parcel number, comparable sales, the county's address),
-// and files it themselves: Hearth never files anything and never promises an
+// and files it themselves: OakTend never files anything and never promises an
 // outcome.
 //
 // Input:  none (everything comes from the active property, so a caller can't
-//         feed the model made-up numbers under Hearth's letterhead tone)
+//         feed the model made-up numbers under OakTend's letterhead tone)
 // Output: { letter } | { letter: null, reason: "no_key" | "rate_limited" | "failed" }
 
 export async function POST(req: NextRequest) {
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
   // CALIFORNIA (Prop 13): the /taxes page judges a CA assessment against the
   // purchase price compounded at the 2%/yr Prop 13 cap, NOT against market
   // value, because a long-held CA home is supposed to be assessed far below
-  // market. The letter must argue over the same basis: citing Hearth's market
+  // market. The letter must argue over the same basis: citing OakTend's market
   // estimate (often a multiple of the assessment) would refute the letter's
   // own claim. Same formula as the prop13Baseline in
   // src/app/(app)/taxes/page.tsx; if one changes, change the other.
@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
       : null;
 
   // The number the letter's over-assessment claim is measured against: the
-  // Prop 13 trajectory in CA, Hearth's market estimate everywhere else
+  // Prop 13 trajectory in CA, OakTend's market estimate everywhere else
   // (mirroring the /taxes verdict).
   const comparisonBasis = prop13Baseline ?? estimatedValue;
 
@@ -177,13 +177,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Your assessment doesn't exceed the value Hearth compares it against, so an appeal letter arguing it is too high wouldn't be honest. Check the taxes page for the latest comparison.",
+          "Your assessment doesn't exceed the value OakTend compares it against, so an appeal letter arguing it is too high wouldn't be honest. Check the taxes page for the latest comparison.",
       },
       { status: 400 }
     );
   }
 
-  // Only facts Hearth actually has. Anything else the letter needs becomes a
+  // Only facts OakTend actually has. Anything else the letter needs becomes a
   // bracketed placeholder the owner fills in.
   const facts: string[] = [];
   if (property.city || property.state) {
@@ -207,8 +207,8 @@ export async function POST(req: NextRequest) {
     // owner's own evidence.
     facts.push(
       headline.source === "avm"
-        ? `Hearth's estimated market value: $${estimatedValue.toLocaleString()} (an automated valuation from RentCast based on recent sales of comparable homes nearby, not an appraisal)`
-        : `Hearth's estimated market value: $${estimatedValue.toLocaleString()} (a ballpark from statewide average appreciation applied to the owner's purchase price, not an appraisal)`
+        ? `OakTend's estimated market value: $${estimatedValue.toLocaleString()} (an automated valuation from RentCast based on recent sales of comparable homes nearby, not an appraisal)`
+        : `OakTend's estimated market value: $${estimatedValue.toLocaleString()} (a ballpark from statewide average appreciation applied to the owner's purchase price, not an appraisal)`
     );
   }
   facts.push(`Purchased in ${purchaseYear} for $${purchasePrice.toLocaleString()}`);

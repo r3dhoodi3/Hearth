@@ -208,7 +208,7 @@ describe("PushPrompt", () => {
   // The iPhone branch. Safari gives a page no notification permission at all
   // until the site is on the Home Screen, so the card explains that rather than
   // failing on a tap.
-  it("tells an iPhone in a Safari tab to add Hearth to the Home Screen", async () => {
+  it("tells an iPhone in a Safari tab to add OakTend to the Home Screen", async () => {
     installIphoneSafariTab();
     await mountAfterAMoment();
     expect(screen.getByTestId("push-prompt")).toBeInTheDocument();
@@ -216,7 +216,7 @@ describe("PushPrompt", () => {
       fireEvent.click(screen.getByRole("button", { name: "Turn on notifications" }));
     });
     expect(
-      screen.getByText(/add Hearth to your Home Screen first/i)
+      screen.getByText(/add OakTend to your Home Screen first/i)
     ).toBeInTheDocument();
   });
 

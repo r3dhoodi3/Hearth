@@ -33,7 +33,7 @@ const mailDomain = domain.replace(/^www\./, "").replace(/:\d+$/, "");
 
 export const LEGAL = {
   /** Product / brand name shown to users. */
-  brand: env("NEXT_PUBLIC_LEGAL_BRAND") ?? "Hearth",
+  brand: env("NEXT_PUBLIC_LEGAL_BRAND") ?? "OakTend",
   /** Registered legal entity, e.g. "Keepwell Home LLC, a California limited liability company". */
   legalName: env("NEXT_PUBLIC_LEGAL_ENTITY_NAME") ?? "[TODO(legal): LLC legal name]",
   /** Street or mailing address. Required before purchase by Cal. B&P 17538 and in every email by CAN-SPAM. */

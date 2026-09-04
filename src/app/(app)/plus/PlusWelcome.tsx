@@ -27,7 +27,7 @@ type Step = {
 const STEPS: Step[] = [
   {
     icon: PartyPopper,
-    title: "You're on Hearth Plus",
+    title: "You're on OakTend Plus",
     benefit: "Here's everything you just unlocked.",
   },
   {
@@ -100,8 +100,8 @@ export default function PlusWelcome({
   const last = step === STEPS.length - 1;
   const current = STEPS[step];
 
-  // Someone who ran out of Ask Hearth questions and then bought Plus is on the
-  // bigger allowance from this second. Ask Hearth remembers a spent allowance
+  // Someone who ran out of Ask OakTend questions and then bought Plus is on the
+  // bigger allowance from this second. Ask OakTend remembers a spent allowance
   // in localStorage so the composer stays locked across mounts (see
   // src/lib/askLock.ts), and that note is now wrong: without this, the one
   // screen they just paid to use more of would stay shut until the daily
@@ -221,10 +221,10 @@ export default function PlusWelcome({
                   acknowledgment fallback (the webhook hasn't landed the plan
                   yet), read at 12px on a phone otherwise. */}
               <p className="text-xs max-sm:text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                Your Hearth Plus renewal terms
+                Your OakTend Plus renewal terms
               </p>
               <p className="mt-2 text-xs max-sm:text-sm text-stone-600 dark:text-stone-300">
-                Hearth Plus renews automatically until you cancel. Your
+                OakTend Plus renews automatically until you cancel. Your
                 confirmation email lists the exact amount and renewal date.
                 Cancel anytime from{" "}
                 <Link href="/plus" className="underline">

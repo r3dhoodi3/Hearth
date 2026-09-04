@@ -324,7 +324,7 @@ export function isPublicPath(path: string): boolean {
     path.startsWith("/emergency-help/") ||
     // A pro's shareable public page: readable with no account by design.
     path.startsWith("/p/") ||
-    // Public pros landing page: /p/ pages link here ("Powered by Hearth"),
+    // Public pros landing page: /p/ pages link here ("Powered by OakTend"),
     // so logged-out visitors must not bounce to /signin. Exact match: the
     // signed-in pro app lives under /pro/ and must stay guarded.
     path === "/pros" ||
@@ -350,7 +350,7 @@ export function isPublicPath(path: string): boolean {
     // Privacy policy + Terms of Service + DMCA policy (src/app/privacy,
     // src/app/terms, src/app/dmca): legally need to be readable by anyone,
     // logged in or not, same reasoning as the guide and city pages above. The
-    // DMCA page in particular is where a copyright owner with no Hearth
+    // DMCA page in particular is where a copyright owner with no OakTend
     // account finds the designated agent, so it must never bounce to /signin.
     path === "/privacy" ||
     path.startsWith("/privacy/") ||
@@ -392,7 +392,7 @@ export function isPublicPath(path: string): boolean {
     path === "/security" ||
     path.startsWith("/security/") ||
     // Law Enforcement Requests (src/app/law-enforcement): read by an agency
-    // or a civil litigant with no Hearth account, same reasoning as the rest
+    // or a civil litigant with no OakTend account, same reasoning as the rest
     // of the legal document set above.
     path === "/law-enforcement" ||
     path.startsWith("/law-enforcement/") ||

@@ -10,10 +10,10 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: "Copyright / DMCA Policy",
   description:
-    "How to report copyrighted material on Hearth, what a valid DMCA takedown notice must include, how to file a counter-notice, and our repeat infringer policy.",
+    "How to report copyrighted material on OakTend, what a valid DMCA takedown notice must include, how to file a counter-notice, and our repeat infringer policy.",
   alternates: {
     canonical: `${SITE_URL}/dmca`,
   },

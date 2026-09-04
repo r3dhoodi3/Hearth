@@ -88,7 +88,7 @@ export default function PlaybookGuide({ guide }: { guide: PlaybookGuideData }) {
                     aria-expanded={active}
                     // Each section row is a tap target, so on a phone it gets
                     // the full 44px. py-2 (a ~36px row) stays on sm and up.
-                    className="flex w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium text-stone-700 hover:text-hearth-700 max-sm:min-h-11 dark:text-stone-300 dark:hover:text-hearth-300"
+                    className="flex w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium text-stone-700 hover:text-oaktend-700 max-sm:min-h-11 dark:text-stone-300 dark:hover:text-oaktend-300"
                   >
                     {s.title}
                     <span

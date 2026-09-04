@@ -64,7 +64,7 @@ const PLUS_BULLETS = [
   "Plan and forecast, in full",
   "Quote analyzer, home report",
   "Every alert, every channel",
-  `${PLUS_INCLUDED_HOMES} homes, more Ask Hearth questions every day`,
+  `${PLUS_INCLUDED_HOMES} homes, more Ask OakTend questions every day`,
 ];
 
 // What the free tier actually includes, so the third card reads as a plan
@@ -254,7 +254,7 @@ export default function PlanToggle({
       ? "Keep Free"
       : trialEligible
         ? `Start ${PLUS_PLAN.trialDays} free days`
-        : "Start Hearth Plus";
+        : "Start OakTend Plus";
 
   // The phone-only description panel below the row of cards. It reads `plan`,
   // not `choice`: `plan` is already the safe fallback to a real cadence (see

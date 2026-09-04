@@ -4,7 +4,7 @@ import { LEGAL } from "@/lib/legal";
 // Cal. Bus. & Prof. Code 17538: the legal name and address of who is charging
 // the buyer, plus a route to the refund policy, shown before purchase. One
 // line, reused verbatim everywhere a subscription or a per-lead fee is about
-// to be charged: the homeowner Plus and Hearth Pro pricing/plan pages, inside
+// to be charged: the homeowner Plus and OakTend Pro pricing/plan pages, inside
 // each checkout block itself, and the pro per-lead "Confirm and pay" card
 // (src/app/pro/ApplyJobButton.tsx).
 //

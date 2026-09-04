@@ -58,7 +58,7 @@ const config: Config = {
         "fade-scale-out": "fade-scale-out 120ms ease-in",
         "check-pop": "check-pop 220ms ease-out",
       },
-      // Warm brand-tinted shadows (rgb from hearth-800 #5e3c28), three tiers.
+      // Warm brand-tinted shadows (rgb from oaktend-800 #5e3c28), three tiers.
       boxShadow: {
         card: "0 1px 2px 0 rgb(94 60 40 / 0.05)",
         lift: "0 6px 16px -4px rgb(94 60 40 / 0.10)",
@@ -69,14 +69,14 @@ const config: Config = {
         menu: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
       },
       colors: {
-        // Hearth palette: one warm-paper ground rising to a single ember
+        // OakTend palette: one warm-paper ground rising to a single ember
         // accent (the fireplace). 600 is the primary accent used by
         // .btn-primary and focus rings; 50 is the app's warm-paper
         // background. The ramp is pulled toward RED (a deep terracotta ember,
         // not orange) so it does not drift yellow - warm mid tones gain
         // luminance on the dark ground and read yellow if left too orange, so
         // the 400-600 steps in particular are red-leaning.
-        hearth: {
+        oaktend: {
           50: "#faf4f0",
           100: "#f6e4dc",
           200: "#eec6b7",
@@ -88,7 +88,7 @@ const config: Config = {
           800: "#7d2f1b",
           900: "#682816",
         },
-        // The pre-redesign hearth brown, revived for buttons. 50/100 are
+        // The pre-redesign oaktend brown, revived for buttons. 50/100 are
         // light tints added for the homeowner/landing sweep off the ember
         // accent, matched to the same pre-redesign ramp as 500-700.
         bark: {

@@ -1,4 +1,4 @@
-/* Hearth service worker.
+/* OakTend service worker.
  *
  * TWO JOBS: receive Web Push messages and show them as notifications when the
  * app is closed, and paint a precached warming screen when a full-page
@@ -21,7 +21,7 @@
  * ships. skipWaiting + clients.claim mean the new worker takes over on the next
  * page load instead of waiting for every tab to close.
  */
-const VERSION = "hearth-sw-2";
+const VERSION = "oaktend-sw-2";
 
 // The one cached asset: the self-contained loading screen served when a
 // navigation stalls. It lives in public/ next to this file.
@@ -154,10 +154,10 @@ self.addEventListener("fetch", (event) => {
 // show a generic "This site has been updated in the background" instead, or
 // eventually revoke the permission), so there is always a fallback.
 const FALLBACK = {
-  title: "Hearth",
+  title: "OakTend",
   body: "You have a new notification.",
   url: "/dashboard",
-  tag: "hearth",
+  tag: "oaktend",
 };
 
 function readPayload(event) {
@@ -170,7 +170,7 @@ function readPayload(event) {
       body: typeof raw.body === "string" ? raw.body : "",
       // Same-origin paths only. The url comes off a push message, and a push
       // service is not a trusted channel: an absolute URL here would let a
-      // notification open any site it liked from inside Hearth's own
+      // notification open any site it liked from inside OakTend's own
       // notification. Anything that is not a plain "/path" is replaced.
       url:
         typeof raw.url === "string" &&
@@ -218,7 +218,7 @@ self.addEventListener("notificationclick", (event) => {
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
         // Prefer an app window that is already open: focus it and navigate it,
-        // rather than opening a second copy of Hearth beside the one the person
+        // rather than opening a second copy of OakTend beside the one the person
         // already had. navigate() can reject in some browsers (a cross-origin
         // client, an older engine), so it falls back to a plain focus.
         for (const client of clientList) {

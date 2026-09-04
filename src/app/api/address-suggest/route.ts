@@ -70,7 +70,7 @@ function cacheSet(key: string, suggestions: AddressSuggestion[]): void {
 }
 
 // The owner-wide outbound ceiling on Photon: one shared bucket across every
-// account, so no number of signups can add up to a flood from Hearth's egress
+// account, so no number of signups can add up to a flood from OakTend's egress
 // IPs. See the reasoning at the call site below.
 const SUGGEST_GLOBAL_BUCKET = "suggest-global-min";
 // The per-user limit below is 60/min. Ten people typing at once is therefore
@@ -164,7 +164,7 @@ export async function GET(req: NextRequest) {
     // what is on the other end of this is not our own infrastructure: Photon is
     // a free community service run by Komoot, with no contract behind it and no
     // per-key quota to hide behind. The thing they can do about a flood is
-    // block the source, and the source is Hearth's Vercel egress IPs - which
+    // block the source, and the source is OakTend's Vercel egress IPs - which
     // are shared, so the punishment lands on the whole deployment and lasts as
     // long as they decide it does. 60 a minute times enough signups is an
     // outage we cannot appeal.
@@ -197,7 +197,7 @@ export async function GET(req: NextRequest) {
       headers: {
         // Photon asks callers to identify themselves so they can reach a
         // misbehaving client instead of blocking a whole IP range.
-        "User-Agent": "Hearth/1.0 (+https://hearth.build)",
+        "User-Agent": "OakTend/1.0 (+https://hearth.build)",
         Accept: "application/json",
       },
       // Next would otherwise try to cache this in its own data cache, keyed on

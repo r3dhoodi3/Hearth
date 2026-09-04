@@ -1,8 +1,8 @@
-# Hearth Legal and Company Setup: README
+# OakTend Legal and Company Setup: README
 
 Last updated: 2026-09-02. Owner: Landen Chu. Co-founder: William Tran.
 
-This is the one file to read when you come back to this. It says where everything is, what is decided, what is not, what to do next, and what we learned. The full document set is in Google Drive: Hearth / 07: Legal / Paperwork (https://drive.google.com/drive/folders/1Q0n_8vjaomzxcFCahTwvtUQ2MrQn8E8a). The site copies live in the repo at src/content/legal.
+This is the one file to read when you come back to this. It says where everything is, what is decided, what is not, what to do next, and what we learned. The full document set is in Google Drive: OakTend / 07: Legal / Paperwork (https://drive.google.com/drive/folders/1Q0n_8vjaomzxcFCahTwvtUQ2MrQn8E8a). The site copies live in the repo at src/content/legal.
 
 ## Current
 

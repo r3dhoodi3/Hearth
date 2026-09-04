@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "article",
     // og:image comes from the colocated opengraph-image.tsx; Next wires it
     // up automatically for this segment.
@@ -356,7 +356,7 @@ export default function AduCostGuide() {
           <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
             Prices vary by property and project. Data as of July 2026,
             aggregated from published contractor pricing and industry cost
-            reports. Hearth does not set, guarantee, or bid these prices and is
+            reports. OakTend does not set, guarantee, or bid these prices and is
             not a contractor.
           </p>
         </section>

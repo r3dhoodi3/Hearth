@@ -7,7 +7,7 @@ import { verifyWebhookSignature, parseCheckrWebhookPayload } from "@/lib/checkr"
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// FCRA note: Hearth is not the "user" of the report under the Fair Credit
+// FCRA note: OakTend is not the "user" of the report under the Fair Credit
 // Reporting Act - Checkr's own candidate-facing flow (consent, disclosures,
 // adverse-action notices) carries those obligations directly with the
 // candidate. This route only ever reads and stores a pass/no-pass STATUS

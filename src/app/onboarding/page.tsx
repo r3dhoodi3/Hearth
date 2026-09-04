@@ -102,14 +102,14 @@ export default async function OnboardingPage(
           </div>
           <div className="card text-center">
             <p className="text-sm text-stone-600 dark:text-stone-300">
-              Your first home is free. Adding another home is part of Hearth
+              Your first home is free. Adding another home is part of OakTend
               Plus.
             </p>
             <Link
               href="/plus?reason=home_limit"
               className="btn-primary mt-4 inline-block"
             >
-              See Hearth Plus
+              See OakTend Plus
             </Link>
           </div>
           <Link
@@ -123,7 +123,7 @@ export default async function OnboardingPage(
               href="/pro"
               className="mt-2 text-center text-sm text-stone-500 hover:underline dark:text-stone-400"
             >
-              Go to Hearth Pro
+              Go to OakTend Pro
             </Link>
           )}
         </main>
@@ -169,7 +169,7 @@ export default async function OnboardingPage(
           <p>
             Here for the pro side?{" "}
             <Link href="/pro" className="underline hover:text-stone-700 dark:hover:text-stone-200">
-              Go to Hearth Pro
+              Go to OakTend Pro
             </Link>
           </p>
         )}

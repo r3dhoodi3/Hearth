@@ -49,7 +49,7 @@ describe("DescriptionField helper stability", () => {
       name: "Draft it for me from the photo",
     });
     const helperSentence = screen.getByText(
-      "Or let Hearth draft it from your photo, then edit."
+      "Or let OakTend draft it from your photo, then edit."
     );
 
     expect(draftButton).toBeInTheDocument();

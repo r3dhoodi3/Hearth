@@ -65,7 +65,7 @@ export default async function WalkthroughPage(props: {
         </h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Snap the data plate on each system as you walk through your home.
-          Hearth reads the brand, model, and age off it, you confirm, and your
+          OakTend reads the brand, model, and age off it, you confirm, and your
           Home Health Score gets sharper on the spot.
         </p>
       </div>

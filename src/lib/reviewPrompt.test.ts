@@ -162,7 +162,7 @@ describe("isEligibleForReviewPrompt: session, timing and page gates", () => {
   });
 });
 
-// The honest follow-up: "did you get a chance to rate Hearth?"
+// The honest follow-up: "did you get a chance to rate OakTend?"
 const baseFollowUp = {
   pathname: "/dashboard",
   settled: false,
@@ -395,7 +395,7 @@ describe("active time: only while visible, reset when idle", () => {
   });
 
   it("a suspended tab cannot bank the whole gap in one tick", () => {
-    // Screen off with Hearth foregrounded: the interval does not run, then
+    // Screen off with OakTend foregrounded: the interval does not run, then
     // fires once with twenty minutes of wall clock behind it.
     let state = createActiveTimeState(Date.now());
     state = noteActivity(state, Date.now());
@@ -578,7 +578,7 @@ describe("requestNativeReview", () => {
   });
 });
 
-// Hearth's own cap, on top of Apple's three-a-year and Google's undocumented
+// OakTend's own cap, on top of Apple's three-a-year and Google's undocumented
 // quota. The point is not to duplicate them: it is that a call past the OS cap
 // is silently swallowed, so spending all three in one week on the same person
 // throws the year away.

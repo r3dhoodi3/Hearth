@@ -126,7 +126,7 @@ function validPurchaseDate(v: string | null): string | null {
 }
 
 // Records an out-of-area lead in market_waitlist (0074) for the signed-in
-// user, so Hearth can email them when it expands to their ZIP. Shared by
+// user, so OakTend can email them when it expands to their ZIP. Shared by
 // every launch-city gate below AND by OnboardingForm.tsx's own faster
 // client-side ZIP check: that check short-circuits before ever calling
 // lookupParcelAction, so without a direct call here someone rejected right
@@ -196,7 +196,7 @@ export async function joinMarketWaitlistAction(
 // the homeowner in dev and was replaced by the caller's generic "That didn't go
 // through. Please try again." in production. The out-of-area case was the worst
 // of them: the visitor was silently added to the waitlist and then told to try
-// again, with no way to learn Hearth simply isn't in their city.
+// again, with no way to learn OakTend simply isn't in their city.
 //
 // `waitlisted` rides along on the out-of-area refusal only, so the caller's
 // waitlist panel can tell "you're on the list" from "we couldn't save you" -
@@ -239,7 +239,7 @@ export async function lookupParcelAction(
     return { ok: false, error: "Enter a valid 5-digit ZIP code." };
   }
   // Launch-restriction gate: the launch area only (isLaunchZip), which since
-  // 0129 is all of Orange County - Hearth has no pros anywhere else, and the
+  // 0129 is all of Orange County - OakTend has no pros anywhere else, and the
   // pro-side gates (open_jobs_for_me / apply_to_lead, migrations 0124/0126/
   // 0129) refuse those jobs too, so accepting the address here would strand
   // the homeowner with a job no pro can ever see. Checked before the rate limiter/RentCast call
@@ -469,7 +469,7 @@ export async function claimPropertyAction(
   // locked, visible ZIP box carried no `name` at all, so the only `zip` in the
   // POST came from a second, freely editable box inside the optional-details
   // disclosure - clearing that box refused the homeowner's own claim with
-  // "Hearth isn't in your area yet" and filed them on the out-of-area
+  // "OakTend isn't in your area yet" and filed them on the out-of-area
   // waitlist. See OnboardingForm.tsx.
   // =========================================================================
   const normalizeStreet = (s: string) =>

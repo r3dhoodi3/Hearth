@@ -25,7 +25,7 @@ describe("PostJobDoneReferralAsk", () => {
     render(<PostJobDoneReferralAsk code="ABCD1234" />);
     await waitFor(() =>
       expect(
-        screen.getByText("Know a neighbour with the same problem? Share Hearth.")
+        screen.getByText("Know a neighbour with the same problem? Share OakTend.")
       ).toBeInTheDocument()
     );
   });

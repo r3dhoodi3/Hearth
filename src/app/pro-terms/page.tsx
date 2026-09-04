@@ -6,7 +6,7 @@ import LegalDocument from "@/components/LegalDocument";
 // src/app/sitemap.ts for the sitemap entry. Content lives in
 // src/content/legal/pro-terms.md, rendered by LegalDocument.
 //
-// This page is the B2B supplement to /terms for contractors using Hearth for
+// This page is the B2B supplement to /terms for contractors using OakTend for
 // Pros: license/insurance obligations, independent-contractor status, leads
 // and lead credit-back, and pro membership billing. It does not replace
 // /terms - a contractor account is still bound by the general Terms of
@@ -17,10 +17,10 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: "Contractor Terms",
   description:
-    "The extra rules for contractors using Hearth for Pros: licensing and insurance, independent-contractor status, lead fees and credit-back, and Pro membership billing.",
+    "The extra rules for contractors using OakTend for Pros: licensing and insurance, independent-contractor status, lead fees and credit-back, and Pro membership billing.",
   alternates: {
     canonical: `${SITE_URL}/pro-terms`,
   },

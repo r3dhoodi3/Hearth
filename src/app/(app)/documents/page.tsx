@@ -143,7 +143,7 @@ export default async function DocumentsPage() {
       </header>
       <p className="mb-5 text-sm text-stone-500 dark:text-stone-400">
         Your home&apos;s paperwork, in one place: warranties, manuals,
-        receipts, model labels. Hearth reads each one and can drop the details
+        receipts, model labels. OakTend reads each one and can drop the details
         straight into your home profile. Never dig for a manual or warranty
         date again.
       </p>
@@ -289,7 +289,7 @@ export default async function DocumentsPage() {
           Home insurance
         </h2>
         <p className="mb-4 text-sm text-stone-500 dark:text-stone-400">
-          Add your renewal date and premium, and Hearth nudges you about 45
+          Add your renewal date and premium, and OakTend nudges you about 45
           days before renewal, while there&apos;s still time to shop around.
         </p>
 

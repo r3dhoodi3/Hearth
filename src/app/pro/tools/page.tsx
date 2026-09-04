@@ -11,7 +11,7 @@ import { PRO_TOOLS_PAYWALL } from "@/lib/freeAiTaste";
 import { proDraftsLeft } from "@/lib/freeAiTasteServer";
 import ProToolsClient, { type Tool } from "./ProToolsClient";
 
-// AI back office (Hearth Pro membership perk): writing tools that turn a pro's
+// AI back office (OakTend Pro membership perk): writing tools that turn a pro's
 // plain-words notes into paperwork they can send: an estimate, an invoice, a
 // follow-up message, a review response, an overdue reminder.
 //
@@ -88,7 +88,7 @@ export default async function ProToolsPage(
   if (!member && draftsLeft !== null && draftsLeft <= 0) {
     // The free trial is for first-time members only, and the pro-side
     // subscriptions row survives a cancellation, so a lapsed member gets the
-    // plain "See Hearth Pro" button instead of a trial they cannot have.
+    // plain "See OakTend Pro" button instead of a trial they cannot have.
     // Request-cached: hasProPlan() above already read the same rows. The
     // paywall experiment's "hard" arm takes the same trial-less branch
     // (src/lib/paywallExperiment.ts).
@@ -108,16 +108,16 @@ export default async function ProToolsPage(
           </p>
         </div>
 
-        <div className="rounded-xl border border-hearth-200 bg-hearth-50 p-4 text-center ring-1 ring-hearth-200 dark:border-hearth-800 dark:bg-hearth-900/40 dark:ring-hearth-800">
+        <div className="rounded-xl border border-oaktend-200 bg-oaktend-50 p-4 text-center ring-1 ring-oaktend-200 dark:border-oaktend-800 dark:bg-oaktend-900/40 dark:ring-oaktend-800">
           <div className="mb-2 flex justify-center">
             <span aria-hidden="true" className="icon-chip">
               <Lock className="h-5 w-5" />
             </span>
           </div>
-          <p className="text-sm font-medium text-hearth-800 dark:text-hearth-200">
+          <p className="text-sm font-medium text-oaktend-800 dark:text-oaktend-200">
             Pro membership tool
           </p>
-          <p className="mt-1 text-sm text-hearth-700 dark:text-hearth-300">
+          <p className="mt-1 text-sm text-oaktend-700 dark:text-oaktend-300">
             {/* The same sentence /api/pro-tools sends on a 402, so the screen
                 never says something the server would not have. */}
             {PRO_TOOLS_PAYWALL.message}{" "}
@@ -130,19 +130,19 @@ export default async function ProToolsPage(
             {trialEligible
               ? `Start your free trial to unlock all three tools.${
                   COLD_START_FREE_ALERTS
-                    ? " Instant job alerts are already free for every pro while Hearth is new."
+                    ? " Instant job alerts are already free for every pro while OakTend is new."
                     : " You also get instant job alerts."
                 } Your +${PRO_DEPOSIT_BOOST_PTS}% deposit match starts when the trial converts.`
               : `Join to unlock all three tools.${
                   COLD_START_FREE_ALERTS
-                    ? " Instant job alerts are already free for every pro while Hearth is new."
+                    ? " Instant job alerts are already free for every pro while OakTend is new."
                     : " You also get instant job alerts."
                 } Members earn +${PRO_DEPOSIT_BOOST_PTS}% on every deposit.`}
           </p>
           <ProUpgradeCta
             trialEligible={trialEligible}
             className="btn-primary mt-3 inline-block"
-            sublineClassName="mt-2 text-xs text-hearth-700 dark:text-hearth-300"
+            sublineClassName="mt-2 text-xs text-oaktend-700 dark:text-oaktend-300"
           />
         </div>
 
@@ -218,7 +218,7 @@ export default async function ProToolsPage(
       // est_value_cents is the pro's OWN estimate of the job's worth, typed
       // in on the CRM. contractor_leads.payout_amount is deliberately never
       // used here even though it looks like "the amount": it is what the pro
-      // pays HEARTH for the lead (see the NOTE in src/lib/proStats.ts), not
+      // pays OAKTEND for the lead (see the NOTE in src/lib/proStats.ts), not
       // what the homeowner owes them, and prefilling an invoice with it
       // would quote a pro's own lead fee back to their customer.
       supabase

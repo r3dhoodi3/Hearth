@@ -129,7 +129,7 @@ export default function ProToolsClient({
   const [paywalled, setPaywalled] = useState(false);
 
   // Show only the trades this pro actually lists on their profile, so the
-  // dropdown isn't a wall of every category on Hearth. If they haven't
+  // dropdown isn't a wall of every category on OakTend. If they haven't
   // picked any yet, fall back to the full list so the tool still works.
   const cats = categories.length
     ? JOB_CATEGORIES.filter((c) => categories.includes(c.value))
@@ -263,7 +263,7 @@ export default function ProToolsClient({
         return;
       }
       if (resp.status === 403) {
-        setPjError("This tool is part of the Hearth Pro membership.");
+        setPjError("This tool is part of the OakTend Pro membership.");
         return;
       }
 
@@ -401,7 +401,7 @@ export default function ProToolsClient({
         return;
       }
       if (resp.status === 403) {
-        setError("This tool is part of the Hearth Pro membership.");
+        setError("This tool is part of the OakTend Pro membership.");
         return;
       }
       // Free drafts spent. Not an error the pro did anything wrong with, so it
@@ -606,7 +606,7 @@ export default function ProToolsClient({
                 </p>
               )}
 
-              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-200 px-4 py-3 text-center hover:border-hearth-300 hover:bg-hearth-100 dark:border-stone-700 dark:hover:border-hearth-400 dark:hover:bg-hearth-900/40">
+              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-200 px-4 py-3 text-center hover:border-oaktend-300 hover:bg-oaktend-100 dark:border-stone-700 dark:hover:border-oaktend-400 dark:hover:bg-oaktend-900/40">
                 <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
                   {pjBusy
                     ? "Reading your document…"
@@ -871,15 +871,15 @@ export default function ProToolsClient({
           // The wall, in place of the button: a plain statement of what was
           // used up and what Pro adds, with the one door out. Never a cold
           // 402, never a disabled button with no explanation.
-          <div className="rounded-lg border border-hearth-200 bg-hearth-50 p-3 dark:border-hearth-500/30 dark:bg-hearth-500/15">
-            <p className="text-sm text-hearth-800 dark:text-hearth-200">
+          <div className="rounded-lg border border-oaktend-200 bg-oaktend-50 p-3 dark:border-oaktend-500/30 dark:bg-oaktend-500/15">
+            <p className="text-sm text-oaktend-800 dark:text-oaktend-200">
               {PRO_TOOLS_PAYWALL.message}
             </p>
             <Link
               href={PRO_TOOLS_PAYWALL.link}
               className="btn-primary mt-3 inline-block text-sm"
             >
-              See Hearth Pro
+              See OakTend Pro
             </Link>
           </div>
         ) : (
@@ -911,7 +911,7 @@ export default function ProToolsClient({
               type="button"
               onClick={copyResult}
               // Phone only: 16px tall before.
-              className="shrink-0 text-xs font-medium text-hearth-700 hover:text-hearth-800 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-hearth-300 dark:hover:text-hearth-200"
+              className="shrink-0 text-xs font-medium text-oaktend-700 hover:text-oaktend-800 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-oaktend-300 dark:hover:text-oaktend-200"
             >
               {copied ? "Copied" : "Copy"}
             </button>
@@ -927,7 +927,7 @@ export default function ProToolsClient({
               setDrafts((d) => ({ ...d, [tool]: e.target.value }))
             }
             rows={10}
-            className="w-full whitespace-pre-wrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm max-sm:text-base max-sm:leading-relaxed text-stone-700 focus:border-hearth-500 focus:outline-none focus:ring-1 focus:ring-hearth-500 dark:border-white/10 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-hearth-400 dark:focus:ring-hearth-400"
+            className="w-full whitespace-pre-wrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm max-sm:text-base max-sm:leading-relaxed text-stone-700 focus:border-oaktend-500 focus:outline-none focus:ring-1 focus:ring-oaktend-500 dark:border-white/10 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-oaktend-400 dark:focus:ring-oaktend-400"
           />
           <AiNotice detail="This is a starting point: read it over and edit anything before you send or post it, because it goes out under your name." />
 

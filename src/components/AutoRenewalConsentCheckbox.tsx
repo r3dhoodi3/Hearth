@@ -6,7 +6,7 @@ import { AUTO_RENEWAL_CHECKBOX_LABEL } from "@/lib/billingTerms";
 // 17602(a)(2), as amended by AB 2863, effective July 1, 2025): unchecked by
 // default, sitting directly under the disclosure block it confirms, on every
 // subscription checkout screen: homeowner Plus
-// (src/app/(app)/plus/PlanToggle.tsx), Hearth Pro
+// (src/app/(app)/plus/PlanToggle.tsx), OakTend Pro
 // (src/app/pro/plus/ProPlanToggle.tsx), and the Pro trial takeover
 // (src/components/pro/ProTrialNudge.tsx). One component so the label, the
 // posted field name, and the hint text can never drift between the three.
@@ -22,7 +22,7 @@ import { AUTO_RENEWAL_CHECKBOX_LABEL } from "@/lib/billingTerms";
 // Same checkbox styling as the 18+/Terms attestation on the two signup pages
 // (src/app/homeowner-signup/page.tsx, src/app/contractor-signup/page.tsx):
 // no custom accent color, so it reads the same on a bark-accented homeowner
-// page and an hearth-accented Pro one, and a 24px box on a phone so the one
+// page and an oaktend-accented Pro one, and a 24px box on a phone so the one
 // control gating checkout is never a fingertip miss.
 export default function AutoRenewalConsentCheckbox({
   id,

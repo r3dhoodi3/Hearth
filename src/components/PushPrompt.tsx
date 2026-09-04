@@ -110,7 +110,7 @@ export default function PushPrompt({ side }: { side: PushSide }) {
     }
     if (result === "needs-install") {
       setNote(
-        "On iPhone, add Hearth to your Home Screen first: tap Share, then Add to Home Screen. Then open Hearth from the new icon and turn this on."
+        "On iPhone, add OakTend to your Home Screen first: tap Share, then Add to Home Screen. Then open OakTend from the new icon and turn this on."
       );
       return;
     }
@@ -118,7 +118,7 @@ export default function PushPrompt({ side }: { side: PushSide }) {
       // The browser's permanent no. Stop offering and say where it lives.
       if (userId) markPushPromptDone(userId);
       setNote(
-        "Notifications are blocked for Hearth in this browser. You can allow them again in your browser's settings for this site."
+        "Notifications are blocked for OakTend in this browser. You can allow them again in your browser's settings for this site."
       );
       return;
     }
@@ -159,7 +159,7 @@ export default function PushPrompt({ side }: { side: PushSide }) {
             </p>
             <p className="mt-0.5 text-sm text-stone-600 dark:text-stone-400">
               {note ??
-                "Your phone can tell you even when Hearth is closed. You can turn this off any time."}
+                "Your phone can tell you even when OakTend is closed. You can turn this off any time."}
             </p>
           </div>
           <button

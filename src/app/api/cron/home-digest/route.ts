@@ -52,7 +52,7 @@ const DIGEST_KIND = "home_digest";
 const DIGEST_URL = "/dashboard";
 
 // Closing line on every digest that actually goes out: word of mouth (a
-// neighbor tip) is how most homeowners find Hearth in the first place, and
+// neighbor tip) is how most homeowners find OakTend in the first place, and
 // the check-in is a warm, non-salesy moment to ask. One sentence, no reward.
 // Skipped entirely when NEXT_PUBLIC_SITE_URL is unset: a digest inviting
 // people to "localhost:3000" would be worse than no invitation at all.

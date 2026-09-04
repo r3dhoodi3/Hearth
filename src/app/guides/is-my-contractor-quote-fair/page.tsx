@@ -4,8 +4,8 @@ import GuideCta from "@/components/GuideCta";
 import Breadcrumbs, { BreadcrumbJsonLd } from "@/components/Breadcrumbs";
 
 // Public SEO guide. General, honest guidance on reading a contractor's
-// quote; no invented prices. Links to /quote-check (Hearth's AI Quote
-// Analyzer, gated behind sign-in / Hearth Plus, see src/app/(app)/quote-check)
+// quote; no invented prices. Links to /quote-check (OakTend's AI Quote
+// Analyzer, gated behind sign-in / OakTend Plus, see src/app/(app)/quote-check)
 // as the natural next step once someone has an actual quote in hand.
 
 const SITE_URL =
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "article",
   },
   twitter: {
@@ -63,8 +63,8 @@ const FAQS = [
     a: "Getting more than one quote for anything beyond a small repair, comparing itemized breakdowns rather than just the bottom line, confirming license and insurance independently, and having a written contract with a payment schedule tied to milestones, not just a handshake and a deposit.",
   },
   {
-    q: "Ca Hearth tell me if my quote is fair?",
-    a: "Hearth's Quote analyzer reads a quote you upload or paste in, compares the total and each line item to typical costs, flags anything that looks padded, vague, or duplicated, and drafts a message you can send back if you want to negotiate.",
+    q: "Can OakTend tell me if my quote is fair?",
+    a: "OakTend's Quote analyzer reads a quote you upload or paste in, compares the total and each line item to typical costs, flags anything that looks padded, vague, or duplicated, and drafts a message you can send back if you want to negotiate.",
   },
 ];
 
@@ -174,7 +174,7 @@ export default function IsMyContractorQuoteFairGuide() {
             Already have a quote in hand?
           </h2>
           <p className="mt-2 leading-relaxed">
-            Hearth&apos;s{" "}
+            OakTend&apos;s{" "}
             <Link
               href="/quote-check"
               className="text-bark-700 hover:underline dark:text-stone-300"

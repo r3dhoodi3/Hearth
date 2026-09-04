@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSignedIn } from "@/components/SessionCta";
 
 // Shared closing CTA for the public /guides pages. Every guide page ends with
-// the same pitch: the ranges above are national/typical, Hearth's answer is
+// the same pitch: the ranges above are national/typical, OakTend's answer is
 // specific to the visitor's own home, and it's free to get. Keep this in
 // lockstep across all guide pages rather than letting each page drift.
 //
@@ -55,7 +55,7 @@ export default function GuideCta({
           See this for YOUR home
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-300">
-          Everything above is a general, national range. Hearth already
+          Everything above is a general, national range. OakTend already
           knows your home&apos;s actual age, size, and systems.
         </p>
         <Link
@@ -74,7 +74,7 @@ export default function GuideCta({
         Get the answer for YOUR home
       </h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-300">
-        Everything above is a general, national range. Hearth knows your
+        Everything above is a general, national range. OakTend knows your
         home&apos;s actual age, size, and systems, and turns that into a
         house-specific answer, free.
       </p>

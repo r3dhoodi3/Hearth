@@ -81,11 +81,11 @@ afterEach(() => {
 describe("useChatViewport", () => {
   it("mirrors the visual viewport, the header and the tab bar onto <html>", () => {
     render(<Panel />);
-    expect(varOf("--hearth-vvh")).toBe("800px");
-    expect(varOf("--hearth-kb")).toBe("0px");
-    expect(varOf("--hearth-chat-top")).toBe("56px");
-    expect(varOf("--hearth-chat-bottom")).toBe("56px");
-    expect(document.body.classList.contains("hearth-kb-open")).toBe(false);
+    expect(varOf("--oaktend-vvh")).toBe("800px");
+    expect(varOf("--oaktend-kb")).toBe("0px");
+    expect(varOf("--oaktend-chat-top")).toBe("56px");
+    expect(varOf("--oaktend-chat-bottom")).toBe("56px");
+    expect(document.body.classList.contains("oaktend-kb-open")).toBe(false);
   });
 
   it("shrinks the panel and marks the body when the keyboard opens", () => {
@@ -94,12 +94,12 @@ describe("useChatViewport", () => {
       vv.height = 460; // 340px of keyboard
       vv.fire("resize");
     });
-    expect(varOf("--hearth-vvh")).toBe("460px");
-    expect(varOf("--hearth-kb")).toBe("340px");
+    expect(varOf("--oaktend-vvh")).toBe("460px");
+    expect(varOf("--oaktend-kb")).toBe("340px");
     // The tab bar is hidden by the body class, so it takes no room: the panel
     // runs all the way down to the keys.
-    expect(varOf("--hearth-chat-bottom")).toBe("0px");
-    expect(document.body.classList.contains("hearth-kb-open")).toBe(true);
+    expect(varOf("--oaktend-chat-bottom")).toBe("0px");
+    expect(document.body.classList.contains("oaktend-kb-open")).toBe(true);
   });
 
   it("ignores the URL bar collapsing, which would flicker the tab bar on every scroll", () => {
@@ -108,8 +108,8 @@ describe("useChatViewport", () => {
       vv.height = 740; // 60px, far too little to be a keyboard
       vv.fire("resize");
     });
-    expect(document.body.classList.contains("hearth-kb-open")).toBe(false);
-    expect(varOf("--hearth-chat-bottom")).toBe("56px");
+    expect(document.body.classList.contains("oaktend-kb-open")).toBe(false);
+    expect(varOf("--oaktend-chat-bottom")).toBe("56px");
   });
 
   it("undoes Safari's document shove while the composer has focus", () => {
@@ -135,11 +135,11 @@ describe("useChatViewport", () => {
       vv.fire("resize");
     });
     view.unmount();
-    expect(varOf("--hearth-vvh")).toBe("");
-    expect(varOf("--hearth-kb")).toBe("");
-    expect(varOf("--hearth-chat-top")).toBe("");
-    expect(varOf("--hearth-chat-bottom")).toBe("");
-    expect(document.body.classList.contains("hearth-kb-open")).toBe(false);
+    expect(varOf("--oaktend-vvh")).toBe("");
+    expect(varOf("--oaktend-kb")).toBe("");
+    expect(varOf("--oaktend-chat-top")).toBe("");
+    expect(varOf("--oaktend-chat-bottom")).toBe("");
+    expect(document.body.classList.contains("oaktend-kb-open")).toBe(false);
   });
 
   it("writes nothing at all where visualViewport does not exist", () => {
@@ -148,7 +148,7 @@ describe("useChatViewport", () => {
       value: undefined,
     });
     render(<Panel />);
-    expect(varOf("--hearth-vvh")).toBe("");
+    expect(varOf("--oaktend-vvh")).toBe("");
   });
 });
 

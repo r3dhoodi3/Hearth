@@ -7,30 +7,30 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 
 const FAQ: { q: string; a: string; href?: string; hrefLabel?: string }[] = [
   {
-    q: "How does Hearth know about my home?",
-    a: "When you claim your address, Hearth looks up public property records and builds a starter profile. You can add or edit your systems, their ages, and their condition at any time from the Home page.",
+    q: "How does OakTend know about my home?",
+    a: "When you claim your address, OakTend looks up public property records and builds a starter profile. You can add or edit your systems, their ages, and their condition at any time from the Home page.",
   },
   {
     q: "How do I get quotes from contractors?",
-    a: "Post a job from the Post a Job page or ask Hearth to help. Local pros can then message you, and any price they send in chat is captured so you can compare them side by side.",
+    a: "Post a job from the Post a Job page or ask OakTend to help. Local pros can then message you, and any price they send in chat is captured so you can compare them side by side.",
   },
   {
-    q: "What is Ask Hearth?",
-    a: "Ask Hearth is your home assistant. It answers questions using your own systems and their ages, reads photos of labels or documents, and can log issues, set reminders, and post jobs for you.",
+    q: "What is Ask OakTend?",
+    a: "Ask OakTend is your home assistant. It answers questions using your own systems and their ages, reads photos of labels or documents, and can log issues, set reminders, and post jobs for you.",
   },
   {
     q: "Is my data private?",
     a: "Your home data is yours. Every record is protected so that only you can see your home, and you can delete your account and all associated data at any time from Account security.",
   },
   {
-    q: "How does Hearth decide when something needs maintenance?",
-    a: "Hearth uses your system's typical lifespan and the age you gave it to flag what is coming due.",
+    q: "How does OakTend decide when something needs maintenance?",
+    a: "OakTend uses your system's typical lifespan and the age you gave it to flag what is coming due.",
     href: "/guides/home-maintenance-schedule",
     hrefLabel: "See the full maintenance schedule",
   },
   {
     q: "How do I know if a contractor's quote is fair?",
-    a: "Ask Hearth to read the quote with you, or check it against the red flags in our guide.",
+    a: "Ask OakTend to read the quote with you, or check it against the red flags in our guide.",
     href: "/guides/is-my-contractor-quote-fair",
     hrefLabel: "Is my contractor's quote fair?",
   },
@@ -109,7 +109,7 @@ export default async function HelpPage(props: {
       {/* Found a bug: reports now have their own page at /feedback (the same
           one the review prompt's "Not really" routes to), so a bug report and
           a support question stop sharing a form. Still no credit offer here:
-          Hearth has no homeowner wallet or credit to pay one out (that's a
+          OakTend has no homeowner wallet or credit to pay one out (that's a
           pro-side thing), so promising one would be a bug of its own. */}
       <div className="card">
         <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
@@ -160,10 +160,10 @@ export default async function HelpPage(props: {
           src/components/ShowAppGuideButton.tsx. */}
       <div className="card">
         <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
-          New to Hearth?
+          New to OakTend?
         </h2>
         <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-          A one-minute look at what Hearth watches, what it asks of you, and
+          A one-minute look at what OakTend watches, what it asks of you, and
           how to find a pro.
         </p>
         <div className="mt-2">
@@ -172,7 +172,7 @@ export default async function HelpPage(props: {
       </div>
 
       <p className="text-sm text-stone-500 dark:text-stone-400">
-        You can also ask Hearth from the Ask Hearth row at the top of Messages.
+        You can also ask OakTend from the Ask OakTend row at the top of Messages.
       </p>
     </div>
   );

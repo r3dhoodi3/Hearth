@@ -9,11 +9,11 @@ import { renderOgCard, OG_SIZE, OG_CONTENT_TYPE } from "@/lib/ogCard";
 
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
-export const alt = "Hearth guide: How much can a contractor ask for up front in California?";
+export const alt = "OakTend guide: How much can a contractor ask for up front in California?";
 
 export default function OgImage() {
   return renderOgCard(
     "How much can a contractor ask for up front in California?",
-    "A Hearth home guide"
+    "A OakTend home guide"
   );
 }

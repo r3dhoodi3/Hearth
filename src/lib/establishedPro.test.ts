@@ -95,7 +95,7 @@ beforeEach(() => {
 });
 
 describe("isEstablishedPro", () => {
-  it("unlocks a paying Hearth Pro member without reading anything else", async () => {
+  it("unlocks a paying OakTend Pro member without reading anything else", async () => {
     hasPro = true;
     expect(await isEstablishedPro("con_paid")).toBe(true);
     expect(touched).toEqual([]);

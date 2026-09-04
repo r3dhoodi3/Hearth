@@ -34,7 +34,7 @@ const RISK_TABLES = [
 describe("both checkout actions consult trialDecision before creating a session", () => {
   const cases: Array<[string, string, string]> = [
     ["homeowner Plus", plusAction, "startPlusCheckoutAction"],
-    ["Hearth Pro", proAction, "startProCheckoutAction"],
+    ["OakTend Pro", proAction, "startProCheckoutAction"],
   ];
 
   it.each(cases)("%s imports the risk decision", (_label, source) => {

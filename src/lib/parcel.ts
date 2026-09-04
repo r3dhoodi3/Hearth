@@ -322,7 +322,7 @@ type RentcastRecord = {
 };
 
 // Normalizes RentCast's owner.type ("Individual" | "Organization", per their
-// docs) to Hearth's lowercase enum. Anything unrecognized stays null rather
+// docs) to OakTend's lowercase enum. Anything unrecognized stays null rather
 // than guessed - ownershipMatch.ts treats a null owner_type as "can't
 // verify", same as a missing owner entirely.
 function normalizeOwnerType(value: string | null | undefined): "individual" | "organization" | null {
@@ -334,7 +334,7 @@ function normalizeOwnerType(value: string | null | undefined): "individual" | "o
 
 // RentCast returns human-readable property types ("Single Family", "Condo",
 // "Townhouse", "Multi-Family", "Apartment", "Manufactured", "Land"), but the
-// onboarding confirm screen's <select> only knows Hearth's snake_case enum
+// onboarding confirm screen's <select> only knows OakTend's snake_case enum
 // (PROPERTY_TYPES in src/lib/constants.ts). An unmapped defaultValue makes the
 // browser silently fall back to the first option, "single_family", so every
 // unnormalized value would misfile as a single-family home. Map what we

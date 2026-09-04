@@ -5,7 +5,7 @@ import LegalDocument from "@/components/LegalDocument";
 // src/lib/supabase/middleware.ts for the allowlist entry and
 // src/app/sitemap.ts for the sitemap entry. Content lives in
 // src/content/legal/law-enforcement.md, rendered by LegalDocument. This is
-// where a law enforcement agency or a civil litigant finds what Hearth
+// where a law enforcement agency or a civil litigant finds what OakTend
 // requires before disclosing any user data.
 
 const SITE_URL =
@@ -14,7 +14,7 @@ const SITE_URL =
 export const metadata: Metadata = {
   title: "Law Enforcement Requests",
   description:
-    "What Hearth has, what legal process we require before disclosing it, how to serve us, and how we handle preservation, emergency, and civil requests.",
+    "What OakTend has, what legal process we require before disclosing it, how to serve us, and how we handle preservation, emergency, and civil requests.",
   alternates: {
     canonical: `${SITE_URL}/law-enforcement`,
   },

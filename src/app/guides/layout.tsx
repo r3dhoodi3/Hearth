@@ -46,7 +46,7 @@ export default function GuidesLayout({
           href="/"
           className="flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
         >
-          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
+          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> OakTend
         </Link>
         <SessionCta signedOutHref="/" />
       </header>
@@ -55,7 +55,7 @@ export default function GuidesLayout({
 
       <footer className="mx-auto mt-16 max-w-2xl border-t border-stone-200 px-6 py-6 text-center dark:border-white/10">
         <p className="inline-flex w-full items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-          <Logo className="h-4 w-4 text-bark-700 dark:text-stone-400" /> Hearth · Your home, looked after
+          <Logo className="h-4 w-4 text-bark-700 dark:text-stone-400" /> OakTend · Your home, looked after
         </p>
         {/* "All guides" plus the legal set (LEGAL_LINKS, src/lib/legal.ts).
             Plain inline text wraps on its own on a phone. */}

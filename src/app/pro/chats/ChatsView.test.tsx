@@ -5,10 +5,10 @@ import "@testing-library/jest-dom/vitest";
 
 // Same rationale as ProNav.test.tsx: stub the client subsystems that have
 // nothing to do with the branch under test. LeadChat in particular opens a
-// realtime subscription and AskHearthRow reads localStorage. The stub keeps
+// realtime subscription and AskOakTendRow reads localStorage. The stub keeps
 // its visible name so the tab tests can assert the pinned row never leaves.
-vi.mock("@/components/AskHearthRow", () => ({
-  default: () => <li>Ask Hearth</li>,
+vi.mock("@/components/AskOakTendRow", () => ({
+  default: () => <li>Ask OakTend</li>,
 }));
 vi.mock("@/components/LeadChat", () => ({ default: () => <div /> }));
 vi.mock("@/components/PhoneChatFrame", () => ({
@@ -99,12 +99,12 @@ describe("pro Messages: Active / Closed tabs", () => {
     expect(screen.queryByText("Dana Homeowner")).toBeNull();
   });
 
-  it("keeps the pinned Ask Hearth and Find clients rows on both tabs", () => {
+  it("keeps the pinned Ask OakTend and Find clients rows on both tabs", () => {
     renderTabs();
-    expect(screen.getByText("Ask Hearth")).toBeInTheDocument();
+    expect(screen.getByText("Ask OakTend")).toBeInTheDocument();
     expect(screen.getByText("Find clients")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Closed/ }));
-    expect(screen.getByText("Ask Hearth")).toBeInTheDocument();
+    expect(screen.getByText("Ask OakTend")).toBeInTheDocument();
     expect(screen.getByText("Find clients")).toBeInTheDocument();
   });
 
@@ -205,7 +205,7 @@ describe("pro Messages: applications waiting on the homeowner", () => {
       />
     );
     expect(screen.queryByText("New")).toBeNull();
-    expect(container.innerHTML).not.toContain("bg-hearth-600");
+    expect(container.innerHTML).not.toContain("bg-oaktend-600");
   });
 });
 

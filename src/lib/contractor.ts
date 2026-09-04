@@ -331,12 +331,12 @@ export async function propertyRowExists(userId: string): Promise<boolean> {
 // How many PAID lead applications this contractor has: lead_applications rows
 // they own whose fee was not refunded (a ghost-protection refund means the
 // lead never really cost them anything, so it does not count toward an
-// earn-in). Used by the Hearth-funded background check gate, which spends real
+// earn-in). Used by the OakTend-funded background check gate, which spends real
 // money per check and therefore only opens after
 // BACKGROUND_CHECK_MIN_PAID_LEADS of them.
 //
 // Returns null when the count could NOT be read. Callers must treat null as
-// "not enough": this decides whether Hearth pays a third-party bill, so a
+// "not enough": this decides whether OakTend pays a third-party bill, so a
 // broken read has to fail closed rather than hand out a free check on the
 // strength of an outage. Cached per request so the page and the action that
 // both need it share one query.
@@ -373,7 +373,7 @@ export const countPaidLeadApplications = cache(
 //   2. paid for at least one lead (countPaidLeadApplications above, which
 //      already excludes ghost-protection refunds),
 //   3. money in the wallet that actually settled,
-//   4. a live Hearth Pro membership, trial included - they are paying us now.
+//   4. a live OakTend Pro membership, trial included - they are paying us now.
 //
 // Any ONE of those unlocks it; they are alternatives, not steps. A free pro who
 // clears the bar gets ASK_DAILY_FREE questions a day, the same as a free

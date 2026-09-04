@@ -23,7 +23,7 @@ describe("pro-ask system prompt: the money model states the Pro member discount"
 
   it("states the discount and the never-stacks rule in the same sentence as the base tiers", () => {
     expect(route).toContain(
-      "Hearth Pro members get ${PRO_LEAD_DISCOUNT_PCT}% off every one of those fees, but it NEVER stacks with the aging markdown"
+      "OakTend Pro members get ${PRO_LEAD_DISCOUNT_PCT}% off every one of those fees, but it NEVER stacks with the aging markdown"
     );
     expect(route).toContain("never both added together");
   });

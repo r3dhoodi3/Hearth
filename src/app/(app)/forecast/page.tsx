@@ -39,7 +39,7 @@ import {
   RESERVE_HORIZON_YEARS,
 } from "@/lib/forecastReserve";
 import { isMissingSchemaError } from "@/lib/dbErrors";
-import AskHearthPlanButton from "./AskHearthPlanButton";
+import AskOakTendPlanButton from "./AskOakTendPlanButton";
 import QuoteEarlyLink from "./QuoteEarlyLink";
 import IncentiveViewTracker from "./IncentiveViewTracker";
 import { addForecastStepAction, saveRepairReserveAction } from "./actions";
@@ -332,7 +332,7 @@ export default async function ForecastPage() {
       })
     : null;
 
-  // Personalize the handoff into Ask Hearth with the owner's actual top
+  // Personalize the handoff into Ask OakTend with the owner's actual top
   // priorities, not a generic prompt, so the answer is about their home.
   const planQuestion =
     forecast && forecast.startHere.length > 0
@@ -415,7 +415,7 @@ export default async function ForecastPage() {
           {plus && (
           <>
           <div className="mt-4 flex justify-center">
-            <AskHearthPlanButton question={planQuestion} />
+            <AskOakTendPlanButton question={planQuestion} />
           </div>
 
           {/* Reserve plan. Sits right under the headline set-aside because it
@@ -1022,7 +1022,7 @@ export default async function ForecastPage() {
                     href="/plus?reason=forecast"
                     className="btn-primary mt-3 inline-flex min-h-11 items-center justify-center px-5"
                   >
-                    Get Hearth Plus
+                    Get OakTend Plus
                   </Link>
                   <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
                     {paywallVariant === "soft"

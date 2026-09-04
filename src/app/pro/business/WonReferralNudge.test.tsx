@@ -25,7 +25,7 @@ describe("WonReferralNudge (MR3#12, pro side)", () => {
     render(<WonReferralNudge wonCount={1} />);
     await waitFor(() =>
       expect(
-        screen.getByText("Who else should be on Hearth? Refer another pro.")
+        screen.getByText("Who else should be on OakTend? Refer another pro.")
       ).toBeInTheDocument()
     );
     const link = screen.getByText("See your referral link");

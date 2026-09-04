@@ -125,7 +125,7 @@ export default function FeedbackForm({
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium text-stone-900 dark:text-stone-100">
-          How is Hearth working for you?
+          How is OakTend working for you?
         </legend>
         {/* Numbers with words: nobody should have to guess whether 1 is good
             or bad. Five buttons across at 390px, each a real tap target. */}
@@ -138,7 +138,7 @@ export default function FeedbackForm({
               aria-pressed={score === o.value}
               className={`flex min-h-[3.5rem] flex-col items-center justify-center rounded-lg border px-1 py-2 text-center transition-colors ${
                 score === o.value
-                  ? "border-hearth-600 bg-hearth-50 text-hearth-800 dark:border-hearth-500 dark:bg-hearth-500/15 dark:text-hearth-200"
+                  ? "border-oaktend-600 bg-oaktend-50 text-oaktend-800 dark:border-oaktend-500 dark:bg-oaktend-500/15 dark:text-oaktend-200"
                   : "border-stone-200 text-stone-600 hover:border-stone-300 dark:border-white/10 dark:text-stone-300"
               }`}
             >
@@ -182,7 +182,7 @@ export default function FeedbackForm({
           type="checkbox"
           checked={contactOk}
           onChange={(e) => setContactOk(e.target.checked)}
-          className="mt-1 h-6 w-6 shrink-0 rounded border-stone-300 text-hearth-600 focus:ring-hearth-600 dark:border-white/20"
+          className="mt-1 h-6 w-6 shrink-0 rounded border-stone-300 text-oaktend-600 focus:ring-oaktend-600 dark:border-white/20"
         />
         <span className="text-sm text-stone-600 dark:text-stone-300">
           You can contact me about this.

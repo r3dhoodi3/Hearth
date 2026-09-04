@@ -75,7 +75,7 @@ describe("pro CRM: the pipeline is unchanged", () => {
     expect(page).toMatch(
       /hasProSubscriptionRow=\{\s*Boolean\(proSub\) \|\|\s*variantForUser\(contractor\.user_id \?\? null\) === "hard"\s*\}/
     );
-    expect(view).toContain('? "See Hearth Pro"');
+    expect(view).toContain('? "See OakTend Pro"');
   });
 });
 

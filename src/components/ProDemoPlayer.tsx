@@ -20,7 +20,7 @@ import { track } from "@/lib/analytics";
 // The shape (same discipline as the homeowner cut):
 // - 28.5 seconds, 76 beats at 160 BPM (375ms per beat), half-time phonk-style
 //   drums; every cut lands on the beat grid.
-// - FULL pro app pages (Hearth for Pros nav and all) inside a browser device,
+// - FULL pro app pages (OakTend for Pros nav and all) inside a browser device,
 //   with a virtual camera that punches into click targets so a normal-sized
 //   cursor still owns the frame.
 // - One continuous session: cold open on the live leads board (no title
@@ -137,10 +137,10 @@ function LockMark() {
   );
 }
 
-// The demo pages copy the LIVE pro app (see ProNav.tsx): the "Hearth for Pros"
+// The demo pages copy the LIVE pro app (see ProNav.tsx): the "OakTend for Pros"
 // wordmark, the four daily tabs (Leads, Messages, Clients, My Business), a
 // notification bell, and the company avatar. The nav sits on the real pro
-// shell's warm hearth-50 fill, not the homeowner's white. Rendered at natural
+// shell's warm oaktend-50 fill, not the homeowner's white. Rendered at natural
 // size, then the page scales to fit the device, so every pixel matches the
 // production stylesheet.
 function ProAppNav({
@@ -160,9 +160,9 @@ function ProAppNav({
   return (
     // Tight spacing so the whole strip, company name included, always fits the
     // frame: nothing on the right edge may clip.
-    <header className="flex items-center gap-2 border-b border-stone-200/70 bg-hearth-50 px-4 py-3">
+    <header className="flex items-center gap-2 border-b border-stone-200/70 bg-oaktend-50 px-4 py-3">
       <span className="flex shrink-0 items-center gap-1.5 text-lg font-semibold text-stone-900">
-        <Logo className="h-6 w-6 text-hearth-700" /> Hearth{" "}
+        <Logo className="h-6 w-6 text-oaktend-700" /> OakTend{" "}
         <span className="font-normal text-stone-500">for Pros</span>
       </span>
       <span className="flex flex-1 items-center">
@@ -171,7 +171,7 @@ function ProAppNav({
             key={t}
             {...(msgTabX && t === "Messages" ? { "data-x": "msgTab" } : {})}
             className={`flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium ${
-              i === active ? "bg-hearth-100 text-hearth-800" : "text-stone-600"
+              i === active ? "bg-oaktend-100 text-oaktend-800" : "text-stone-600"
             }`}
           >
             {t}
@@ -194,7 +194,7 @@ function ProAppNav({
         <path d="M13.7 21a2 2 0 0 1-3.4 0" />
       </svg>
       <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-medium text-stone-700">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-hearth-100 text-sm font-semibold text-hearth-700">R</span>
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-oaktend-100 text-sm font-semibold text-oaktend-700">R</span>
         Rivera Plumbing <span className="text-[10px] text-stone-400">▾</span>
       </span>
     </header>
@@ -992,7 +992,7 @@ export default function ProDemoPlayer() {
     const VO_DIR = "/demo-vo/pro";
     const VO_TEXT = {
       // hook: cold open over the live board, the promise up front.
-      hook: "This is Hearth. Real jobs, from homeowners near you.",
+      hook: "This is OakTend. Real jobs, from homeowners near you.",
       // leads: the board, with the honest up-front fee.
       leads: "New jobs post here, with the lead fee shown up front.",
       // apply: the one-tap apply moment. The founder cut the wallet clause
@@ -1674,7 +1674,7 @@ export default function ProDemoPlayer() {
       // narration starts over the real product and the hand drifts to the
       // one open job, with the camera easing in behind it, so the first
       // seconds already read as someone showing you around.
-      // VO: "This is Hearth. Real jobs, from homeowners near you."
+      // VO: "This is OakTend. Real jobs, from homeowners near you."
       showPage("leadsPage");
       cameraSnapWide();
       const w = q("[data-x='wallet']");
@@ -2427,11 +2427,11 @@ export default function ProDemoPlayer() {
       ref={boxRef}
       className={styles.box}
       role="group"
-      aria-label="Hearth for Pros demo, about half a minute, with sound"
+      aria-label="OakTend for Pros demo, about half a minute, with sound"
       aria-describedby="pro-demo-desc"
     >
       <p id="pro-demo-desc" className="sr-only">
-        A fast animated walkthrough of Hearth for Pros. A contractor opens their leads board and
+        A fast animated walkthrough of OakTend for Pros. A contractor opens their leads board and
         sees a nearby job with the details masked and the lead fee shown up front, applies with an
         AI-drafted note and pays the fee from their wallet, messages the homeowner, and gets chosen
         for the job. It ends on the pro value prop and the fee-credit guarantee: not chosen, your
@@ -2440,7 +2440,7 @@ export default function ProDemoPlayer() {
 
       <span className={styles.watermark}>
         <HouseMark />
-        Hearth for Pros
+        OakTend for Pros
       </span>
       <span className={styles.stepChip} data-x="stepChip"></span>
       <Link
@@ -2480,7 +2480,7 @@ export default function ProDemoPlayer() {
                       <p className="stat-number mt-1 text-4xl text-stone-900">
                         $<span data-x="wallet">80</span>
                       </p>
-                      <p className="mt-1 text-xs font-medium text-hearth-700">Add funds →</p>
+                      <p className="mt-1 text-xs font-medium text-oaktend-700">Add funds →</p>
                     </div>
                   </div>
                   <h2 className="mt-5 text-lg font-semibold text-stone-900">
@@ -2538,7 +2538,7 @@ export default function ProDemoPlayer() {
                             <span data-x="applyNote"></span>
                           </span>
                         </div>
-                        <span className="text-xs font-medium text-hearth-700" data-x="draftBtn">Draft it for me</span>
+                        <span className="text-xs font-medium text-oaktend-700" data-x="draftBtn">Draft it for me</span>
                         <p className="text-xs text-stone-500">
                           Applying charges the $50 lead fee from your wallet. Not chosen? Your fee
                           comes back as credit, good for 60 days.
@@ -2568,12 +2568,12 @@ export default function ProDemoPlayer() {
                   <h1 className="text-xl font-semibold text-stone-900">Messages</h1>
                   <div className="mt-3 grid grid-cols-[220px_1fr] gap-4">
                     <div className="card p-0">
-                      <div className="border-l-2 border-hearth-500 bg-hearth-50 px-4 py-3">
+                      <div className="border-l-2 border-oaktend-500 bg-oaktend-50 px-4 py-3">
                         <p className="text-sm font-semibold text-stone-900">Dana M. · Plumbing</p>
                         <p className="text-xs text-stone-500">Kitchen sink leak</p>
                       </div>
                       <div className="px-4 py-3">
-                        <p className="text-sm text-stone-700">Ask Hearth</p>
+                        <p className="text-sm text-stone-700">Ask OakTend</p>
                         <p className="text-xs text-stone-500">Your business copilot</p>
                       </div>
                     </div>
@@ -2610,8 +2610,8 @@ export default function ProDemoPlayer() {
               {/* ---------- End card (pro value prop + fee-credit guarantee) ---------- */}
               <div className={styles.page} data-page="endPage">
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-                  <Logo className="h-12 w-12 text-hearth-700" />
-                  <p className="text-2xl font-bold tracking-tight text-stone-900">Hearth for Pros</p>
+                  <Logo className="h-12 w-12 text-oaktend-700" />
+                  <p className="text-2xl font-bold tracking-tight text-stone-900">OakTend for Pros</p>
                   <p className="text-sm text-stone-600">Win work in your trade.</p>
                   <p className="mt-1 text-sm text-stone-500">
                     <span className="align-middle text-2xl font-bold text-green-700" data-x="endStat">1</span>
@@ -2729,13 +2729,13 @@ export default function ProDemoPlayer() {
       </div>
 
       {!started && (
-        <button type="button" className={styles.posterOverlay} onClick={handlePlay} aria-label="Play the Hearth for Pros demo, about half a minute, with sound">
+        <button type="button" className={styles.posterOverlay} onClick={handlePlay} aria-label="Play the OakTend for Pros demo, about half a minute, with sound">
           <span className={styles.posterBg} aria-hidden="true"></span>
           <span className={styles.playCircle} aria-hidden="true">
             <svg viewBox="0 0 20 20" fill="currentColor"><path d="M6 4.5v11l9-5.5-9-5.5z" /></svg>
           </span>
           <span className={styles.posterLabel}>From open lead to job won</span>
-          <span className={styles.posterSub}>Watch a pro use Hearth, 28 seconds</span>
+          <span className={styles.posterSub}>Watch a pro use OakTend, 28 seconds</span>
           <span className={styles.durationBadge}>0:28</span>
         </button>
       )}

@@ -1,4 +1,4 @@
-// Free-tier allowance rules for the homeowner Ask Hearth chat, kept pure so
+// Free-tier allowance rules for the homeowner Ask OakTend chat, kept pure so
 // they can be tested without a DOM.
 //
 // The server tells the client where it stands on every reply (`freeRemaining`
@@ -14,7 +14,7 @@ export type AskLink = { href: string; label: string };
 // answer with no link on it).
 export const ASK_PLUS_LINK: AskLink = {
   href: "/plus?reason=ask",
-  label: "See what Hearth Plus adds",
+  label: "See what OakTend Plus adds",
 };
 
 function pair(

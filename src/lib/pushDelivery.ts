@@ -56,10 +56,10 @@ export function buildPushPayload(message: PushMessage): string {
       ? message.url
       : "/dashboard";
   return JSON.stringify({
-    title: clip(message.title || "Hearth", PUSH_TITLE_MAX),
+    title: clip(message.title || "OakTend", PUSH_TITLE_MAX),
     body: message.body ? clip(message.body, PUSH_BODY_MAX) : "",
     url,
-    tag: message.tag ? clip(message.tag, 60) : "hearth",
+    tag: message.tag ? clip(message.tag, 60) : "oaktend",
   });
 }
 

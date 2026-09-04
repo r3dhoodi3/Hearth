@@ -24,7 +24,7 @@ afterEach(() => cleanup());
 
 // CR2#2: the three value bullets used to live one screen later, on
 // onboarding's address step, leaving the sign-up screen with nothing but
-// "Start tracking your home with Hearth." They now render here too, from the
+// "Start tracking your home with OakTend." They now render here too, from the
 // same shared component onboarding uses (src/components/OnboardingValueBullets.tsx),
 // so the two can never say something different.
 describe("homeowner sign-up value bullets", () => {
@@ -44,11 +44,11 @@ describe("homeowner sign-up value bullets", () => {
       )
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Scan a warranty or receipt and Hearth files it for you")
+      screen.getByText("Scan a warranty or receipt and OakTend files it for you")
     ).toBeInTheDocument();
     // Still there, unchanged.
     expect(
-      screen.getByText("Start tracking your home with Hearth.")
+      screen.getByText("Start tracking your home with OakTend.")
     ).toBeInTheDocument();
   });
 });

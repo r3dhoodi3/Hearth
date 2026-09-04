@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   // Global Privacy Control (src/lib/gpc.ts): the first time this browser
   // session sends "Sec-GPC: 1", log the first-party app_event
   // "gpc_signal_seen" and set a session cookie so it is not logged again.
-  // Hearth does not sell or share personal information, so this changes no
+  // OakTend does not sell or share personal information, so this changes no
   // other behavior - see that file's module comment for why the log is still
   // worth having. No user id is available at this layer (middleware never
   // decodes the session further than updateSession already does), so this

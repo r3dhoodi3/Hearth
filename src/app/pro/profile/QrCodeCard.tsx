@@ -63,7 +63,7 @@ export default function QrCodeCard({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={dataUrl}
-        alt={`QR code linking to ${businessName} on Hearth`}
+        alt={`QR code linking to ${businessName} on OakTend`}
         className="h-24 w-24 rounded-lg border border-stone-200 bg-white dark:border-white/10"
       />
       <div className="min-w-0">
@@ -74,7 +74,7 @@ export default function QrCodeCard({
         </p>
         <a
           href={dataUrl}
-          download={`hearth-qr-${slug}.png`}
+          download={`oaktend-qr-${slug}.png`}
           className="btn-secondary mt-2 text-xs px-3 py-1.5"
         >
           Download QR (PNG)

@@ -13,14 +13,14 @@ function src(rel: string): string {
 
 const page = src("./page.tsx");
 
-// 2026-08-30 research wave, owner's rule (2026-08-29): "ask Hearth can just
+// 2026-08-30 research wave, owner's rule (2026-08-29): "ask OakTend can just
 // be on the messages tab to limit potential usage". /search used to render
-// two inline AskHearth panes (nothing-matched and a trailing fallback); both
+// two inline AskOakTend panes (nothing-matched and a trailing fallback); both
 // are gone, and the empty state now points at Messages with the query
 // carried along instead.
-describe("/search has no inline Ask Hearth pane", () => {
-  it("does not import or render the AskHearth component", () => {
-    expect(page).not.toContain("AskHearth");
+describe("/search has no inline Ask OakTend pane", () => {
+  it("does not import or render the AskOakTend component", () => {
+    expect(page).not.toContain("AskOakTend");
   });
 
   it("the nothing-matched state links to /chats with the question prefilled", () => {
@@ -30,14 +30,14 @@ describe("/search has no inline Ask Hearth pane", () => {
     const block = page.slice(start, end);
     // Same mechanism src/app/(app)/chats/page.tsx already reads
     // (searchParams.q -> initialQuestion) for the ask pane.
-    expect(block).toContain("/chats?lead=ask-hearth&q=${encodeURIComponent(q)}");
-    expect(block).toContain("Ask Hearth in Messages");
+    expect(block).toContain("/chats?lead=ask-oaktend&q=${encodeURIComponent(q)}");
+    expect(block).toContain("Ask OakTend in Messages");
   });
 
-  it("no trailing Ask Hearth section after the results groups", () => {
+  it("no trailing Ask OakTend section after the results groups", () => {
     // The old fallback lived right after the groups.map(...) block, keyed on
     // total > 0. If it comes back, this catches it even if the wording
     // around it changes.
-    expect(page).not.toMatch(/q && total > 0[\s\S]{0,200}Ask Hearth/);
+    expect(page).not.toMatch(/q && total > 0[\s\S]{0,200}Ask OakTend/);
   });
 });

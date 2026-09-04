@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 //
 // WHAT THIS FILE PINS. Consent under TCPA is given for a NUMBER, not for an
 // account. The action used to carry sms_consent straight across a phone
-// change, so editing the number left Hearth holding a "yes" that the new
+// change, so editing the number left OakTend holding a "yes" that the new
 // number never gave - and the checkbox, still ticked from the previous save,
 // re-posted "on" every time. Damages are per text, so the flag now drops with
 // the number and has to be granted again, and the person is told that it did.

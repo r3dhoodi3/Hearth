@@ -1,6 +1,6 @@
 # Performance
 
-How Hearth measures and guards app speed, and where the numbers from the
+How OakTend measures and guards app speed, and where the numbers from the
 2026-08-30 speed wave (five agents, P1-P5) live. Re-measure using the steps
 below whenever a change is meant to move one of these numbers.
 
@@ -70,7 +70,7 @@ route change inside the app (most navigation here) does not re-arm them for
 the new route. INP still tracks interactions across the page's lifetime. In
 practice this means the sample mostly reflects whichever route a session
 *entered* the app on, not every route visited in it - still useful for "how
-fast does Hearth feel when someone opens it," less so for a route reached
+fast does OakTend feel when someone opens it," less so for a route reached
 only by in-app navigation.
 
 ## Skeletons and loading states

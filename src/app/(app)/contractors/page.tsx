@@ -561,7 +561,7 @@ export default async function ContractorsPage(
                 Your jobs
               </Link>{" "}
               further down this page. We&apos;ll notify you the moment a pro
-              applies. Honest note: Hearth is still new in some areas, so if
+              applies. Honest note: OakTend is still new in some areas, so if
               applications are slow it&apos;s our pro coverage catching up, not
               a problem with your post.
             </p>
@@ -727,7 +727,7 @@ export default async function ContractorsPage(
               Juggling more than one project?
             </p>
             <p className="text-sm text-bark-700 dark:text-stone-300">
-              Free covers 3 open jobs at a time. Hearth Plus is unlimited, plus
+              Free covers 3 open jobs at a time. OakTend Plus is unlimited, plus
               priority matching so pros see yours first. Start weekly with a
               3-day free trial, or go monthly at $4.99.
             </p>
@@ -1008,7 +1008,7 @@ export default async function ContractorsPage(
                     <div className="rounded-lg border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
                       You closed this job without choosing a pro.
                       {apps.length > 0
-                        ? " Applicants who already paid to apply were notified, and their fee comes back to them as Hearth credit automatically if you haven't picked anyone within a week of applying."
+                        ? " Applicants who already paid to apply were notified, and their fee comes back to them as OakTend credit automatically if you haven't picked anyone within a week of applying."
                         : ""}
                     </div>
                   ) : apps.length === 0 ? (

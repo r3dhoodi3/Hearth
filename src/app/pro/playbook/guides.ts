@@ -1,4 +1,4 @@
-// Playbook content: short, honest guides on how to win work on Hearth.
+// Playbook content: short, honest guides on how to win work on OakTend.
 // Plain data (no JSX, no component references) so the server page can pass it
 // straight through as a prop to the client accordion. Icons are stored as
 // names, not lucide-react components: a live component reference is a
@@ -36,7 +36,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
   {
     id: "first-win",
     icon: "Flag",
-    title: "Win your first job on Hearth",
+    title: "Win your first job on OakTend",
     summary: "The shortest path from a fresh wallet to a first win.",
     sections: [
       {
@@ -140,7 +140,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
           "Two habits put you first in line:",
           "- Turn on notifications so you see new postings the moment they go up",
           "- Check the board during real gaps in your day, not just at night when everyone else does",
-          "A fresh posting with zero spots taken is the best moment on Hearth to spend a fee.",
+          "A fresh posting with zero spots taken is the best moment on OakTend to spend a fee.",
         ],
       },
       {
@@ -269,7 +269,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
       {
         title: "Say what's included",
         body: [
-          "Homeowners on Hearth get help reading quotes, so vague line items like 'materials' get questioned. Spell out the specifics and you win trust even when you aren't the lowest number:",
+          "Homeowners on OakTend get help reading quotes, so vague line items like 'materials' get questioned. Spell out the specifics and you win trust even when you aren't the lowest number:",
           "- Labor: hours or a flat rate",
           "- Materials: what's actually being installed, not just \"materials\"",
           "- Cleanup: haul-away and site cleanup included",
@@ -337,7 +337,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
       {
         title: "When a thread matches your trade, help first",
         body: [
-          "Reply with one sentence of real, specific help for their actual problem, then add your Hearth profile link so they can see your reviews and reach you. A reply that's all pitch and no help gets scrolled past.",
+          "Reply with one sentence of real, specific help for their actual problem, then add your OakTend profile link so they can see your reviews and reach you. A reply that's all pitch and no help gets scrolled past.",
         ],
       },
       {
@@ -356,7 +356,7 @@ export const PLAYBOOK_GUIDES: PlaybookGuideData[] = [
         title: "A blurb you can paste into a thread",
         body: [
           "Keep it short and about their problem first, your link second:",
-          "This sounds like something in my line of work. Happy to take a look, here are my reviews and how to reach me: [your Hearth profile link]",
+          "This sounds like something in my line of work. Happy to take a look, here are my reviews and how to reach me: [your OakTend profile link]",
         ],
         quote: 1,
       },

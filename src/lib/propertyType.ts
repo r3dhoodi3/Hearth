@@ -24,7 +24,7 @@ export const FALLBACK_PROPERTY_TYPE = "single_family";
 const BUILDING_LEVEL_TYPES = new Set(["multi_family", "apartment"]);
 
 export function defaultPropertyType(
-  // The type the records lookup returned, already normalized to Hearth's enum
+  // The type the records lookup returned, already normalized to OakTend's enum
   // (or null when it returned nothing we recognize).
   factsType: string | null | undefined,
   // Does the homeowner's address carry a unit or apt number?

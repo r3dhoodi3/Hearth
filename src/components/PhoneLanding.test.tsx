@@ -109,7 +109,7 @@ describe("PhoneLanding", () => {
       screen.getByRole("heading", { level: 1, name: "Your home, looked after." })
     ).toBeInTheDocument();
     expect(screen.queryByText(/How it works/i)).toBeNull();
-    expect(screen.queryByText(/What Hearth watches for you/i)).toBeNull();
+    expect(screen.queryByText(/What OakTend watches for you/i)).toBeNull();
   });
 
   it("shows a hero photo so the screen is not just text on a flat fill", () => {

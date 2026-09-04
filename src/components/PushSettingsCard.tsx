@@ -32,14 +32,14 @@ const COPY: Record<
   homeowner: {
     title: "Get notified when a pro replies or sends a quote",
     detail:
-      "Hearth can notify you on your phone even when the app is closed, so you do not have to keep checking.",
+      "OakTend can notify you on your phone even when the app is closed, so you do not have to keep checking.",
     onDetail:
       "You will get a notification when a pro replies, sends a quote, or an alert needs your attention.",
   },
   pro: {
     title: "Get notified when a homeowner messages you",
     detail:
-      "Hearth can notify you on your phone even when the app is closed, so you can answer first.",
+      "OakTend can notify you on your phone even when the app is closed, so you can answer first.",
     onDetail:
       "You will get a notification for new messages, new jobs in your area, and quote requests.",
   },
@@ -182,17 +182,17 @@ export default function PushSettingsCard({ side }: { side: PushSide }) {
         // site has been added to the Home Screen (iOS 16.4+). There is nothing
         // to tap until then, so the card says what to do instead of failing.
         <p className="mt-3 rounded-lg bg-stone-50 p-3 text-sm text-stone-700 dark:bg-stone-800 dark:text-stone-300">
-          On iPhone, add Hearth to your Home Screen first, then turn this on.
+          On iPhone, add OakTend to your Home Screen first, then turn this on.
           Tap the Share button in Safari, choose Add to Home Screen, then open
-          Hearth from the new icon and come back here.
+          OakTend from the new icon and come back here.
         </p>
       )}
 
       {state === "denied" && (
         <p className="mt-3 rounded-lg bg-stone-50 p-3 text-sm text-stone-700 dark:bg-stone-800 dark:text-stone-300">
-          Notifications are blocked for Hearth in this browser. Only your
+          Notifications are blocked for OakTend in this browser. Only your
           browser settings can turn them back on: open its site settings for
-          Hearth, allow notifications, then reload this page.
+          OakTend, allow notifications, then reload this page.
         </p>
       )}
 

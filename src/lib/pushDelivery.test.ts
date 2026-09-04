@@ -39,7 +39,7 @@ describe("buildPushPayload", () => {
   it("defaults a missing body and tag rather than emitting undefined", () => {
     const parsed = JSON.parse(buildPushPayload({ title: "Freeze tonight" }));
     expect(parsed.body).toBe("");
-    expect(parsed.tag).toBe("hearth");
+    expect(parsed.tag).toBe("oaktend");
     expect(parsed.url).toBe("/dashboard");
   });
 

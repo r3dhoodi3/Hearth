@@ -26,9 +26,9 @@ const TOPIC_LABELS: Record<string, string> = {
 };
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: "Contact us",
-  description: "Send Hearth a message. No account needed, and we read every message and will reach out by phone call or email.",
+  description: "Send OakTend a message. No account needed, and we read every message and will reach out by phone call or email.",
   alternates: {
     canonical: `${SITE_URL}/contact`,
   },
@@ -83,7 +83,7 @@ export default async function ContactPage(
             link (terms, privacy, dmca, pricing, ai-disclosure, pro-terms,
             emergency-help). */}
         <Link href="/" className="text-stone-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-400 dark:hover:text-stone-300">
-          ← Hearth
+          ← OakTend
         </Link>
       </p>
 

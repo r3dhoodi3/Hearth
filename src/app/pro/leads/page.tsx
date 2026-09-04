@@ -328,7 +328,7 @@ export default async function ProDashboard(
 
   const openJobVms: OpenJobVM[] = open.map((j) => {
     const payoutDollars = Number(j.payout_amount ?? 0);
-    // Best SINGLE discount: this pro's own Hearth Pro membership (10% off) or
+    // Best SINGLE discount: this pro's own OakTend Pro membership (10% off) or
     // the aging markdown, never both (migration 0149; owner's words: "it does
     // NOT stack with the 15-30%"). bestLeadDiscount is the one place this
     // comparison lives, mirrored byte-for-byte by pro_lead_fee_cents() in the

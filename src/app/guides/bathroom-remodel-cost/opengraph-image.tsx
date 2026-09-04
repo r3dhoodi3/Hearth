@@ -9,11 +9,11 @@ import { renderOgCard, OG_SIZE, OG_CONTENT_TYPE } from "@/lib/ogCard";
 
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
-export const alt = "Hearth guide: Bathroom remodel cost in Orange County: typical ranges (2026)";
+export const alt = "OakTend guide: Bathroom remodel cost in Orange County: typical ranges (2026)";
 
 export default function OgImage() {
   return renderOgCard(
     "Bathroom remodel cost in Orange County: typical ranges (2026)",
-    "A Hearth home guide"
+    "A OakTend home guide"
   );
 }

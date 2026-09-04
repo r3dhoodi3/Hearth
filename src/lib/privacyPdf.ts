@@ -2,7 +2,7 @@ import { PDFDocument, PDFFont, PDFPage, StandardFonts } from "pdf-lib";
 import type { Category, ExportPayload, ThirdParty } from "@/lib/privacy";
 
 // =============================================================================
-// Hearth - PDF rendering of the CCPA/CPRA "right to know" export.
+// OakTend - PDF rendering of the CCPA/CPRA "right to know" export.
 //
 // This is a second SERIALIZATION of the exact same payload the JSON export
 // sends (collectUserData() in src/lib/privacy.ts is the one gather step both
@@ -26,7 +26,7 @@ const PAGE_HEIGHT = 792;
 const MARGIN = 50;
 
 // pdf-lib's StandardFonts (Helvetica/Helvetica-Bold) can only encode the
-// WinAnsi (cp1252) character set. Real Hearth data routinely has characters
+// WinAnsi (cp1252) character set. Real OakTend data routinely has characters
 // outside it - emoji in a contractor name, a home-system note, a message, an
 // issue description - and pdf-lib THROWS ("WinAnsi cannot encode ...")
 // rather than skipping them. Every string in this file funnels through
@@ -261,13 +261,13 @@ function renderSectionBody(w: Writer, obj: Record<string, unknown>): void {
   }
 }
 
-// Builds the full "Your Hearth data" PDF from the same payload the JSON
+// Builds the full "Your OakTend data" PDF from the same payload the JSON
 // export serializes. Same data, no more and no less - just laid out to read.
 export async function buildExportPdf(payload: ExportPayload): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  doc.setTitle("Your Hearth data");
-  doc.setProducer("Hearth");
-  doc.setCreator("Hearth");
+  doc.setTitle("Your OakTend data");
+  doc.setProducer("OakTend");
+  doc.setCreator("OakTend");
 
   const regular = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -281,7 +281,7 @@ export async function buildExportPdf(payload: ExportPayload): Promise<Uint8Array
     sold_or_shared_for_cross_context_behavioral_advertising?: boolean;
   };
 
-  w.heading1("Your Hearth data");
+  w.heading1("Your OakTend data");
   const generatedAt = meta.generated_at ? new Date(meta.generated_at) : new Date();
   w.para(
     `Exported ${generatedAt.toLocaleString("en-US", {

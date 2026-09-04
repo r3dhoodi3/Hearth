@@ -100,7 +100,7 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
             <option value="1">1 (failing)</option>
           </select>
         </div>
-        {/* HVAC only: filter size + reminder cadence, so Hearth can nudge the
+        {/* HVAC only: filter size + reminder cadence, so OakTend can nudge the
             owner when it is time for a fresh filter (consumables autopilot). */}
         {systemType === "hvac" && (
           <>

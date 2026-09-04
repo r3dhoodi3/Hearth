@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
-// Ask Hearth streams its answer: the route sends NDJSON (see
+// Ask OakTend streams its answer: the route sends NDJSON (see
 // src/lib/askStream.ts) and the chat fills one bubble in as the lines arrive.
 // This file covers the part unit tests can't: that a stream of deltas ends up
 // as ONE assistant message with the whole answer in it, that a half-written
@@ -32,7 +32,7 @@ vi.mock("@/lib/ask-actions", () => ({
 
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 
-import AskHearth from "./AskHearth";
+import AskOakTend from "./AskOakTend";
 
 // A response body the test feeds by hand, one push at a time, so assertions
 // can land mid-answer.
@@ -81,7 +81,7 @@ function makeStream() {
 // The canned opener the chat starts every conversation with; it is part of the
 // saved list, so the order assertions below account for it.
 const GREETING =
-  "Hi, I'm Hearth. If you have any questions about your home, feel free to ask.";
+  "Hi, I'm OakTend. If you have any questions about your home, feel free to ask.";
 
 const delta = (text: string) => `${JSON.stringify({ delta: text })}\n`;
 const done = (payload: Record<string, unknown>) =>
@@ -121,7 +121,7 @@ describe("a streamed answer", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("Why is my water heater loud?");
 
     // The question is on screen, once, while the answer is still coming.
@@ -162,7 +162,7 @@ describe("a streamed answer", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("How old is my water heater?");
 
     stream.push(delta("About 9 years, going by the install date on file."));
@@ -178,11 +178,11 @@ describe("a streamed answer", () => {
     expect(
       screen.getByText(/1 free question left today\./)
     ).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: "See what Hearth Plus adds" });
+    const link = screen.getByRole("link", { name: "See what OakTend Plus adds" });
     expect(link).toHaveAttribute("href", "/plus?reason=ask");
     // No number attached to Plus itself: the owner's rule is to keep the
     // Plus allowance vague (see the "gives you more, plus photo answers"
-    // line further down AskHearth.tsx).
+    // line further down AskOakTend.tsx).
     expect(screen.queryByText(/15/)).not.toBeInTheDocument();
   });
 
@@ -190,7 +190,7 @@ describe("a streamed answer", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("Should I call someone?");
 
     // Mid-stream: the OPTIONS block has opened and its JSON is incomplete.
@@ -229,7 +229,7 @@ describe("a streamed answer", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("How do I get ready for winter?");
 
     // The closing "**" has not arrived yet.
@@ -267,7 +267,7 @@ describe("a streamed answer", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("What is that noise?");
 
     stream.push(delta("It is probably the expansion tank."));
@@ -296,7 +296,7 @@ describe("a streamed answer", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("Should I call someone?");
 
     // The OPTIONS block is complete - only the stream itself is cut short.
@@ -327,7 +327,7 @@ describe("a streamed answer", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("Anything there?");
 
     stream.push("end");
@@ -369,7 +369,7 @@ describe("a second question in the same conversation", () => {
       vi.fn(async () => streams.shift() ?? second.response)
     );
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("Why is my water heater loud?");
 
     first.push(delta("Sediment in the tank."));
@@ -452,7 +452,7 @@ describe("a second question in the same conversation", () => {
       })
     );
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("Why is my water heater loud?");
     first.push(done({ answer: "Sediment in the tank." }));
     await settle();
@@ -469,7 +469,7 @@ describe("a second question in the same conversation", () => {
     await act(async () => {
       window.localStorage.setItem(key, JSON.stringify(withoutAnswer));
       window.dispatchEvent(
-        new CustomEvent("hearth:ask-updated", { detail: { key } })
+        new CustomEvent("oaktend:ask-updated", { detail: { key } })
       );
     });
     expect(
@@ -509,7 +509,7 @@ describe("an answer still being written", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    const view = render(<AskHearth fill />);
+    const view = render(<AskOakTend fill />);
     await ask("What is that noise?");
 
     stream.push(delta("It is probably the expansion tank."));
@@ -527,7 +527,7 @@ describe("an answer still being written", () => {
 
     // The page goes away mid-answer and comes back.
     view.unmount();
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
 
     expect(
       await screen.findByText("It is probably the expansion tank.")
@@ -565,7 +565,7 @@ describe("a full localStorage", () => {
 
     // A long opener stands in for the long history a real chat accumulates:
     // the whole conversation no longer fits, only its newest turns do.
-    render(<AskHearth fill greeting={"a lot of history. ".repeat(200)} />);
+    render(<AskOakTend fill greeting={"a lot of history. ".repeat(200)} />);
     await ask("Why is my water heater loud?");
 
     stream.push(done({ answer: "Sediment in the tank." }));
@@ -597,19 +597,19 @@ describe("a non-streamed reply still works", () => {
         headers: { get: () => "application/json" },
         body: null,
         json: async () => ({
-          answer: "Photo questions are part of Hearth Plus.",
+          answer: "Photo questions are part of OakTend Plus.",
           locked: true,
-          link: { href: "/plus?reason=ask", label: "See Hearth Plus" },
+          link: { href: "/plus?reason=ask", label: "See OakTend Plus" },
         }),
       }))
     );
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("Look at this");
     await settle();
 
     expect(
-      screen.getByText("Photo questions are part of Hearth Plus.")
+      screen.getByText("Photo questions are part of OakTend Plus.")
     ).toBeInTheDocument();
     // A locked request never reached the model, so the question is handed back.
     expect(screen.getByPlaceholderText("Ask anything")).toHaveValue(
@@ -643,7 +643,7 @@ describe("clearing while an answer is streaming", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("Why is my water heater loud?");
 
     stream.push(delta("Sediment in the tank. "));
@@ -686,7 +686,7 @@ describe("clearing while an answer is streaming", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await ask("Why is my water heater loud?");
 
     stream.push(delta("Sediment in the tank. "));
@@ -718,7 +718,7 @@ describe("clearing while an answer is streaming", () => {
     const stream = makeStream();
     vi.stubGlobal("fetch", vi.fn(async () => stream.response));
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     const clear = screen.getByRole("button", { name: "Clear" });
     const retention = screen.getByLabelText("How long chats are kept");
     expect(clear).not.toBeDisabled();

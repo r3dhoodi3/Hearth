@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PRO_PLAN } from "@/lib/constants";
 
-// One place for every "join Hearth Pro" call to action, so the same promise is
+// One place for every "join OakTend Pro" call to action, so the same promise is
 // made everywhere and no surface can drift out of sync with checkout.
 //
 // The free trial is for FIRST-TIME members only (see startProCheckoutAction):
@@ -22,7 +22,7 @@ import { PRO_PLAN } from "@/lib/constants";
 export function proCtaLabel(trialEligible: boolean): string {
   return trialEligible
     ? `Try Pro free for ${PRO_PLAN.trialDays} days`
-    : "See Hearth Pro";
+    : "See OakTend Pro";
 }
 
 // What happens after the trial, in plain numbers. Only ever shown next to the
