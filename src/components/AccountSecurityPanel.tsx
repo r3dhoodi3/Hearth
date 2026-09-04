@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import SubmitButton from "@/components/SubmitButton";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
+import Turnstile, { CAPTCHA_ENABLED, type TurnstileHandle } from "@/components/Turnstile";
 import { sendSetPasswordLinkAction } from "@/lib/passwordSetup";
 
 // The one account-security surface, shared by the homeowner page
@@ -66,6 +67,13 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
   // button sits out that minute rather than firing a request it knows the
   // throttle will reject. It also stops a double-click sending twice.
   const [cooldown, setCooldown] = useState(0);
+  // This card stays mounted across sends (no redirect), and Turnstile tokens
+  // are single-use, so we reset() the widget after each attempt to mint a fresh
+  // one for the next click. Null/empty when NEXT_PUBLIC_TURNSTILE_SITE_KEY is
+  // unset - the action then gets captchaToken: undefined, which Supabase
+  // ignores while its own CAPTCHA is off.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -75,6 +83,8 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
 
   async function send() {
     if (busy || cooldown > 0) return;
+    // Wait for a token when the CAPTCHA is on; a no-op when it's off.
+    if (CAPTCHA_ENABLED && !captchaToken) return;
     setBusy(true);
     setError(null);
     // finally, not a bare setBusy(false) on the happy path:
@@ -84,7 +94,7 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
     // it in finally guarantees the button comes back, and the catch turns the
     // throw into a message instead of nothing.
     try {
-      const result = await sendSetPasswordLinkAction();
+      const result = await sendSetPasswordLinkAction(captchaToken ?? undefined);
       if (!result.ok) {
         setError(result.message);
         return;
@@ -95,6 +105,8 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
       setError("Couldn't send that link just now. Please try again.");
     } finally {
       setBusy(false);
+      // Spend the single-use token and mint a fresh one for the next send.
+      captchaRef.current?.reset();
     }
   }
 
@@ -110,6 +122,10 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
         really yours.
       </p>
 
+      {/* The set-password email hits Supabase's CAPTCHA-gated endpoint, so it
+          needs a Turnstile token. Renders nothing when no site key is set. */}
+      <Turnstile ref={captchaRef} onToken={setCaptchaToken} />
+
       {sent ? (
         <div className="space-y-3">
           <p
@@ -121,7 +137,7 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
           <button
             type="button"
             onClick={send}
-            disabled={busy || cooldown > 0}
+            disabled={busy || cooldown > 0 || (CAPTCHA_ENABLED && !captchaToken)}
             className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy
@@ -135,7 +151,7 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
         <button
           type="button"
           onClick={send}
-          disabled={busy || cooldown > 0}
+          disabled={busy || cooldown > 0 || (CAPTCHA_ENABLED && !captchaToken)}
           className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Sending…" : "Set a password"}
@@ -196,6 +212,18 @@ export default function AccountSecurityPanel({
   const [confirmEmail, setConfirmEmail] = useState("");
   const confirmEmailMatches =
     !!email && confirmEmail.trim().toLowerCase() === email.toLowerCase();
+
+  // Each password-verifying form re-authenticates against Supabase's
+  // CAPTCHA-gated sign-in endpoint, so each needs its own Turnstile token. They
+  // must be PER FORM, not shared: tokens are single-use, and a shared one would
+  // be spent by whichever form submitted first. Each action redirects (a page
+  // reload) on submit, so the widget re-initialises with a fresh token and no
+  // manual reset is needed here. All null/empty when no site key is set - the
+  // hidden inputs then submit "" and the actions pass captchaToken: undefined,
+  // which Supabase ignores while its own CAPTCHA is off, so nothing changes.
+  const [emailCaptcha, setEmailCaptcha] = useState<string | null>(null);
+  const [passwordCaptcha, setPasswordCaptcha] = useState<string | null>(null);
+  const [deleteCaptcha, setDeleteCaptcha] = useState<string | null>(null);
 
   return (
     <div className="space-y-6">
@@ -260,7 +288,21 @@ export default function AccountSecurityPanel({
               </p>
             </div>
           )}
-          <SubmitButton className="btn-primary" pendingLabel="Updating…">
+          {/* Turnstile for the CAPTCHA-gated re-auth on the server. Renders
+              nothing when no site key is set; the hidden input then submits "".
+              Only meaningful when a password is being re-verified - a no-
+              password account gives no signInWithPassword call to gate. */}
+          {hasPassword && (
+            <>
+              <Turnstile onToken={setEmailCaptcha} />
+              <input type="hidden" name="captcha_token" value={emailCaptcha ?? ""} />
+            </>
+          )}
+          <SubmitButton
+            className="btn-primary"
+            pendingLabel="Updating…"
+            disabled={CAPTCHA_ENABLED && hasPassword && !emailCaptcha}
+          >
             Update Email
           </SubmitButton>
         </form>
@@ -327,7 +369,17 @@ export default function AccountSecurityPanel({
               </div>
             </div>
   
-            <SubmitButton className="btn-primary" pendingLabel="Updating…">
+            {/* Turnstile for the CAPTCHA-gated current-password re-auth on the
+                server. Renders nothing when no site key is set; the hidden
+                input then submits "". */}
+            <Turnstile onToken={setPasswordCaptcha} />
+            <input type="hidden" name="captcha_token" value={passwordCaptcha ?? ""} />
+
+            <SubmitButton
+              className="btn-primary"
+              pendingLabel="Updating…"
+              disabled={CAPTCHA_ENABLED && !passwordCaptcha}
+            >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
                 <path d="M17 21v-8H7v8M7 3v5h8" />
@@ -474,11 +526,24 @@ export default function AccountSecurityPanel({
                   </p>
                 </div>
               )}
+              {/* Turnstile for the CAPTCHA-gated re-auth on the server, needed
+                  only on the password branch: the no-password branch confirms
+                  by typed email and makes no signInWithPassword call. Renders
+                  nothing when no site key is set; the hidden input submits "". */}
+              {hasPassword && (
+                <>
+                  <Turnstile onToken={setDeleteCaptcha} />
+                  <input type="hidden" name="captcha_token" value={deleteCaptcha ?? ""} />
+                </>
+              )}
               <div className="flex items-center gap-3">
                 <SubmitButton
                   className="whitespace-nowrap rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   pendingLabel="Deleting…"
-                  disabled={!hasPassword && !confirmEmailMatches}
+                  disabled={
+                    (!hasPassword && !confirmEmailMatches) ||
+                    (CAPTCHA_ENABLED && hasPassword && !deleteCaptcha)
+                  }
                 >
                   Permanently delete account
                 </SubmitButton>
