@@ -117,7 +117,10 @@ export default async function BrowseProsPage(
           )}
         </div>
       ) : (
-        <ul className="space-y-3">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Two-up from sm on: the detailed cards need full width on a phone,
+              but a single column wasted the horizontal space on tablet/desktop.
+              gap-3 matches the old space-y-3 rhythm. */}
           {pros.map((p) => (
             <ProCard key={p.id} pro={p} />
           ))}

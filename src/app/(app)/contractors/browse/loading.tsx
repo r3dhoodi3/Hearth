@@ -18,7 +18,7 @@ export default function Loading() {
         ))}
       </div>
 
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="card">
             <div className="flex gap-3">
