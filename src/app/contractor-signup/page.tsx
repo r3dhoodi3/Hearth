@@ -3,7 +3,11 @@
 import Link from "next/link";
 import NoticeAtCollection from "@/components/NoticeAtCollection";
 import DeviceFingerprint from "@/components/DeviceFingerprint";
-import { useState, use } from "react";
+import Turnstile, {
+  CAPTCHA_ENABLED,
+  type TurnstileHandle,
+} from "@/components/Turnstile";
+import { useState, useRef, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
@@ -12,15 +16,18 @@ import AppleSignInButton, {
   APPLE_SIGNIN_ENABLED,
 } from "@/components/AppleSignInButton";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
+import EmailCodeVerify from "@/components/EmailCodeVerify";
 import { SIGNUP_EMAIL_NEUTRAL, friendlyAuthError } from "@/lib/friendlyAuthError";
 import { Eye, EyeOff } from "lucide-react";
 
 // Real per-user contractor sign-up. Creates a Supabase Auth account tagged with
 // role=contractor, then sends them to set up their company. If email
-// confirmation is OFF in Supabase they're signed in immediately; if ON, we
-// show a check-your-inbox panel, and the confirmation link lands on
-// /auth/callback with next=/pro/onboarding so verifying drops them straight
-// into company setup instead of back at sign-in.
+// confirmation is OFF in Supabase they're signed in immediately; if ON, we swap
+// the form for a 6-digit-code panel (EmailCodeVerify): the reader types the
+// code Supabase emailed, verifyOtp signs them in on THIS device, and they go
+// straight to /pro/onboarding to set up their company. A code, not a link, so
+// the device that started signup is the one that gets the session and can
+// advance - a link opened on a phone can't move the desktop along.
 //
 // ?next=: carried in from /signin same as the homeowner sign-up. Note
 // it only survives as far as /pro/onboarding: the company-setup form there
@@ -72,6 +79,11 @@ export default function ContractorSignUpPage(props: {
   // before submit; also re-checked in onSubmit, not just via `required`,
   // since a crafted or programmatic submit can bypass HTML validation.
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  // Turnstile CAPTCHA token, present only once the widget solves. No-op when
+  // NEXT_PUBLIC_TURNSTILE_SITE_KEY is unset: the widget renders nothing, the
+  // token stays null, and signUp sends captchaToken: undefined.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   // Where the confirmation email's link (and the Google / Apple buttons
   // below) should land: the auth callback exchanges the code for a session,
@@ -113,8 +125,13 @@ export default function ContractorSignUpPage(props: {
       options: {
         data: { role: "contractor" },
         emailRedirectTo: confirmRedirectUrl(),
+        captchaToken: captchaToken ?? undefined,
       },
     });
+
+    // Turnstile tokens are single-use, so spend it now regardless of outcome; a
+    // second attempt must solve a fresh one. No-op when the widget isn't rendered.
+    turnstileRef.current?.reset();
 
     if (error) {
       setBusy(false);
@@ -159,90 +176,22 @@ export default function ContractorSignUpPage(props: {
     setPendingEmail(email.trim());
   }
 
-  async function onResend() {
-    if (!pendingEmail) return;
-    setError(null);
-    setNotice(null);
-    setBusy(true);
-
-    const { error } = await supabase.auth.resend({
-      type: "signup",
-      email: pendingEmail,
-      options: { emailRedirectTo: confirmRedirectUrl() },
-    });
-
-    setBusy(false);
-    if (error) {
-      setError(friendlyAuthError(error));
-      return;
-    }
-    setNotice("Confirmation email resent. Give it a minute or two.");
-  }
-
-  // Account created, email confirmation pending: check-your-inbox panel.
+  // Account created, email confirmation pending: swap the form for the
+  // 6-digit-code panel. Verifying there signs the reader in on THIS device
+  // (see EmailCodeVerify's note on why a code beats a link cross-device) and
+  // sends them on to /pro/onboarding to set up their company.
   if (pendingEmail) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
-        <div className="card">
-          <div className="mb-6 text-center">
-            <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-              Check your inbox
-            </h1>
-            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-              We sent a confirmation link to{" "}
-              <span className="break-all font-medium text-stone-700 dark:text-stone-300">{pendingEmail}</span>
-              . Click it and you&apos;ll land right in company setup.
-            </p>
-          </div>
-
-          <p className="text-center text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
-            Nothing after a couple of minutes? Check your spam folder, or
-            resend it.
-          </p>
-          <button
-            type="button"
-            onClick={onResend}
-            className="btn-secondary mt-4 w-full"
-            disabled={busy}
-          >
-            {busy ? "Resending…" : "Resend email"}
-          </button>
-
-          {error && (
-            <p
-              role="alert"
-              className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
-            >
-              {error}
-            </p>
-          )}
-          {notice && (
-            <p
-              aria-live="polite"
-              className="mt-4 rounded-lg bg-bark-50 p-3 text-center text-sm text-bark-700 dark:bg-bark-700/40 dark:text-stone-300"
-            >
-              {notice}
-            </p>
-          )}
-
-          <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 max-sm:text-sm dark:border-white/10 dark:text-stone-400">
-            Already confirmed, or used the wrong email?{" "}
-            <Link href={`/signin${nextQuery}`} className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
-              Sign in
-            </Link>{" "}
-            or{" "}
-            <Link href="/reset-password" className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
-              reset your password
-            </Link>
-            .
-          </p>
-        </div>
-      </main>
+      <EmailCodeVerify
+        email={pendingEmail}
+        successHref={`/pro/onboarding${onboardingQuery}`}
+        signInHref={`/signin${nextQuery}`}
+      />
     );
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
+    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6 py-10">
       {/* Renders nothing. See the note on the homeowner sign-up page: a coarse
           browser fingerprint written to a first-party cookie, for the
           free-trial abuse score, on the account doors only. */}
@@ -355,7 +304,14 @@ export default function ContractorSignUpPage(props: {
               next thing they reach - not something below two social buttons
               they have to scroll past. The social buttons keep their own
               agreement line underneath them. */}
-          <button className="btn-primary w-full" disabled={busy}>
+          {/* Renders nothing until NEXT_PUBLIC_TURNSTILE_SITE_KEY is set. When
+              it is, the submit stays disabled until the CAPTCHA is solved so we
+              never fire a token-required signUp with no token. */}
+          <Turnstile ref={turnstileRef} onToken={setCaptchaToken} />
+          <button
+            className="btn-primary w-full"
+            disabled={busy || (CAPTCHA_ENABLED && !captchaToken)}
+          >
             {busy ? "Creating account…" : "Sign up"}
           </button>
           <div className="flex items-center gap-3">
@@ -417,7 +373,7 @@ export default function ContractorSignUpPage(props: {
         </div>
       </div>
 
-      <p className="mt-6 text-center text-xs text-stone-500 dark:text-stone-400">
+      <p className="mt-4 text-center text-sm text-stone-600 dark:text-stone-300">
         Want to track your own home instead?{" "}
         <Link
           href={`/homeowner-signup${nextQuery}`}

@@ -97,6 +97,13 @@ export function friendlyAuthError(error: AuthErrorLike): string {
     return "Couldn't reach Hearth just now. Check your connection and try again.";
   }
 
+  // A mistyped or expired 6-digit email code (verifyOtp). Placed after the
+  // rate-limit check above so throttle copy still wins, and just before the
+  // generic below.
+  if (/token has expired|expired or is invalid|invalid.*(token|otp|code)|otp_expired/.test(m)) {
+    return "That code didn't work — it may have expired. Check the latest email or resend a new code.";
+  }
+
   // Anything we don't recognize: a warm generic that never echoes raw text.
   return "That didn't go through. Please try again in a moment.";
 }

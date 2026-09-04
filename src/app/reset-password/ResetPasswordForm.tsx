@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
 import { passwordRecoveryRedirectTo } from "@/lib/passwordRecovery";
 import { clearPasswordRecoveryAction } from "./actions";
+import Turnstile, {
+  CAPTCHA_ENABLED,
+  type TurnstileHandle,
+} from "@/components/Turnstile";
 
 // Password reset, styled to match src/app/signin/page.tsx.
 //
@@ -30,6 +34,13 @@ export default function ResetPasswordForm({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Turnstile CAPTCHA token, present only once the widget solves. It gates the
+  // reset-email request step ONLY (the set-new-password step makes no such
+  // call). No-op when NEXT_PUBLIC_TURNSTILE_SITE_KEY is unset: the widget
+  // renders nothing, the token stays null, and the request sends
+  // captchaToken: undefined.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   async function onRequest(e: React.FormEvent) {
     e.preventDefault();
@@ -43,7 +54,13 @@ export default function ResetPasswordForm({
       // /auth/callback needs before it will let the "set a new password" step
       // render. See the note in src/lib/passwordRecovery.ts.
       redirectTo: passwordRecoveryRedirectTo(window.location.origin),
+      // Top-level field of this options arg, alongside redirectTo.
+      captchaToken: captchaToken ?? undefined,
     });
+
+    // Turnstile tokens are single-use, so spend it now regardless of outcome; a
+    // second request must solve a fresh one. No-op when the widget isn't rendered.
+    turnstileRef.current?.reset();
 
     setBusy(false);
     if (error) {
@@ -168,7 +185,15 @@ export default function ResetPasswordForm({
                 required
               />
             </div>
-            <button className="btn-primary w-full" disabled={busy}>
+            {/* Gates the reset-email request ONLY. Renders nothing until
+                NEXT_PUBLIC_TURNSTILE_SITE_KEY is set; when it is, the submit
+                stays disabled until the CAPTCHA is solved so we never fire a
+                token-required request with no token. */}
+            <Turnstile ref={turnstileRef} onToken={setCaptchaToken} />
+            <button
+              className="btn-primary w-full"
+              disabled={busy || (CAPTCHA_ENABLED && !captchaToken)}
+            >
               {busy ? "Sending…" : "Send reset link"}
             </button>
           </form>

@@ -3,7 +3,11 @@
 import Link from "next/link";
 import NoticeAtCollection from "@/components/NoticeAtCollection";
 import DeviceFingerprint from "@/components/DeviceFingerprint";
-import { useState, use } from "react";
+import Turnstile, {
+  CAPTCHA_ENABLED,
+  type TurnstileHandle,
+} from "@/components/Turnstile";
+import { useState, useRef, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import {
@@ -17,15 +21,17 @@ import AppleSignInButton, {
   APPLE_SIGNIN_ENABLED,
 } from "@/components/AppleSignInButton";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
-import OnboardingValueBullets from "@/components/OnboardingValueBullets";
+import EmailCodeVerify from "@/components/EmailCodeVerify";
 import { Eye, EyeOff } from "lucide-react";
 
 // Real per-user sign-up. Creates a Supabase Auth account from the user's email
 // + password. If email confirmation is OFF in Supabase, the user is signed in
-// immediately and sent to claim their home; if it's ON, we show a
-// check-your-inbox panel, and the confirmation link lands on /auth/callback
-// with next=/onboarding so verifying drops them straight into onboarding
-// instead of back at sign-in.
+// immediately and sent to claim their home; if it's ON, we swap the form for a
+// 6-digit-code panel (EmailCodeVerify): the reader types the code Supabase
+// emailed, verifyOtp signs them in on THIS device, and they go straight to
+// /onboarding. A code, not a link, so the device that started signup is the one
+// that gets the session and can advance - a link opened on a phone can't move
+// the desktop along.
 //
 // ?next=: carried in from /signin (ultimately from the middleware bouncing a
 // signed-out visitor off a gated page) via the Google/Apple buttons and the
@@ -83,6 +89,11 @@ export default function HomeownerSignUpPage(props: {
   // before submit; also re-checked in onSubmit, not just via `required`,
   // since a crafted or programmatic submit can bypass HTML validation.
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  // Turnstile CAPTCHA token, present only once the widget solves. No-op when
+  // NEXT_PUBLIC_TURNSTILE_SITE_KEY is unset: the widget renders nothing, the
+  // token stays null, and signUp sends captchaToken: undefined.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   // Where the confirmation email's link (and the Google / Apple buttons
   // below) should land: the auth callback exchanges the code for a session,
@@ -129,8 +140,13 @@ export default function HomeownerSignUpPage(props: {
         // (see src/app/onboarding). Only the role is stamped at creation.
         data: { role: "homeowner" },
         emailRedirectTo: confirmRedirectUrl(),
+        captchaToken: captchaToken ?? undefined,
       },
     });
+
+    // Turnstile tokens are single-use, so spend it now regardless of outcome; a
+    // second attempt must solve a fresh one. No-op when the widget isn't rendered.
+    turnstileRef.current?.reset();
 
     if (error) {
       setBusy(false);
@@ -173,90 +189,22 @@ export default function HomeownerSignUpPage(props: {
     setPendingEmail(email.trim());
   }
 
-  async function onResend() {
-    if (!pendingEmail) return;
-    setError(null);
-    setNotice(null);
-    setBusy(true);
-
-    const { error } = await supabase.auth.resend({
-      type: "signup",
-      email: pendingEmail,
-      options: { emailRedirectTo: confirmRedirectUrl() },
-    });
-
-    setBusy(false);
-    if (error) {
-      setError(friendlyAuthError(error));
-      return;
-    }
-    setNotice("Confirmation email resent. Give it a minute or two.");
-  }
-
-  // Account created, email confirmation pending: check-your-inbox panel.
+  // Account created, email confirmation pending: swap the form for the
+  // 6-digit-code panel. Verifying there signs the reader in on THIS device
+  // (see EmailCodeVerify's note on why a code beats a link cross-device) and
+  // sends them on to /onboarding.
   if (pendingEmail) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
-        <div className="card">
-          <div className="mb-6 text-center">
-            <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-              Check your inbox
-            </h1>
-            <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-              We sent a confirmation link to{" "}
-              <span className="break-all font-medium text-stone-700 dark:text-stone-300">{pendingEmail}</span>
-              . Click it and you&apos;ll land right in onboarding.
-            </p>
-          </div>
-
-          <p className="text-center text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
-            Nothing after a couple of minutes? Check your spam folder, or
-            resend it.
-          </p>
-          <button
-            type="button"
-            onClick={onResend}
-            className="btn-secondary mt-4 w-full"
-            disabled={busy}
-          >
-            {busy ? "Resending…" : "Resend email"}
-          </button>
-
-          {error && (
-            <p
-              role="alert"
-              className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
-            >
-              {error}
-            </p>
-          )}
-          {notice && (
-            <p
-              aria-live="polite"
-              className="mt-4 rounded-lg bg-bark-50 p-3 text-center text-sm text-bark-700 dark:bg-bark-700/40 dark:text-stone-300"
-            >
-              {notice}
-            </p>
-          )}
-
-          <p className="mt-6 border-t border-stone-100 pt-4 text-center text-xs text-stone-500 max-sm:text-sm dark:border-white/10 dark:text-stone-400">
-            Already confirmed, or used the wrong email?{" "}
-            <Link href={`/signin${nextQuery}`} className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
-              Sign in
-            </Link>{" "}
-            or{" "}
-            <Link href="/reset-password" className="text-bark-700 hover:underline max-sm:py-3 dark:text-stone-300">
-              reset your password
-            </Link>
-            .
-          </p>
-        </div>
-      </main>
+      <EmailCodeVerify
+        email={pendingEmail}
+        successHref={`/onboarding${onboardingQuery}`}
+        signInHref={`/signin${nextQuery}`}
+      />
     );
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
+    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6 py-10">
       {/* Renders nothing. Writes a coarse browser fingerprint to a first-party
           cookie so the free-trial abuse score can tell a private window apart
           from a genuinely new person. Only on the account doors (this page, the
@@ -270,14 +218,6 @@ export default function HomeownerSignUpPage(props: {
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             Start tracking your home with Hearth.
           </p>
-        </div>
-
-        {/* Same three bullets onboarding's address step shows, moved up to
-            the very first screen a visitor reads (CR2#2): one shared
-            component, src/components/OnboardingValueBullets.tsx, so the
-            wording is identical in both places by construction. */}
-        <div className="mb-4">
-          <OnboardingValueBullets />
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
@@ -376,7 +316,14 @@ export default function HomeownerSignUpPage(props: {
               next thing they reach - not something below two social buttons
               they have to scroll past. The social buttons keep their own
               agreement line underneath them. */}
-          <button className="btn-primary w-full" disabled={busy}>
+          {/* Renders nothing until NEXT_PUBLIC_TURNSTILE_SITE_KEY is set. When
+              it is, the submit stays disabled until the CAPTCHA is solved so we
+              never fire a token-required signUp with no token. */}
+          <Turnstile ref={turnstileRef} onToken={setCaptchaToken} />
+          <button
+            className="btn-primary w-full"
+            disabled={busy || (CAPTCHA_ENABLED && !captchaToken)}
+          >
             {busy ? "Creating account…" : "Sign up"}
           </button>
           <div className="flex items-center gap-3">
@@ -437,7 +384,7 @@ export default function HomeownerSignUpPage(props: {
         </div>
       </div>
 
-      <p className="mt-6 text-center text-xs text-stone-500 dark:text-stone-400">
+      <p className="mt-4 text-center text-sm text-stone-600 dark:text-stone-300">
         Are you a contractor?{" "}
         <Link
           href={`/contractor-signup${nextQuery}`}
