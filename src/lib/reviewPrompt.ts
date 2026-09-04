@@ -45,6 +45,7 @@ export const REVIEW_PROMPT_EXCLUDED_PATHS = [
   "/plus",
   "/onboarding",
   "/signin",
+  "/verify",
   "/checkout",
 ] as const;
 

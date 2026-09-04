@@ -22,13 +22,12 @@ import HomeownerSignUpPage from "./page";
 
 afterEach(() => cleanup());
 
-// CR2#2: the three value bullets used to live one screen later, on
-// onboarding's address step, leaving the sign-up screen with nothing but
-// "Start tracking your home with Hearth." They now render here too, from the
-// same shared component onboarding uses (src/components/OnboardingValueBullets.tsx),
-// so the two can never say something different.
+// The three onboarding value bullets were removed from the sign-up screen
+// (owner request): they cluttered the account door, and onboarding still shows
+// them where they're acted on. This guards that they stay off this page and the
+// subtitle remains the one bit of value copy here.
 describe("homeowner sign-up value bullets", () => {
-  it("shows the same three bullets onboarding shows, above the form", async () => {
+  it("no longer shows the onboarding value bullets, keeps the subtitle", async () => {
     // The page reads searchParams via React's use(), which suspends for a
     // tick even against an already-resolved promise - the render has to be
     // awaited or React warns about an un-awaited act().
@@ -36,17 +35,17 @@ describe("homeowner sign-up value bullets", () => {
       render(<HomeownerSignUpPage searchParams={Promise.resolve({})} />);
     });
     expect(
-      screen.getByText("Track every system and know what needs attention")
-    ).toBeInTheDocument();
+      screen.queryByText("Track every system and know what needs attention")
+    ).toBeNull();
     expect(
-      screen.getByText(
+      screen.queryByText(
         "Proactive freeze, heat, and recall alerts for YOUR home"
       )
-    ).toBeInTheDocument();
+    ).toBeNull();
     expect(
-      screen.getByText("Scan a warranty or receipt and Hearth files it for you")
-    ).toBeInTheDocument();
-    // Still there, unchanged.
+      screen.queryByText("Scan a warranty or receipt and Hearth files it for you")
+    ).toBeNull();
+    // The subtitle stays as the one line of value copy on the account door.
     expect(
       screen.getByText("Start tracking your home with Hearth.")
     ).toBeInTheDocument();
