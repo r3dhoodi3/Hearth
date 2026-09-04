@@ -451,11 +451,9 @@ export default async function Home(props: {
               <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
                 Outside the county? Join the waitlist and we&apos;ll tell you when we expand.
               </p>
-              <div className="mt-4 flex justify-center text-sm lg:justify-start">
-                <Link href="/signin" className="text-bark-700 hover:underline dark:text-stone-300">
-                  Already have an account? Sign in
-                </Link>
-              </div>
+              {/* No "Already have an account? Sign in" here anymore: the header
+                  "Sign in" button (top-right) is the single, more discoverable
+                  door for returning users, same as the mobile landing. */}
             </div>
             {/* Flat hero photo: no gradient, no glass, no text-over-image
                 scrim - just a licensed photo in a rounded frame. The cycler's
