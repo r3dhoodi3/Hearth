@@ -15,9 +15,11 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 // send, so the two stay identical rather than drifting into two different
 // limits. Same fixed-window rate_limit_hit RPC (migration 0070) the rest of
 // the codebase already uses (see src/lib/aiUsage.ts's countAskUsage), on a
-// bucket keyed to the account, not the phone number - the account is the
-// thing doing the toggling, and a limit keyed to the number would just reset
-// every time the attacker typed a new one.
+// TWO buckets, both must pass: one keyed to the account (the thing doing the
+// toggling; a number-only limit would reset every time the attacker typed a
+// new one) and one keyed to the normalized phone number (so a stranger's
+// number cannot be hit 2 more times from every fresh free account - red
+// team, 2026-09-03).
 //
 // Fails CLOSED, same direction as every other abuse-shaped counter in this
 // codebase: an RPC outage must not hand out unmetered texts to an arbitrary
@@ -33,26 +35,33 @@ export function smsOptinBucket(userId: string): string {
   return `sms_optin:${userId}`;
 }
 
+export function smsOptinPhoneBucket(phone: string): string {
+  return `sms_optin_phone:${phone.replace(/\D/g, "")}`;
+}
+
 // Call this immediately before sending the opt-in confirmation, on the same
 // admin client the caller already holds. Returns true only when the send may
 // proceed; every other outcome (limit hit, RPC error) returns false and has
 // already logged why.
 export async function smsOptinConfirmationAllowed(
   admin: ReturnType<typeof createAdminClient>,
-  userId: string
+  userId: string,
+  phone: string
 ): Promise<boolean> {
   try {
-    const { data: allowed, error } = await admin.rpc("rate_limit_hit", {
-      p_bucket: smsOptinBucket(userId),
-      p_limit: SMS_OPTIN_LIMIT,
-      p_window_seconds: SMS_OPTIN_WINDOW_SECONDS,
-    });
-    if (error) throw error;
-    if (allowed === false) {
-      console.warn(
-        `smsOptinConfirmationAllowed: rate limit hit for user ${userId}, skipping send`
-      );
-      return false;
+    for (const bucket of [smsOptinBucket(userId), smsOptinPhoneBucket(phone)]) {
+      const { data: allowed, error } = await admin.rpc("rate_limit_hit", {
+        p_bucket: bucket,
+        p_limit: SMS_OPTIN_LIMIT,
+        p_window_seconds: SMS_OPTIN_WINDOW_SECONDS,
+      });
+      if (error) throw error;
+      if (allowed === false) {
+        console.warn(
+          `smsOptinConfirmationAllowed: rate limit hit on ${bucket.split(":")[0]} for user ${userId}, skipping send`
+        );
+        return false;
+      }
     }
     return true;
   } catch (err) {

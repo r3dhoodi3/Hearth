@@ -79,7 +79,7 @@ function baseSubItem(sub: Stripe.Subscription): Stripe.SubscriptionItem {
 // src/lib/stripePlanPrice.ts, which returns the configured STRIPE_PRICE_* id
 // when there is one and otherwise find-or-creates an ACTIVE product and price.
 
-// Start a OakTend Plus checkout on any of the three sold cadences: weekly,
+// Start an OakTend Plus checkout on any of the three sold cadences: weekly,
 // monthly, or yearly. Uses the pre-created Stripe Price if one is configured,
 // otherwise falls back to inline price_data so the flow works before
 // Products/Prices are set up in Stripe.
@@ -233,7 +233,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
     }
     if (alreadySubscribed) {
       await setFlash(
-        "You already have a OakTend Plus membership. No need to buy it twice.",
+        "You already have an OakTend Plus membership. No need to buy it twice.",
         "info"
       );
       redirect("/plus");

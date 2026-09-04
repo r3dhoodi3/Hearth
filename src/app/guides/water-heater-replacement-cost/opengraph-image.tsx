@@ -14,6 +14,6 @@ export const alt = "OakTend guide: Water heater replacement cost: typical range 
 export default function OgImage() {
   return renderOgCard(
     "Water heater replacement cost: typical range and what changes it",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

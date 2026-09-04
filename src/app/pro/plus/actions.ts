@@ -62,7 +62,10 @@ async function proIntroCouponId(): Promise<string | null> {
   const envId = process.env.STRIPE_PRO_INTRO_COUPON_ID;
   if (envId) return envId;
 
-  const fallbackId = "oaktend-pro-intro";
+  // Stripe coupon ids live in the Stripe account, not the brand: the coupon was
+  // created as "hearth-pro-intro" and renaming the string here would silently
+  // stop the intro discount. Set STRIPE_PRO_INTRO_COUPON_ID to override.
+  const fallbackId = "hearth-pro-intro";
   try {
     await stripe.coupons.retrieve(fallbackId);
     return fallbackId;
@@ -84,7 +87,7 @@ async function proIntroCouponId(): Promise<string | null> {
   }
 }
 
-// Start a OakTend Pro checkout (monthly or yearly). Uses the pre-created
+// Start an OakTend Pro checkout (monthly or yearly). Uses the pre-created
 // Stripe Price if one is configured, otherwise falls back to inline
 // price_data so the flow works before Products/Prices are set up in Stripe.
 export async function startProCheckoutAction(formData: FormData) {
@@ -173,7 +176,7 @@ export async function startProCheckoutAction(formData: FormData) {
     (existing.status === "active" || existing.status === "trialing");
   if (liveExisting) {
     await setFlash(
-      "You already have a OakTend Pro membership. No need to buy it twice.",
+      "You already have an OakTend Pro membership. No need to buy it twice.",
       "info"
     );
     redirect("/pro/plus");
@@ -232,7 +235,7 @@ export async function startProCheckoutAction(formData: FormData) {
     }
     if (alreadyMember) {
       await setFlash(
-        "You already have a OakTend Pro membership. No need to buy it twice.",
+        "You already have an OakTend Pro membership. No need to buy it twice.",
         "info"
       );
       redirect("/pro/plus");

@@ -721,7 +721,7 @@ export async function postJobAction(formData: FormData) {
   }
 
   // Instant new-job alerts through the full notification stack (in-app now,
-  // email/SMS once those providers are configured). Normally a OakTend Pro
+  // email/SMS once those providers are configured). Normally an OakTend Pro
   // member perk; while COLD_START_FREE_ALERTS is on, every category-matched
   // pro gets one. Pros not alerted keep the nudge below unchanged.
   // alertProsForNewLead catches everything internally and returns the ids it

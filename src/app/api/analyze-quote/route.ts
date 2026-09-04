@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // The quote analyzer is a OakTend Plus feature, but every homeowner gets
+  // The quote analyzer is an OakTend Plus feature, but every homeowner gets
   // exactly one free check as a taste. A non-Plus user with an unused credit
   // (users.free_quote_used_at is null) claims it ATOMICALLY up front: a
   // conditional update that only matches while the column is still null, so

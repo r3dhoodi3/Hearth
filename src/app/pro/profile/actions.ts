@@ -325,7 +325,7 @@ export async function savePublicPageAction(formData: FormData) {
   if (!contractor) redirect("/pro/onboarding");
 
   if (!(await hasProPlan())) {
-    setFlash("Page extras are a OakTend Pro member perk.", "error");
+    setFlash("Page extras are an OakTend Pro member perk.", "error");
     redirect("/pro/profile");
   }
 

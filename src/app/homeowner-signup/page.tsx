@@ -159,7 +159,7 @@ export default function HomeownerSignUpPage(props: {
     // What we say back is deliberately the SAME sentence either way. Saying
     // "an account with this email already exists" undid Supabase's own
     // enumeration protection in one line: anybody could type an address here
-    // and read off whether that person is a OakTend customer. See
+    // and read off whether that person is an OakTend customer. See
     // SIGNUP_EMAIL_NEUTRAL for the reasoning and the wording.
     if (data.user && data.user.identities && data.user.identities.length === 0) {
       setBusy(false);

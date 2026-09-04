@@ -53,7 +53,7 @@ export default function ThemeToggle({
     document.documentElement.classList.toggle("dark", next);
     setThemeColorMeta(next);
     try {
-      localStorage.setItem("oaktend-theme", next ? "dark" : "light");
+      localStorage.setItem("hearth-theme", next ? "dark" : "light");
     } catch {
       // Storage can be unavailable (private mode); the theme still flips for
       // this page view, it just won't persist.

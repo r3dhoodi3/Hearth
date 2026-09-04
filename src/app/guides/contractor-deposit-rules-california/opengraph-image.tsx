@@ -14,6 +14,6 @@ export const alt = "OakTend guide: How much can a contractor ask for up front in
 export default function OgImage() {
   return renderOgCard(
     "How much can a contractor ask for up front in California?",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

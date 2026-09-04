@@ -14,6 +14,6 @@ export const alt = "OakTend guide: Bathroom remodel cost in Orange County: typic
 export default function OgImage() {
   return renderOgCard(
     "Bathroom remodel cost in Orange County: typical ranges (2026)",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

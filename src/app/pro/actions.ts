@@ -454,7 +454,7 @@ async function saveProSmsConsent(
       wants &&
       !priorConsent &&
       sendPhone &&
-      (await smsOptinConfirmationAllowed(admin, userId))
+      (await smsOptinConfirmationAllowed(admin, userId, sendPhone))
     ) {
       await sendNotification(admin, {
         userId,

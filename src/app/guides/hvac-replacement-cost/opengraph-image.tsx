@@ -14,6 +14,6 @@ export const alt = "OakTend guide: HVAC replacement cost: typical range and what
 export default function OgImage() {
   return renderOgCard(
     "HVAC replacement cost: typical range and what changes it",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

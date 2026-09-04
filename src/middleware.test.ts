@@ -28,7 +28,8 @@ vi.mock("@/lib/supabase/middleware", async (importOriginal) => {
 const logGpcSignalOncePerSession = vi.fn(
   async (
     _headers: Headers,
-    _cookies: import("@/lib/gpc").GpcCookieJar,
+    _requestCookies: Pick<import("@/lib/gpc").GpcCookieJar, "get">,
+    _cookies: Pick<import("@/lib/gpc").GpcCookieJar, "set">,
     _userId: string | null
   ): Promise<void> => {}
 );
@@ -253,12 +254,14 @@ describe("Global Privacy Control wiring", () => {
     const response = await middleware(request, event);
 
     expect(logGpcSignalOncePerSession).toHaveBeenCalledTimes(1);
-    const [headersArg, cookiesArg, userIdArg] =
+    const [headersArg, requestCookiesArg, cookiesArg, userIdArg] =
       logGpcSignalOncePerSession.mock.calls[0];
     expect(headersArg.get("sec-gpc")).toBe("1");
     // Same jar the response that was returned carries, so a cookie the helper
     // sets is not lost.
     expect(cookiesArg).toBe(response.cookies);
+    // The once-per-session marker is READ from what the browser sent.
+    expect(requestCookiesArg).toBe(request.cookies);
     expect(userIdArg).toBeNull();
     // Non-blocking: the returned promise is handed to event.waitUntil, not
     // awaited inline by the middleware.

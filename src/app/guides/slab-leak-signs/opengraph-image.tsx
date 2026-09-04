@@ -14,6 +14,6 @@ export const alt = "OakTend guide: Slab leak signs: how to spot one early";
 export default function OgImage() {
   return renderOgCard(
     "Slab leak signs: how to spot one early",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

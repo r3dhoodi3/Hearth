@@ -14,6 +14,6 @@ export const alt = "OakTend guide: Home maintenance schedule: how often to do ev
 export default function OgImage() {
   return renderOgCard(
     "Home maintenance schedule: how often to do everything",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

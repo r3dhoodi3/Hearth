@@ -51,7 +51,7 @@ function seenMillis(name: string, leadId: string): number {
   const cookieVal = readSeen(name)[leadId];
   let ms = cookieVal ? new Date(cookieVal).getTime() : 0;
   try {
-    const local = localStorage.getItem(`oaktend:seen:${leadId}`);
+    const local = localStorage.getItem(`hearth:seen:${leadId}`);
     if (local) ms = Math.max(ms, Number(local) || 0);
   } catch {
     /* localStorage unavailable */

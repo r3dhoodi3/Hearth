@@ -108,7 +108,7 @@ export async function inviteMemberAction(formData: FormData) {
   }
 
   setFlash(
-    `Invited ${email}. If they don't have a OakTend account yet, the invite waits until they sign up with that email.`
+    `Invited ${email}. If they don't have an OakTend account yet, the invite waits until they sign up with that email.`
   );
   revalidatePath(HOUSEHOLD_PATH);
   redirect(HOUSEHOLD_PATH);

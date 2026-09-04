@@ -232,7 +232,7 @@ export async function POST(req: NextRequest) {
   // signup, and until now that was enough to get an unmetered-looking run at a
   // paid model. So the copilot is locked until the account has done one thing a
   // pretend business does not do: a CSLB-confirmed license, a paid lead, a
-  // settled deposit, or a OakTend Pro membership (see isEstablishedPro in
+  // settled deposit, or an OakTend Pro membership (see isEstablishedPro in
   // src/lib/contractor.ts, which fails closed on every read).
   //
   // FIRST, before the daily counter and before the context build: a locked
@@ -277,7 +277,7 @@ export async function POST(req: NextRequest) {
   // paid) - so the pro copilot was quietly the most generous free AI surface
   // in the product, and a free pro got eight times what a free homeowner gets
   // for the same kind of question. It now counts exactly like the homeowner
-  // chat: countAskUsage, a free pro on ASK_DAILY_FREE and a OakTend Pro member
+  // chat: countAskUsage, a free pro on ASK_DAILY_FREE and an OakTend Pro member
   // (trial included) on ASK_DAILY_PRO, in the pro chat's own key so the two
   // sides of a dual account never drain each other. Fails closed, resets at
   // midnight; see src/lib/aiUsage.ts.

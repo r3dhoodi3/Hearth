@@ -268,7 +268,10 @@ function renderList(list: ListNode, key: number): ReactNode {
 const SAFE_EXTERNAL_HREF = /^(https?:\/\/|mailto:)/i;
 
 function renderLink(text: string, href: string, key: number): ReactNode {
-  const isInternal = href.startsWith("/") || href.startsWith("#");
+  // A protocol-relative "//host" (or "/\\host", which some browsers fold into
+  // "//host") is an off-site URL, not an internal path, so it must go through
+  // the scheme allowlist below instead of becoming a bare <Link>.
+  const isInternal = /^(\/(?![\/\\])|#)/.test(href);
   if (isInternal) {
     return (
       <Link key={key} href={href} className={LINK_CLASS}>{text}</Link>

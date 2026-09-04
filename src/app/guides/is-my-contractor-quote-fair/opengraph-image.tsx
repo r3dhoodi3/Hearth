@@ -14,6 +14,6 @@ export const alt = "OakTend guide: Is my contractor's quote fair? How to read it
 export default function OgImage() {
   return renderOgCard(
     "Is my contractor's quote fair? How to read it before you sign",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

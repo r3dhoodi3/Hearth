@@ -14,6 +14,6 @@ export const alt = "OakTend guide: ADU cost in Orange County: typical ranges by 
 export default function OgImage() {
   return renderOgCard(
     "ADU cost in Orange County: typical ranges by type (2026)",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

@@ -25,10 +25,12 @@ vi.mock("@/lib/supabase/admin", () => ({
           }),
         }),
         update: (fields: Record<string, unknown>) => ({
-          eq: async (_col: string, id: string) => {
-            updates.push({ id, fields });
-            const u = users.find((x) => x.id === id);
-            if (u) Object.assign(u, fields);
+          in: async (_col: string, ids: string[]) => {
+            for (const id of ids) {
+              updates.push({ id, fields });
+              const u = users.find((x) => x.id === id);
+              if (u) Object.assign(u, fields);
+            }
             return { error: null };
           },
         }),

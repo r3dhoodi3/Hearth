@@ -92,7 +92,7 @@ function WonReviewAsk({
   );
 }
 
-// The premium CRM upgrades a OakTend Pro membership adds on top of the free
+// The premium CRM upgrades an OakTend Pro membership adds on top of the free
 // pipeline. Honest framing: only things that actually work in the app today
 // may appear here. Tapping a card sends a non-member to /pro/plus, and a
 // member to the real tool (via `href`).

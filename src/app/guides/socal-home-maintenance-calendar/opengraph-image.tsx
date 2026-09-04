@@ -14,6 +14,6 @@ export const alt = "OakTend guide: Coastal Southern California home maintenance 
 export default function OgImage() {
   return renderOgCard(
     "Coastal Southern California home maintenance calendar, month by month",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

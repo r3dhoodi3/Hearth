@@ -42,15 +42,23 @@ export type GpcCookieJar = {
 // it clears when the browser session ends) marks it done. No other behavior
 // changes - see the module comment above for why that is the correct, honest
 // response for a business that does not sell or share data.
+// `requestCookies` is what the browser SENT (NextRequest.cookies);
+// `responseCookies` is where the marker is WRITTEN (NextResponse.cookies).
+// They must be two different jars in middleware: a ResponseCookies.get()
+// only sees cookies set on this response, never the incoming ones, so
+// reading the marker from the response jar made the once-per-session guard
+// a no-op (red team, 2026-09-03). In a route handler using next/headers
+// cookies(), pass the same jar for both.
 export async function logGpcSignalOncePerSession(
   headers: Headers,
-  cookies: GpcCookieJar,
+  requestCookies: Pick<GpcCookieJar, "get">,
+  responseCookies: Pick<GpcCookieJar, "set">,
   userId: string | null
 ): Promise<void> {
   if (!hasGlobalPrivacyControl(headers)) return;
-  if (cookies.get(GPC_SEEN_COOKIE)) return;
+  if (requestCookies.get(GPC_SEEN_COOKIE)) return;
 
-  cookies.set(GPC_SEEN_COOKIE, "1", {
+  responseCookies.set(GPC_SEEN_COOKIE, "1", {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

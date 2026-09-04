@@ -245,12 +245,19 @@ export async function POST(req: NextRequest) {
       if (error) {
         console.error("twilio inbound: users lookup failed:", error.message);
       } else {
-        const match = (users ?? []).find(
-          (u: { id: string; phone: string | null }) =>
-            u.phone && normalizePhone(u.phone) === fromDigits
-        );
+        // EVERY matching row, not the first one found. users.phone is
+        // unverified and has no unique constraint, so two accounts can carry
+        // the same number; a STOP from that number must switch off consent on
+        // all of them, or the confirmation "No further messages will be sent"
+        // is false for whichever row lost the sort (red team, 2026-09-03).
+        const matchIds = (users ?? [])
+          .filter(
+            (u: { id: string; phone: string | null }) =>
+              u.phone && normalizePhone(u.phone) === fromDigits
+          )
+          .map((u: { id: string }) => u.id);
 
-        if (match) {
+        if (matchIds.length > 0) {
           // sms_consent_at only advances on a fresh grant (START). A STOP
           // flips consent off but deliberately leaves sms_consent_at alone,
           // same rule as saveAccountAction in
@@ -264,7 +271,7 @@ export async function POST(req: NextRequest) {
           const { error: updateError } = await admin
             .from("users")
             .update(updatePayload)
-            .eq("id", match.id);
+            .in("id", matchIds);
           if (updateError) {
             console.error(
               "twilio inbound: consent update failed:",

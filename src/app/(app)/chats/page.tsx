@@ -62,7 +62,7 @@ async function markChatSeenAction(leadId: string) {
 
 // Fires when the inbox is opened, so the nav badge clears even on the default
 // Ask OakTend pane where no single thread is selected. The badge clear itself
-// happens client-side: MarkChatsSeen stamps `oaktend:seen:<id>` in localStorage
+// happens client-side: MarkChatsSeen stamps `hearth:seen:<id>` in localStorage
 // for every listed lead and LiveUnreadBadge takes the max of that and the seen
 // cookie. This action deliberately does NOT write the per-thread seen cookie:
 // stamping every lead id here wiped the per-thread "New" indicator on

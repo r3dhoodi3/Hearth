@@ -49,7 +49,7 @@ describe("hasGlobalPrivacyControl", () => {
 describe("logGpcSignalOncePerSession", () => {
   it("does nothing when the signal is absent", async () => {
     const cookies = jar();
-    await logGpcSignalOncePerSession(new Headers(), cookies, "user-1");
+    await logGpcSignalOncePerSession(new Headers(), cookies, cookies, "user-1");
     expect(trackServerEvent).not.toHaveBeenCalled();
     expect(cookies.store.has(GPC_SEEN_COOKIE)).toBe(false);
   });
@@ -57,7 +57,7 @@ describe("logGpcSignalOncePerSession", () => {
   it("logs the event and sets the session marker on first sight", async () => {
     const cookies = jar();
     const headers = new Headers({ "Sec-GPC": "1" });
-    await logGpcSignalOncePerSession(headers, cookies, "user-1");
+    await logGpcSignalOncePerSession(headers, cookies, cookies, "user-1");
     expect(trackServerEvent).toHaveBeenCalledTimes(1);
     expect(trackServerEvent).toHaveBeenCalledWith("user-1", "gpc_signal_seen", {});
     expect(cookies.store.get(GPC_SEEN_COOKIE)).toBe("1");
@@ -66,7 +66,7 @@ describe("logGpcSignalOncePerSession", () => {
   it("does not log a second time once the session marker is set", async () => {
     const cookies = jar({ [GPC_SEEN_COOKIE]: "1" });
     const headers = new Headers({ "Sec-GPC": "1" });
-    await logGpcSignalOncePerSession(headers, cookies, "user-1");
+    await logGpcSignalOncePerSession(headers, cookies, cookies, "user-1");
     expect(trackServerEvent).not.toHaveBeenCalled();
   });
 
@@ -76,8 +76,17 @@ describe("logGpcSignalOncePerSession", () => {
     // would be an unbounded insert per request, so only the cookie is set.
     const cookies = jar();
     const headers = new Headers({ "Sec-GPC": "1" });
-    await logGpcSignalOncePerSession(headers, cookies, null);
+    await logGpcSignalOncePerSession(headers, cookies, cookies, null);
     expect(cookies.get("hearth_gpc_seen")?.value).toBe("1");
     expect(trackServerEvent).not.toHaveBeenCalled();
+  });
+
+  it("reads the marker from the REQUEST jar, not the response jar it writes to", async () => {
+    const requestJar = jar({ [GPC_SEEN_COOKIE]: "1" });
+    const responseJar = jar();
+    const headers = new Headers({ "Sec-GPC": "1" });
+    await logGpcSignalOncePerSession(headers, requestJar, responseJar, "user-1");
+    expect(trackServerEvent).not.toHaveBeenCalled();
+    expect(responseJar.store.has(GPC_SEEN_COOKIE)).toBe(false);
   });
 });

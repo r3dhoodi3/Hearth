@@ -48,6 +48,7 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   try {
     const gpcLogged = logGpcSignalOncePerSession(
       request.headers,
+      request.cookies,
       withDevice.cookies,
       null
     );

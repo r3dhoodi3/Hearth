@@ -14,6 +14,6 @@ export const alt = "OakTend guide: Roof replacement cost in Orange County: what 
 export default function OgImage() {
   return renderOgCard(
     "Roof replacement cost in Orange County: what to expect",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

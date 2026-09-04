@@ -14,6 +14,6 @@ export const alt = "OakTend guide: Kitchen remodel cost in Orange County: typica
 export default function OgImage() {
   return renderOgCard(
     "Kitchen remodel cost in Orange County: typical ranges (2026)",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

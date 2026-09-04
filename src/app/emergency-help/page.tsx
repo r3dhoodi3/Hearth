@@ -90,7 +90,7 @@ export default function EmergencyHelpPage() {
           Get a pro on it
         </Link>
         <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-          Already have a OakTend account? The in-app version at{" "}
+          Already have an OakTend account? The in-app version at{" "}
           <Link href="/emergency" className="text-bark-700 hover:underline dark:text-stone-300">
             Emergency
           </Link>{" "}

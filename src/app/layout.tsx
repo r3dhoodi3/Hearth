@@ -29,7 +29,7 @@ const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 // in dark mode still gets OakTend's light look until they ask otherwise.
 const themeInit = `(function () {
   try {
-    if (localStorage.getItem("oaktend-theme") !== "dark") return;
+    if (localStorage.getItem("hearth-theme") !== "dark") return;
     document.documentElement.classList.add("dark");
     // Match the browser/status-bar tint to the restored theme. The
     // theme-color meta is emitted by Next's viewport export, which may not

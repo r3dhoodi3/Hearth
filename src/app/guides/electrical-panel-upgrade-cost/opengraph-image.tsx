@@ -14,6 +14,6 @@ export const alt = "OakTend guide: Electrical panel upgrade cost: typical range 
 export default function OgImage() {
   return renderOgCard(
     "Electrical panel upgrade cost: typical range and when you need one",
-    "A OakTend home guide"
+    "An OakTend home guide"
   );
 }

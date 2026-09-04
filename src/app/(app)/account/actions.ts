@@ -190,7 +190,7 @@ export async function saveAccountAction(formData: FormData) {
     consentFields.sms_consent === true &&
     !priorConsent &&
     phone &&
-    (await smsOptinConfirmationAllowed(admin, user.id))
+    (await smsOptinConfirmationAllowed(admin, user.id, phone))
   ) {
     try {
       await sendNotification(supabase, {

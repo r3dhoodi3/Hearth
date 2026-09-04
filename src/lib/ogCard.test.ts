@@ -18,7 +18,7 @@ describe("renderOgCard", () => {
     // exercises the small-end of titleFontSize()'s scaling.
     const res = renderOgCard(
       "Coastal Southern California home maintenance calendar, month by month",
-      "A OakTend home guide"
+      "An OakTend home guide"
     );
     expect(res).toBeInstanceOf(Response);
     expect(res.status).toBe(200);
