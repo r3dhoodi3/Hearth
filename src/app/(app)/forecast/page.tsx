@@ -367,7 +367,7 @@ export default async function ForecastPage() {
               the Home page. /profile still resolves here via the redirect in
               next.config.mjs, but an in-app link should not spend a round
               trip rediscovering that. */}
-          <Link href="/dashboard#systems" className="btn-primary inline-block">
+          <Link href="/dashboard#systems" className="btn-primary">
             Add my systems
           </Link>
         </div>

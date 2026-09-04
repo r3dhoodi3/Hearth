@@ -238,7 +238,7 @@ export default function BillingView({
             )}
             <ProUpgradeCta
               trialEligible={trialEligible}
-              className="btn-primary mt-3 inline-block"
+              className="btn-primary mt-3"
               sublineClassName="mt-2 text-xs text-hearth-700 dark:text-hearth-300"
             />
           </div>

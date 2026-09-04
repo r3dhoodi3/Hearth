@@ -107,7 +107,7 @@ export default async function OnboardingPage(
             </p>
             <Link
               href="/plus?reason=home_limit"
-              className="btn-primary mt-4 inline-block"
+              className="btn-primary mt-4"
             >
               See Hearth Plus
             </Link>

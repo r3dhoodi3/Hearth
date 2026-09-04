@@ -693,7 +693,7 @@ export default function InspectionUpload({
           </p>
           <Link
             href={FREE_TASTE_PAYWALL.inspection.link}
-            className="btn-primary inline-block"
+            className="btn-primary"
           >
             Get Hearth Plus
           </Link>
