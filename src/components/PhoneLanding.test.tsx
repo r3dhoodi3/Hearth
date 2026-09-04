@@ -52,15 +52,17 @@ describe("PhoneLanding", () => {
     expect(contractor).toHaveClass("btn-secondary", "min-h-12", "w-full");
   });
 
-  it("keeps sign-in below the doors as a quieter full-width link, not a third button", () => {
+  it("puts sign-in in the header as a one-tap button for recurring users", () => {
     render(<PhoneLanding photos={PHOTOS} />);
-    const signIn = screen.getByRole("link", {
-      name: /already have an account\? sign in/i,
-    });
+    // Moved out of a quiet below-the-doors link into a header button (matching
+    // the desktop landing) so a returning user reaches it top-right, not below
+    // the fold.
+    const signIn = screen.getByRole("link", { name: "Sign in" });
     expect(signIn).toHaveAttribute("href", "/signin");
-    expect(signIn.className).not.toMatch(/btn/);
-    // Still a full 44px-tall, full-width tap target even though it reads quiet.
-    expect(signIn).toHaveClass("min-h-11", "w-full");
+    // The old "Already have an account?" link is gone.
+    expect(
+      screen.queryByText(/already have an account/i)
+    ).toBeNull();
   });
 
   it("keeps only Emergency help in the quiet row, since contractor is a door now", () => {
