@@ -41,6 +41,23 @@ const CHILD_ROUTES: Record<string, string[]> = {
   "/pro/chats": ["/pro/ask"],
 };
 
+// Whether a link owns the current route. Exact match, or a nested route under
+// it (but never let an "index" link like /pro - or /contractors, whose
+// /contractors/browse sibling is its own tab - swallow its own sub-pages), or a
+// CHILD_ROUTES entry. Shared by both variants and, for the bottom bar, by the
+// sliding indicator that needs the active tab's INDEX, not just its styling.
+function isActive(href: string, pathname: string) {
+  return (
+    pathname === href ||
+    (href !== "/pro" &&
+      href !== "/contractors" &&
+      pathname.startsWith(href + "/")) ||
+    (CHILD_ROUTES[href] ?? []).some(
+      (c) => pathname === c || pathname.startsWith(c + "/")
+    )
+  );
+}
+
 type NavLink = {
   href: string;
   label: string;
@@ -76,22 +93,41 @@ export default function NavLinks({
 }) {
   const pathname = usePathname();
 
-  return (
-    <>
-      {links.map((l) => {
-        // Exact match, or a nested route under it (but never let an "index"
-        // link like /pro - or /contractors, whose /contractors/browse sibling
-        // is its own tab - swallow its own sub-pages).
-        const active =
-          pathname === l.href ||
-          (l.href !== "/pro" &&
-            l.href !== "/contractors" &&
-            pathname.startsWith(l.href + "/")) ||
-          (CHILD_ROUTES[l.href] ?? []).some(
-            (c) => pathname === c || pathname.startsWith(c + "/")
-          );
+  if (variant === "bottom") {
+    // One sliding indicator does the highlighting now (see below), so the bar
+    // needs the active tab's INDEX to translate it, not just a per-link flag.
+    const n = links.length;
+    const activeIndex = links.findIndex((l) => isActive(l.href, pathname));
 
-        if (variant === "bottom") {
+    return (
+      <>
+        {/* The filled highlight, desktop-style but as a SINGLE element that
+            slides to the active tab like a segmented control. Full tab-width
+            (100/n%), inset from the bar's top and bottom, and translated by its
+            own width per tab to land under the active one - only ever one is
+            shown, so full width is fine. Absolute + z-0 + pointer-events-none
+            so it sits behind the flex tabs (each relative z-10 below) and never
+            affects their layout or taps; the nav is the positioning context
+            (Nav.tsx / ProNav.tsx add `relative`). motion-safe: so a
+            reduced-motion user gets an instant jump, not a slide. The bottom
+            calc keeps it clear of the safe-area home indicator. */}
+        {activeIndex >= 0 && (
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute left-0 top-1 z-0 rounded-lg motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out ${
+              accent === "hearth"
+                ? "bg-hearth-100 dark:bg-hearth-700/40"
+                : "bg-bark-100 dark:bg-bark-700/40"
+            }`}
+            style={{
+              width: `${100 / n}%`,
+              bottom: "calc(0.25rem + env(safe-area-inset-bottom))",
+              transform: `translateX(${activeIndex * 100}%)`,
+            }}
+          />
+        )}
+        {links.map((l) => {
+          const active = isActive(l.href, pathname);
           const Icon = l.icon ? NAV_ICONS[l.icon] : undefined;
           return (
             <Link
@@ -115,12 +151,17 @@ export default function NavLinks({
               // render their bottom bars through this one variant, so the
               // homeowner and pro sides get the exact same pressed state by
               // construction.
-              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1 text-xs max-lg:transition-opacity max-lg:duration-75 max-lg:active:opacity-60 ${
+              // relative z-10 lifts the tab above the sliding indicator (absolute
+              // z-0) so the icon and label read on top of the highlight. Active is
+              // now just the accent TEXT color, matching the desktop highlight (a
+              // filled bg + colored text, not bold) - the fill comes from the
+              // indicator, so no font-semibold here.
+              className={`relative z-10 flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1 text-xs font-medium max-lg:transition-opacity max-lg:duration-75 max-lg:active:opacity-60 ${
                 active
                   ? accent === "hearth"
-                    ? "font-semibold text-hearth-700 dark:text-stone-300"
-                    : "font-semibold text-bark-700 dark:text-stone-300"
-                  : "font-medium text-stone-500 dark:text-stone-400"
+                    ? "text-hearth-700 dark:text-stone-200"
+                    : "text-bark-700 dark:text-stone-200"
+                  : "text-stone-500 dark:text-stone-400"
               }`}
             >
               <span className="relative flex h-6 w-6 items-center justify-center">
@@ -142,7 +183,15 @@ export default function NavLinks({
               <span className="max-w-full truncate">{l.shortLabel ?? l.label}</span>
             </Link>
           );
-        }
+        })}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {links.map((l) => {
+        const active = isActive(l.href, pathname);
 
         return (
           <Link
