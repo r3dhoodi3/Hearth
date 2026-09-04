@@ -145,7 +145,7 @@ export default function Nav({
               overflow-x-auto nav strip so its dropdown isn't clipped. */}
           <ToolsMenu hasPlus={hasPlus} />
           <div className="hidden sm:block">
-            <GlobalSearch />
+            <GlobalSearch expandable />
           </div>
           {/* Mobile-only entry to /search; the inline GlobalSearch box is
               hidden below sm and the page had no other way in. */}
