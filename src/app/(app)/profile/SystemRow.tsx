@@ -473,7 +473,7 @@ export default function SystemRow({
       >
         <Link
           href={findProHref}
-          className="btn-primary px-2 py-1 text-xs"
+          className="btn-primary px-3 text-sm"
         >
           Find a pro
         </Link>
