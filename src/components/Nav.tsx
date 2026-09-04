@@ -209,12 +209,14 @@ export default function Nav({
           />
         </div>
       </div>
-      {/* Phone twin of the desktop SidePill above. A phone header is already
-          tight with the address, search, bell, and avatar on one line, so
-          this renders as its own quiet line under the logo instead of
-          risking a wrap. */}
+      {/* Phone twin of the desktop SidePill above. Its own quiet line under the
+          wordmark rather than risking a wrap on the tight phone header. Matches
+          the pro header's mobile pill positioning exactly: pl-12 starts it under
+          the "H" of "Hearth" (past the h-6 logo + gap), and -mt-5 pulls it up
+          under the wordmark (the header row's py-2.5 + line-height otherwise
+          leave a visible gap). */}
       {hasPro && (
-        <div className="px-4 pb-1.5 sm:hidden">
+        <div className="-mt-5 pl-12 pb-1.5 sm:hidden">
           <SidePill label="Home" accent="bark" />
         </div>
       )}
