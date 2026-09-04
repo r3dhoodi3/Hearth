@@ -257,6 +257,9 @@ export async function updateEmailAction(formData: FormData) {
     const { error: verifyError } = await verifier.auth.signInWithPassword({
       email: user.email,
       password: current,
+      options: {
+        captchaToken: (formData.get("captcha_token") as string) || undefined,
+      },
     });
     if (verifyError) {
       setFlash("Current password is incorrect.", "error");
@@ -316,6 +319,9 @@ export async function updatePasswordAction(formData: FormData) {
   const { error: verifyError } = await verifier.auth.signInWithPassword({
     email: user.email,
     password: current,
+    options: {
+      captchaToken: (formData.get("captcha_token") as string) || undefined,
+    },
   });
   if (verifyError) {
     setFlash("Current password is incorrect.", "error");
@@ -422,6 +428,9 @@ export async function deleteAccountAction(formData: FormData) {
     const { error: verifyError } = await verifier.auth.signInWithPassword({
       email: user.email,
       password: current,
+      options: {
+        captchaToken: (formData.get("captcha_token") as string) || undefined,
+      },
     });
     if (verifyError) {
       // Distinguish a genuinely wrong password from a throttle/network blip:
