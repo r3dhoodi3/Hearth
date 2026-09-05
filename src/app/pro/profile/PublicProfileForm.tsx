@@ -181,7 +181,12 @@ export default function PublicProfileForm({
             a "Basic Information" tab that otherwise has nothing to do with
             Pro perks, so this is now a plain, non-interactive placeholder
             with a pointer to where the real control lives. */}
-        <div className="-mt-10 mb-6">
+        {/* relative z-10: the banner above is position:relative, so without a
+            higher-stacked, positioned avatar here the banner (a positioned box)
+            paints OVER this static one and clips its top border. Lifting the
+            avatar onto its own stacking level puts it back on top of the banner
+            it overlaps. */}
+        <div className="relative z-10 -mt-10 mb-6">
           <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 text-stone-500 shadow-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-400">
             <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 21V5l8-2 8 2v16M9 9h.01M9 13h.01M15 9h.01M15 13h.01M10 21v-4h4v4" />

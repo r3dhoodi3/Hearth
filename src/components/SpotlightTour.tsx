@@ -132,8 +132,13 @@ export const TOUR_TARGET_TIMEOUT_MS = 4000;
 // The poll that backs up the MutationObserver, for appearances the observer
 // cannot see (an attribute flip, a CSS breakpoint change).
 export const TOUR_POLL_MS = 150;
-// Breathing room between the element and the edge of its cutout.
+// Breathing room between the element and the edge of its cutout. The default
+// suits a big page card (the score hero, the systems list); a nav pill is
+// small and already padded, so 8px more each side reads as a loose fat box
+// floating around a tiny tab. Toolbar targets - anything inside a <nav> - use
+// the tighter value so the ring hugs the pill instead.
 const CUTOUT_PAD = 8;
+const CUTOUT_PAD_TIGHT = 3;
 // Corner radius of the cutout and its ring.
 const CUTOUT_RADIUS = 12;
 // Gap between the cutout and the card.
@@ -152,6 +157,36 @@ type Phase = "seeking" | "anchored" | "fallback";
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(Math.max(v, lo), Math.max(lo, hi));
+}
+
+// The overlay's real pixel size, which is the LAYOUT viewport - what a
+// position:fixed inset-0 box fills - not window.innerWidth/innerHeight. The two
+// differ by the vertical scrollbar's width on desktop (there is no scrollbar on
+// a phone, hence why this only ever bit the toolbar on a wide screen). The SVG
+// scrim's viewBox is these dimensions with preserveAspectRatio="none", so if it
+// used innerWidth (scrollbar included) the whole cutout would be squashed to
+// fit the narrower box and the bright hole would slide left of its element -
+// worse the further right the element sits - while the ring div, positioned in
+// raw client pixels, stayed put. Reading clientWidth/clientHeight keeps the
+// viewBox 1:1 with its pixels so hole and ring land together. Falls back to the
+// window for jsdom, where an unlaid-out documentElement reports 0.
+function readViewport(): { w: number; h: number } {
+  const doc = document.documentElement;
+  return {
+    w: doc.clientWidth || window.innerWidth,
+    h: doc.clientHeight || window.innerHeight,
+  };
+}
+
+// The bottom edge of the sticky toolbar, in viewport pixels - the line the
+// tooltip must not cross. Found by the `sticky` utility class both shells'
+// <header> carries, so a plain <header> inside page content is never mistaken
+// for the toolbar. Zero when there is no toolbar, which leaves the card
+// unconstrained (nothing to avoid).
+function readSafeTop(): number {
+  const header = document.querySelector<HTMLElement>("header.sticky");
+  if (!header) return 0;
+  return Math.max(0, header.getBoundingClientRect().bottom);
 }
 
 function findStepElement(step: TourStep): HTMLElement | null {
@@ -222,15 +257,26 @@ export default function SpotlightTour({
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("seeking");
   const [rect, setRect] = useState<Rect | null>(null);
+  // Padding for the current step's cutout, chosen when the element anchors: the
+  // tighter value for a toolbar pill (inside a <nav>), the roomy default for a
+  // page card. Kept in state so the ring re-renders with the right hug the
+  // instant the element is found.
+  const [pad, setPad] = useState(CUTOUT_PAD);
+  // Whether this step's element sits in a toolbar (inside a <nav>). A toolbar
+  // pill is pinned and never scrolls, so its spotlight rides ABOVE the sticky
+  // header to ring the pill; a page element scrolls, so its spotlight rides
+  // BELOW the header and slides out of sight behind it as the page moves up.
+  const [inToolbar, setInToolbar] = useState(false);
+  // The toolbar's bottom edge; the tooltip is held below this so it stops at
+  // the toolbar rather than overlapping it. Measured when a step anchors and on
+  // resize - the sticky header's height does not change on scroll.
+  const [safeTop, setSafeTop] = useState(0);
   // Bumped when an anchored element disappears mid-step (a client rerender
   // swapped the node out), so the seek below runs again for the same step.
   const [seekNonce, setSeekNonce] = useState(0);
   // Rendered client-side only (AppGuide mounts this after an effect), so the
   // window is always there to read.
-  const [viewport, setViewport] = useState(() => ({
-    w: window.innerWidth,
-    h: window.innerHeight,
-  }));
+  const [viewport, setViewport] = useState(readViewport);
   const elRef = useRef<HTMLElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const pathnameRef = useRef(pathname);
@@ -293,6 +339,10 @@ export default function SpotlightTour({
           // A failed scroll only means the measurement happens where we are.
         }
       }
+      const nav = el.closest("nav");
+      setInToolbar(!!nav);
+      setPad(nav ? CUTOUT_PAD_TIGHT : CUTOUT_PAD);
+      setSafeTop(readSafeTop());
       setRect(measure(el));
       setPhase("anchored");
     }
@@ -312,31 +362,43 @@ export default function SpotlightTour({
     return stop;
   }, [index, step, pathname, seekNonce]);
 
-  // While anchored, keep the cutout glued to the element through scrolling
-  // (capture, so scrolls inside nested containers count too) and resizing.
-  // An element that has left the DOM sends the step back to seeking rather
-  // than leaving a ring around where it used to be.
+  // While anchored, keep the cutout glued to the element every animation frame.
+  // A plain scroll listener only runs when the browser dispatches scroll, which
+  // it coalesces under momentum and smooth-scroll, so the ring visibly trailed
+  // the page and snapped into place when the scroll stopped. Sampling on rAF
+  // instead re-measures on the same frame the page paints, with no lag, and
+  // only re-renders when the rect actually moved so an idle tour costs nothing.
+  // An element that has left the DOM sends the step back to seeking rather than
+  // leaving a ring around where it used to be.
   useEffect(() => {
     if (phase !== "anchored") return;
 
-    function remeasure() {
+    let raf = 0;
+    let lastKey = "";
+    function tick() {
       const el = elRef.current;
       if (!el || !el.isConnected) {
         setSeekNonce((n) => n + 1);
         return;
       }
-      setRect(measure(el));
+      const r = measure(el);
+      const key = `${r.top},${r.left},${r.width},${r.height}`;
+      if (key !== lastKey) {
+        lastKey = key;
+        setRect(r);
+      }
+      raf = requestAnimationFrame(tick);
     }
 
     function onResize() {
-      setViewport({ w: window.innerWidth, h: window.innerHeight });
-      remeasure();
+      setViewport(readViewport());
+      setSafeTop(readSafeTop());
     }
 
-    window.addEventListener("scroll", remeasure, true);
+    raf = requestAnimationFrame(tick);
     window.addEventListener("resize", onResize);
     return () => {
-      window.removeEventListener("scroll", remeasure, true);
+      if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
     };
   }, [phase]);
@@ -393,10 +455,10 @@ export default function SpotlightTour({
   // target hanging half off screen never produces negative geometry.
   let cutout: Rect | null = null;
   if (phase === "anchored" && rect) {
-    const x = clamp(rect.left - CUTOUT_PAD, 0, vw);
-    const y = clamp(rect.top - CUTOUT_PAD, 0, vh);
-    const right = clamp(rect.left + rect.width + CUTOUT_PAD, 0, vw);
-    const bottom = clamp(rect.top + rect.height + CUTOUT_PAD, 0, vh);
+    const x = clamp(rect.left - pad, 0, vw);
+    const y = clamp(rect.top - pad, 0, vh);
+    const right = clamp(rect.left + rect.width + pad, 0, vw);
+    const bottom = clamp(rect.top + rect.height + pad, 0, vh);
     cutout = { top: y, left: x, width: right - x, height: bottom - y };
   }
 
@@ -406,7 +468,11 @@ export default function SpotlightTour({
   let cardStyle: CSSProperties;
   if (cutout) {
     const spaceBelow = vh - (cutout.top + cutout.height);
-    const spaceAbove = cutout.top;
+    // Room ABOVE the cutout is measured from the toolbar's bottom edge, not the
+    // top of the screen: the strip the toolbar occupies is not the tooltip's to
+    // use, so a card that would only fit by riding under the toolbar counts as
+    // not fitting and flips below instead.
+    const spaceAbove = cutout.top - safeTop;
     let placement =
       step.fallbackPlacement ??
       (cutout.top + cutout.height / 2 < vh / 2 ? "below" : "above");
@@ -423,10 +489,24 @@ export default function SpotlightTour({
     ) {
       placement = "below";
     }
-    cardStyle =
-      placement === "below"
-        ? { top: cutout.top + cutout.height + CARD_GAP }
-        : { bottom: vh - cutout.top + CARD_GAP };
+    if (placement === "below") {
+      // Never start the card above the toolbar: if the element has scrolled up
+      // under the strip, hold the card at the toolbar's edge instead of letting
+      // it follow the element up and over the toolbar.
+      cardStyle = {
+        top: Math.max(cutout.top + cutout.height + CARD_GAP, safeTop),
+      };
+    } else {
+      // Above the cutout, bottom-anchored so it hugs the element - but capped so
+      // its top edge stops CARD_GAP below the toolbar rather than crossing it.
+      // overflow-y-auto on the card scrolls any content that no longer fits; the
+      // class's 70vh ceiling stays the other bound.
+      const maxHeight = Math.max(
+        0,
+        Math.min(cutout.top - CARD_GAP - safeTop, Math.round(vh * 0.7))
+      );
+      cardStyle = { bottom: vh - cutout.top + CARD_GAP, maxHeight };
+    }
   } else {
     cardStyle = { top: "50%", transform: "translateY(-50%)" };
   }
@@ -439,52 +519,67 @@ export default function SpotlightTour({
       : "border-bark-600 dark:border-bark-400";
   const dotClass = side === "pro" ? "bg-hearth-600" : "bg-bark-600";
 
-  return (
-    // z-[60]: one tier above everything else on screen at once - the bottom
-    // tab bar (z-30), the header (z-40), the Tools sheet (z-50). Same slot
-    // the old guide sheet held. The scrim layers below have no click handler
-    // on purpose: during the tour the page underneath, spotlighted element
-    // included, is not clickable, and the only live controls are the card's.
-    <div className="fixed inset-0 z-[60]">
-      {cutout ? (
-        <>
-          <svg
-            data-testid="tour-cutout"
-            className="absolute inset-0 h-full w-full"
-            viewBox={`0 0 ${vw} ${vh}`}
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <path
-              d={spotlightPath(vw, vh, cutout)}
-              fillRule="evenodd"
-              className="fill-black/60"
-            />
-          </svg>
-          {/* The ring around the cutout. motion-safe keeps the pulse off for
-              anyone with reduced motion set; the ring itself stays. */}
-          <div
-            data-testid="tour-ring"
-            aria-hidden="true"
-            className={`pointer-events-none absolute rounded-xl border-2 ${ringClass} motion-safe:animate-pulse`}
-            style={{
-              top: cutout.top,
-              left: cutout.left,
-              width: cutout.width,
-              height: cutout.height,
-            }}
-          />
-        </>
-      ) : (
-        // No target (yet, or ever): a plain scrim with the card centered on
-        // it. Never a blank overlay.
-        <div
-          data-testid="tour-scrim"
-          aria-hidden="true"
-          className="absolute inset-0 bg-black/60"
-        />
-      )}
+  // The spotlight layer's tier. A toolbar step rides at z-[60], above the
+  // sticky header (homeowner z-40, pro z-30), the bottom tab bar (z-30), and
+  // the Tools sheet (z-50), so the ring paints on the pill - the original
+  // behaviour, unchanged. A page step rides at z-20, BELOW the header, so the
+  // moment its element scrolls up under the toolbar the whole spotlight - scrim
+  // hole and ring - is occluded by the header instead of drawing over it. The
+  // tooltip lives in its own top-tier layer below, so it stays readable either
+  // way; that split is the whole point of two layers instead of one.
+  const spotlightZ = inToolbar ? "z-[60]" : "z-20";
 
+  return (
+    <>
+      {/* Spotlight layer: the dimming scrim, its cutout, and the ring. No click
+          handler on purpose - the scrim's own box is opaque to pointer events,
+          so the page beneath a step is not clickable while it is up. */}
+      <div className={`fixed inset-0 ${spotlightZ}`} aria-hidden="true">
+        {cutout ? (
+          <>
+            <svg
+              data-testid="tour-cutout"
+              className="absolute inset-0 h-full w-full"
+              viewBox={`0 0 ${vw} ${vh}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <path
+                d={spotlightPath(vw, vh, cutout)}
+                fillRule="evenodd"
+                className="fill-black/60"
+              />
+            </svg>
+            {/* The ring around the cutout. motion-safe keeps the pulse off for
+                anyone with reduced motion set; the ring itself stays. */}
+            <div
+              data-testid="tour-ring"
+              aria-hidden="true"
+              className={`pointer-events-none absolute rounded-xl border-2 ${ringClass} motion-safe:animate-pulse`}
+              style={{
+                top: cutout.top,
+                left: cutout.left,
+                width: cutout.width,
+                height: cutout.height,
+              }}
+            />
+          </>
+        ) : (
+          // No target (yet, or ever): a plain scrim with the card centered on
+          // it. Never a blank overlay.
+          <div
+            data-testid="tour-scrim"
+            aria-hidden="true"
+            className="absolute inset-0 bg-black/60"
+          />
+        )}
+      </div>
+
+      {/* Tooltip layer: always the top tier (z-[70], above the header and the
+          Tools sheet) so the card is readable and operable no matter which tier
+          the spotlight is on. pointer-events-none lets clicks fall through the
+          empty area to the header beneath; the card itself opts back in. */}
+      <div className="pointer-events-none fixed inset-0 z-[70]">
       <div
         ref={cardRef}
         role="dialog"
@@ -492,7 +587,7 @@ export default function SpotlightTour({
         aria-labelledby="spotlight-tour-title"
         tabIndex={-1}
         style={cardStyle}
-        className="absolute left-4 right-4 mx-auto max-h-[70vh] max-w-sm overflow-y-auto rounded-2xl border border-stone-200 bg-white p-5 shadow-menu outline-none dark:border-white/10 dark:bg-stone-800"
+        className="pointer-events-auto absolute left-4 right-4 mx-auto max-h-[70vh] max-w-sm overflow-y-auto rounded-2xl border border-stone-200 bg-white p-5 shadow-menu outline-none dark:border-white/10 dark:bg-stone-800"
       >
         <h2
           id="spotlight-tour-title"
@@ -539,6 +634,7 @@ export default function SpotlightTour({
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
