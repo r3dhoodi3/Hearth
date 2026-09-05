@@ -12,19 +12,25 @@
 export default function SidePill({
   label,
   accent,
+  size = "md",
   className = "",
 }: {
   label: string;
   accent: "bark" | "hearth";
+  // "md" is the standard header pill; "sm" is a tighter pill for spots where it
+  // has to tuck into a smaller gap (the pro desktop badge under the wordmark).
+  size?: "sm" | "md";
   className?: string;
 }) {
   const tone =
     accent === "bark"
       ? "bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300"
       : "bg-hearth-100 text-hearth-700 dark:bg-hearth-700 dark:text-stone-300";
+  const sizing =
+    size === "sm" ? "px-1.5 py-0 text-[11px]" : "px-2 py-0.5 text-[13px]";
   return (
     <span
-      className={`shrink-0 rounded-full px-2 py-0.5 text-[13px] font-medium ${tone} ${className}`}
+      className={`shrink-0 rounded-full font-medium ${sizing} ${tone} ${className}`}
     >
       {label}
     </span>

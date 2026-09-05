@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import GlobalSearch from "@/components/GlobalSearch";
+import TourButton from "@/components/TourButton";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
 import NotificationBell from "@/components/NotificationBell";
@@ -105,27 +106,39 @@ export default function ProNav({
             className="flex shrink-0 items-center gap-2 whitespace-nowrap text-lg font-semibold text-stone-900 dark:text-stone-100"
           >
             <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" />
-            <span>
-              Hearth{" "}
-              {/* Shown at every width so a pro (especially a pro-only account,
-                  which gets no side pill) can tell at a glance they're in the
-                  Pro app, not the homeowner one. This used to be hidden below lg
-                  because the top nav strip filled the row at md and squeezed the
-                  suffix into a wrap - but the strip is lg-only now (it lives in
-                  the bottom tab bar below lg), so the top row has the room, and
-                  the wordmark's whitespace-nowrap keeps "Hearth for Pros" on one
-                  line at phone widths. */}
-              <span className="font-normal text-stone-500 dark:text-stone-400">
-                for Pros
+            <span className="relative leading-tight">
+              <span>
+                Hearth{" "}
+                {/* Shown at every width so a pro (especially a pro-only account,
+                    which gets no side pill) can tell at a glance they're in the
+                    Pro app, not the homeowner one. This used to be hidden below
+                    lg because the top nav strip filled the row at md and squeezed
+                    the suffix into a wrap - but the strip is lg-only now (it lives
+                    in the bottom tab bar below lg), so the top row has the room,
+                    and the wordmark's whitespace-nowrap keeps "Hearth for Pros"
+                    on one line at phone widths. */}
+                <span className="font-normal text-stone-500 dark:text-stone-400">
+                  for Pros
+                </span>
               </span>
+              {/* Desktop side badge, tucked under the wordmark. The small size
+                  keeps it short enough to sit inside the toolbar under "Hearth"
+                  while absolute + top-full drops it out of flow, so the wordmark
+                  stays centered and lines up with the nav strip and the
+                  bell/avatar opposite it; the row's height is set by the h-11
+                  controls, so this does not grow the toolbar. Only for accounts
+                  with both sides (hasHome); shown from sm up - the max-sm twin
+                  below the header row still owns sub-sm. */}
+              {hasHome && (
+                <SidePill
+                  label="Business"
+                  accent="hearth"
+                  size="sm"
+                  className="absolute left-0 top-full mt-0.5 hidden sm:block"
+                />
+              )}
             </span>
           </Link>
-          {/* Which side of the account you're on. Only for accounts that
-              hold both sides (hasHome) - a pro-only account sees no pill.
-              Desktop only here; the max-sm twin lives just below the header
-              row so it can't push this line into two rows next to the bell
-              and avatar. */}
-          {hasHome && <SidePill label="Business" accent="hearth" className="hidden sm:inline-block" />}
         </div>
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {/* Primary destinations. Desktop (lg and up) keeps this exact top
@@ -168,6 +181,9 @@ export default function ProNav({
               <path d="M21 21l-4.3-4.3" />
             </svg>
           </Link>
+          {/* Replays the first-run spotlight tour on demand; it otherwise only
+              auto-opens once per account. See TourButton.tsx. */}
+          <TourButton side="pro" />
           <NotificationBell />
           <ProfileMenu
             name={company}

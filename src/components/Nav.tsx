@@ -7,6 +7,7 @@ import SidePill from "@/components/SidePill";
 import ToolsMenu from "@/components/ToolsMenu";
 import AddToHomeScreenNudge from "@/components/AddToHomeScreenNudge";
 import GlobalSearch from "@/components/GlobalSearch";
+import TourButton from "@/components/TourButton";
 import NotificationBell from "@/components/NotificationBell";
 import UnreadProvider from "@/components/UnreadProvider";
 import { setPreferredSideAction } from "@/lib/sideActions";
@@ -99,15 +100,24 @@ export default function Nav({
           >
             <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" />
             {/* Wordmark is desktop-only: on a phone the address is the more
-                useful label and the logo alone identifies the app. */}
-            <span className="hidden sm:inline">Hearth</span>
+                useful label and the logo alone identifies the app. The Home
+                badge - only for accounts that hold both sides (hasPro) - tucks
+                under the wordmark, small and out of flow (absolute + top-full)
+                so "Hearth" stays centered and level with the rest of the toolbar
+                and the row's height (set by the h-11 controls) does not grow.
+                The max-sm twin below the header row still owns sub-sm. */}
+            <span className="relative hidden leading-tight sm:inline-block">
+              Hearth
+              {hasPro && (
+                <SidePill
+                  label="Home"
+                  accent="bark"
+                  size="sm"
+                  className="absolute left-0 top-full mt-0.5"
+                />
+              )}
+            </span>
           </Link>
-          {/* Which side of the account you're on. Only for accounts that
-              hold both sides (hasPro) - a homeowner-only account has nothing
-              to distinguish, so it sees no pill. Desktop only here; the
-              max-sm twin lives just below the header row so it can't push
-              this line into two rows next to the bell and avatar. */}
-          {hasPro && <SidePill label="Home" accent="bark" className="hidden sm:inline-block" />}
           <span className="hidden shrink-0 text-stone-300 sm:inline dark:text-stone-500">·</span>
           {/* Project to just the fields the client switcher renders. The full
               property rows carry sensitive columns (mortgage_balance,
@@ -168,6 +178,9 @@ export default function Nav({
               <path d="M21 21l-4.3-4.3" />
             </svg>
           </Link>
+          {/* Replays the first-run spotlight tour on demand; it otherwise only
+              auto-opens once per account. See TourButton.tsx. */}
+          <TourButton side="homeowner" />
           <NotificationBell />
           {/* Account-only menu (profile, household, notifications, help, log
               out; account security is reached via Edit profile's tabs).
