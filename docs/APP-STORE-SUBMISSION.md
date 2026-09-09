@@ -239,9 +239,11 @@ safety" - same underlying questions, same answers apply to both)
 
 Source of truth for what is actually collected: `src/content/legal/ai-disclosure.md`,
 `src/content/legal/privacy.md`, and the codebase scan in the research report section 1/3. No
-third-party ad or analytics SDK exists in `package.json` (no Segment, Mixpanel, Meta Pixel,
-Google Analytics) - `/api/track` is a first-party analytics beacon into OakTend's own
-`app_events` table.
+ad or attribution SDK exists in `package.json` (no Segment, Mixpanel, Meta Pixel, Google
+Analytics) - `/api/track` is a first-party analytics beacon into OakTend's own `app_events`
+table. The one analytics dependency is `@vercel/analytics` (added 2026-09-09), the hosting
+provider's cookieless page-view counter: no cookie, no cross-app identifier, no ad network, so
+it does not change the tracking answer below.
 
 | Data type | Collected? | Linked to identity? | Used for tracking? | Purpose |
 |---|---|---|---|---|
@@ -256,7 +258,7 @@ Google Analytics) - `/api/track` is a first-party analytics beacon into OakTend'
 | Customer support data | Yes | Yes | No | App functionality (support messages) |
 | Third-party AI processing | Yes (Anthropic Claude, via `src/lib/claude.ts`) | Yes | No | App functionality (Ask OakTend, document/quote analysis). Disclosed in-product every session per `ai-disclosure.md`; not used for ad targeting; per that doc's stated position, not used by Anthropic to train models under OakTend's commercial API terms. **Apple's 5.1.2(i) specifically names third-party AI sharing** - call this out explicitly as its own row/note in App Store Connect, not folded into a generic "app functionality" bucket. |
 | Third-party data enrichment (RentCast/Regrid parcel lookups) | Yes - a homeowner's typed address is sent OUT to get parcel/home-value data back | Yes (tied to the address/account) | No | App functionality (home-value estimate, onboarding pre-fill). Frame as "address shared with a service provider for a home-value estimate" if the label schema wants a location-sharing note. |
-| Identifiers used for analytics | Yes (`/api/track`, first-party only) | Yes when signed in | No | Analytics (first-party; dollar amounts and sensitive numbers explicitly excluded from event props per that route's own code) |
+| Identifiers used for analytics | Yes (`/api/track`, first-party). Vercel Web Analytics adds no identifier: it is cookieless and keeps nothing that lasts beyond a day | Yes when signed in, for `/api/track` only | No | Analytics (first-party; dollar amounts and sensitive numbers explicitly excluded from event props per that route's own code) |
 
 **Tracking**: No. No cross-app/cross-company identifier is collected, no ad network SDK exists.
 Per Apple's own ATT scope ("tracking across other companies' apps and sites requires ATT

@@ -2,7 +2,7 @@
 
 Last updated: {{EFFECTIVE_DATE}}
 
-**Plain-language summary:** {{BRAND}} uses a small number of cookies and browser-storage items to keep you signed in and make the app work correctly. None of them are advertising or analytics cookies. We do not use any third-party tracker anywhere in {{BRAND}}, and we do not need to show you a cookie-consent banner, because nothing we use requires one under California law. You can control or delete cookies through your own browser settings at any time.
+**Plain-language summary:** {{BRAND}} uses a small number of cookies and browser-storage items to keep you signed in and make the app work correctly. None of them are advertising cookies. We use a cookieless analytics service from our hosting provider that sets no cookie at all, and we do not need to show you a cookie-consent banner, because nothing we use requires one under California law. You can control or delete cookies through your own browser settings at any time.
 
 This notice supplements our Privacy Policy and lists, specifically, the cookies and similar technologies {{BRAND}} uses.
 
@@ -40,9 +40,9 @@ None of these local-storage items are shared across accounts or devices, and non
 
 **Stripe.** When you check out for {{BRAND}} Plus, a pro membership, or a lead fee, you are taken to Stripe's own hosted checkout page. Stripe may set its own cookies there, on Stripe's domain, for fraud prevention and to process your payment. {{BRAND}} does not set, read, or control these cookies; see Stripe's own privacy policy for what they do.
 
-**Vercel.** Our hosting provider does not add any analytics or tracking cookie of its own. It hosts the app; it does not track visitors on our behalf.
+**Vercel.** Our hosting provider also provides Vercel Web Analytics, a cookieless page-view counter. It sets no cookie and stores nothing in your browser. It records page views, referrer, country and region, device type, and the outcome of a few in-app actions we define, without any identifier that lasts beyond a day. Details are in the Analytics section of our Privacy Policy.
 
-**No advertising or analytics trackers, anywhere.** {{BRAND}} does not run Google Analytics, Meta Pixel, PostHog, session-replay tools, or any comparable third-party analytics or advertising service. We do not use retargeting, and we do not build an advertising profile of you from cookies or any other source.
+**No advertising trackers, anywhere.** {{BRAND}} does not run Google Analytics, Meta Pixel, PostHog, session-replay tools, or any advertising service. We do not use retargeting, and we do not build an advertising profile of you from cookies or any other source.
 
 ## Your controls
 

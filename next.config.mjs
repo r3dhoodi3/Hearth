@@ -32,7 +32,9 @@ const SUPABASE_HOST = (() => {
 //                 graduates to enforcing (see below) an enforcing CSP without
 //                 this entry blocks the script outright and every one of
 //                 those forms stops being able to solve the CAPTCHA the
-//                 submit button is waiting on.
+//                 submit button is waiting on. va.vercel-scripts.com is the
+//                 other one, for the cookieless Vercel Web Analytics beacon;
+//                 see VERCEL_ANALYTICS_HOST below.
 //   style-src   - Tailwind ships real stylesheets, but React inline styles and
 //                 the CSS modules' runtime need 'unsafe-inline'.
 //   img-src     - blob:/data: cover the local upload previews
@@ -66,10 +68,19 @@ const SUPABASE_HOST = (() => {
 // NODE_ENV so a production build never sends the token at all; local `next
 // dev` (and any verification build that leaves NODE_ENV unset) keeps it.
 const TURNSTILE_HOST = "https://challenges.cloudflare.com";
+// Vercel Web Analytics (<Analytics /> in src/app/layout.tsx). In production on
+// Vercel the script is proxied same-origin at /_vercel/insights/script.js and
+// the beacon posts to /_vercel/insights/view, both of which 'self' already
+// covers. Outside that setup (a self-hosted deploy, a preview served through
+// another domain, or a build where the rewrite is not in place) the same script
+// loads straight from va.vercel-scripts.com and beacons back to it, so the host
+// is listed in script-src and connect-src rather than left to fail silently
+// the day this policy graduates from Report-Only to enforcing.
+const VERCEL_ANALYTICS_HOST = "https://va.vercel-scripts.com";
 const SCRIPT_SRC =
   process.env.NODE_ENV === "production"
-    ? `script-src 'self' 'unsafe-inline' ${TURNSTILE_HOST}`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${TURNSTILE_HOST}`;
+    ? `script-src 'self' 'unsafe-inline' ${TURNSTILE_HOST} ${VERCEL_ANALYTICS_HOST}`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${TURNSTILE_HOST} ${VERCEL_ANALYTICS_HOST}`;
 
 const CSP_DIRECTIVES = [
   "default-src 'self'",
@@ -77,7 +88,7 @@ const CSP_DIRECTIVES = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: https://${SUPABASE_HOST}`,
   "media-src 'self'",
-  `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} ${TURNSTILE_HOST}`,
+  `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} ${TURNSTILE_HOST} ${VERCEL_ANALYTICS_HOST}`,
   "font-src 'self'",
   "object-src 'self' blob:",
   `frame-src 'self' ${TURNSTILE_HOST}`,
