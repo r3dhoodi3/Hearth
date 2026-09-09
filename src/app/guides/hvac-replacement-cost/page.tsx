@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "article",
   },
   twitter: {

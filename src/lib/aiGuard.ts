@@ -1,8 +1,8 @@
 import { newestUserMessage } from "@/lib/askRequest";
 
-// Shared guard rules for the Ask Hearth prompts.
+// Shared guard rules for the Ask OakTend prompts.
 //
-// Ask Hearth is a paid model call on someone else's card, so it should only
+// Ask OakTend is a paid model call on someone else's card, so it should only
 // ever do the job it exists for. There is deliberately NO server-side keyword
 // pre-filter: every cheap classifier we sketched misfired on real questions
 // ("how much paint for a 12x14 room" is arithmetic AND a home question), and a
@@ -28,24 +28,24 @@ const GUARD_BEHAVIOUR =
   "and do not explain what you are or are not allowed to do. One warm sentence, then a useful offer. " +
   "Never emit a POSTJOB, LOGISSUE, REMINDER, OPTIONS, or any other block for a declined question.";
 
-// Homeowner side: their own home, and Hearth itself.
+// Homeowner side: their own home, and OakTend itself.
 export const TOPIC_GUARD_HOMEOWNER =
   "STAY ON TOPIC, this overrides everything else in this prompt: you only help with the " +
   "homeowner's home. That means their systems and appliances, repairs, maintenance, what work " +
   "costs, hiring and vetting contractors, home safety, home documents and records, insurance and " +
-  "property taxes as they relate to the home, and how to use Hearth itself. " +
+  "property taxes as they relate to the home, and how to use OakTend itself. " +
   GUARD_BEHAVIOUR;
 
-// Contractor side: their trade and their business on Hearth.
+// Contractor side: their trade and their business on OakTend.
 export const TOPIC_GUARD_PRO =
   "STAY ON TOPIC, this overrides everything else in this prompt: you only help with this " +
-  "contractor's trade and their business on Hearth. That means winning and quoting work, their " +
+  "contractor's trade and their business on OakTend. That means winning and quoting work, their " +
   "trades and job sites, pricing and materials, leads, the wallet and fees, licensing, insurance " +
   "and background checks as they relate to the business, their profile and reviews, and how to use " +
-  "Hearth for Pros itself. " +
+  "OakTend for Pros itself. " +
   GUARD_BEHAVIOUR;
 
-// One chat message as the client sends it (see src/components/AskHearth.tsx).
+// One chat message as the client sends it (see src/components/AskOakTend.tsx).
 // Loose on purpose: this runs over untrusted request JSON.
 type LooseMessage = { role?: unknown; content?: unknown; image?: unknown };
 

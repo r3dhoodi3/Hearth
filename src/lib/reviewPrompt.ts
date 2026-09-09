@@ -1,16 +1,16 @@
-// Pure, DOM-light helpers for the "Enjoying Hearth?" review prompt
+// Pure, DOM-light helpers for the "Enjoying OakTend?" review prompt
 // (src/components/ReviewPrompt.tsx). Kept separate from the component so the
 // trigger rules can be unit tested without rendering anything, and separate
 // from src/app/(app)/feedback/actions.ts so the DB-backed signals it needs
 // (settled, owed a follow-up, done something meaningful) stay server-only.
 //
-// The full gate for the "Enjoying Hearth?" card, in order, is:
+// The full gate for the "Enjoying OakTend?" card, in order, is:
 //   1. not on an excluded page (onboarding, sign-in, checkout, /feedback itself)
 //   2. not the first time this browser has ever loaded the app
 //   3. the account has never settled the prompt (rated it, or answered
 //      "Not really" and gone to the private feedback form)
 //   4. the account has done something meaningful (claimed a home, posted a
-//      job, asked Ask Hearth 3+ times, or a pro applied to one of its jobs)
+//      job, asked Ask OakTend 3+ times, or a pro applied to one of its jobs)
 //   5. this session was drawn as an "ask" session (see isAskSession)
 //   6. they have actually been USING the app for the 15 to 20 minutes drawn
 //      for this session (see advanceActiveTime), and have not been asked
@@ -97,7 +97,7 @@ export function isFirstSession(storage?: Storage): boolean {
 // would clear any threshold without a single tap. So the clock here only runs
 // while the tab is VISIBLE, and it resets to zero after five minutes with no
 // pointer, keyboard, or scroll event, which is the difference between somebody
-// using Hearth and somebody who walked away with it open.
+// using OakTend and somebody who walked away with it open.
 
 // The owner's window, drawn per session so everybody does not get asked at the
 // same minute mark.
@@ -178,7 +178,7 @@ export function noteActivity(
 
 // document.visibilitychange. Going hidden banks whatever was earned up to this
 // instant first; coming back counts as activity, so switching to another app
-// for a while does not wipe time that was genuinely spent using Hearth (the
+// for a while does not wipe time that was genuinely spent using OakTend (the
 // idle reset is about somebody sitting on an open screen doing nothing).
 export function setActiveTimeVisibility(
   state: ActiveTimeState,
@@ -243,7 +243,7 @@ const SESSION_THRESHOLD_KEY = "hearth_review_threshold_ms";
 const SESSION_ACTIVE_MS_KEY = "hearth_review_active_ms";
 // The card was already put on screen in this app open, answered or not.
 const SESSION_ASKED_KEY = "hearth_review_asked";
-// The "did you get a chance to rate Hearth?" follow-up was already asked in
+// The "did you get a chance to rate OakTend?" follow-up was already asked in
 // this app open. Once per session, however they answered it.
 const SESSION_FOLLOW_UP_KEY = "hearth_review_followup_asked";
 // They tapped through to the store and have not come back yet. This is the
@@ -411,7 +411,7 @@ export function getReviewSessionPlan(opts: {
 // The two gates the component actually calls
 // ---------------------------------------------------------------------------
 
-// "Enjoying Hearth?" - the first card. Pure and synchronous on purpose, so
+// "Enjoying OakTend?" - the first card. Pure and synchronous on purpose, so
 // each rule is its own assertion in the test file rather than folded into one
 // opaque boolean.
 export function isEligibleForReviewPrompt(opts: {
@@ -421,7 +421,7 @@ export function isEligibleForReviewPrompt(opts: {
   // A bare 'prompt_shown' no longer counts - that was the old "asked once and
   // never again" behaviour, and it made a mis-tap final.
   settled: boolean;
-  // Claimed a home, posted a job, asked Ask Hearth 3+ times, or a pro applied
+  // Claimed a home, posted a job, asked Ask OakTend 3+ times, or a pro applied
   // to one of the account's jobs.
   hasMeaningfulActivity: boolean;
   // This app open was drawn as an ask session (getReviewSessionPlan).
@@ -446,7 +446,7 @@ export function isEligibleForReviewPrompt(opts: {
   return true;
 }
 
-// "Did you get a chance to rate Hearth?" - the honest follow-up, and the fix
+// "Did you get a chance to rate OakTend?" - the honest follow-up, and the fix
 // for the bug the owner reported: tapping the store link used to mark the
 // whole thing complete, so somebody who bounced straight back without rating
 // was never asked again. Apple never tells an app whether a rating was left,
@@ -499,7 +499,7 @@ export function isEligibleForRateFollowUp(opts: {
 // the answer. The prompt may only ever ASK.
 
 // ---------------------------------------------------------------------------
-// The native review sheet, and Hearth's own cap on top of the OS's
+// The native review sheet, and OakTend's own cap on top of the OS's
 // ---------------------------------------------------------------------------
 
 // Per DEVICE, not per account: Apple and Google both cap their sheet per app
@@ -519,7 +519,7 @@ function readNativeReviewCalls(storage: Storage, now: number): number[] {
   );
 }
 
-// Hearth's own throttle, on top of the OS's. iOS ignores anything past three
+// OakTend's own throttle, on top of the OS's. iOS ignores anything past three
 // sheets a year without telling us, so a week where somebody both builds a
 // plan and hires a pro must not spend all three slots on the same person in
 // three days: those calls would vanish and the year's allowance would be gone.
@@ -551,7 +551,7 @@ export function recordNativeReviewCall(now: number, storage?: Storage): void {
 }
 
 // The one hook a native wrapper needs. On the web this is always a no-op: the
-// "Rate Hearth" step in ReviewPrompt.tsx shows a plain link to
+// "Rate OakTend" step in ReviewPrompt.tsx shows a plain link to
 // NEXT_PUBLIC_APP_STORE_URL instead, and a web page is not an App Store app.
 // Inside a Capacitor shell it asks the platform for ITS own sheet, through the
 // adapter in src/lib/nativeReview.ts.
@@ -670,7 +670,7 @@ export function isAnyFloatingPromptClaimedThisSession(
 }
 
 // Claims the session for the takeover the moment it opens: its own flag, AND
-// the review card's SESSION_ASKED_KEY, so "Enjoying Hearth?" cannot open on
+// the review card's SESSION_ASKED_KEY, so "Enjoying OakTend?" cannot open on
 // top of it later in the same app open. The reverse direction needs no extra
 // code - isAnyFloatingPromptClaimedThisSession above already reads
 // wasPromptAskedThisSession(), so a review card that appeared FIRST already

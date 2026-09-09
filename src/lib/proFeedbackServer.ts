@@ -1,54 +1,40 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isMissingSchemaError } from "@/lib/dbErrors";
-import { FEEDBACK_CREDIT_CENTS, FEEDBACK_PROMO_KEY } from "@/lib/proFeedback";
-import { trackServerEvent } from "@/lib/trackServer";
 
-// The database half of the pro feedback credit (see src/lib/proFeedback.ts for
-// what it is, and for the rule that it is never tied to a store rating).
+// The database half of pro feedback (see src/lib/proFeedback.ts for what it
+// is, and for the rule that it is never tied to a store rating).
 //
-// Service-role only, so none of it ships to the browser. Everything here fails
-// SOFT: the feedback itself is the point, and a pro's note must never be lost
-// because a wallet write hiccuped. A missed grant is recoverable - the Home tab
-// retries it on the next render (see hasFeedback / hasClaimedFeedbackCredit
-// below and their use in src/app/pro/page.tsx).
+// Service-role only, so none of it ships to the browser.
+//
+// C7 (2026-09-07): this used to also grant a one-time $5 bonus credit the
+// moment the first report was sent (grantFeedbackCredit, calling migration
+// 0144's grant_feedback_credit()). That automatic path is gone: every report
+// now stores as status='pending' and money moves only through
+// verify_pro_feedback() (migration 0157), run by hand from the Supabase SQL
+// editor after a person confirms the report is real. Nothing in this file
+// calls it - see the PASTE-ME file's header for the exact command.
 
 export type FeedbackState = {
-  // Has this contractor already sent us feedback?
+  // Has this contractor already sent us at least one report?
   sent: boolean;
-  // Has the $5 already landed in their wallet?
-  claimed: boolean;
 };
 
-// Both facts in two tiny indexed reads. Returns { sent: false, claimed: false }
-// when either read fails or migration 0144 is not live yet, which renders as
-// "the card is still on offer" - the safe direction, since the grant itself is
-// idempotent and would simply refuse a second time.
+// Returns { sent: false } when the read fails or the table isn't live yet,
+// which renders as "the form is fresh" - the safe direction, since sending a
+// report a second time costs nothing (0152 dropped the one-per-business cap).
 export async function readFeedbackState(
-  contractorId: string,
-  userId: string
+  contractorId: string
 ): Promise<FeedbackState> {
   try {
     const admin = createAdminClient();
-    const [feedback, claim] = await Promise.all([
-      (admin as any)
-        .from("pro_feedback")
-        .select("contractor_id")
-        .eq("contractor_id", contractorId)
-        .maybeSingle(),
-      (admin as any)
-        .from("promo_claims")
-        .select("promo_key")
-        .eq("user_id", userId)
-        .eq("promo_key", FEEDBACK_PROMO_KEY)
-        .maybeSingle(),
-    ]);
-    return {
-      sent: Boolean(feedback?.data),
-      claimed: Boolean(claim?.data),
-    };
+    const { data } = await (admin as any)
+      .from("pro_feedback")
+      .select("contractor_id")
+      .eq("contractor_id", contractorId)
+      .maybeSingle();
+    return { sent: Boolean(data) };
   } catch {
-    return { sent: false, claimed: false };
+    return { sent: false };
   }
 }
 
@@ -75,8 +61,9 @@ export async function proFeedbackRateLimitOk(userId: string): Promise<boolean> {
 // Store one pro's report. Returns "ok", "already", or "failed". "already" is
 // the unique index on contractor_id refusing a second row, which only exists
 // until migration 0152 is pasted live: after it, a business can send as many
-// reports as it likes and this path never fires. The money never listens to
-// row counts either way; promo_claims is its only gate.
+// reports as it likes and this path never fires. Every stored row defaults to
+// status='pending' (migration 0157's column default): nothing here decides
+// money, review does.
 export async function insertProFeedback(input: {
   contractorId: string;
   userId: string;
@@ -103,63 +90,5 @@ export async function insertProFeedback(input: {
   } catch (err) {
     console.error("pro_feedback insert threw:", err);
     return "failed";
-  }
-}
-
-// Grant the one-time $5 of bonus lead credit, atomically and idempotently.
-//
-// All of the safety lives in the SQL function (migration 0144): it inserts the
-// promo_claims row and credits the wallet in ONE transaction, and only on the
-// insert actually landing, so a second call - a double tap, two tabs, a retry
-// from the Home tab below - returns false and moves no money. This wrapper
-// only decides what to do with that answer.
-//
-// Returns true when THIS call is the one that credited the wallet.
-export async function grantFeedbackCredit(
-  contractorId: string
-): Promise<boolean> {
-  try {
-    const admin = createAdminClient();
-    const { data, error } = await (admin as any).rpc("grant_feedback_credit", {
-      p_contractor: contractorId,
-      p_amount_cents: FEEDBACK_CREDIT_CENTS,
-    });
-    if (error) throw error;
-    const granted = data === true;
-    if (granted) {
-      // Funnel analytics (docs/ANALYTICS.md), only on the call that actually
-      // moved money, never on a retry that found the claim already spent.
-      // Both call sites (the feedback form, the Home tab's qualify-later
-      // retry) only carry contractorId, so the account id is looked up here
-      // rather than threading userId through both of them just for this.
-      // Best-effort: a lookup or track hiccup must never cost the pro the
-      // credit that already landed above.
-      try {
-        const { data: row } = await (admin as any)
-          .from("contractors")
-          .select("user_id")
-          .eq("id", contractorId)
-          .maybeSingle();
-        if (row?.user_id) {
-          await trackServerEvent(row.user_id, "feedback_credit_claimed");
-        }
-      } catch {
-        /* analytics only; the grant above already succeeded */
-      }
-    }
-    return granted;
-  } catch (err) {
-    // Migration 0144 not live yet reads as "no credit granted", which is the
-    // truth: nothing moved. The pro's feedback is already stored either way,
-    // and the Home tab retries the grant on the next render once the SQL is
-    // pasted. Logged, not thrown, so a wallet problem never eats the note.
-    if (isMissingSchemaError(err as { code?: string; message?: string })) {
-      console.warn(
-        "grant_feedback_credit is missing: paste supabase/PASTE-ME-live-2026-08-29-feedback-credit.sql (migration 0144). Feedback is still being stored."
-      );
-      return false;
-    }
-    console.error("grant_feedback_credit failed:", err);
-    return false;
   }
 }

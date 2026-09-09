@@ -71,7 +71,7 @@ export default function ProSupportForm({
       <Honeypot />
 
       {member && (
-        <p className="mt-3 inline-block rounded-full border border-hearth-200 bg-hearth-50 px-3 py-1 text-xs font-medium text-hearth-800 dark:border-hearth-800 dark:bg-hearth-900/40 dark:text-hearth-200">
+        <p className="mt-3 inline-block rounded-full border border-oaktend-200 bg-oaktend-50 px-3 py-1 text-xs font-medium text-oaktend-800 dark:border-oaktend-800 dark:bg-oaktend-900/40 dark:text-oaktend-200">
           Priority support: Pro members go to the front of the line.
         </p>
       )}

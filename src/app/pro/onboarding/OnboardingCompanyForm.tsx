@@ -10,8 +10,10 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import { useFormStatus } from "react-dom";
+import Link from "next/link";
 import { Hammer } from "lucide-react";
 import { saveCompanyAction } from "../actions";
+import { LEGAL } from "@/lib/legal";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
@@ -129,6 +131,10 @@ function readDraft(userId: string): Draft | null {
       email: text(d.email),
       cities: stringList(d.cities),
       categories: stringList(d.categories),
+      // Never restored from a week-old draft, same rule sms_consent already
+      // follows below: a legal acknowledgment has to be given on the form
+      // that is actually submitted, not resurrected from storage.
+      agreedToProTerms: false,
     };
   } catch {
     return null;
@@ -168,6 +174,7 @@ function readValues(form: HTMLFormElement): ProOnboardingValues {
     phone: String(data.get("contact_phone") ?? ""),
     cities: data.getAll("service_cities").map(String),
     categories: data.getAll("categories").map(String),
+    agreedToProTerms: data.get("pro_terms_ack") !== null,
   };
 }
 
@@ -306,11 +313,11 @@ function WaitlistedPanel({ userId }: { userId: string }) {
         You&apos;re on the waitlist
       </h1>
       <p className="text-sm text-stone-600 dark:text-stone-300">
-        Hearth is matching pros in {LAUNCH_AREA_LABEL} right now. We added you
-        to the waitlist and will reach out when Hearth opens in your area.
+        OakTend is matching pros in {LAUNCH_AREA_LABEL} right now. We added you
+        to the waitlist and will reach out when OakTend opens in your area.
       </p>
       <p className="text-sm text-stone-500 dark:text-stone-400">
-        There&apos;s nothing else to set up here yet since Hearth covers{" "}
+        There&apos;s nothing else to set up here yet since OakTend covers{" "}
         {LAUNCH_AREA_LABEL} right now. We&apos;ll reach out when that changes.
       </p>
       <form action="/auth/signout" method="post">
@@ -475,6 +482,10 @@ function OnboardingCompanyFormInner({
       email: field("contact_email", 254),
       cities: data.getAll("service_cities").map(String),
       categories: data.getAll("categories").map(String).slice(0, 40),
+      // Never persisted: same rule readDraft() enforces on the way back out
+      // (see its own comment) - a legal acknowledgment must be given fresh
+      // on the form that is actually submitted.
+      agreedToProTerms: false,
     };
     try {
       localStorage.setItem(storageKey, JSON.stringify(next));
@@ -746,7 +757,7 @@ function OnboardingCompanyFormInner({
             />
           </div>
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            Where homeowners and Hearth reach you. Prefilled from your sign-in,
+            Where homeowners and OakTend reach you. Prefilled from your sign-in,
             change it if you want a different one.
           </p>
         </div>
@@ -775,7 +786,7 @@ function OnboardingCompanyFormInner({
             />
           </fieldset>
           <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-            Hearth matches pros across all of Orange County. Keep the whole
+            OakTend matches pros across all of Orange County. Keep the whole
             county, or narrow it to the cities you actually drive to. You can
             change this from your profile any time.
           </p>
@@ -787,7 +798,7 @@ function OnboardingCompanyFormInner({
             <FieldIcon>
               <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15" />
             </FieldIcon>
-            {/* Locked to California while Hearth serves CA only. The hidden
+            {/* Locked to California while OakTend serves CA only. The hidden
                 input still posts service_state=CA, the two-letter code
                 saveCompanyAction and the CSLB check expect. */}
             <div className="input cursor-not-allowed select-none bg-stone-100 pl-9 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
@@ -796,7 +807,7 @@ function OnboardingCompanyFormInner({
             <input type="hidden" name="service_state" value="CA" />
           </div>
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            Hearth serves California only right now, so this is set for you.
+            OakTend serves California only right now, so this is set for you.
           </p>
         </div>
 
@@ -892,7 +903,7 @@ function OnboardingCompanyFormInner({
             condition of signing up. The hidden marker beside it is what tells
             saveCompanyAction "unticked" apart from "this form did not ask" (an
             unticked checkbox posts nothing at all). Without this box, every
-            job alert Hearth already builds and pays for is dropped by the gate
+            job alert OakTend already builds and pays for is dropped by the gate
             in src/lib/notify.ts, silently. Deliberately NOT saved into the
             localStorage draft: a consent has to be given on the form that is
             actually submitted, not restored from a week-old draft.
@@ -900,7 +911,7 @@ function OnboardingCompanyFormInner({
         {/* Said once, here, on purpose: homeowners often reply to whoever
             answers first, so a fast reply wins jobs. It used to be stamped on
             every single new-lead alert, which manufactured the same reply-race
-            anxiety Hearth is trying to be the calm alternative to (research
+            anxiety OakTend is trying to be the calm alternative to (research
             wave RC, 2026-08-30). One quiet mention in onboarding, tied to why
             the texts below are worth turning on, does the job without the
             drumbeat. */}
@@ -918,9 +929,95 @@ function OnboardingCompanyFormInner({
           <span className="text-sm text-stone-600 dark:text-stone-400">
             Text me when a job matches or a homeowner replies. Message and data
             rates may apply. Message frequency varies. Reply STOP to opt out,
-            HELP for help.
+            HELP for help. This number is never used for marketing from other
+            companies.
           </span>
         </label>
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Consent isn&apos;t required to use {LEGAL.brand} or to buy anything.
+          See our{" "}
+          <Link href="/sms-terms" className="underline hover:text-stone-700 dark:hover:text-stone-300">
+            SMS Terms
+          </Link>
+          .
+        </p>
+
+        {/* Pro Terms appendix: the required onboarding acknowledgment.
+            Server-side floor in saveCompanyAction (../actions.ts) requires
+            pro_terms_ack on first-time company creation; this client-side
+            required attribute is only the helpful early message (see the
+            case 2 gate in ./wizardSteps.ts) - a hidden panel like this one
+            still submits, so the real gate lives in the two places above,
+            not here. TODO(legal): have counsel review this acknowledgment
+            copy before launch. */}
+        <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 dark:border-white/10 dark:bg-stone-800/60">
+          <p className="text-sm text-stone-600 dark:text-stone-400">
+            {LEGAL.brand} charges a flat fee per lead category, refunded as
+            wallet credit if you don&apos;t win the job or a homeowner never
+            responds. See{" "}
+            <Link href="/pro-terms" className="underline hover:text-stone-700 dark:hover:text-stone-300">
+              Pro Terms
+            </Link>{" "}
+            for the schedule.
+          </p>
+          <label className="mt-3 flex min-h-11 items-start gap-2">
+            <input
+              type="checkbox"
+              name="pro_terms_ack"
+              // Conditioned on the active step, same discipline as every
+              // other `required` field in this wizard (see step 1's inputs
+              // above): every panel stays mounted, just hidden, so a bare
+              // `required` here would also apply while THIS panel is hidden
+              // behind an earlier step and block that step's own submit
+              // attempt with a validation message the browser cannot focus.
+              required={step === LAST_STEP}
+              className="mt-1 h-6 w-6 shrink-0 rounded border-stone-300 text-bark-600 focus:ring-bark-600 dark:border-white/20"
+            />
+            <span className="text-sm text-stone-700 dark:text-stone-300">
+              I have read and agree to the{" "}
+              <Link href="/pro-terms" className="underline hover:text-stone-900 dark:hover:text-stone-100">
+                Pro Terms
+              </Link>{" "}
+              and the{" "}
+              <Link href="/terms" className="underline hover:text-stone-900 dark:hover:text-stone-100">
+                Terms of Service
+              </Link>
+              , and I confirm the statements below.
+            </span>
+          </label>
+          <ul className="mt-2 list-disc space-y-1 pl-9 text-xs text-stone-500 dark:text-stone-400">
+            <li>
+              I am operating as an independent business, not as an employee of{" "}
+              {LEGAL.brand}.
+            </li>
+            <li>
+              Any license I list is active and belongs to me or to the
+              business I am registering, or my work qualifies for the
+              small-job exception under Business and Professions Code section
+              7048.
+            </li>
+            <li>
+              I will tell {LEGAL.brand} within 5 days if my license lapses, is
+              suspended, or is revoked.
+            </li>
+            <li>
+              I carry the insurance my work requires, and any insurance
+              information I provide is accurate to the best of my knowledge.
+            </li>
+            <li>
+              I understand lead fees are non-refundable except through the
+              credit-back and ghost-protection rules in the Pro Terms, and
+              that any credit issued is wallet credit, not cash, and expires
+              in 60 days.
+            </li>
+            <li>
+              I will use homeowner information I receive through{" "}
+              {LEGAL.brand} only to respond to and perform the job it was
+              given to me for.
+            </li>
+            <li>I am at least 18 years old.</li>
+          </ul>
+        </div>
       </div>
 
       {error && (

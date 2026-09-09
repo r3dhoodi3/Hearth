@@ -50,7 +50,7 @@ describe("ghost protection: never a bare refund, always credit-to-wallet", () =>
     const creditLineHtml = renderToStaticMarkup(
       createElement("span", null, creditNotCashLineRich())
     );
-    expect(creditLineHtml).toContain("<strong>Hearth credit in your wallet</strong>");
+    expect(creditLineHtml).toContain("<strong>OakTend credit in your wallet</strong>");
     expect(creditLineHtml).toContain("<strong>not money back to your card</strong>");
   });
 

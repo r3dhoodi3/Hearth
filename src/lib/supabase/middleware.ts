@@ -312,8 +312,11 @@ export function isPublicPath(path: string): boolean {
     // Email-code recovery page (src/app/verify): an account created but not yet
     // email-confirmed is SIGNED OUT, so bouncing it to /signin here would trap
     // exactly the person this page exists to rescue. It reads no private data -
-    // verifyOtp is the gate - so it is safe with no session.
-    path.startsWith("/verify") ||
+    // verifyOtp is the gate - so it is safe with no session. Exact match, not
+    // a prefix (same rule as "/open" above): only this one page is public, so
+    // a future /verify/<something> cannot inherit anonymity by accident, and
+    // no path that merely starts with the word can either.
+    path === "/verify" ||
     // Password reset request page: a signed-out user is exactly who needs it,
     // so it must not bounce to /signin.
     path.startsWith("/reset-password") ||
@@ -329,7 +332,12 @@ export function isPublicPath(path: string): boolean {
     path.startsWith("/emergency-help/") ||
     // A pro's shareable public page: readable with no account by design.
     path.startsWith("/p/") ||
-    // Public pros landing page: /p/ pages link here ("Powered by Hearth"),
+    // Campaign click redirects (src/app/go/[code]/route.ts): a bio-link tap
+    // from TikTok or Instagram is anonymous by definition, and the route only
+    // logs an allowlisted code and 302s. /go itself is not a page; only
+    // children exist, hence the trailing-slash prefix.
+    path.startsWith("/go/") ||
+    // Public pros landing page: /p/ pages link here ("Powered by OakTend"),
     // so logged-out visitors must not bounce to /signin. Exact match: the
     // signed-in pro app lives under /pro/ and must stay guarded.
     path === "/pros" ||
@@ -355,7 +363,7 @@ export function isPublicPath(path: string): boolean {
     // Privacy policy + Terms of Service + DMCA policy (src/app/privacy,
     // src/app/terms, src/app/dmca): legally need to be readable by anyone,
     // logged in or not, same reasoning as the guide and city pages above. The
-    // DMCA page in particular is where a copyright owner with no Hearth
+    // DMCA page in particular is where a copyright owner with no OakTend
     // account finds the designated agent, so it must never bounce to /signin.
     path === "/privacy" ||
     path.startsWith("/privacy/") ||
@@ -366,6 +374,12 @@ export function isPublicPath(path: string): boolean {
     // visitor must be able to open before they have an account.
     path === "/pro-terms" ||
     path.startsWith("/pro-terms/") ||
+    // Pro Data Addendum (src/app/pro-data-addendum): the Pro Terms addendum
+    // governing homeowner contact data, linked from the same contractor
+    // sign-up checkbox as pro-terms above - same reasoning, must be readable
+    // with no account.
+    path === "/pro-data-addendum" ||
+    path.startsWith("/pro-data-addendum/") ||
     // AI disclosure (src/app/ai-disclosure): same reasoning as privacy/terms.
     // It is ALSO linked from the inline AI label inside the signed-in app
     // (src/components/AiNotice.tsx), so it has to resolve either way.
@@ -373,6 +387,39 @@ export function isPublicPath(path: string): boolean {
     path.startsWith("/ai-disclosure/") ||
     path === "/dmca" ||
     path.startsWith("/dmca/") ||
+    // The rest of the legal document set (src/content/legal/*.md, rendered by
+    // src/components/LegalDocument.tsx): same reasoning as privacy/terms/
+    // pro-terms/ai-disclosure/dmca above - every one of these is either
+    // legally required to be readable with no account (billing disclosures
+    // under B&P 17538, the SMS terms linked from the opt-in checkbox, the
+    // DMCA-adjacent subprocessor list) or is itself an accessibility/privacy
+    // commitment that would be self-defeating behind a sign-in wall.
+    path === "/billing" ||
+    path.startsWith("/billing/") ||
+    path === "/sms-terms" ||
+    path.startsWith("/sms-terms/") ||
+    path === "/accessibility" ||
+    path.startsWith("/accessibility/") ||
+    path === "/guidelines" ||
+    path.startsWith("/guidelines/") ||
+    path === "/security" ||
+    path.startsWith("/security/") ||
+    // Law Enforcement Requests (src/app/law-enforcement): read by an agency
+    // or a civil litigant with no OakTend account, same reasoning as the rest
+    // of the legal document set above.
+    path === "/law-enforcement" ||
+    path.startsWith("/law-enforcement/") ||
+    path === "/cookies" ||
+    path.startsWith("/cookies/") ||
+    path === "/subprocessors" ||
+    path.startsWith("/subprocessors/") ||
+    path === "/privacy-choices" ||
+    path.startsWith("/privacy-choices/") ||
+    // RFC 9116 security.txt (src/app/.well-known/security.txt/route.ts) and
+    // anything else that ever lands under /.well-known: fetched by automated
+    // scanners and researchers with no session, same reasoning as
+    // robots.txt/sitemap.xml below.
+    path.startsWith("/.well-known/") ||
     // Public contact form (src/app/contact): the whole point is to give a
     // signed-out visitor a reachable channel now that the site no longer
     // publishes FOUNDER.email directly (see LegalContact.tsx). A signed-out
@@ -451,6 +498,15 @@ export function isPublicPath(path: string): boolean {
     // via X-Checkr-Signature, not a user session, and a 307 here would read
     // as a failed delivery, so background check results would never land.
     path.startsWith("/api/checkr/webhook") ||
+    // RevenueCat in-app-purchase webhook (src/app/api/iap/webhook): same
+    // reasoning as Stripe/Checkr above. It authenticates with an
+    // Authorization bearer token (REVENUECAT_WEBHOOK_SECRET), never a user
+    // session, so without this line every delivery 307s to /signin: RevenueCat
+    // reads a non-2xx as a failed delivery, retries for hours, then gives up,
+    // and an App Store / Play purchase would be charged and never grant Plus
+    // or Pro. src/lib/apiCsrfCoverage.test.ts already lists it as a
+    // machine-called webhook for the same reason.
+    path.startsWith("/api/iap/webhook") ||
     // Twilio inbound SMS webhook: authenticates via Twilio's request
     // signature, not a user session, same reasoning as the Stripe/Checkr
     // webhooks above - a 307 here would read as a failed delivery and drop

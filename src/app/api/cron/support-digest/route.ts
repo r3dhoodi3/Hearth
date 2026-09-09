@@ -216,12 +216,12 @@ async function runCron(req: NextRequest) {
     return NextResponse.json({ ok: false, open: rows.length, notified: false });
   }
   if (!owner?.id) {
-    // No Hearth account on the founder address. sendNotification is built
+    // No OakTend account on the founder address. sendNotification is built
     // around a user row (the in-app bell, the CAN-SPAM unsubscribe token), so
     // there is nothing to send through. Loud log, successful run: the messages
     // are safe in the table and the next run retries once the account exists.
     console.error(
-      "support-digest: no Hearth account matches the founder address, so no digest was sent"
+      "support-digest: no OakTend account matches the founder address, so no digest was sent"
     );
     return NextResponse.json({ ok: false, open: rows.length, notified: false });
   }

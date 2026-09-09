@@ -9,7 +9,7 @@ import {
 // The identity half of CSLB verification. Two directions matter here and they
 // pull against each other: a pro must not be able to verify on a stranger's
 // license (the false-accept cases at the bottom), and a real pro must not be
-// locked out because CSLB spells their name differently than Hearth does (the
+// locked out because CSLB spells their name differently than OakTend does (the
 // long list of shape differences above it). This matcher deliberately errs
 // toward accepting - the hard guarantee is the one-license-one-account lock
 // (migration 0125), not this comparison.

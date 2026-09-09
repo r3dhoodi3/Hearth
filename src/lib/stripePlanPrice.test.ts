@@ -85,7 +85,7 @@ describe("a configured Price always wins", () => {
 });
 
 describe("the fallback never references an inactive product", () => {
-  // THE LIVE BUG: the "Hearth Plus" product on the connected account was
+  // THE LIVE BUG: the "OakTend Plus" product on the connected account was
   // archived, the switch-to-yearly action pointed inline price_data at it, and
   // Stripe refused ("marked as inactive, and thus no new subscriptions can be
   // created to any plans of this product"). An archived product must read as
@@ -101,7 +101,7 @@ describe("the fallback never references an inactive product", () => {
     const id = await plusPriceId("yearly");
 
     expect(productsCreate).toHaveBeenCalledWith({
-      name: "Hearth Plus",
+      name: "OakTend Plus",
       metadata: { hearth_plan: "plus" },
     });
     expect(id).toBe("price_new");

@@ -7,7 +7,7 @@ import { stripe } from "@/lib/stripe";
 import type { Subscription } from "@/lib/database.types";
 
 // One user can hold TWO subscriptions rows at once (migration 0036): the
-// homeowner Hearth Plus side ("monthly"/"yearly") and the contractor Hearth
+// homeowner OakTend Plus side ("monthly"/"yearly") and the contractor OakTend
 // Pro side ("pro_monthly"/"pro_yearly"). The pro_ prefix keeps the two
 // memberships from satisfying each other's checks.
 function isProPlanName(plan: string | null | undefined): boolean {
@@ -71,7 +71,7 @@ const getSubscriptionRows = cache(async (): Promise<Subscription[]> => {
   return (await getSubscriptionRowsResult()).rows;
 });
 
-// The current user's homeowner Hearth Plus subscription row (billing status,
+// The current user's homeowner OakTend Plus subscription row (billing status,
 // plan, renewal date). Never returns the contractor Pro-side row.
 export const getSubscription = cache(
   async (): Promise<Subscription | null> => {
@@ -80,7 +80,7 @@ export const getSubscription = cache(
   }
 );
 
-// The current user's contractor Hearth Pro membership row. Never returns the
+// The current user's contractor OakTend Pro membership row. Never returns the
 // homeowner Plus-side row.
 export const getProSubscription = cache(
   async (): Promise<Subscription | null> => {
@@ -89,7 +89,7 @@ export const getProSubscription = cache(
   }
 );
 
-// Whether the current user may start a first-time Hearth Pro free trial. The
+// Whether the current user may start a first-time OakTend Pro free trial. The
 // Pro-side row survives a cancellation (it lands on "canceled", it is not
 // deleted), so any existing Pro row means NOT eligible. Critically, this fails
 // CLOSED: a read that ERRORED also returns false, so a transient or RLS read
@@ -104,7 +104,7 @@ export async function isProTrialEligible(): Promise<boolean> {
 }
 
 // The homeowner-side twin of isProTrialEligible: may the current user start a
-// first-time Hearth Plus free trial (the 3 free days every cadence carries)?
+// first-time OakTend Plus free trial (the 3 free days every cadence carries)?
 // Same rule, same failure posture, for the same reason - the Plus row
 // also survives a cancellation, so any homeowner-side row at all means the
 // trial has already been used.
@@ -190,7 +190,7 @@ function isLive(
   return true;
 }
 
-// Whether the current user PERSONALLY holds a live Hearth Plus subscription.
+// Whether the current user PERSONALLY holds a live OakTend Plus subscription.
 // This is the billing truth: the /plus manage-billing UI and the owned-home
 // cap (claimPropertyAction, mirrored by the 0108 DB trigger, which checks the
 // inserting user's own row) key off it. A household member of a Plus home
@@ -294,7 +294,7 @@ export async function getExtraHomeSlots(): Promise<number> {
   return slots > 0 ? slots : 0;
 }
 
-// Whether the current user has an active Hearth Pro membership (contractor
+// Whether the current user has an active OakTend Pro membership (contractor
 // side). Unlocks perks only: deposit bonus boost, alerts, back-office tools.
 // It NEVER changes which leads a pro can see or apply to.
 export async function hasProPlan(): Promise<boolean> {

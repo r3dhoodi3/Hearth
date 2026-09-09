@@ -149,7 +149,7 @@ describe("HeroDemoPlayer click-to-pause", () => {
   it("does not pause when a click lands on the simulated app content inside the screen", () => {
     render(<HeroDemoPlayer />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Play the Hearth demo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Play the OakTend demo/i }));
     expect(playPauseLabel()).toBe("Pause");
 
     // A fake nav logo rendered with the real site's own classes - exactly
@@ -173,7 +173,7 @@ describe("HeroDemoPlayer click-to-pause", () => {
   it("still toggles pause on a click that lands on the device frame outside the screen (the deliberate control)", () => {
     render(<HeroDemoPlayer />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Play the Hearth demo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Play the OakTend demo/i }));
     expect(playPauseLabel()).toBe("Pause");
 
     // deviceWrap itself, not any descendant of [data-x="screen"] - this is
@@ -193,7 +193,7 @@ describe("HeroDemoPlayer transport labels", () => {
   // watched on and the one place in this component that named a mouse.
   it("names the playback speed without telling a phone user to click", () => {
     render(<HeroDemoPlayer />);
-    fireEvent.click(screen.getByRole("button", { name: /Play the Hearth demo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Play the OakTend demo/i }));
 
     const rate = screen.getByRole("button", { name: /Playback speed/i });
     const label = rate.getAttribute("aria-label") ?? "";

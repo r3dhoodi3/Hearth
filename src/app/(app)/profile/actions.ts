@@ -6,7 +6,12 @@ import { getActiveProperty } from "@/lib/property";
 import { DEFAULT_LIFESPANS } from "@/lib/health";
 import { setFlash } from "@/lib/flash";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
-import { labelFor, PROPERTY_TYPES, SYSTEM_TYPES } from "@/lib/constants";
+import {
+  labelFor,
+  PROPERTY_TYPES,
+  SYSTEM_TYPES,
+  systemDisplayLabel,
+} from "@/lib/constants";
 import {
   boundedNumber,
   boundedInt,
@@ -117,6 +122,20 @@ function modelCapacityFields(
   };
 }
 
+// B7: the free-text name for a system_type "other" row (migration 0156).
+// Only ever written when the form actually sent the field (SystemForm /
+// SystemRow only render it for an "other" system), so an edit on any other
+// system type never touches this column. Capped to the same 80 characters
+// the migration's own CHECK constraint enforces, so a truncated-but-valid
+// value always reaches the insert/update rather than tripping it.
+const MAX_OTHER_LABEL = 80;
+
+function otherLabelField(formData: FormData): { other_label: string | null } | null {
+  if (!formData.has("other_label")) return null;
+  const raw = ((formData.get("other_label") as string) || "").trim();
+  return { other_label: raw ? raw.slice(0, MAX_OTHER_LABEL) : null };
+}
+
 // Save any photos the owner uploaded (the PhotoUpload component already pushed
 // them to storage and put the public URLs in the form as `photo_urls`). Photos
 // are polymorphic, so we tag them with related_type "system".
@@ -171,6 +190,17 @@ export async function addSystemAction(
     return err("Couldn't add that system. Please pick a type from the list.");
   }
 
+  // B7: "Other" carries no type-specific label to fall back on, so it needs a
+  // real name. SystemForm's input is `required`, so a client submit can't
+  // reach here blank; this is the authoritative floor for a forged/scripted
+  // post.
+  if (
+    systemType === "other" &&
+    !((formData.get("other_label") as string) || "").trim()
+  ) {
+    return err("Please name the system (e.g. \"Pool pump\").");
+  }
+
   const baseRow = {
     property_id: property.id,
     system_type: systemType,
@@ -202,9 +232,10 @@ export async function addSystemAction(
   // without them keeps adding a system working - same pattern as pro/actions.
   const filter = filterFields(formData);
   const modelCapacity = modelCapacityFields(formData);
+  const otherLabel = otherLabelField(formData);
   const extras =
-    filter || modelCapacity
-      ? { ...(filter ?? {}), ...(modelCapacity ?? {}) }
+    filter || modelCapacity || otherLabel
+      ? { ...(filter ?? {}), ...(modelCapacity ?? {}), ...(otherLabel ?? {}) }
       : null;
   let { data: row, error } = extras
     ? await supabase
@@ -233,7 +264,9 @@ export async function addSystemAction(
     return err("Couldn't add that system just now. Please try again.");
   }
   await attachPhotos(formData, property.id, row.id);
-  setFlash(`Added ${labelFor(SYSTEM_TYPES, systemType)}`);
+  setFlash(
+    `Added ${systemDisplayLabel({ system_type: systemType, other_label: otherLabel?.other_label ?? null })}`
+  );
   revalidatePath("/dashboard");
   revalidatePath("/home-report");
   return ok({ id: row.id });
@@ -400,9 +433,10 @@ export async function updateSystemAction(
   // RLS guarantees the row belongs to the caller's property.
   const filter = filterFields(formData);
   const modelCapacity = modelCapacityFields(formData);
+  const otherLabel = otherLabelField(formData);
   const extras =
-    filter || modelCapacity
-      ? { ...(filter ?? {}), ...(modelCapacity ?? {}) }
+    filter || modelCapacity || otherLabel
+      ? { ...(filter ?? {}), ...(modelCapacity ?? {}), ...(otherLabel ?? {}) }
       : null;
   let { error } = extras
     ? await supabase

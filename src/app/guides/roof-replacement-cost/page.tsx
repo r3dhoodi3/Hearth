@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "article",
   },
   twitter: {
@@ -284,7 +284,7 @@ export default function RoofReplacementCostGuide() {
           </ul>
           <p className="mt-2 leading-relaxed">
             Sun exposure, attic ventilation, and upkeep all shift where a real
-            roof lands. Hearth uses a 22-year default for planning a roof&apos;s
+            roof lands. OakTend uses a 22-year default for planning a roof&apos;s
             replacement timeline unless it knows more about yours.
           </p>
         </section>
@@ -307,12 +307,12 @@ export default function RoofReplacementCostGuide() {
 
         <section>
           <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-500">
-            Data as of July 2026. The national range reflects Hearth&apos;s
+            Data as of July 2026. The national range reflects OakTend&apos;s
             in-app planning figure for a roof replacement; the Orange County
             ranges are drawn from typical local per-square-foot pricing for a
             2,000 square foot home. All figures are general estimates, not
             quotes, and actual prices vary by home, material, and contractor.
-            Hearth does not set or guarantee prices and is not a contractor.
+            OakTend does not set or guarantee prices and is not a contractor.
           </p>
         </section>
       </div>

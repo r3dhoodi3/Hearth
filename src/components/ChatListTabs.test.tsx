@@ -26,7 +26,7 @@ function renderTabs(
       closedCount={1}
       activeEmpty="No open conversations yet. Pick a pro for a job and your chat starts here."
       closedEmpty="Nothing here yet. Finished conversations land here."
-      pinned={<li>Ask Hearth</li>}
+      pinned={<li>Ask OakTend</li>}
       activeRows={<li>Plumber Pete</li>}
       closedRows={<li>Roofer Rita</li>}
       {...extra}
@@ -52,11 +52,11 @@ describe("ChatListTabs", () => {
     expect(screen.queryByText("Plumber Pete")).toBeNull();
   });
 
-  it("keeps the pinned Ask Hearth row on both tabs, untouched by the filter", () => {
+  it("keeps the pinned Ask OakTend row on both tabs, untouched by the filter", () => {
     renderTabs();
-    expect(screen.getByText("Ask Hearth")).toBeInTheDocument();
+    expect(screen.getByText("Ask OakTend")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Closed/ }));
-    expect(screen.getByText("Ask Hearth")).toBeInTheDocument();
+    expect(screen.getByText("Ask OakTend")).toBeInTheDocument();
   });
 
   it("shows counts off the fetched list and hides a zero", () => {
@@ -99,5 +99,20 @@ describe("ChatListTabs", () => {
     expect(screen.getByRole("button", { name: /Active/ }).className).toContain(
       "sm:min-h-0"
     );
+  });
+
+  // A9: the pinned Ask OakTend row reads as just another conversation, so a
+  // second, unmistakable button to the same place sits under the list, phone
+  // only. Omitted by default (no mobileAskHref) so a caller that never opts
+  // in renders nothing extra.
+  it("shows a phone-only Chat with AI link when mobileAskHref is given, not otherwise", () => {
+    renderTabs();
+    expect(screen.queryByRole("link", { name: /Chat with AI/ })).toBeNull();
+
+    renderTabs({ mobileAskHref: "/ask" });
+    const link = screen.getByRole("link", { name: /Chat with AI/ });
+    expect(link).toHaveAttribute("href", "/ask");
+    expect(link.className).toContain("md:hidden");
+    expect(link.className).toContain("min-h-11");
   });
 });

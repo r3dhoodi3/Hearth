@@ -22,7 +22,7 @@ import {
 // email and SMS, and the only one that costs nothing per message - the
 // browser's own push service (Apple, Google, Mozilla) does the delivery. That
 // is why it is free for everyone on both sides of the marketplace rather than
-// a Hearth Plus perk: there is no bill to gate.
+// an OakTend Plus perk: there is no bill to gate.
 //
 // HOW THE PIECES FIT:
 //   public/sw.js                        the service worker that shows it

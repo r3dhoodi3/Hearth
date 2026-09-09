@@ -1,6 +1,7 @@
 "use client";
 
 import NoticeAtCollection from "@/components/NoticeAtCollection";
+import InlineSpinner from "@/components/InlineSpinner";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { lookupParcelAction, claimPropertyAction, joinMarketWaitlistAction } from "./actions";
 import type { PublicParcelFacts } from "@/lib/parcel";
@@ -774,7 +775,7 @@ export default function OnboardingForm({
   // Photon needs a house number. Asked for a bare street name it answers with
   // centerlines and bus stops, every one of which mapPhotonResults drops for
   // having no number - so a street-name-only query reliably shows an empty
-  // list, and an empty list with no explanation reads as "Hearth doesn't know
+  // list, and an empty list with no explanation reads as "OakTend doesn't know
   // my street". Say the one thing that fixes it. Only after a request has
   // actually come back empty (suggestEmpty), and only while there is no digit
   // in the box, so it never argues with someone who did type a number.
@@ -917,7 +918,7 @@ export default function OnboardingForm({
                 // "off", not "address-line1": the browser's own address
                 // autofill panel and this suggestion list would otherwise
                 // stack on top of each other over the same box, and only one
-                // of them knows which addresses Hearth can actually serve.
+                // of them knows which addresses OakTend can actually serve.
                 autoComplete="off"
                 maxLength={MAX_ADDRESS_LENGTH}
                 value={street}
@@ -1507,7 +1508,7 @@ export default function OnboardingForm({
                   claimPropertyAction in ./actions.ts, which refuses to match
                   against it). Promising a check that is not run, and could not
                   mean anything if it were, is the kind of small lie that turns
-                  into "Hearth said it verified me" later. */}
+                  into "OakTend said it verified me" later. */}
               <p className="rounded-lg bg-bark-50 p-3 text-xs text-bark-700 dark:bg-bark-700/40 dark:text-stone-300">
                 {hasUnit ? (
                   <>
@@ -1537,8 +1538,23 @@ export default function OnboardingForm({
                 </p>
               )}
 
-              <button className="btn-primary w-full" disabled={busy}>
-                {busy ? "One moment…" : "Claim my home"}
+              {/* Claiming a home now looks up the county record a second time,
+                  runs the ownership check, and seeds the starter inventory
+                  (buildStarterSystems, src/lib/starterSystems.ts) all before
+                  redirecting - about 5 seconds measured against the live
+                  RentCast path (reports/accounts-seed.md), not the instant a
+                  plain disabled button implies. A spinner plus copy that
+                  names what's actually happening (not a generic "One
+                  moment…") is the honest version of the same pending state
+                  this button already had via `busy`/disabled - nothing about
+                  double-submit protection changes, only what it says while
+                  it waits. */}
+              <button
+                className="btn-primary flex w-full items-center justify-center gap-2"
+                disabled={busy}
+              >
+                {busy && <InlineSpinner size={16} />}
+                {busy ? "Building your home profile…" : "Claim my home"}
               </button>
 
               {/* We keep this form filled in across a reload, so there has to be a
@@ -1565,7 +1581,7 @@ export default function OnboardingForm({
       {step === "out_of_area" && (
         <div className="space-y-4 text-center">
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Hearth isn&apos;t in your area yet
+            OakTend isn&apos;t in your area yet
           </h2>
           <p className="break-words text-sm text-stone-600 dark:text-stone-300">
             {waitlistSaved
@@ -1573,7 +1589,7 @@ export default function OnboardingForm({
               : `We couldn't save you to the waitlist. Email us at ${FOUNDER.email} and we'll add you by hand.`}
           </p>
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            There&apos;s nothing else to set up here yet since Hearth covers{" "}
+            There&apos;s nothing else to set up here yet since OakTend covers{" "}
             {LAUNCH_AREA_LABEL} right now. We&apos;ll email you when that
             changes.
           </p>

@@ -12,8 +12,8 @@ import { plainPreview } from "@/lib/previewText";
 import LeadChat from "@/components/LeadChat";
 import MarkChatSeen from "@/components/MarkChatSeen";
 import MarkChatsSeen from "@/components/MarkChatsSeen";
-import AskHearth from "@/components/AskHearth";
-import AskHearthRow from "@/components/AskHearthRow";
+import AskOakTend from "@/components/AskOakTend";
+import AskOakTendRow from "@/components/AskOakTendRow";
 import ChatListTabs from "@/components/ChatListTabs";
 import { isTerminalLeadStatus } from "@/app/pro/leadStatusLabel";
 import PhoneChatFrame from "@/components/PhoneChatFrame";
@@ -61,7 +61,7 @@ async function markChatSeenAction(leadId: string) {
 }
 
 // Fires when the inbox is opened, so the nav badge clears even on the default
-// Ask Hearth pane where no single thread is selected. The badge clear itself
+// Ask OakTend pane where no single thread is selected. The badge clear itself
 // happens client-side: MarkChatsSeen stamps `hearth:seen:<id>` in localStorage
 // for every listed lead and LiveUnreadBadge takes the max of that and the seen
 // cookie. This action deliberately does NOT write the per-thread seen cookie:
@@ -74,7 +74,7 @@ async function markAllChatsSeenAction(_leadIds: string[]) {
 
 export default async function HomeownerChatsPage(
   props: {
-    // `q` prefills and sends one question into the Ask Hearth pane, the way
+    // `q` prefills and sends one question into the Ask OakTend pane, the way
     // /ask?q= does on a phone. It is how an "ask about this" link elsewhere in
     // the app (the forecast plan button) reaches the assistant on a desktop
     // now that the floating dock is gone.
@@ -85,7 +85,7 @@ export default async function HomeownerChatsPage(
   // getProactiveGreeting doesn't depend on the property lookup (or anything
   // else on this page) - run it alongside getActiveProperty instead of
   // stacking a round trip after the redirect check.
-  // `user` is only here to namespace the pinned Ask Hearth row's localStorage
+  // `user` is only here to namespace the pinned Ask OakTend row's localStorage
   // lookup (the assistant's conversation is browser-local, keyed by user id).
   // getUser reads the already-validated session cookie, so it costs nothing.
   const [property, greeting, user] = await Promise.all([
@@ -136,10 +136,11 @@ export default async function HomeownerChatsPage(
   // never got one.
   const quoteByLead = new Map<string, number>();
 
-  // "Ask Hearth" is a pinned assistant conversation, always available. It's the
+  // "Ask OakTend" is a pinned assistant conversation, always available. It's the
   // default when there are no real (chosen-pro) conversations yet.
   const askSelected =
-    !searchParams.lead || searchParams.lead === "ask-hearth";
+    !searchParams.lead || searchParams.lead === "ask-oaktend" ||
+    searchParams.lead === "ask-hearth"; // legacy links from before the OakTend rename
   // Candidate pick from the active home's own conversation list. Finding it
   // here (before the messages/quotes fetch below) is safe: convos.sort()
   // further down only reorders the array, it never changes which lead
@@ -230,7 +231,7 @@ export default async function HomeownerChatsPage(
     // silently cleared the contractor-side badge for threads they never
     // opened. The properties select is RLS-scoped (household membership
     // included), so its ids are exactly the owner-side universe; a user's
-    // home count is small, so one .in() list is plenty. Note the Ask Hearth
+    // home count is small, so one .in() list is plenty. Note the Ask OakTend
     // assistant is not involved here at all: it lives in localStorage only
     // and never writes to the messages table.
     supabase
@@ -396,7 +397,7 @@ export default async function HomeownerChatsPage(
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Messages</h1>
 
-      {/* Opening the inbox clears the nav badge, even on the Ask Hearth pane.
+      {/* Opening the inbox clears the nav badge, even on the Ask OakTend pane.
           The stamped set is the union of the listed conversations and every
           other lead on the user's own homes (other homes, unassigned leads;
           never pro-side leads a dual-role account is the assigned contractor
@@ -482,9 +483,9 @@ export default async function HomeownerChatsPage(
                view. Desktop keeps selecting the in-page pane below instead, so
                the two-pane inbox doesn't disappear under someone who just
                wanted a question answered. */
-            <AskHearthRow
+            <AskOakTendRow
               href="/ask"
-              desktopHref="/chats?lead=ask-hearth"
+              desktopHref="/chats?lead=ask-oaktend"
               subtitle="Your home assistant"
               storageKeyBase="hearth_ask_chat"
               retentionKeyBase="hearth_ask_retention"
@@ -494,6 +495,7 @@ export default async function HomeownerChatsPage(
           }
           activeRows={activeConvos.map(renderConvoRow)}
           closedRows={closedConvos.map(renderConvoRow)}
+          mobileAskHref="/ask"
         />
 
           {/* ---- Open thread (the only pane on phones once one is picked) ---- */}
@@ -520,11 +522,11 @@ export default async function HomeownerChatsPage(
                     into this page does not ask it a second time (and spend a
                     second free question on an answer already on screen). Same
                     contract as /ask. */}
-                <AskHearth
+                <AskOakTend
                   fill
                   greeting={greeting}
                   initialQuestion={searchParams.q}
-                  replaceUrlAfterInitial="/chats?lead=ask-hearth"
+                  replaceUrlAfterInitial="/chats?lead=ask-oaktend"
                 />
               </div>
             </PhoneChatFrame>

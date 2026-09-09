@@ -5,7 +5,9 @@ import {
   FREE_ASK_PER_DAY,
   PLUS_ASK_PER_DAY,
   PLUS_INCLUDED_HOMES,
+  SYSTEM_TYPES,
   TRIAL_ASK_PER_DAY,
+  systemDisplayLabel,
 } from "@/lib/constants";
 
 // src/lib/aiUsage.ts imports the service-role Supabase client, which is
@@ -22,6 +24,46 @@ function constant(source: string, name: string): number {
   if (!m) throw new Error(`${name} was not found as a plain numeric constant`);
   return Number(m[1]);
 }
+
+// B7: "Other" home system with a free-text name (migration 0156).
+describe("SYSTEM_TYPES includes an Other option", () => {
+  it("has an 'other' entry", () => {
+    expect(SYSTEM_TYPES.some((s) => s.value === "other")).toBe(true);
+  });
+});
+
+describe("systemDisplayLabel", () => {
+  it("shows the owner's own name for an 'other' system", () => {
+    expect(
+      systemDisplayLabel({ system_type: "other", other_label: "Pool pump" })
+    ).toBe("Pool pump");
+  });
+
+  it("trims the stored label", () => {
+    expect(
+      systemDisplayLabel({ system_type: "other", other_label: "  Pool pump  " })
+    ).toBe("Pool pump");
+  });
+
+  it("falls back to the plain 'Other' label when blank", () => {
+    expect(systemDisplayLabel({ system_type: "other", other_label: "" })).toBe(
+      "Other"
+    );
+    expect(
+      systemDisplayLabel({ system_type: "other", other_label: null })
+    ).toBe("Other");
+  });
+
+  it("falls back to the plain 'Other' label when the column doesn't exist yet", () => {
+    expect(systemDisplayLabel({ system_type: "other" })).toBe("Other");
+  });
+
+  it("ignores other_label for every other system type", () => {
+    expect(
+      systemDisplayLabel({ system_type: "roof", other_label: "Pool pump" })
+    ).toBe("Roof");
+  });
+});
 
 describe("the Plus allowances quoted in marketing copy", () => {
   it("quotes the same daily question count the server enforces", () => {

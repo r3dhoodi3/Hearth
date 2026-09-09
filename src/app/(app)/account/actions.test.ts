@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 //
 // WHAT THIS FILE PINS. Consent under TCPA is given for a NUMBER, not for an
 // account. The action used to carry sms_consent straight across a phone
-// change, so editing the number left Hearth holding a "yes" that the new
+// change, so editing the number left OakTend holding a "yes" that the new
 // number never gave - and the checkbox, still ticked from the previous save,
 // re-posted "on" every time. Damages are per text, so the flag now drops with
 // the number and has to be granted again, and the person is told that it did.
@@ -32,6 +32,23 @@ let lastProfileUpdate: Row | null = null;
 let lastConsentUpdate: Row | null = null;
 let profileError: { code?: string; message?: string } | null = null;
 let consentError: { code?: string; message?: string } | null = null;
+// What the admin client's rate_limit_hit RPC answers for the SMS opt-in
+// confirmation send (src/lib/smsOptinLimit.ts). Defaults to "allowed".
+let rateLimitResult: { data: boolean | null; error: { message: string } | null } = {
+  data: true,
+  error: null,
+};
+// Every row saveAccountAction's opt-in confirmation send (via
+// sendNotification -> the in-app "notifications" insert) writes on the
+// session client, so a test can assert the confirmation fired - or didn't -
+// without mocking the whole of src/lib/notify.ts.
+let notificationInserts: Row[] = [];
+
+// src/lib/notify.ts (imported by ./actions.ts for the SMS opt-in
+// confirmation send) imports "server-only" to fail the build if it ever
+// reaches a Client Component; vitest has no such module, same mock every
+// other test that pulls this file in uses.
+vi.mock("server-only", () => ({}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -40,6 +57,14 @@ vi.mock("@/lib/supabase/server", () => ({
       updateUser: async () => ({ error: null }),
     },
     from: (table: string) => {
+      if (table === "notifications") {
+        return {
+          insert: async (row: Row) => {
+            notificationInserts.push(row);
+            return { error: null };
+          },
+        };
+      }
       if (table !== "users") {
         throw new Error(`test does not expect a read/write on "${table}"`);
       }
@@ -58,6 +83,10 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => ({
+    rpc: vi.fn(async (fn: string) => {
+      if (fn === "rate_limit_hit") return rateLimitResult;
+      throw new Error(`test does not expect rpc "${fn}"`);
+    }),
     from: (table: string) => {
       if (table !== "users") {
         throw new Error(`admin write went to "${table}", not users`);
@@ -114,6 +143,8 @@ beforeEach(() => {
   lastConsentUpdate = null;
   profileError = null;
   consentError = null;
+  rateLimitResult = { data: true, error: null };
+  notificationInserts = [];
   vi.mocked(setFlash).mockClear();
 });
 
@@ -132,6 +163,34 @@ describe("saveAccountAction: SMS consent follows the number", () => {
     await run({ full_name: "Sam", phone: "555-0100", sms_consent: "on" });
     expect(lastConsentUpdate).toMatchObject({ sms_consent: true });
     expect(typeof (lastConsentUpdate as Row).sms_consent_at).toBe("string");
+  });
+
+  it("sends the opt-in confirmation once on a fresh false -> true grant", async () => {
+    currentRow = { sms_consent: false, phone: "555-0100" };
+    await run({ full_name: "Sam", phone: "555-0100", sms_consent: "on" });
+    expect(notificationInserts).toHaveLength(1);
+    expect(notificationInserts[0]).toMatchObject({
+      user_id: "user-1",
+      kind: "sms_optin_confirmation",
+    });
+  });
+
+  it("does not repeat the opt-in confirmation on a re-save that leaves consent already on", async () => {
+    currentRow = { sms_consent: true, phone: "555-0100" };
+    await run({ full_name: "Sam", phone: "555-0100", sms_consent: "on" });
+    expect(notificationInserts).toEqual([]);
+  });
+
+  it("does not send the opt-in confirmation when the phoneChanged override forces consent back off", async () => {
+    currentRow = { sms_consent: true, phone: "555-0100" };
+    await run({ full_name: "Sam", phone: "555-0199", sms_consent: "on" });
+    expect(notificationInserts).toEqual([]);
+  });
+
+  it("does not send the opt-in confirmation when the box is left unticked", async () => {
+    currentRow = { sms_consent: false, phone: "555-0100" };
+    await run({ full_name: "Sam", phone: "555-0100" });
+    expect(notificationInserts).toEqual([]);
   });
 
   it("drops consent and its timestamp when the phone changes", async () => {
@@ -186,5 +245,30 @@ describe("saveAccountAction: SMS consent follows the number", () => {
     // The session client never carries the two locked columns.
     expect(lastProfileUpdate).toEqual({ full_name: "Sam", phone: "555-0100" });
     expect(lastConsentUpdate).not.toBeNull();
+  });
+});
+
+// FIX 2 (red team): phone is unverified, so a person could toggle the SMS
+// checkbox off and on repeatedly to blast the opt-in confirmation text at
+// whatever number they currently have entered. src/lib/smsOptinLimit.ts caps
+// this at 2 sends per user per 24 hours via the same rate_limit_hit RPC
+// countAskUsage already uses (src/lib/aiUsage.ts). The account save itself
+// must never be blocked by this - only the text.
+describe("saveAccountAction: SMS opt-in confirmation is rate limited", () => {
+  it("does not send once the shared rate limit is already exhausted (e.g. a third toggle within the window)", async () => {
+    currentRow = { sms_consent: false, phone: "555-0100" };
+    rateLimitResult = { data: false, error: null };
+    const to = await run({ full_name: "Sam", phone: "555-0100", sms_consent: "on" });
+    expect(to).toBe("/account");
+    // The consent flag itself still saves - only the text is withheld.
+    expect(lastConsentUpdate).toMatchObject({ sms_consent: true });
+    expect(notificationInserts).toEqual([]);
+  });
+
+  it("fails closed and does not send when the rate_limit_hit RPC errors", async () => {
+    currentRow = { sms_consent: false, phone: "555-0100" };
+    rateLimitResult = { data: null, error: { message: "db down" } };
+    await run({ full_name: "Sam", phone: "555-0100", sms_consent: "on" });
+    expect(notificationInserts).toEqual([]);
   });
 });

@@ -18,5 +18,5 @@ export function reviewAskMessage(
 ): string {
   const firstName = clientName.trim().split(/\s+/)[0] || clientName;
   const url = `${origin}/contractors?review=${leadId}`;
-  return `Hi ${firstName}, thanks for choosing me for the job! If you have a minute, a quick review on Hearth would mean a lot: ${url}`;
+  return `Hi ${firstName}, thanks for choosing me for the job! If you have a minute, a quick review on OakTend would mean a lot: ${url}`;
 }

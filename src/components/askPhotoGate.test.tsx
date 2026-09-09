@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
-// The fairness fix: a free homeowner should learn a photo needs Hearth Plus
+// The fairness fix: a free homeowner should learn a photo needs OakTend Plus
 // from the attach button itself, before they tap it - never after they've
-// already picked a photo and sent it. See AskHearth's `photoGate` (driven by
+// already picked a photo and sent it. See AskOakTend's `photoGate` (driven by
 // the remembered plan, `hearth_ask_plan[:<uid>]` in localStorage) and the
 // button/label split in the composer.
 
@@ -30,7 +30,7 @@ vi.mock("@/lib/ask-actions", () => ({
 
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 
-import AskHearth from "./AskHearth";
+import AskOakTend from "./AskOakTend";
 
 const PLAN_KEY = "hearth_ask_plan:user-1";
 
@@ -68,11 +68,11 @@ describe("the photo-attach control on a free plan", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await attachControl();
 
     const btn = await screen.findByRole("button", {
-      name: "Attach a photo, requires Hearth Plus",
+      name: "Attach a photo, requires OakTend Plus",
     });
     // The visible tag, matching the dashboard's Plus chip.
     expect(within(btn).getByText("Plus")).toBeInTheDocument();
@@ -84,10 +84,10 @@ describe("the photo-attach control on a free plan", () => {
     // The same gentle lock message the server's own refusal shows, reached
     // without ever having attached anything.
     expect(
-      await screen.findByText("Photos need Hearth Plus.")
+      await screen.findByText("Photos need OakTend Plus.")
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "See what Hearth Plus adds" })
+      screen.getByRole("link", { name: "See what OakTend Plus adds" })
     ).toHaveAttribute("href", "/plus?reason=ask");
 
     // No photo was ever picked, and no request went out: tapping the
@@ -101,7 +101,7 @@ describe("the photo-attach control on a Plus plan", () => {
   it("opens the picker as before, with no Plus tag", async () => {
     rememberedPlan("plus");
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await attachControl();
 
     await waitFor(() => {
@@ -114,14 +114,14 @@ describe("the photo-attach control on a Plus plan", () => {
     expect(document.querySelector('input[type="file"]')).not.toBeNull();
 
     fireEvent.click(screen.getByTitle("Attach a photo"));
-    expect(screen.queryByText("Photos need Hearth Plus.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Photos need OakTend Plus.")).not.toBeInTheDocument();
   });
 });
 
 describe("the photo-attach control on an unknown plan", () => {
   it("opens the picker rather than risk blocking a member", async () => {
     // Nothing remembered: a brand-new device/tab, first turn.
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await attachControl();
 
     await waitFor(() => {
@@ -142,7 +142,7 @@ describe("the photo-attach control on a trial plan", () => {
     // src/app/api/ask/route.ts and the rememberPlan call in applyAllowance.
     rememberedPlan("trial");
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await attachControl();
 
     await waitFor(() => {
@@ -164,7 +164,7 @@ describe("the free-allowance hint under an empty composer", () => {
 
   it("shows for a remembered free plan", async () => {
     rememberedPlan("free");
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await attachControl();
     expect(await screen.findByText(hint)).toBeInTheDocument();
   });
@@ -173,7 +173,7 @@ describe("the free-allowance hint under an empty composer", () => {
     // A trial member is already on the full Plus allowance and has photos, so
     // a pitch for Plus does not belong under their composer.
     rememberedPlan("trial");
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await attachControl();
     expect(screen.queryByText(hint)).not.toBeInTheDocument();
   });
@@ -197,7 +197,7 @@ describe("askTier tells a trial member apart from a free one", () => {
       }))
     );
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     const input = await screen.findByPlaceholderText("Ask anything");
     fireEvent.change(input, { target: { value: "What's this noise?" } });
     const send = screen.getByRole("button", { name: "Send" });
@@ -241,7 +241,7 @@ describe("askTier tells a trial member apart from a free one", () => {
       }))
     );
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     const input = await screen.findByPlaceholderText("Ask anything");
     fireEvent.change(input, { target: { value: "What's this noise?" } });
     const send = screen.getByRole("button", { name: "Send" });
@@ -255,7 +255,7 @@ describe("askTier tells a trial member apart from a free one", () => {
     expect(window.localStorage.getItem(PLAN_KEY)).toBe("free");
     expect(
       await screen.findByRole("button", {
-        name: "Attach a photo, requires Hearth Plus",
+        name: "Attach a photo, requires OakTend Plus",
       })
     ).toBeInTheDocument();
   });
@@ -288,12 +288,12 @@ describe("MED-46: membership is never inferred from a bare ok reply", () => {
         headers: { get: () => "application/json" },
         body: null,
         json: async () => ({
-          answer: "Ask Hearth is temporarily unavailable. Please try again soon.",
+          answer: "Ask OakTend is temporarily unavailable. Please try again soon.",
         }),
       }))
     );
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     const input = await screen.findByPlaceholderText("Ask anything");
     fireEvent.change(input, { target: { value: "What's this noise?" } });
     const send = screen.getByRole("button", { name: "Send" });
@@ -303,7 +303,7 @@ describe("MED-46: membership is never inferred from a bare ok reply", () => {
     });
 
     await screen.findByText(
-      "Ask Hearth is temporarily unavailable. Please try again soon."
+      "Ask OakTend is temporarily unavailable. Please try again soon."
     );
 
     // Still free: an outage-shaped reply must never silently relabel a free
@@ -313,7 +313,7 @@ describe("MED-46: membership is never inferred from a bare ok reply", () => {
     // the back of this reply.
     expect(
       await screen.findByRole("button", {
-        name: "Attach a photo, requires Hearth Plus",
+        name: "Attach a photo, requires OakTend Plus",
       })
     ).toBeInTheDocument();
   });
@@ -333,7 +333,7 @@ describe("MED-46: membership is never inferred from a bare ok reply", () => {
       }))
     );
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     const input = await screen.findByPlaceholderText("Ask anything");
     fireEvent.change(input, { target: { value: "What's this noise?" } });
     const send = screen.getByRole("button", { name: "Send" });
@@ -363,14 +363,14 @@ describe("a server photo lock", () => {
         headers: { get: () => "application/json" },
         body: null,
         json: async () => ({
-          answer: "Photo questions are part of Hearth Plus.",
+          answer: "Photo questions are part of OakTend Plus.",
           locked: true,
-          link: { href: "/plus?reason=ask", label: "See Hearth Plus" },
+          link: { href: "/plus?reason=ask", label: "See OakTend Plus" },
         }),
       }))
     );
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     const input = await screen.findByPlaceholderText("Ask anything");
     fireEvent.change(input, { target: { value: "What's this?" } });
     const send = screen.getByRole("button", { name: "Send" });
@@ -379,14 +379,14 @@ describe("a server photo lock", () => {
       fireEvent.click(send);
     });
 
-    await screen.findByText("Photo questions are part of Hearth Plus.");
+    await screen.findByText("Photo questions are part of OakTend Plus.");
 
     // The verdict is remembered: a reload of this same chat now gates the
     // button before any further tap.
     expect(window.localStorage.getItem(PLAN_KEY)).toBe("free");
     expect(
       await screen.findByRole("button", {
-        name: "Attach a photo, requires Hearth Plus",
+        name: "Attach a photo, requires OakTend Plus",
       })
     ).toBeInTheDocument();
   });

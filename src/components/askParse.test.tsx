@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { parseAssistant } from "./AskHearth";
+import { parseAssistant } from "./AskOakTend";
 
 // What the homeowner must never see is raw [[...]] machinery. The assistant
 // appends action blocks to the END of a reply, so every failure mode here is

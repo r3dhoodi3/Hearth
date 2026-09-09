@@ -176,20 +176,20 @@ export default async function SearchPage(
         )}
       </div>
 
-      {/* Ask Hearth lives only in Messages now (owner's rule, 2026-08-29:
-          "ask hearth can just be on the messages tab to limit potential
+      {/* Ask OakTend lives only in Messages now (owner's rule, 2026-08-29:
+          "ask OakTend can just be on the messages tab to limit potential
           usage") - this page no longer renders it inline. Nothing matched is
           exactly the moment a homeowner wants to ask instead of click, so it
           points at Messages with the same question already typed in, using
-          the ?lead=ask-hearth&q= mechanism src/app/(app)/chats/page.tsx
+          the ?lead=ask-oaktend&q= mechanism src/app/(app)/chats/page.tsx
           already reads (see initialQuestion there). */}
       {q && total === 0 && (
         <section className="space-y-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-            Ask Hearth
+            Ask OakTend
           </h2>
           <Link
-            href={`/chats?lead=ask-hearth&q=${encodeURIComponent(q)}`}
+            href={`/chats?lead=ask-oaktend&q=${encodeURIComponent(q)}`}
             className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 hover:bg-bark-50 max-sm:min-h-11 dark:border-white/10 dark:bg-stone-800 dark:hover:bg-stone-700"
           >
             <span className="text-stone-500 dark:text-stone-400">
@@ -197,7 +197,7 @@ export default async function SearchPage(
             </span>
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium text-stone-900 dark:text-stone-100">
-                Ask Hearth in Messages
+                Ask OakTend in Messages
               </span>
               <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
                 &ldquo;{q}&rdquo;

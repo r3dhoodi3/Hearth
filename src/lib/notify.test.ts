@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // notify.ts imports "server-only" and pulls in the service-role client
 // (createAdminClient), neither of which resolves in a test process. Stubbed
@@ -32,7 +32,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
-import { withinMarketingBudget } from "./notify";
+import { withinMarketingBudget, sendEmail, isEmailOptOutExempt } from "./notify";
 import { MARKETING_BUDGET_MAX_PER_WINDOW } from "./notifyGating";
 
 beforeEach(() => {
@@ -76,5 +76,91 @@ describe("withinMarketingBudget", () => {
     // enum (that full list is asserted in notifyGating.test.ts).
     expect(notCalls[0].value).toContain("message");
     expect(notCalls[0].value).toContain("payment_failed");
+  });
+});
+
+// The CAN-SPAM opt-out exemption: unsubscribing turns off digests and
+// product updates, never the mail about a person's own account, billing, or
+// an active job (see the /unsubscribe confirmation copy and the "never gate
+// a billing notice" reasoning in src/lib/notifyGating.ts). sendEmail is
+// driven directly here (knownOptOut passed explicitly) so the database
+// opt-out lookup never has to be mocked: isEmailOptOutExempt short-circuits
+// the whole check before that lookup would run.
+describe("email opt-out exemption", () => {
+  const email = "member@example.com";
+
+  beforeEach(() => {
+    vi.stubEnv("RESEND_API_KEY", "test-key");
+    vi.stubEnv("RESEND_FROM", "OakTend <hello@example.com>");
+    // sendEmail signs an unsubscribe link with this secret; a real value here
+    // is what lets execution reach the fetch() call at all instead of the
+    // outer try/catch silently swallowing a thrown signing error.
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({}) }))
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("isEmailOptOutExempt: exempts transactional/billing kinds, not digests", () => {
+    expect(isEmailOptOutExempt("renewal_acknowledgment")).toBe(true);
+    expect(isEmailOptOutExempt("payment_failed")).toBe(true);
+    expect(isEmailOptOutExempt("home_digest")).toBe(false);
+    expect(isEmailOptOutExempt("seasonal_check")).toBe(false);
+  });
+
+  it("blocks a digest kind for an opted-out recipient", async () => {
+    await sendEmail(
+      { userId: "user-1", kind: "home_digest", title: "Your home digest", email },
+      /* knownOptOut */ true
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not block a transactional kind for an opted-out recipient", async () => {
+    await sendEmail(
+      {
+        userId: "user-1",
+        kind: "renewal_acknowledgment",
+        title: "Your OakTend Plus subscription",
+        email,
+      },
+      /* knownOptOut */ true
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  // EMAIL_TRANSACTIONAL_KINDS is now an explicit allowlist, not the union
+  // with TRANSACTIONAL_NOTIFICATION_KINDS (src/lib/notifyGating.ts). That
+  // union used to carry new_review, referral_reward, and the freeze/heat/
+  // high_wind/heavy_rain/recall safety alerts into email's opt-out exemption
+  // too, even though none of those is account, billing, or active-job mail.
+  it("blocks a new_review email for an opted-out recipient", async () => {
+    await sendEmail(
+      { userId: "user-1", kind: "new_review", title: "You got a new review", email },
+      /* knownOptOut */ true
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("blocks a freeze-warning email for an opted-out recipient", async () => {
+    await sendEmail(
+      { userId: "user-1", kind: "freeze", title: "Freeze warning tonight", email },
+      /* knownOptOut */ true
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("still sends a payment_failed email to an opted-out recipient", async () => {
+    await sendEmail(
+      { userId: "user-1", kind: "payment_failed", title: "Your payment failed", email },
+      /* knownOptOut */ true
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notify";
 
-// Hearth Pro perk: automated review requests. When a Pro member marks a job
+// OakTend Pro perk: automated review requests. When a Pro member marks a job
 // Won (closed), the homeowner gets a friendly nudge to leave a review, linking
 // to /contractors where the review form lives (ReviewButton on the job row).
 // This only ASKS: it never touches rating math, ordering, or who is allowed to

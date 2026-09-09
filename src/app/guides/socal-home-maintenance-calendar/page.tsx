@@ -7,7 +7,7 @@ import Breadcrumbs, { BreadcrumbJsonLd } from "@/components/Breadcrumbs";
 // door-hanger QR code points at. Written coastal-SoCal-generic on purpose
 // (it needs to read as honest and useful in any coastal SoCal city, not just
 // the launch market) with Fountain Valley / Huntington Beach mentioned once
-// as Hearth's home market rather than framing the whole page around them.
+// as OakTend's home market rather than framing the whole page around them.
 // Cadence claims mirror src/app/guides/home-maintenance-schedule/page.tsx;
 // the climate-specific timing (AC strain, termite swarms, Santa Ana winds,
 // first rain) is standard, widely published Southern California guidance,
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "article",
   },
   twitter: {
@@ -334,7 +334,7 @@ export default function SocalHomeMaintenanceCalendarGuide() {
         Month by month, built around the coastal SoCal climate: AC strain in
         late summer, drywood termite swarm season, Santa Ana winds, and the
         first fall rain. Written for coastal Southern California generally,
-        including all of Orange County, where Hearth serves homeowners.
+        including all of Orange County, where OakTend serves homeowners.
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">

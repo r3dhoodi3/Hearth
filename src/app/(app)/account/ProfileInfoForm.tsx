@@ -6,6 +6,7 @@ import { saveAccountAction } from "./actions";
 import PhoneInput from "@/components/PhoneInput";
 import InlineSpinner from "@/components/InlineSpinner";
 import type { UserProfile } from "@/lib/database.types";
+import { LEGAL } from "@/lib/legal";
 
 function FieldIcon({ children }: { children: React.ReactNode }) {
   return (
@@ -100,9 +101,18 @@ export default function ProfileInfoForm({
             Text me at this number for account and job-related messages (like
             a reminder to review a pro after a job). Message and data rates
             may apply. Message frequency varies. Reply STOP to opt out, HELP
-            for help.
+            for help. This number is never used for marketing from other
+            companies.
           </span>
         </label>
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Consent isn&apos;t required to use {LEGAL.brand} or to buy anything.
+          See our{" "}
+          <Link href="/sms-terms" className="underline hover:text-stone-700 dark:hover:text-stone-300">
+            SMS Terms
+          </Link>
+          .
+        </p>
 
       </div>
 

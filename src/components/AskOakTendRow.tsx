@@ -5,19 +5,19 @@ import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { plainPreview } from "@/lib/previewText";
 
-// The pinned "Ask Hearth" entry at the top of a conversation list. On a phone
+// The pinned "Ask OakTend" entry at the top of a conversation list. On a phone
 // the assistant lives INSIDE Messages rather than in its own bottom tab or a
 // floating pill, so this row is the way in: it looks like a conversation
 // because that is what it is, and tapping it opens the full-screen view
 // (/ask, /pro/ask).
 //
-// The conversation itself is browser-local (AskHearth keeps it in
+// The conversation itself is browser-local (AskOakTend keeps it in
 // localStorage, namespaced per user id), so the last-message preview can only
 // be read on the client. The server renders the subtitle; this swaps in the
-// real preview once mounted, and again whenever an AskHearth instance on the
+// real preview once mounted, and again whenever an AskOakTend instance on the
 // same page writes a new message.
 
-// Mirrors AskHearth's own retention windows, so a preview never shows a line
+// Mirrors AskOakTend's own retention windows, so a preview never shows a line
 // the conversation has already aged out.
 const RETENTION_MS: Record<string, number> = {
   "24h": 24 * 60 * 60 * 1000,
@@ -25,8 +25,8 @@ const RETENTION_MS: Record<string, number> = {
   "1m": 30 * 24 * 60 * 60 * 1000,
   never: Infinity,
 };
-// The event AskHearth fires after it persists a change.
-const SYNC_EVENT = "hearth:ask-updated";
+// The event AskOakTend fires after it persists a change.
+const SYNC_EVENT = "oaktend:ask-updated";
 
 type StoredMsg = {
   role?: "user" | "assistant";
@@ -35,7 +35,7 @@ type StoredMsg = {
   ts?: number;
 };
 
-export default function AskHearthRow({
+export default function AskOakTendRow({
   href,
   desktopHref,
   subtitle,
@@ -48,17 +48,17 @@ export default function AskHearthRow({
   // Where a tap goes on a phone (and everywhere, unless desktopHref is set).
   href: string;
   // Optional md-and-up destination. The homeowner inbox hosts its own Ask
-  // Hearth pane, so on desktop this row keeps selecting that pane instead of
+  // OakTend pane, so on desktop this row keeps selecting that pane instead of
   // navigating away from the two-pane inbox.
   desktopHref?: string;
   subtitle: string;
-  // Key BASES, matching what the matching AskHearth mount is given.
+  // Key BASES, matching what the matching AskOakTend mount is given.
   storageKeyBase: string;
   retentionKeyBase: string;
   // The signed-in user's id, which namespaces those keys. Passed from the
   // server so this row doesn't pay for an auth round trip of its own.
   userId: string | null;
-  accent?: "bark" | "hearth";
+  accent?: "bark" | "oaktend";
   active?: boolean;
 }) {
   const [preview, setPreview] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export default function AskHearthRow({
         // The STORED content, not the rendered bubble: an assistant reply
         // carries markdown and the machine-readable [[TAG]]{...}[[/TAG]]
         // action blocks the chat strips before it renders (parseAssistant in
-        // AskHearth.tsx). This row printed all of it, so a preview could read
+        // AskOakTend.tsx). This row printed all of it, so a preview could read
         // `**Here's what I'd do:** [[OPTIONS]]{"options":[...]}[[/OPTIONS]]`.
         // plainPreview (@/lib/previewText) is the display-only version of that
         // strip, with no React or chat UI behind it.
@@ -118,16 +118,16 @@ export default function AskHearthRow({
 
   // Full class strings per accent so Tailwind's compiler can see them.
   const shell =
-    accent === "hearth"
+    accent === "oaktend"
       ? active
-        ? "border-hearth-500 bg-hearth-50 dark:border-hearth-400 dark:bg-hearth-900/40"
+        ? "border-oaktend-500 bg-oaktend-50 dark:border-oaktend-400 dark:bg-oaktend-900/40"
         : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700"
       : active
         ? "border-bark-600 bg-bark-50 dark:bg-bark-700/40"
         : "border-transparent hover:bg-stone-50 dark:hover:bg-stone-700";
   const badge =
-    accent === "hearth"
-      ? "bg-hearth-100 text-hearth-700 dark:bg-hearth-900/50 dark:text-hearth-300"
+    accent === "oaktend"
+      ? "bg-oaktend-100 text-oaktend-700 dark:bg-oaktend-900/50 dark:text-oaktend-300"
       : "bg-bark-100 text-bark-700 dark:bg-bark-700/40 dark:text-stone-300";
 
   function body() {
@@ -141,7 +141,7 @@ export default function AskHearthRow({
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-2">
             <span className="truncate font-medium text-stone-900 dark:text-stone-100">
-              Ask Hearth
+              Ask OakTend
             </span>
             <span className="shrink-0 text-xs text-stone-500 dark:text-stone-400">
               Assistant

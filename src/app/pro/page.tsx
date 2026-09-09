@@ -20,7 +20,7 @@ import {
 import { hasCurrentInsurance } from "@/lib/insuranceGate";
 import { countAwaitingReply } from "@/lib/proHomeServer";
 import { buildProStats } from "@/lib/proStats";
-import { readFeedbackState, grantFeedbackCredit } from "@/lib/proFeedbackServer";
+import { readFeedbackState } from "@/lib/proFeedbackServer";
 // The body is one client component. That is a streaming fix, not a behaviour
 // change: DBG3's SetupChecklist fix took this page from eight nested stream
 // holes to one, but the page's own Flight row still deferred the entire
@@ -193,20 +193,11 @@ export default async function ProHome() {
   // which case nothing renders.
   const expiring = expiryChips(contractor);
 
-  // Feedback credit state, and the retry that makes the "grant when they later
-  // qualify" case work without a cron: if the note is already on file, the
-  // credit was never claimed, and this pro has since become established, grant
-  // it now. Costs two indexed reads on a page that is already doing several,
-  // and the SQL function is idempotent, so a double render cannot double pay.
-  const feedback = await readFeedbackState(
-    contractor.id,
-    contractor.user_id ?? ""
-  );
+  // Whether this business has ever sent a bug report (C7, 2026-09-07: credit
+  // is no longer automatic, so this is display-only - has the door been
+  // opened before, not whether anything was paid).
+  const feedback = await readFeedbackState(contractor.id);
   const established = await isEstablishedPro(contractor.id);
-  let feedbackClaimed = feedback.claimed;
-  if (feedback.sent && !feedback.claimed && established) {
-    feedbackClaimed = await grantFeedbackCredit(contractor.id);
-  }
 
   // The membership nudge is for a pro with a real business who is not paying
   // us, and never for a member. The trial label needs the Pro-side
@@ -266,9 +257,7 @@ export default async function ProHome() {
             }
           : null
       }
-      feedbackClaimed={feedbackClaimed}
       feedbackSent={feedback.sent}
-      established={established}
       showNudge={showNudge}
       nudgeTrialEligible={nudgeTrialEligible}
       latestRows={latestRows.map((r: any) => ({

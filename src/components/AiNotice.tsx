@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 // The single inline "this was written by a model" label that sits with every
-// piece of AI-generated output in the app (Ask Hearth's composer, the quote
+// piece of AI-generated output in the app (Ask OakTend's composer, the quote
 // analyzer verdict, the pro back-office drafts, inspection/document
 // extraction, the tax appeal letter, the insurance packet).
 //
@@ -25,7 +25,7 @@ export default function AiNotice({
   className?: string;
 }) {
   // max-sm:text-sm on the xxs size: 11px grey on near-white is unreadable on a
-  // phone, and the only surface asking for xxs is Ask Hearth's composer, which
+  // phone, and the only surface asking for xxs is Ask OakTend's composer, which
   // is one of the two screens the phone push is built around. 14px there, the
   // unchanged 11px from sm up.
   const sizeClass = size === "xxs" ? "text-[11px] max-sm:text-sm" : "text-xs";
@@ -39,7 +39,7 @@ export default function AiNotice({
         href="/ai-disclosure"
         className="underline decoration-dotted hover:text-stone-600 dark:hover:text-stone-300"
       >
-        How Hearth uses AI
+        How OakTend uses AI
       </Link>
     </p>
   );

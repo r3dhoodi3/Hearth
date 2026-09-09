@@ -18,9 +18,9 @@ describe("reviewAskMessage (CR4#4, Won-stage review template)", () => {
     expect(msg).toContain("https://hearth.com/contractors?review=lead-abc-123");
   });
 
-  it("mentions Hearth by name", () => {
+  it("mentions OakTend by name", () => {
     const msg = reviewAskMessage("Maria", "lead-1", "https://hearth.com");
-    expect(msg).toContain("Hearth");
+    expect(msg).toContain("OakTend");
   });
 
   it("stays SMS length (well under the 160-char single-segment guideline for a short name)", () => {

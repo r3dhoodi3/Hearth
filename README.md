@@ -1,9 +1,9 @@
-# Hearth
+# OakTend
 
 A homeowner maintenance tool with a home-services marketplace attached. The
 owner's job-to-be-done is the product: keep my house in good shape, tell me
 what needs attention, store my home docs, and get me a trustworthy contractor
-when something breaks. Pros pay for leads; homeowners can upgrade to Hearth
+when something breaks. Pros pay for leads; homeowners can upgrade to OakTend
 Plus for proactive alerts and reports.
 
 Launching in Orange County, CA: Huntington Beach, Fountain Valley, Seal
@@ -26,9 +26,9 @@ For the current state of the project, decisions, and what is next, read
   tax appeal, insurance check-up, inspection ingest, walkthrough
 - Documents vault, home report (printable), emergency help, guides
 - Household sharing (invite members by link)
-- Ask Hearth assistant (Anthropic's Claude)
+- Ask OakTend assistant (Anthropic's Claude)
 - Account: security, notifications, privacy rights, help
-- Hearth Plus subscription via Stripe (free / annual / monthly)
+- OakTend Plus subscription via Stripe (free / annual / monthly)
 
 **Pro side** (`src/app/pro/`)
 
@@ -38,7 +38,7 @@ For the current state of the project, decisions, and what is next, read
   wallet, first-apply guarantee, refunds
 - CRM, past jobs, structured quotes and invoices, reviews, win cards, widget
 - Pro Plus, playbook, tools, weekly digest, compliance calendar
-- Background checks (Checkr) paid by Hearth after 3 paid leads
+- Background checks (Checkr) paid by OakTend after 3 paid leads
 
 **Public** (`src/app/`)
 
@@ -85,7 +85,7 @@ src/lib/*.test.ts      unit tests (co-located)
 src/app/               public pages, signup/signin, onboarding, api routes
 src/app/(app)/         signed-in homeowner shell
 src/app/pro/           signed-in pro shell
-src/components/        shared UI (Nav, AskHearth, ChatDock, PhotoUpload, ...)
+src/components/        shared UI (Nav, AskOakTend, ChatDock, PhotoUpload, ...)
 docs/                  go-live wiring, deploy runbook, launch playbook,
                        Apple sign-in setup, App Store checklist, pricing notes
 HANDOFF.md             current state, decisions, next steps, gotchas
@@ -119,7 +119,7 @@ Optional, each turns on one feature and is skipped when missing:
 - `STRIPE_SECRET_KEY` (+ price ids, webhook secret): checkout, billing portal,
   wallet top-ups. Pages load without it; billing actions fail with an error that
   names the variable. A test-mode key works locally.
-- `ANTHROPIC_API_KEY`: Ask Hearth, quote analysis, document extraction, and
+- `ANTHROPIC_API_KEY`: Ask OakTend, quote analysis, document extraction, and
   every other AI feature. All of them run on Claude.
 - `RENTCAST_API_KEY`: county-record prefill in onboarding and home value.
 - `RESEND_API_KEY`/`RESEND_FROM`, `TWILIO_*`: email and SMS; senders no-op
@@ -193,7 +193,7 @@ because it still covers the dev-server path.
 
 - **Condition signal**: `home_systems` + `issues` are most of the value.
 - **Revenue**: pros buy leads (`contractor_leads`) with a prepaid wallet;
-  homeowners subscribe to Hearth Plus. No license or RESPA exposure.
+  homeowners subscribe to OakTend Plus. No license or RESPA exposure.
 - **Sell-intent** lives in a separate `intent_signals` table with a
   `shared_consent` flag. Opt-in warm intros only; see [PRIVACY.md](./PRIVACY.md).
 

@@ -5,8 +5,13 @@ import { updateJobAction } from "./actions";
 import { TIMING_OPTIONS } from "@/lib/constants";
 import CategoryFilter from "./CategoryFilter";
 import PhoneInput from "@/components/PhoneInput";
+import {
+  normalizeContactEmail,
+  normalizeContactPhone,
+} from "@/lib/contactFields";
+import { parseOtherService } from "./otherService";
 
-const MIN_DESCRIPTION = 20;
+const MIN_DESCRIPTION = 10;
 
 // Inline editor for a posted job. Shows an "Edit" link that opens a prefilled
 // form (same fields as posting). Calls updateJobAction programmatically so it
@@ -17,6 +22,10 @@ export default function EditJobForm({ job }: { job: any }) {
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Splits an "Other" job's stored description back into the owner's service
+  // name and the description proper (see ./otherService.ts). A no-op for
+  // every other category: name is "" and rest is the description as stored.
+  const otherService = parseOtherService(job.issue_description ?? "");
 
   if (!editing) {
     return (
@@ -41,10 +50,28 @@ export default function EditJobForm({ job }: { job: any }) {
     <form
       onSubmit={async (e) => {
         e.preventDefault();
-        setPending(true);
         setError(null);
+        const fd = new FormData(e.currentTarget);
+        const email = String(fd.get("homeowner_email") ?? "").trim();
+        const phone = String(fd.get("homeowner_phone") ?? "").trim();
+        if (!email && !phone) {
+          setError("Please add an email or phone number so pros can reach you.");
+          return;
+        }
+        // Same shape checks the action runs (src/lib/contactFields.ts), so a
+        // half-typed phone number is caught before the round trip.
+        if (
+          (email && normalizeContactEmail(email) === null) ||
+          (phone && normalizeContactPhone(phone) === null)
+        ) {
+          setError(
+            "That email address or phone number doesn't look right. Please check it and try again."
+          );
+          return;
+        }
+        setPending(true);
         try {
-          const res = await updateJobAction(new FormData(e.currentTarget));
+          const res = await updateJobAction(fd);
           if (res.ok) setEditing(false);
           else setError(res.error);
         } catch {
@@ -61,7 +88,15 @@ export default function EditJobForm({ job }: { job: any }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="label">What do you need?</label>
-          <CategoryFilter category={job.category ?? ""} />
+          {/* An "Other" job keeps its service name inside the description as
+              a "Service needed: ..." prefix (there is no column for it), so
+              the edit form pulls it back out: without this the inline field
+              opened blank and `required` forced the owner to retype the name
+              on every unrelated edit. */}
+          <CategoryFilter
+            category={job.category ?? ""}
+            otherDefault={otherService.name}
+          />
         </div>
         <div>
           <label className="label">Preferred timing</label>
@@ -79,20 +114,25 @@ export default function EditJobForm({ job }: { job: any }) {
         </div>
       </div>
       <div>
-        {/* Not "optional": updateJobAction enforces the same 20-character
+        {/* Not "optional": updateJobAction enforces the same 10-character
             floor postJobAction does (pros pay to apply, so an edit can't
             blank out what they're applying to). minLength surfaces that in
             the browser before the action rejects it. */}
         <label className="label">Details about your project</label>
+        {/* The stored description for an "Other" job carries the service name
+            as a "Service needed: ..." prefix; this box shows only what the
+            owner typed, and updateJobAction puts the prefix back on save.
+            For every other category parseOtherService hands the description
+            back untouched. */}
         <textarea
           name="message"
           className="textarea"
           rows={3}
           minLength={MIN_DESCRIPTION}
-          defaultValue={job.issue_description ?? ""}
+          defaultValue={otherService.rest}
         />
         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-          At least 20 characters so pros know what they&apos;re applying to.
+          At least 10 characters so pros know what they&apos;re applying to.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -106,7 +146,7 @@ export default function EditJobForm({ job }: { job: any }) {
           />
         </div>
         <div>
-          <label className="label">Email (optional)</label>
+          <label className="label">Email</label>
           <input
             name="homeowner_email"
             type="email"
@@ -115,13 +155,13 @@ export default function EditJobForm({ job }: { job: any }) {
           />
         </div>
         <div>
-          <label className="label">Phone (optional)</label>
+          <label className="label">Phone</label>
           <PhoneInput
             name="homeowner_phone"
             defaultValue={job.homeowner_phone ?? ""}
           />
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-            So pros can reach you faster (optional).
+            Add email or phone, whichever&apos;s easiest for pros to reach you.
           </p>
         </div>
       </div>

@@ -13,7 +13,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   title: "Message sent",
-  description: "Your message to Hearth was sent.",
+  description: "Your message to OakTend was sent.",
   alternates: {
     canonical: `${SITE_URL}/contact/thanks`,
   },
@@ -33,7 +33,7 @@ export default function ContactThanksPage() {
           href="/"
           className="text-stone-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-400 dark:hover:text-stone-300"
         >
-          ← Hearth
+          ← OakTend
         </Link>
       </p>
 
@@ -46,7 +46,7 @@ export default function ContactThanksPage() {
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <Link href="/" className="btn-primary text-center">
-          Back to Hearth
+          Back to OakTend
         </Link>
         <Link href="/guides" className="btn-secondary text-center">
           Browse the guides

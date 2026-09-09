@@ -20,7 +20,7 @@ describe("OnboardingValueBullets", () => {
       )
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Scan a warranty or receipt and Hearth files it for you")
+      screen.getByText("Scan a warranty or receipt and OakTend files it for you")
     ).toBeInTheDocument();
   });
 });

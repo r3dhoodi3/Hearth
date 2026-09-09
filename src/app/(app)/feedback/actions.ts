@@ -87,7 +87,7 @@ export async function getReviewPromptSignals(): Promise<ReviewPromptSignals | nu
     const rateDeferred = kinds.has("rate_deferred");
 
     // "Claimed a home" from the owner's four-way OR (the other three are
-    // posted a job, asked Ask Hearth 3+ times, and a pro applied to a job).
+    // posted a job, asked Ask OakTend 3+ times, and a pro applied to a job).
     // Only this one is actually checked: src/app/(app)/layout.tsx - the only
     // place ReviewPrompt is mounted - redirects to /onboarding for anyone
     // with zero properties, so by the time this code runs the answer is
@@ -124,7 +124,7 @@ export async function getReviewPromptSignals(): Promise<ReviewPromptSignals | nu
 // 'loved' / 'not_really' when a button on the first card is tapped,
 // 'rate_clicked' when they tap through to the App Store, and then 'rated' or
 // 'rate_deferred' depending on how they answer "did you get a chance to rate
-// Hearth?" when they come back. Only 'rated' and 'not_really' end the
+// OakTend?" when they come back. Only 'rated' and 'not_really' end the
 // prompt for good. Best effort and silent on failure - a homeowner tapping a
 // review prompt button must never see an error toast over it, and the worst
 // case of a dropped write is one extra ask later, not a broken page.

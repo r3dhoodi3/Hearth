@@ -47,6 +47,10 @@ vi.mock("@/lib/supabase/client", () => ({
         }),
         update: () => api,
         in: async () => ({ error: null }),
+        // markOneRead's per-row update, keyed by id. Scoped by the
+        // notifications RLS policy server-side (0026_notifications.sql:36),
+        // so an id that is not this user's matches nothing.
+        eq: async () => ({ error: null }),
       });
       return api;
     },
@@ -170,14 +174,17 @@ describe("NotificationBell on a phone", () => {
     installMatchMedia();
   });
 
-  it("opens as a bottom sheet instead of a dropdown", async () => {
+  it("opens as a top sheet instead of a dropdown", async () => {
     await openPanel();
     const sheet = screen.getByTestId("notification-sheet");
     expect(sheet).toBeInTheDocument();
     expect(screen.queryByTestId("notification-panel")).toBeNull();
-    // Anchored to the bottom of the viewport and above the fixed tab bar.
+    // Anchored under the header, not the bottom of the viewport.
     expect(sheet.querySelector('[role="dialog"]')?.className).toContain(
-      "fixed inset-x-0 bottom-0"
+      "fixed inset-x-3"
+    );
+    expect(sheet.querySelector('[role="dialog"]')?.className).not.toContain(
+      "bottom-0"
     );
   });
 
@@ -374,5 +381,58 @@ describe("NotificationBell unread badge on open", () => {
     expect(
       screen.getByRole("button", { name: "Notifications" })
     ).toBeInTheDocument();
+  });
+});
+
+// A11: "mark as read" has to make the notification disappear, and the control
+// that does it has to still be on screen when a thumb arrives. loadList marks
+// the whole fetched batch read a few hundred ms after the panel opens, so
+// anything gated on read_at (the per-row dot) or on the unread count itself
+// ("Mark all read") disappears right after every open unless it is written to
+// survive that.
+describe("NotificationBell mark as read", () => {
+  it("keeps a per-row control after the batch is auto-marked read, and drops the row when it is used", async () => {
+    await openPanel();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const control =
+      screen.queryByRole("button", { name: "Mark as read" }) ??
+      screen.getByRole("button", { name: "Dismiss notification" });
+
+    await act(async () => {
+      fireEvent.click(control);
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText("New message")).toBeNull();
+  });
+
+  it("keeps Mark all read on screen once the badge has dropped to zero", async () => {
+    // 1 unread at mount, 0 left after loadList marks the visible batch: the
+    // exact state where a badge-gated button would leave the screen even
+    // though there is still a row on it to clear.
+    queueUnreadCounts(1, 0);
+    await openPanel();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("button", { name: /Mark all read/ })
+    ).toBeInTheDocument();
+  });
+
+  it("empties the list when Mark all read is used", async () => {
+    await openPanel();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Mark all read/ }));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText("New message")).toBeNull();
   });
 });

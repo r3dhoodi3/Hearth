@@ -59,10 +59,10 @@ describe("ProNav: five tabs, Home first", () => {
   it("lights Home on exactly /pro, never as a prefix of every pro route", () => {
     // Without this carve-out in NavLinks, /pro would be "active" on
     // /pro/leads, /pro/chats and every other pro screen at once.
-    expect(navLinksSrc).toContain('l.href !== "/pro" &&');
+    expect(navLinksSrc).toContain('href !== "/pro" &&');
     // ...while /pro/leads has no carve-out, so it lights on itself and its
     // own children through the startsWith branch.
-    expect(navLinksSrc).not.toContain('l.href !== "/pro/leads"');
+    expect(navLinksSrc).not.toContain('href !== "/pro/leads"');
   });
 
   it("keeps Messages lit while the copilot is open", () => {

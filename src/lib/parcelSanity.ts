@@ -38,7 +38,7 @@ export const SMALL_HOME_SQFT = 5_000;
 
 // Property types whose county record is filed against a building rather than
 // the dwelling. Normalized so RentCast's own wording ("Multi-Family",
-// "Apartment") and Hearth's stored enum ("multi_family") both land here.
+// "Apartment") and OakTend's stored enum ("multi_family") both land here.
 const BUILDING_LEVEL_TYPES = new Set([
   "condo",
   "condominium",
@@ -54,7 +54,7 @@ export type HomeFigureContext = {
   // The unit/apt designator the homeowner entered, if any. Its presence alone
   // means the county record for the street line is not this home's.
   unit?: string | null;
-  // The home's property type, either Hearth's enum or the provider's wording.
+  // The home's property type, either OakTend's enum or the provider's wording.
   propertyType?: string | null;
   // Living area, used only by the absolute-ceiling rule.
   sqft?: number | null;

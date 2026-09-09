@@ -58,6 +58,8 @@ export type ProOnboardingValues = {
   cities: readonly string[];
   /** Canonical category values plus any typed "Other" service. */
   categories: readonly string[];
+  /** The Pro Terms onboarding acknowledgment checkbox (Pro Terms appendix). */
+  agreedToProTerms: boolean;
 };
 
 // A US number, the only shape PhoneInput can produce (it caps input at ten
@@ -106,6 +108,16 @@ export function validateProOnboardingStep(
       const custom = picked.filter((c) => !isAllowedValue(JOB_CATEGORIES, c));
       if (custom.length > 0 && !custom.some((c) => isAcceptableCustomCategory(c))) {
         return CUSTOM_CATEGORY_REJECTED;
+      }
+      return null;
+    }
+    case 2: {
+      // Pro Terms appendix: required to finish onboarding, unlike the SMS
+      // consent checkbox on this same "Almost done" panel. Server-side floor
+      // in saveCompanyAction (../actions.ts) stands underneath this either
+      // way; this is only the helpful inline message.
+      if (!values.agreedToProTerms) {
+        return "Please confirm the Pro Terms acknowledgment to continue.";
       }
       return null;
     }

@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  OakTend app-level privacy manifest (2026-09-07, appstore-execute).
+
+  This declares OUR bundle's own use of "required reason" APIs and the data
+  types OUR app collects. It does NOT replace each third-party plugin's own
+  manifest - Capacitor core, RevenueCat, and the push/apple-sign-in plugins
+  each ship (or should ship) their own PrivacyInfo.xcprivacy bundled inside
+  their .xcframework/.swiftpm; Xcode merges all of them at archive time.
+  TODO(appstore): when building on the Mac, run `xcodebuild -showBuildSettings`
+  or inspect the archived .ipa's PrivacyInfo.xcprivacy merge to confirm every
+  plugin actually shipped one for its installed version - the research report
+  (appstore-research.md section 1) flagged this as "should be verified
+  per-plugin version at build time, not assumed."
+
+  REQUIRED REASON APIS DECLARED BELOW, and why:
+  - NSPrivacyAccessedAPICategoryUserDefaults: @capacitor/preferences (native
+    key-value storage) reads/writes UserDefaults under the hood. Reason
+    CA92.1 ("access info from same app, per Apple's own examples") - Capacitor
+    Preferences never reads another app's or the system's defaults, only
+    OakTend's own.
+  - NSPrivacyAccessedAPICategoryFileTimestamp: Capacitor's core runtime and
+    several plugins (file caching for the WebView, RevenueCat's local
+    receipt cache) touch file modification/creation timestamps as a normal
+    side effect of file I/O. Reason C617.1 ("display to the user in the
+    app's UI" is NOT the reason here - OakTend never shows a file timestamp
+    to the user - so DDA9.1 "access timestamps of files inside the app's own
+    container, app group container, or CloudKit container" is the correct
+    code: nothing here reads timestamps outside the app's own sandbox).
+
+  DATA TYPES COLLECTED, mapped to what actually happens in the codebase (see
+  docs/APP-STORE-SUBMISSION.md for the full App Store Connect nutrition-label
+  mapping - this file only needs the fields Apple's manifest schema wants):
+  name/email/phone -> account functionality, linked to identity, not used for
+  tracking. Photos -> app functionality (job/system photos), linked to
+  identity. Precise/coarse location is NOT collected (no geolocation API call
+  found in the codebase as of this scan - see the research report). Financial
+  info (Stripe/RevenueCat payment data) -> app functionality, processed by
+  those third parties, not stored by OakTend itself beyond a plan/status row.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeName</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeEmailAddress</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhoneNumber</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhysicalAddress</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePaymentInfo</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCustomerSupport</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>DDA9.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

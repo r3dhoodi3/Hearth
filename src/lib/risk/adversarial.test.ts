@@ -125,7 +125,7 @@ describe("FIXED: a spouse on the family iPad", () => {
 // A single honest cancellation inside a free trial writes ONE abuse_flags row
 // of kind 'trial_abuse'. facts.ts used to read that one row into TWO separate
 // facts: sharesIpOrDeviceWithFlaggedAccount (40) and linkedToTrialCanceller
-// (25). 65 points, from one person deciding Hearth was not for them.
+// (25). 65 points, from one person deciding OakTend was not for them.
 //
 // FIXED: 'trial_abuse' no longer feeds the +40 flagged-neighbour weight at all
 // (only 'chargeback' and hand-written 'manual' flags do), and
@@ -168,7 +168,7 @@ describe("FIXED: one cancelled trial next door", () => {
 // FALSE POSITIVE 3 - carrier NAT.
 // ===========================================================================
 // A phone on T-Mobile or Verizon shares one egress IP with thousands of other
-// subscribers. Three Hearth accounts behind that IP inside a week is not a
+// subscribers. Three OakTend accounts behind that IP inside a week is not a
 // coincidence to be explained, it is Tuesday.
 //
 // WAS: the link RPC had no time filter at all, so a DHCP address recycled a year
@@ -410,7 +410,7 @@ describe("FIXED: the card signal now reaches a decision", () => {
 // score.ts used to claim, in its own tuning notes: "A single shared card, a
 // single shared IP, or a single disposable inbox all land in `medium`". None of
 // the three did. cardSharedWithOther was 35, MEDIUM_AT is 40, so the single most
-// useful thing this system can learn - "this card is already on another Hearth
+// useful thing this system can learn - "this card is already on another OakTend
 // account" - changed nothing.
 //
 // FIXED: cardSharedWithOther raised to 40, exactly the medium edge, so a shared

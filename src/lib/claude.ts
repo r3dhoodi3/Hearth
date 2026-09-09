@@ -3,7 +3,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 
-// Every AI feature in Hearth runs on Anthropic Claude through the official
+// Every AI feature in OakTend runs on Anthropic Claude through the official
 // SDK. There is exactly one model id here on purpose: the old Gemini call
 // sites each carried their own four-model fallback ladder (free-tier quotas
 // meant a 429 on one model had to fall through to the next), and because
@@ -69,7 +69,7 @@ const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
 };
 
 /**
- * EVERY model call in Hearth, in one table.
+ * EVERY model call in OakTend, in one table.
  *
  * Each route names its model, its output ceiling, and its reasoning settings
  * here rather than at the call site, so "what does this feature cost" is one
@@ -578,7 +578,7 @@ function buildSystem(
       // end of the whole prompt: a marker after a volatile tail writes a fresh
       // cache entry every request and reads none of them.
       //
-      // ttl "1h" rather than the default 5 minutes, because Hearth's traffic
+      // ttl "1h" rather than the default 5 minutes, because OakTend's traffic
       // shape is gaps, not bursts: a homeowner asks a question, goes to look
       // at the water heater, and comes back ten minutes later. At 5 minutes
       // that second question paid full price for a prefix we had already

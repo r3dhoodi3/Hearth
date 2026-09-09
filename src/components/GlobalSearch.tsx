@@ -134,21 +134,21 @@ export default function GlobalSearch({
   const askHref =
     side === "pro"
       ? `/pro/ask?q=${encodeURIComponent(trimmed)}`
-      : `/chats?lead=ask-hearth&q=${encodeURIComponent(trimmed)}`;
-  // The two shells keep their own accents: bark on the homeowner side, hearth
+      : `/chats?lead=ask-oaktend&q=${encodeURIComponent(trimmed)}`;
+  // The two shells keep their own accents: bark on the homeowner side, OakTend
   // ember on the pro side, matching each header's palette.
   const focusBorder =
     side === "pro"
-      ? "focus:border-hearth-500 dark:focus:border-hearth-500"
+      ? "focus:border-oaktend-500 dark:focus:border-oaktend-500"
       : "focus:border-bark-500 dark:focus:border-bark-500";
-  const rowHover = side === "pro" ? "hover:bg-hearth-50" : "hover:bg-bark-50";
-  const rowActive = side === "pro" ? "bg-hearth-50" : "bg-bark-50";
+  const rowHover = side === "pro" ? "hover:bg-oaktend-50" : "hover:bg-bark-50";
+  const rowActive = side === "pro" ? "bg-oaktend-50" : "bg-bark-50";
   // Collapsed icon button hover accent, matching the sibling header icon
-  // buttons (bell / back-office): bark on the homeowner side, hearth on the pro
+  // buttons (bell / back-office): bark on the homeowner side, oaktend on the pro
   // side.
   const iconHover =
     side === "pro"
-      ? "hover:bg-hearth-50 hover:text-hearth-700"
+      ? "hover:bg-oaktend-50 hover:text-oaktend-700"
       : "hover:bg-bark-50 hover:text-bark-700";
 
   function close() {
@@ -309,7 +309,7 @@ export default function GlobalSearch({
           // only ever shown once opened, so it skips the w-24-at-rest / focus:w-48
           // dance and just renders at its full width.
           className={`${
-            expandable ? "w-56" : "w-24 focus:w-48"
+            expandable ? "w-56" : "w-24 focus:w-48 max-lg:focus:w-24"
           } rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-base text-stone-700 transition-all placeholder:text-stone-500 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 ${focusBorder}`}
         />
       </form>
@@ -419,7 +419,7 @@ export default function GlobalSearch({
           {trimmed !== "" && settled && items.length === 0 && (
             <div className="px-2 py-1.5">
               <p className="text-sm text-stone-600 dark:text-stone-300">
-                No matches. Try the FAQ or ask Hearth.
+                No matches. Try the FAQ or ask OakTend.
               </p>
               <button
                 type="button"
@@ -427,7 +427,7 @@ export default function GlobalSearch({
                 onClick={() => navigate(askHref)}
                 className={`${rowBase} ${rowHover} -mx-2 mt-1 w-[calc(100%+1rem)] font-medium text-stone-700 dark:text-stone-300 dark:hover:bg-stone-600`}
               >
-                Ask Hearth: &ldquo;{trimmed}&rdquo;
+                Ask OakTend: &ldquo;{trimmed}&rdquo;
               </button>
               <button
                 type="button"

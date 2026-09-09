@@ -74,7 +74,7 @@ export default function ProgressBar({
 }
 
 // Simulated staged progress for a single request that has no real progress
-// events (all of Hearth's AI reads are one POST that either lands or times out).
+// events (all of OakTend's AI reads are one POST that either lands or times out).
 // It is honest about that: the bar creeps toward a ceiling below 100 and slows
 // as it climbs, so it can move without ever claiming the work is done, then
 // snaps to 100 only when the caller says the response arrived.

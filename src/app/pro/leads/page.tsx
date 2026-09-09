@@ -328,7 +328,7 @@ export default async function ProDashboard(
 
   const openJobVms: OpenJobVM[] = open.map((j) => {
     const payoutDollars = Number(j.payout_amount ?? 0);
-    // Best SINGLE discount: this pro's own Hearth Pro membership (10% off) or
+    // Best SINGLE discount: this pro's own OakTend Pro membership (10% off) or
     // the aging markdown, never both (migration 0149; owner's words: "it does
     // NOT stack with the 15-30%"). bestLeadDiscount is the one place this
     // comparison lives, mirrored byte-for-byte by pro_lead_fee_cents() in the
@@ -378,7 +378,10 @@ export default async function ProDashboard(
       severity: j.issue_severity ?? null,
       ownershipVerified: Boolean(j.ownership_verified),
       feeGlance: feeGlanceLabel(fee, feeStr),
-      glanceLine2: [timingLabel, j.city ? `in ${j.city}` : null]
+      // First name + last initial only (C4, migration 0155): open_jobs_for_me
+      // truncates it server-side, so this is never the homeowner's full name.
+      homeownerDisplay: j.homeowner_display ?? null,
+      glanceLine2: [j.homeowner_display, timingLabel, j.city ? `in ${j.city}` : null]
         .filter(Boolean)
         .join(" · "),
       feeStr,

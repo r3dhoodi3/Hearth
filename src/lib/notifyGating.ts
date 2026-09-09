@@ -1,4 +1,4 @@
-// Which notification kinds are a Hearth Plus perk on the email/SMS channels.
+// Which notification kinds are an OakTend Plus perk on the email/SMS channels.
 //
 // Kept as a standalone, dependency-free module (no server-only, no Supabase)
 // so the decision is a pure function that can be unit tested and so every
@@ -12,7 +12,7 @@
 // the /plus comparison table sells ("Proactive alerts: free = In-app, plus =
 // All alerts, every channel").
 //
-// GATED (homeowner alerts and reminders - proactive nudges Hearth generates on
+// GATED (homeowner alerts and reminders - proactive nudges OakTend generates on
 // its own schedule, nobody asked for them just now):
 //   freeze / heat / high_wind / heavy_rain  weather alerts cron
 //   maintenance_upcoming / maintenance_overdue  maintenance reminders cron
@@ -91,8 +91,8 @@ export function shouldSendOutboundChannels(
 // rules on purpose:
 //
 //   - It is FREE for everyone, on both sides of the marketplace. It costs
-//     Hearth nothing per message (the browser's own push service delivers it),
-//     so there is no cost to gate behind Hearth Plus. What Plus sells on the
+//     OakTend nothing per message (the browser's own push service delivers it),
+//     so there is no cost to gate behind OakTend Plus. What Plus sells on the
 //     alerts is email and SMS, and that is untouched: isPlusGatedKind above
 //     still governs those two and only those two.
 //   - There is no TCPA equivalent for push. Permission is granted by the
@@ -179,7 +179,7 @@ export function isPushKind(kind: string): boolean {
 //     exactly the complaint this was built to fix. Those go through.
 //
 // The in-app notification row is written either way, so a held push loses no
-// information; the person sees it on the bell the next time they open Hearth.
+// information; the person sees it on the bell the next time they open OakTend.
 export const PUSH_QUIET_HOURS_KINDS: ReadonlySet<string> = new Set([
   "freeze",
   "heat",
@@ -189,7 +189,7 @@ export const PUSH_QUIET_HOURS_KINDS: ReadonlySet<string> = new Set([
 ]);
 
 // Same window and the same single-metro hardcoded timezone as sendSms: every
-// launch-area home is in Orange County. When Hearth launches a second metro
+// launch-area home is in Orange County. When OakTend launches a second metro
 // this needs to become per-recipient, in both places at once.
 export const PUSH_QUIET_START_HOUR = 21;
 export const PUSH_QUIET_END_HOUR = 8;
@@ -261,6 +261,12 @@ export const TRANSACTIONAL_NOTIFICATION_KINDS: ReadonlySet<string> = new Set([
   "license",
   "insurance",
   "trial_abuse",
+  // The CTIA-required opt-in confirmation sent once, the moment someone
+  // checks the SMS box in their profile (homeowner or pro). It is a direct
+  // reply to something the person just did, not a campaign, and carriers
+  // expect it to actually arrive, so it must never compete with a seasonal
+  // nudge for the same two-a-week budget.
+  "sms_optin_confirmation",
   // Safety alerts: time-critical by definition, the same reasoning
   // PUSH_QUIET_HOURS_KINDS uses to bypass quiet hours above. A freeze warning
   // and a heat warning three days apart in one bad week must not compete with

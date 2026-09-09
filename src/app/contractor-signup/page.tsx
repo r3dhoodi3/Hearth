@@ -199,7 +199,7 @@ export default function ContractorSignUpPage(props: {
       <div className="card">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-            Join Hearth for Pros
+            Join OakTend for Pros
           </h1>
           {/* No fee blurb here, at the owner's request (2026-08-30): the
               account door stays clean, and pricing is explained where it is

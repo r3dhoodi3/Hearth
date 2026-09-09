@@ -75,7 +75,7 @@ describe("topic guard wording", () => {
     expect(TOPIC_GUARD_HOMEOWNER).toContain("homeowner's home");
     expect(TOPIC_GUARD_HOMEOWNER).toContain("insurance and property taxes");
     expect(TOPIC_GUARD_PRO).toContain("contractor's trade");
-    expect(TOPIC_GUARD_PRO).toContain("Hearth for Pros");
+    expect(TOPIC_GUARD_PRO).toContain("OakTend for Pros");
   });
 });
 

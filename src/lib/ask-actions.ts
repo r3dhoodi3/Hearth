@@ -14,7 +14,7 @@ const SYSTEM_VALUES = SYSTEM_TYPES.map((s) => s.value) as string[];
 const oneOf = (v: string | undefined, allowed: string[], fallback: string) =>
   v && allowed.includes(v) ? v : fallback;
 
-// Ask Hearth proposes these via [[LOGISSUE]] / [[REMINDER]] blocks; the chat
+// Ask OakTend proposes these via [[LOGISSUE]] / [[REMINDER]] blocks; the chat
 // renders a button that calls one of these to write it to the home record. RLS
 // limits writes to the caller's own property.
 
@@ -80,7 +80,7 @@ export async function logIssueFromChat(payload: {
 }
 
 // Bounds on what one chat-created reminder can be, and how many a home can
-// hold. Both exist because open reminders are read back into Ask Hearth's
+// hold. Both exist because open reminders are read back into Ask OakTend's
 // system prompt on EVERY turn: without a ceiling, a few hundred long
 // self-created reminders turn every later question into a much larger (and
 // much more expensive) paid request, forever. A real home has a handful.

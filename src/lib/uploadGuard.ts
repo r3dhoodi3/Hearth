@@ -1,4 +1,4 @@
-// The one place that decides whether a file is allowed into Hearth.
+// The one place that decides whether a file is allowed into OakTend.
 //
 // WHY IT EXISTS. Before this module, every upload path carried its own copy of
 // the same three checks and none of them were real:
@@ -29,7 +29,7 @@
 // 1. What each kind of upload is allowed to be
 // ---------------------------------------------------------------------------
 
-// The only content types Hearth ever stores. Anything else is refused, both
+// The only content types OakTend ever stores. Anything else is refused, both
 // because we have no use for it and because the list of formats a browser will
 // happily execute when handed back (SVG, HTML, XML) is longer than the list it
 // will merely render.
@@ -152,7 +152,7 @@ export function sniffFileType(bytes: Uint8Array): SniffResult {
 // a document into something that acts on open: script bodies, an action fired
 // at open time, per-page and per-field triggers, "run this file", and embedded
 // attachments. None of them appear in an insurance certificate or a license
-// scan, which is all Hearth ever accepts a PDF for, so their presence is
+// scan, which is all OakTend ever accepts a PDF for, so their presence is
 // treated as a refusal rather than something to sanitise.
 //
 // This is a coarse byte scan on purpose. A determined attacker can hide a name
@@ -189,7 +189,7 @@ export function findActivePdfTokens(bytes: Uint8Array): string[] {
 //
 //   1. EXIF. A phone photo carries GPS coordinates. A homeowner uploading a
 //      picture of their water heater is publishing their address unless the
-//      tags come off. AskHearth.tsx and InspectionUpload.tsx already re-encode
+//      tags come off. AskOakTend.tsx and InspectionUpload.tsx already re-encode
 //      through a canvas, which drops EXIF; every other path did not.
 //   2. Appended payloads. Every image format has a defined end. Bytes after it
 //      are ignored by decoders and preserved by storage, which is how a

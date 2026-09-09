@@ -21,10 +21,10 @@ import { describe, it, expect } from "vitest";
 //      a request breaker with a spend breaker's name.
 //
 //   2. countAiUsage charges the caller's own daily allowance BEFORE it checks
-//      Hearth's owner-wide ceilings, and does not hand it back when one of
+//      OakTend's owner-wide ceilings, and does not hand it back when one of
 //      those ceilings refuses the request. The chat path (countAskUsage) does
 //      hand it back - refundAskUsage exists for exactly this - so the two
-//      halves of the same file disagree about who pays for Hearth's brakes.
+//      halves of the same file disagree about who pays for OakTend's brakes.
 
 function src(rel: string): string {
   return readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
@@ -112,7 +112,7 @@ describe("the owner-wide breaker is a REQUEST count, not a spend cap", () => {
   );
 });
 
-describe("who pays when Hearth's own ceiling sheds a request", () => {
+describe("who pays when OakTend's own ceiling sheds a request", () => {
   it("the CHAT path hands the question back", () => {
     // countAskUsage: charge, then if the global breaker says no, refund.
     const chat = aiUsage.slice(
@@ -128,7 +128,7 @@ describe("who pays when Hearth's own ceiling sheds a request", () => {
     // global ceiling is consulted, and neither branch used to call
     // refundAiUsage. A free homeowner who tried a document scan while a swarm
     // had the breaker tripped was charged one of their 25 for a request that
-    // never reached the model - and the client is told "Hearth's AI is busy",
+    // never reached the model - and the client is told "OakTend's AI is busy",
     // so they retried, and were charged again, until their day was gone. Both
     // shed branches in countAiUsage now refund, the way countAskUsage always
     // has.

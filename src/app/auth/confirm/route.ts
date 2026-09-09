@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       // destinationForSignIn in src/lib/roleRouting.ts): an account that
       // already owns a home must never be handed back to the claim-a-home
       // wizard, because for them that page is the add-another-home screen and
-      // on the free plan it is the "Adding another home is part of Hearth
+      // on the free plan it is the "Adding another home is part of OakTend
       // Plus" wall. Which of the two routes a link lands on is decided by the
       // Supabase email template, so a rule that lived in only one of them
       // would come back the moment a template changed. One extra query, and

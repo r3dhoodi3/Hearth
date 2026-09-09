@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 //
 // The top nav strip used to turn on at sm (640px) but only had room for itself
 // from about 1024px, so between those widths the pills were painted straight
-// over the "Hearth" wordmark and the home address. The fix moved BOTH halves of
+// over the "OakTend" wordmark and the home address. The fix moved BOTH halves of
 // the shell - the top strip and the fixed bottom tab bar - to lg, which hands
 // tablets the phone-style bar and leaves desktop exactly as it was.
 //
@@ -118,7 +118,7 @@ describe("everything that clears the tab bar moved to lg with it", () => {
   });
 
   it("leaves the phone chat frame on the phone breakpoint", () => {
-    // Deliberate: .hearth-chat-frame is the iOS keyboard workaround, bound to
+    // Deliberate: .oaktend-chat-frame is the iOS keyboard workaround, bound to
     // PHONE_MEDIA_QUERY in useVisualViewport.ts (which also decides textarea
     // vs input). Both halves must name the same screens, so this one stays at
     // 639.98px while the tab bar runs to lg.

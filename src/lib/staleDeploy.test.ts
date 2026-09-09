@@ -74,19 +74,19 @@ describe("recoverFromStaleDeploy", () => {
     const storage = fakeStorage();
     expect(recoverFromStaleDeploy(reload, storage, 1_000_000)).toBe(true);
     expect(reload).toHaveBeenCalledTimes(1);
-    expect(storage.store.get("hearth-stale-reload-at")).toBe("1000000");
+    expect(storage.store.get("oaktend-stale-reload-at")).toBe("1000000");
   });
 
   it("refuses within the cooldown after a previous reload", () => {
     const reload = vi.fn();
-    const storage = fakeStorage({ "hearth-stale-reload-at": "1000000" });
+    const storage = fakeStorage({ "oaktend-stale-reload-at": "1000000" });
     expect(recoverFromStaleDeploy(reload, storage, 1_030_000)).toBe(false);
     expect(reload).not.toHaveBeenCalled();
   });
 
   it("reloads again once the cooldown has passed", () => {
     const reload = vi.fn();
-    const storage = fakeStorage({ "hearth-stale-reload-at": "1000000" });
+    const storage = fakeStorage({ "oaktend-stale-reload-at": "1000000" });
     expect(recoverFromStaleDeploy(reload, storage, 1_061_000)).toBe(true);
     expect(reload).toHaveBeenCalledTimes(1);
   });

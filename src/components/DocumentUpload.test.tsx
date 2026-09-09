@@ -74,7 +74,7 @@ describe("DocumentUpload free-read meter", () => {
   it("turns the picker into the Plus door at zero", () => {
     render(<DocumentUpload propertyId="p1" freeReadsLeft={0} />);
     expect(screen.getByText(new RegExp(PAYWALL_START))).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: "Get Hearth Plus" });
+    const link = screen.getByRole("link", { name: "Get OakTend Plus" });
     expect(link).toHaveAttribute("href", "/plus?reason=documents");
     // No picker to tap into a refusal.
     expect(

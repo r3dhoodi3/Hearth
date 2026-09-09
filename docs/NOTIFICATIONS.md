@@ -13,7 +13,7 @@ other two:
 
 | Gate | List | Default for an unclassified kind | Enforced in |
 | --- | --- | --- | --- |
-| Hearth Plus paywall (email/SMS only) | `PLUS_GATED_NOTIFICATION_KINDS` | ships free | `sendNotification` (`src/lib/notify.ts`) |
+| OakTend Plus paywall (email/SMS only) | `PLUS_GATED_NOTIFICATION_KINDS` | ships free | `sendNotification` (`src/lib/notify.ts`) |
 | Push allowlist (buzzes a phone at all) | `PUSH_NOTIFICATION_KINDS` | stays silent | `sendPush` (`src/lib/push.ts`) |
 | Marketing frequency cap | `TRANSACTIONAL_NOTIFICATION_KINDS` | counted against the budget | `sendNotification` (`src/lib/notify.ts`) |
 
@@ -130,8 +130,8 @@ is live and callable manually with the cron secret.
    silent on push and metered by the marketing cap - the safe default for
    anything that is, in fact, a campaign.
 4. If the campaign is a proactive homeowner alert or reminder (something
-   Hearth generates on its own schedule, not requested), also decide whether
-   its email/SMS channels are a Hearth Plus perk - `PLUS_GATED_NOTIFICATION_KINDS`
+   OakTend generates on its own schedule, not requested), also decide whether
+   its email/SMS channels are an OakTend Plus perk - `PLUS_GATED_NOTIFICATION_KINDS`
    in the same file.
 5. Add a unit test in `src/lib/notifyGating.test.ts` asserting where the new
    kind landed on each list it touches, the same way every existing kind is

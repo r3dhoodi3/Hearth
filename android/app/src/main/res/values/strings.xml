@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">OakTend</string>
+    <string name="title_activity_main">OakTend</string>
+    <string name="package_name">com.oaktend.app</string>
+    <string name="custom_url_scheme">com.oaktend.app</string>
+</resources>

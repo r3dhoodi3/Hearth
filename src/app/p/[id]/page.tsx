@@ -11,6 +11,7 @@ import BackLink from "./BackLink";
 import ReportSheet from "@/components/ReportSheet";
 import BlockMenu from "@/components/BlockMenu";
 import { requestProAction } from "@/app/(app)/contractors/actions";
+import { LEGAL } from "@/lib/legal";
 
 // Public, shareable business page for a pro: /p/<contractor_id> or, once
 // migration 0043 lands, /p/<slug>. No account needed. Data comes from the
@@ -186,14 +187,14 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const params = await props.params;
   const { id } = await resolveContractorId(params.id);
-  if (!id) return { title: "Hearth" };
+  if (!id) return { title: "OakTend" };
   const { profile } = await loadProfile(id);
-  if (!profile) return { title: "Hearth" };
+  if (!profile) return { title: "OakTend" };
 
-  const title = `${profile.name} on Hearth`;
+  const title = `${profile.name} on OakTend`;
   const description =
     profile.review_count > 0 && profile.rating != null
-      // "verified" was doing more work than the rule behind it. What Hearth
+      // "verified" was doing more work than the rule behind it. What OakTend
       // actually checks (leave_review, migrations 0017/0082/0132) is that the
       // reviewer owned the property on a job this pro was hired for, that it
       // is not the pro's own account, and that it is not a linked second
@@ -203,8 +204,8 @@ export async function generateMetadata(
       // describe review eligibility under the FTC Rule on Consumer Reviews
       // and Testimonials (16 CFR 465), and confirm dropping "verified" here
       // is the right call rather than defining the term on the page.
-      ? `${profile.name} is rated ${profile.rating} from ${profile.review_count} review${profile.review_count === 1 ? "" : "s"} on Hearth, left by homeowners who hired them. See reviews and services.`
-      : `Reviews and services for ${profile.name}, a home service pro on Hearth.`;
+      ? `${profile.name} is rated ${profile.rating} from ${profile.review_count} review${profile.review_count === 1 ? "" : "s"} on OakTend, left by homeowners who hired them. See reviews and services.`
+      : `Reviews and services for ${profile.name}, a home service pro on OakTend.`;
   const url = `${SITE_URL}${canonicalPath(profile)}`;
 
   return {
@@ -215,7 +216,7 @@ export async function generateMetadata(
       title,
       description,
       url,
-      siteName: "Hearth",
+      siteName: "OakTend",
       type: "website",
       // og:image comes from the colocated opengraph-image.tsx route; Next
       // wires it up automatically for this segment.
@@ -228,7 +229,7 @@ export async function generateMetadata(
   };
 }
 
-// JSON-LD for Google review-star rich results. Hearth hosts third-party
+// JSON-LD for Google review-star rich results. OakTend hosts third-party
 // reviews, so LocalBusiness + AggregateRating markup is eligible (a pro's own
 // site would not be). Every number mirrors the page render EXACTLY: same
 // rating value, same review_count. Per-review markup is deliberately omitted:
@@ -268,8 +269,8 @@ function NotReadyCard() {
   return (
     <main className="mx-auto max-w-xl px-6 py-16 text-center">
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
-        {/* Flat warm banner strip, no gradient: hearth-100 in light, a
-            translucent hearth tint over the stone-800 card in dark. */}
+        {/* Flat warm banner strip, no gradient: oaktend-100 in light, a
+            translucent OakTend tint over the stone-800 card in dark. */}
         <div className="h-20 bg-bark-100 dark:bg-bark-700/30" />
         <div className="px-6 pb-8 pt-2">
           <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
@@ -285,7 +286,7 @@ function NotReadyCard() {
         href="/pros"
         className="mt-6 inline-block text-sm font-medium text-bark-700 hover:underline dark:text-stone-300"
       >
-        Powered by Hearth
+        Powered by OakTend
       </Link>
     </main>
   );
@@ -335,12 +336,19 @@ export default async function PublicProPage(
   // the same as the CSLB and background-check badges below. Membership only
   // gates cosmetics (logo, about).
   const showBadge = profile.has_license || profile.has_insurance;
+  // Insurance is always labeled "(self-reported)" here, on its own or
+  // combined with the license half of this same neutral badge - never just
+  // "Insurance" or "on file", which reads as more verified than it is.
   const badgeLabel =
     profile.has_license && profile.has_insurance
-      ? "License and insurance on file"
+      ? "License on file and insurance (self-reported)"
       : profile.has_license
         ? "License on file"
-        : "Insurance on file";
+        : "Insurance (self-reported)";
+  const badgeMentionsInsurance = profile.has_insurance;
+  const badgeCaption = badgeMentionsInsurance
+    ? `Reported by the pro. Not verified by ${LEGAL.brand}.`
+    : "Reported by the business, not verified.";
   const about = profile.member ? (profile.about ?? "").trim() : "";
   // Guard: the RPC only includes 'projects' once migration 0045 has run, so
   // older payloads simply render no section.
@@ -390,8 +398,8 @@ export default async function PublicProPage(
           their list. */}
       <BackLink />
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
-        {/* Flat warm banner strip, no gradient: hearth-100 in light, a
-            translucent hearth tint over the stone-800 card in dark. */}
+        {/* Flat warm banner strip, no gradient: oaktend-100 in light, a
+            translucent OakTend tint over the stone-800 card in dark. */}
         <div className="h-20 bg-bark-100 dark:bg-bark-700/30" />
         <div className="px-6 pb-6">
           {/* Logo (Pro members) or a neutral monogram */}
@@ -442,7 +450,13 @@ export default async function PublicProPage(
             <div className="mt-3">
               {/* Self-reported: neutral stone, not green, so it can never be
                   mistaken for the real CSLB-verified badge below. */}
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
+                title={badgeMentionsInsurance ? badgeCaption : undefined}
+                aria-label={
+                  badgeMentionsInsurance ? `${badgeLabel}. ${badgeCaption}` : undefined
+                }
+              >
                 <svg
                   viewBox="0 0 24 24"
                   className="h-3.5 w-3.5"
@@ -451,13 +465,14 @@ export default async function PublicProPage(
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  aria-hidden="true"
                 >
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 15l2 2 4-4" />
                 </svg>
                 {badgeLabel}
               </span>
               <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                Reported by the business, not verified.
+                {badgeCaption}
               </p>
             </div>
           )}
@@ -524,7 +539,7 @@ export default async function PublicProPage(
               embeds review content or shows star counts from those sites, just
               a button that opens the pro's own Yelp / Google page. Sits near
               the trust badges above; the one-line disclaimer keeps clear that
-              these are not Hearth-verified. */}
+              these are not OakTend-verified. */}
           {(profile.yelp_url || profile.google_reviews_url) && (
             <div className="mt-3">
               <div className="flex flex-wrap gap-2">
@@ -550,7 +565,7 @@ export default async function PublicProPage(
                 )}
               </div>
               <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                Reviews on outside sites are not verified by Hearth.
+                Reviews on outside sites are not verified by OakTend.
               </p>
             </div>
           )}
@@ -677,7 +692,7 @@ export default async function PublicProPage(
             </h2>
             {profile.reviews.length === 0 ? (
               <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-                No reviews yet. Reviews come from real Hearth jobs only.
+                No reviews yet. Reviews come from real OakTend jobs only.
               </p>
             ) : (
               <ul className="mt-1 divide-y divide-stone-100 dark:divide-white/10">
@@ -758,7 +773,7 @@ export default async function PublicProPage(
           href="/pros"
           className="inline-flex items-center gap-1.5 hover:text-bark-700 hover:underline dark:hover:text-stone-300"
         >
-          <Logo className="h-4 w-4" /> Powered by Hearth
+          <Logo className="h-4 w-4" /> Powered by OakTend
         </Link>
       </p>
     </main>

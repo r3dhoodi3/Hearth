@@ -20,7 +20,7 @@ const route = src("./route.ts");
 const page = src("../../pro/ask/page.tsx");
 
 const UNLOCK_COPY =
-  "Ask Hearth opens once your business is verified: add a California license number we can confirm, or place your first lead. Hearth Pro members get it right away.";
+  "Ask OakTend opens once your business is verified: add a California license number we can confirm, or place your first lead. OakTend Pro members get it right away.";
 
 describe("the pro copilot is locked until the business is real", () => {
   it("asks isEstablishedPro", () => {
@@ -64,12 +64,12 @@ describe("the pro ask page shows the lock instead of a dead composer", () => {
 
   it("renders the unlock note and no chat when locked", () => {
     expect(page).toContain('data-testid="pro-ask-locked"');
-    expect(page).toContain("Ask Hearth opens once your business is verified");
+    expect(page).toContain("Ask OakTend opens once your business is verified");
     expect(page).toContain(
       "Add a California license number we can confirm, or place your"
     );
     // The composer is the other branch of the same ternary, so a locked pro
     // never gets a box to type into.
-    expect(page).toMatch(/!established \?[\s\S]*\) : \([\s\S]*<AskHearth/);
+    expect(page).toMatch(/!established \?[\s\S]*\) : \([\s\S]*<AskOakTend/);
   });
 });

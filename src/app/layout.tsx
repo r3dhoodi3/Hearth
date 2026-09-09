@@ -4,6 +4,8 @@ import "./globals.css";
 import ToastProvider from "@/components/ToastProvider";
 import FlashToast from "@/components/FlashToast";
 import StaleDeployRecovery from "@/components/StaleDeployRecovery";
+import NativeBootstrap from "@/components/native/NativeBootstrap";
+import ZoomLock from "@/components/ZoomLock";
 import { LAUNCH_CITY_NAMES } from "@/lib/serviceArea";
 
 // KEEP THIS FILE FREE OF cookies() AND headers().
@@ -26,7 +28,7 @@ const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 // <head>. Dark is strictly opt-in: light is the default for everyone, and the
 // class is added only when the user has actually chosen dark in ThemeToggle.
 // The OS preference is deliberately not consulted - a visitor whose phone is
-// in dark mode still gets Hearth's light look until they ask otherwise.
+// in dark mode still gets OakTend's light look until they ask otherwise.
 const themeInit = `(function () {
   try {
     if (localStorage.getItem("hearth-theme") !== "dark") return;
@@ -43,12 +45,12 @@ const themeInit = `(function () {
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
-// Organization JSON-LD, so search results can attribute pages to Hearth as a
+// Organization JSON-LD, so search results can attribute pages to OakTend as a
 // business rather than guessing from the page title. Mirrors the Service
 // JSON-LD CityLandingPage builds per city (src/components/CityLandingPage.tsx):
 // same reasoning, root-level scope. areaServed is built from the same
 // LAUNCH_CITY_NAMES the ZIP gates and the pro checkboxes read, so the
-// structured data can never claim a city Hearth has stopped (or not yet
+// structured data can never claim a city OakTend has stopped (or not yet
 // started) serving. Only two of these cities have a landing page of their own;
 // the rest are served without one, which is fine here - this is a service-area
 // claim, not a sitemap.
@@ -57,12 +59,12 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 // a second one (name/url/logo) alongside its WebApplication, which left two
 // competing descriptions of the same business on the highest-value page; the
 // logo moved here instead, and the stable @id gives anything that wants to
-// point at Hearth-the-organization something to reference.
+// point at OakTend-the-organization something to reference.
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
   "@id": `${SITE_URL}#organization`,
-  name: "Hearth",
+  name: "OakTend",
   url: SITE_URL,
   logo: `${SITE_URL}/icon-512.png`,
   areaServed: LAUNCH_CITY_NAMES.map((city) => ({
@@ -74,13 +76,13 @@ const organizationJsonLd = {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Hearth: Your home, looked after",
-    template: "%s | Hearth",
+    default: "OakTend: Your home, looked after",
+    template: "%s | OakTend",
   },
   description:
     "Keep your house in good shape, know what needs attention, store your home docs, and reach a trustworthy pro when something breaks.",
   openGraph: {
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "website",
     locale: "en_US",
   },
@@ -90,13 +92,13 @@ export const metadata: Metadata = {
   // Installable on phones. The manifest (src/app/manifest.ts) covers Android
   // and desktop Chrome; Safari on iOS ignores manifest icons and reads the
   // apple-* tags below plus src/app/apple-icon.tsx instead. "Add to Home
-  // Screen" then installs a real Hearth icon that opens full-screen with no
+  // Screen" then installs a real OakTend icon that opens full-screen with no
   // browser chrome, which is the mobile counterpart of SEO: the app lives on
   // the home screen rather than in a bookmark.
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Hearth",
+    title: "OakTend",
     statusBarStyle: "default",
   },
   formatDetection: { telephone: false },
@@ -110,6 +112,18 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // NO maximumScale / userScalable HERE, deliberately. Locking pinch and
+  // double-tap zoom out of the app shell was tried in the 2026-09-07 App Store
+  // pass; this is the WEB app's viewport too, and blocking zoom on every
+  // browser visitor fails WCAG 2.1 SC 1.4.4 (Resize Text) and takes a real
+  // accessibility affordance away from low-vision homeowners for a cosmetic
+  // "feels native" gain. iOS Safari's focus auto-zoom is already handled the
+  // right way instead: every input/select/textarea uses the shared
+  // .input/.select/.textarea classes (text-base, 16px, below the sm
+  // breakpoint), which is what actually stops the zoom-on-focus jump. If the
+  // native shell specifically should not pinch-zoom, that belongs in the
+  // runtime ZoomLock (src/components/ZoomLock.tsx), which rewrites this
+  // tag only in app mode, not in the viewport every web visitor gets.
   viewportFit: "cover",
   // Tints the iOS status bar / Android toolbar to the header background so
   // the installed app and the browser tab read as one surface. Value matches
@@ -148,11 +162,25 @@ export default async function RootLayout({
         />
       </head>
       <body>
+        {/* First focusable element on every page. Off-screen until it gets
+            keyboard focus (see .skip-link in globals.css), then it jumps a
+            keyboard or screen-reader user straight past the header and nav to
+            the page's own <main id="main">. */}
+        <a href="#main" className="skip-link rounded-md bg-bark-700 px-4 py-2 text-sm font-semibold text-white">
+          Skip to content
+        </a>
         <ToastProvider>
           {children}
           <FlashToast />
         </ToastProvider>
         <StaleDeployRecovery />
+        {/* No-op on web (every effect inside is gated on isNativeApp()) -
+            see src/components/native/NativeBootstrap.tsx. */}
+        <NativeBootstrap />
+        {/* Pinch/double-tap zoom lock, applied only in the installed PWA and
+            the native shell (see src/components/ZoomLock.tsx). Browser tabs
+            stay zoomable. */}
+        <ZoomLock />
       </body>
     </html>
   );

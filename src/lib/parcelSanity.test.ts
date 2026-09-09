@@ -36,7 +36,7 @@ describe("isBuildingLevelHome", () => {
     expect(isBuildingLevelHome({ propertyType: "multi_family" })).toBe(true);
   });
 
-  it("accepts the provider's own wording as well as Hearth's enum", () => {
+  it("accepts the provider's own wording as well as OakTend's enum", () => {
     expect(isBuildingLevelHome({ propertyType: "Multi-Family" })).toBe(true);
     expect(isBuildingLevelHome({ propertyType: "Apartment" })).toBe(true);
     expect(isBuildingLevelHome({ propertyType: "Condo" })).toBe(true);

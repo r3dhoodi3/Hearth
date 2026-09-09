@@ -44,11 +44,7 @@ import {
   Search,
 } from "lucide-react";
 import { PRO_LEADS_HREF, PRO_DEPOSIT_BOOST_PTS } from "@/lib/constants";
-import {
-  FEEDBACK_CARD_TITLE,
-  FEEDBACK_LOCKED_NOTE,
-  feedbackCreditDollars,
-} from "@/lib/proFeedback";
+import { FEEDBACK_CARD_TITLE, FEEDBACK_PENDING_NOTE } from "@/lib/proFeedback";
 import SetupChecklist, { type SetupItem } from "@/components/pro/SetupChecklist";
 import ProChip from "@/components/pro/ProChip";
 import ProNudge from "@/components/pro/ProNudge";
@@ -90,9 +86,7 @@ export default function HomeView({
   appliedCount,
   wonCount,
   trend,
-  feedbackClaimed,
   feedbackSent,
-  established,
   showNudge,
   nudgeTrialEligible,
   latestRows,
@@ -121,9 +115,7 @@ export default function HomeView({
   wonCount: number;
   /** Six-month totals; null for a non-member, who gets the pitch instead. */
   trend: { applications: number; wins: number } | null;
-  feedbackClaimed: boolean;
   feedbackSent: boolean;
-  established: boolean;
   showNudge: boolean;
   nudgeTrialEligible: boolean;
   latestRows: LatestRow[];
@@ -197,7 +189,7 @@ export default function HomeView({
           Same classes, same grid, same tile shape. Titles shorten below sm so
           three fit across at 390px without wrapping to three lines.
           `chip` says what a non-member sees before tapping, never after:
-          "pro" is the hearth-accent gate for a tile that is truly member-only
+          "pro" is the OakTend-accent gate for a tile that is truly member-only
           (the insights trend on /pro/business), "free" is the green two-free-
           drafts tag for the back office (0145 gave every contractor two free
           drafts before it gates, so a "Pro" chip there overstated the door),
@@ -282,7 +274,7 @@ export default function HomeView({
               {showSeeAll && (
                 <Link
                   href={PRO_LEADS_HREF}
-                  className="text-sm font-medium text-hearth-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                  className="text-sm font-medium text-oaktend-700 hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
                 >
                   See all
                 </Link>
@@ -316,7 +308,7 @@ export default function HomeView({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Link
               href="/pro/billing"
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
+              className="card-link hover:border-oaktend-400 dark:hover:border-oaktend-400"
             >
               <p className="stat-label">Wallet</p>
               <p className="stat-number mt-1 text-2xl text-stone-900 dark:text-stone-100">
@@ -325,7 +317,7 @@ export default function HomeView({
             </Link>
             <Link
               href={PRO_LEADS_HREF}
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
+              className="card-link hover:border-oaktend-400 dark:hover:border-oaktend-400"
             >
               <p className="stat-label">Open jobs</p>
               <p className="stat-number mt-1 text-2xl text-stone-900 dark:text-stone-100">
@@ -340,7 +332,7 @@ export default function HomeView({
                 leads board instead, the list this stat actually counts. */}
             <Link
               href={`${PRO_LEADS_HREF}#your-jobs`}
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
+              className="card-link hover:border-oaktend-400 dark:hover:border-oaktend-400"
             >
               <p className="stat-label">Active jobs</p>
               <p className="stat-number mt-1 text-2xl text-stone-900 dark:text-stone-100">
@@ -353,7 +345,7 @@ export default function HomeView({
                 leads board's results hero uses. */}
             <Link
               href="/pro/business"
-              className="card-link hover:border-hearth-400 dark:hover:border-hearth-400"
+              className="card-link hover:border-oaktend-400 dark:hover:border-oaktend-400"
             >
               <p className="stat-label">
                 {appliedCount >= 3 ? "Win rate" : "Applications"}
@@ -388,7 +380,7 @@ export default function HomeView({
               </p>
               <Link
                 href="/pro/business"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                className="inline-flex text-sm font-medium text-oaktend-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
               >
                 See the breakdown
               </Link>
@@ -401,55 +393,28 @@ export default function HomeView({
               </p>
               <Link
                 href="/pro/plus?reason=leads"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                className="inline-flex text-sm font-medium text-oaktend-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
               >
-                See Hearth Pro
+                See OakTend Pro
               </Link>
             </>
           )}
         </section>
 
-        {/* ---- Feedback credit ---- */}
+        {/* ---- Feedback / bug reports (C7, 2026-09-07: reviewed by a
+            person, nothing pays automatically) ---- */}
         <section className="card space-y-2">
-          {feedbackClaimed ? (
-            <>
-              <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                Thank you for your feedback
-              </h2>
-              <p className="text-sm text-stone-600 dark:text-stone-300">
-                {feedbackCreditDollars()} in lead credit has been added to your
-                wallet.
-              </p>
-              <Link
-                href="/pro/billing"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
-              >
-                See it in your wallet
-              </Link>
-              {/* The money was once-ever; the reports are not. Keep the door
-                  to /pro/feedback open after the credit is collected. */}
-              <Link
-                href="/pro/feedback"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
-              >
-                Report a bug
-              </Link>
-            </>
-          ) : feedbackSent ? (
+          {feedbackSent ? (
             <>
               <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
                 Thanks for the feedback
               </h2>
-              {/* Sent, not yet earned: say exactly what unlocks it rather than
-                  leaving a promise hanging. The grant runs on its own the next
-                  time this page loads after they qualify. */}
               <p className="text-sm text-stone-600 dark:text-stone-300">
-                Your {feedbackCreditDollars()} in lead credit will be added once
-                your license is confirmed or you place your first lead.
+                {FEEDBACK_PENDING_NOTE}
               </p>
               <Link
                 href="/pro/feedback"
-                className="inline-flex text-sm font-medium text-hearth-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-hearth-300"
+                className="inline-flex text-sm font-medium text-oaktend-700 hover:underline max-sm:min-h-11 max-sm:items-center dark:text-oaktend-300"
               >
                 Report another bug
               </Link>
@@ -460,13 +425,10 @@ export default function HomeView({
                 {FEEDBACK_CARD_TITLE}
               </h2>
               <p className="text-sm text-stone-600 dark:text-stone-300">
-                It takes about a minute: a score from 1 to 5 and a few words. We read every message.
+                It takes about a minute: a score from 1 to 5 and a few words.
+                {" "}
+                {FEEDBACK_PENDING_NOTE}
               </p>
-              {!established && (
-                <p className="text-sm text-stone-500 dark:text-stone-400">
-                  {FEEDBACK_LOCKED_NOTE}
-                </p>
-              )}
               <Link
                 href="/pro/feedback"
                 className="btn-secondary mt-1 text-sm"

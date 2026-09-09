@@ -127,6 +127,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { trackServerEvent } from "@/lib/trackServer";
 import { lookupCslbLicense } from "@/lib/cslb";
 import { licenseNameMatches } from "@/lib/licenseMatch";
+import { sendNotification } from "@/lib/notify";
 
 function fd(fields: Record<string, string | string[]>): FormData {
   const f = new FormData();
@@ -151,6 +152,7 @@ beforeEach(() => {
   vi.mocked(redirect).mockClear();
   vi.mocked(createAdminClient).mockClear();
   vi.mocked(trackServerEvent).mockClear();
+  vi.mocked(sendNotification).mockClear();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -173,6 +175,7 @@ describe("saveCompanyAction: contractors write failure", () => {
           service_state: "CA",
           service_cities_present: "1",
           service_cities: ["Irvine"],
+          pro_terms_ack: "on",
         })
       )
     ).resolves.toBeUndefined();
@@ -388,6 +391,68 @@ describe("saveCompanyAction: validation floors", () => {
   });
 });
 
+// Pro Terms appendix: the onboarding acknowledgment checkbox is required on
+// first-time company creation only, never on a later profile edit.
+describe("saveCompanyAction: pro_terms_ack (onboarding acknowledgment)", () => {
+  it("refuses first-time setup when the acknowledgment box is left unticked", async () => {
+    await expect(
+      saveCompanyAction(
+        fd({
+          name: "Ivy Plumbing",
+          contact_phone: "7145550100",
+          service_state: "CA",
+          service_cities_present: "1",
+          service_cities: ["Irvine"],
+          // pro_terms_ack deliberately omitted.
+        })
+      )
+    ).resolves.toBeUndefined();
+
+    expect(setFlash).toHaveBeenCalledWith(
+      "Please confirm the Pro Terms acknowledgment to continue.",
+      "error"
+    );
+    expect(redirect).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith("/pro/onboarding");
+    expect(lastInsert).toBeNull();
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("creates the company once the acknowledgment box is ticked", async () => {
+    await expect(
+      saveCompanyAction(
+        fd({
+          name: "Ivy Plumbing",
+          contact_phone: "7145550100",
+          service_state: "CA",
+          service_cities_present: "1",
+          service_cities: ["Irvine"],
+          pro_terms_ack: "on",
+        })
+      )
+    ).rejects.toThrow(/createAdminClient must not be called|REDIRECT/);
+    expect(lastInsert).not.toBeNull();
+  });
+
+  it("never asks for the acknowledgment box again on a profile edit", async () => {
+    existingContractor = {
+      id: "contractor-1",
+      name: "Acme Plumbing",
+      license_number: null,
+      license_verified_status: "unverified",
+      service_state: null,
+    };
+    await saveCompanyAction(
+      fd({ name: "Acme Plumbing", contact_phone: "7145550100" })
+    );
+    expect(setFlash).not.toHaveBeenCalledWith(
+      "Please confirm the Pro Terms acknowledgment to continue.",
+      "error"
+    );
+    expect(lastUpdate).not.toBeNull();
+  });
+});
+
 // MED-21: WizardFooter's submittedRef latch (OnboardingCompanyForm.tsx)
 // stops a same-tick double click, but not two genuinely separate requests
 // (a slow network retry, two tabs). Migration 0072's contractors_unique_user
@@ -417,6 +482,7 @@ describe("saveCompanyAction: double-submit race (23505)", () => {
           service_state: "CA",
           service_cities_present: "1",
           service_cities: ["Irvine"],
+          pro_terms_ack: "on",
         })
       )
     ).rejects.toThrow(/createAdminClient must not be called|REDIRECT/);
@@ -450,6 +516,7 @@ describe("saveCompanyAction: owner_name", () => {
     service_state: "CA",
     service_cities_present: "1",
     service_cities: ["Irvine"],
+    pro_terms_ack: "on",
   };
 
   // An insert that SUCCEEDS runs the admin-client work after it (the pending
@@ -556,6 +623,7 @@ describe("saveCompanyAction: funnel analytics (signup_pro / onboarding_done)", (
     service_state: "CA",
     service_cities_present: "1",
     service_cities: ["Irvine"],
+    pro_terms_ack: "on",
   };
 
   it("records signup_pro right when the contractor row lands", async () => {
@@ -649,6 +717,113 @@ describe("verifyLicenseNowAction: license_verified analytics", () => {
     expect(setFlash).toHaveBeenCalledWith(
       "License verified against the CSLB database.",
       "success"
+    );
+  });
+});
+
+// FIX 2 (red team): users.phone is unverified, so a pro toggling the SMS
+// checkbox off and on repeatedly could blast the "you're opted in"
+// confirmation text at whatever number is currently entered - the pro-side
+// twin of the same red-team finding on the homeowner form
+// (src/app/(app)/account/actions.test.ts). Both call sites now run the same
+// shared check (src/lib/smsOptinLimit.ts) immediately before the send.
+//
+// The company/contractor fields below are chosen to keep the rest of
+// saveCompanyAction a no-op past saveProSmsConsent: same name as stored (no
+// moderation check), no license_number posted so licenseChanged is false (no
+// second admin-client call for the license write), no city/state/review-link
+// fields (no other missing-column retries). That leaves exactly one
+// createAdminClient() call in the whole action - the one inside
+// saveProSmsConsent - so a single mockImplementationOnce covers it.
+describe("saveCompanyAction: SMS opt-in confirmation is rate limited", () => {
+  function makeSmsAdmin(opts: {
+    currentRow: Record<string, unknown> | null;
+    rateLimit: { data: boolean | null; error: { message: string } | null };
+  }) {
+    return {
+      from: (table: string) => {
+        if (table !== "users") {
+          throw new Error(`test does not expect an admin write to "${table}"`);
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: opts.currentRow, error: null }),
+            }),
+          }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      },
+      rpc: async (fn: string) => {
+        if (fn !== "rate_limit_hit") throw new Error(`unexpected rpc "${fn}"`);
+        return opts.rateLimit;
+      },
+    };
+  }
+
+  const profileForm = () =>
+    fd({
+      name: "Acme Plumbing",
+      contact_phone: "7145550100",
+      sms_consent_present: "1",
+      sms_consent: "on",
+    });
+
+  beforeEach(() => {
+    existingContractor = {
+      id: "contractor-1",
+      name: "Acme Plumbing",
+      license_number: null,
+      license_verified_status: "unverified",
+      service_state: null,
+    };
+  });
+
+  it("does not send once the shared rate limit is already exhausted (e.g. a third toggle within the window)", async () => {
+    vi.mocked(createAdminClient).mockImplementationOnce(
+      () =>
+        makeSmsAdmin({
+          currentRow: { sms_consent: false, phone: null },
+          rateLimit: { data: false, error: null },
+        }) as any
+    );
+
+    await saveCompanyAction(profileForm());
+
+    expect(sendNotification).not.toHaveBeenCalled();
+    // The company save itself still succeeds - only the text is withheld.
+    expect(setFlash).toHaveBeenCalledWith("Profile saved.");
+  });
+
+  it("fails closed and does not send when the rate_limit_hit RPC errors", async () => {
+    vi.mocked(createAdminClient).mockImplementationOnce(
+      () =>
+        makeSmsAdmin({
+          currentRow: { sms_consent: false, phone: null },
+          rateLimit: { data: null, error: { message: "db down" } },
+        }) as any
+    );
+
+    await saveCompanyAction(profileForm());
+
+    expect(sendNotification).not.toHaveBeenCalled();
+    expect(setFlash).toHaveBeenCalledWith("Profile saved.");
+  });
+
+  it("sends the confirmation on a fresh grant when under the limit", async () => {
+    vi.mocked(createAdminClient).mockImplementationOnce(
+      () =>
+        makeSmsAdmin({
+          currentRow: { sms_consent: false, phone: null },
+          rateLimit: { data: true, error: null },
+        }) as any
+    );
+
+    await saveCompanyAction(profileForm());
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: "user-1", kind: "sms_optin_confirmation" })
     );
   });
 });

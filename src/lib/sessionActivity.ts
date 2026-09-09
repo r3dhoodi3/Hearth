@@ -1,5 +1,5 @@
 // The app-side idle timeout: sign somebody out after 30 days of not using
-// Hearth, even though their Supabase refresh token is still perfectly valid.
+// OakTend, even though their Supabase refresh token is still perfectly valid.
 //
 // WHY THIS EXISTS. Supabase issues a short-lived access token (1 hour by
 // default) plus a refresh token, and the refresh token does NOT expire on its
@@ -31,7 +31,7 @@
 export const ACTIVITY_COOKIE = "hearth_seen";
 
 // 30 days for both sides, homeowner and pro. Long enough that a homeowner who
-// only opens Hearth when something breaks is not logged out between problems,
+// only opens OakTend when something breaks is not logged out between problems,
 // short enough that an abandoned phone or a borrowed laptop stops being a live
 // session within a month.
 export const IDLE_LIMIT_MS = 30 * 24 * 60 * 60 * 1000;

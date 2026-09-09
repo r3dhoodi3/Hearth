@@ -212,7 +212,7 @@ describe("the claim post", () => {
   // form actually named "zip" was an optional box tucked inside "Know more
   // details?" - a disclosure most people never open. Leaving it blank (or
   // clearing it) posted an empty ZIP, which claimPropertyAction reads as out of
-  // area: the homeowner was refused with "Hearth isn't in your area yet" and
+  // area: the homeowner was refused with "OakTend isn't in your area yet" and
   // filed on the waitlist for the ZIP they had just successfully looked up.
   it("posts the ZIP from the locked field, and only that one", async () => {
     const { container } = await toReadyStep();
@@ -318,7 +318,7 @@ describe("OnboardingForm lookup refusals", () => {
     await submitAddress();
 
     expect(
-      await screen.findByText(/Hearth isn't in your area yet/i)
+      await screen.findByText(/OakTend isn't in your area yet/i)
     ).toBeInTheDocument();
     expect(screen.getByText(LAUNCH_ONLY_MESSAGE)).toBeInTheDocument();
     expect(screen.queryByText(/couldn't save you to the waitlist/i)).toBeNull();
@@ -718,7 +718,7 @@ describe("OnboardingForm county record disagrees with the picked address", () =>
 // Photon needs a house number: asked for a bare street name it answers with
 // centerlines and bus stops, all of which mapPhotonResults drops for having no
 // number. So a street-name-only query reliably comes back empty, and an empty
-// list with nothing under it reads as "Hearth has never heard of my street".
+// list with nothing under it reads as "OakTend has never heard of my street".
 describe("OnboardingForm empty suggestion list", () => {
   const HINT = "Add a house number to see matches.";
 
@@ -804,7 +804,7 @@ describe("OnboardingForm empty suggestion list", () => {
 // React 19 resets a form as soon as the function passed to <form action>
 // settles, and a refused claim settles like any other. The name box and the
 // optional detail boxes are uncontrolled, so before restoreTypedValues() the
-// very submit that produced "Hearth isn't in your area yet" also wiped what
+// very submit that produced "OakTend isn't in your area yet" also wiped what
 // had been typed into them - the retry started over from the county's numbers
 // instead of the corrected ones. Every keystroke is already mirrored into the
 // draft, so the values go back on screen alongside the error.

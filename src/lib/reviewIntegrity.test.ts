@@ -8,7 +8,7 @@ import path from "node:path";
 // absence, not a behaviour. A pro should never be able to buy a better
 // review, a better position in the review list, or a better star average by
 // paying more, holding a bigger wallet deposit, joining Pro membership, or
-// winning more leads. That is the whole trust promise of a Hearth rating:
+// winning more leads. That is the whole trust promise of an OakTend rating:
 // the same reviews a $5-deposit pro gets, a top-deposit-tier Pro member
 // gets, in the same order.
 //

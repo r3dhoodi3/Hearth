@@ -45,7 +45,6 @@ describe("pro help is one client component with plain-data props", () => {
     for (const prop of [
       "member={member}",
       "trialEligible={trialEligible}",
-      "feedbackClaimed={feedbackClaimed}",
       "sent={sent}",
     ]) {
       expect(page, prop).toContain(prop);
@@ -69,21 +68,20 @@ describe("pro help keeps the content it always had", () => {
     expect(view).not.toMatch(/\$\d+ *</);
   });
 
-  it("keeps the support form, the bug bounty, safety, and the app guide", () => {
+  it("keeps the support form, the bug report card, safety, and the app guide", () => {
     expect(view).toContain('id="support-form"');
-    expect(view).toContain("Found a bug?");
+    expect(view).toContain("FEEDBACK_CARD_TITLE");
     expect(view).toContain("Report abuse or a safety concern");
     expect(view).toContain('href="/pro/blocks"');
     expect(view).toContain("<ShowAppGuideButton tone=\"pro\" />");
   });
 
-  it("keeps the bug-report card after the credit is claimed, without re-promising the $5", () => {
-    // Reports are welcome forever (migration 0152); only the money was
-    // once-ever. So the card stays, and its claimed-side copy is the honest
-    // repeat note rather than the offer headline.
-    expect(view).not.toContain("{!feedbackClaimed && (");
-    expect(view).toContain('{feedbackClaimed ? "Found a bug?" : FEEDBACK_CARD_TITLE}');
-    expect(view).toContain("FEEDBACK_REPEAT_NOTE");
+  it("keeps the bug-report card evergreen, with no claimed-state branching (C7)", () => {
+    // C7 (2026-09-07): every report goes to review, so there is no more
+    // "already claimed" state to branch the headline on - the card always
+    // shows the same title and the same pending-review copy.
+    expect(view).not.toContain("feedbackClaimed");
+    expect(view).toContain("FEEDBACK_WHAT_COUNTS");
     expect(view).toContain('href="/pro/feedback"');
   });
 });

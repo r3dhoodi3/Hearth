@@ -40,14 +40,14 @@ const DELAY_MS = 5000;
 
 // Flows where an install nudge would be noise or a distraction: getting
 // signed up, getting signed in, paying, leaving feedback, or typing into
-// Ask Hearth or a chat thread. All are path-prefix matches, so a nested
+// Ask OakTend or a chat thread. All are path-prefix matches, so a nested
 // route under any of these is covered too.
 //
-// Ask Hearth and the chat threads are here for the same reason: this card is
+// Ask OakTend and the chat threads are here for the same reason: this card is
 // fixed to the bottom of the phone screen, right where the composer lives on
 // both. A tester saw it pop up mid-answer and cover the input. There is no
 // global "a request is in flight" signal to gate on instead (no
-// hearth:ask-* window event or body class marks that moment - AskHearth.tsx's
+// oaktend:ask-* window event or body class marks that moment - AskOakTend.tsx's
 // loading state is local to that component), so this excludes the whole
 // route rather than just the moment of an in-flight request: the composer
 // sits at the bottom of these pages the entire time, in-flight or not.
@@ -61,7 +61,7 @@ const EXCLUDED_PATH_PREFIXES = [
   "/pro/ask",
   "/chats",
   "/pro/chats",
-  // Every other route that mounts AskHearth. Its composer is pinned to the
+  // Every other route that mounts AskOakTend. Its composer is pinned to the
   // bottom of the pane on all of them, which is where this card lands: Learn
   // and Search embed the chat inline, and the walkthrough is a step-by-step
   // flow with its own bottom controls to get through.
@@ -173,7 +173,7 @@ export default function AddToHomeScreenNudge() {
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-              Add Hearth to your Home Screen
+              Add OakTend to your Home Screen
             </p>
             <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">
               Tap Share, then Add to Home Screen. It opens like an app, full

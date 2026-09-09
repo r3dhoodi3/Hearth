@@ -75,7 +75,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
     btnRef.current?.focus();
   }
 
-  // An "Ask Hearth" row used to lead this group on phones. Ask Hearth lives
+  // An "Ask OakTend" row used to lead this group on phones. Ask OakTend lives
   // in one place now, the Messages tab (the pinned row at the top of /chats),
   // so this sheet lists tools and nothing else.
   const homeLinks = [
@@ -186,7 +186,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                       <span className="rounded bg-bark-100 px-1.5 text-[11px] font-medium text-bark-700 dark:bg-bark-700 dark:text-stone-300">
                         Plus
                       </span>
-                      <span className="sr-only">(requires Hearth Plus)</span>
+                      <span className="sr-only">(requires OakTend Plus)</span>
                     </>
                   )}
                 </Link>
@@ -224,7 +224,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
               // z-50 it would otherwise still catch a tap meant for something
               // opening right after it, e.g. the account menu's Household row
               // - the tap would land on this sheet's own Emergency tile
-              // instead, since that's the first tile in it (Ask Hearth leads
+              // instead, since that's the first tile in it (Ask OakTend leads
               // the "Your home" group below it, not the sheet).
               className={`fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-menu outline-none dark:border-white/10 dark:bg-stone-800 ${
                 open ? "motion-safe:animate-fade-slide-up" : "pointer-events-none motion-safe:animate-fade-slide-down"
@@ -319,7 +319,7 @@ export default function ToolsMenu({ hasPlus }: { hasPlus: boolean }) {
                             <span className="rounded bg-bark-100 px-1.5 text-[11px] font-medium text-bark-700 dark:bg-bark-700 dark:text-stone-300">
                               Plus
                             </span>
-                            <span className="sr-only">(requires Hearth Plus)</span>
+                            <span className="sr-only">(requires OakTend Plus)</span>
                           </>
                         )}
                       </Link>

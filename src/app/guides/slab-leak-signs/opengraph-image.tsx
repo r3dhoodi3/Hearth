@@ -9,11 +9,11 @@ import { renderOgCard, OG_SIZE, OG_CONTENT_TYPE } from "@/lib/ogCard";
 
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
-export const alt = "Hearth guide: Slab leak signs: how to spot one early";
+export const alt = "OakTend guide: Slab leak signs: how to spot one early";
 
 export default function OgImage() {
   return renderOgCard(
     "Slab leak signs: how to spot one early",
-    "A Hearth home guide"
+    "An OakTend home guide"
   );
 }

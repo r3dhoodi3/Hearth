@@ -1,4 +1,4 @@
-// "Is this an iPhone, and has Hearth been added to the Home Screen yet?"
+// "Is this an iPhone, and has OakTend been added to the Home Screen yet?"
 //
 // Extracted from src/components/AddToHomeScreenNudge.tsx, which had these two
 // checks private to itself, because the push notification UI needs exactly the
@@ -34,7 +34,7 @@ export function isIosSafari(): boolean {
 // is the standards-track fallback other engines use.
 //
 // Fails closed to TRUE: for the install nudge that means "don't nudge", and for
-// the push card it means "don't tell an Android user to add Hearth to their
+// the push card it means "don't tell an Android user to add OakTend to their
 // Home Screen", both of which are the harmless answer.
 export function isStandalone(): boolean {
   try {
@@ -49,7 +49,7 @@ export function isStandalone(): boolean {
 
 // The one case where the "Turn on notifications" button cannot work and must
 // explain itself instead: an iPhone in a Safari TAB. Android Chrome subscribes
-// happily from a plain tab, and an installed Hearth on iOS is fine.
+// happily from a plain tab, and an installed OakTend on iOS is fine.
 export function needsHomeScreenInstallForPush(): boolean {
   return isIosSafari() && !isStandalone();
 }

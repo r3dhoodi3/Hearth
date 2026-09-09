@@ -14,7 +14,7 @@ import { askLockKey, askResetAt, writeAskLock } from "@/lib/askLock";
 //    difference: it is a different ELEMENT per breakpoint, not a key handler,
 //    because a browser only submits a form from Enter in an <input>.
 //
-// 2. "when you use up all tokens for Ask Hearth, click out and go back in, it
+// 2. "when you use up all tokens for Ask OakTend, click out and go back in, it
 //    has the text prompt again... can we just lock it." The lock is written to
 //    localStorage with the end of the server's 24 hour window, so a remount
 //    inside that window comes back locked, and one after it does not.
@@ -38,7 +38,7 @@ vi.mock("@/lib/ask-actions", () => ({
 
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 
-import AskHearth from "./AskHearth";
+import AskOakTend from "./AskOakTend";
 
 // Both keys, per askPhotoGate.test.tsx: the bare one is what the chat reads on
 // the very first render, the namespaced one is where it settles once the
@@ -78,7 +78,7 @@ afterEach(() => {
 
 describe("the composer, by breakpoint", () => {
   it("is a single-line input on desktop, where Enter sends", async () => {
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await settle();
     const field = screen.getByPlaceholderText("Ask anything");
     expect(field.tagName).toBe("INPUT");
@@ -88,7 +88,7 @@ describe("the composer, by breakpoint", () => {
 
   it("is a textarea on a phone, where Return adds a line and only Send sends", async () => {
     phoneWidth(true);
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await settle();
     const field = screen.getByPlaceholderText("Ask anything");
     expect(field.tagName).toBe("TEXTAREA");
@@ -104,7 +104,7 @@ describe("the composer, by breakpoint", () => {
 describe("a spent daily allowance", () => {
   it("comes back locked after leaving the screen and returning", async () => {
     seedLock(3);
-    const first = render(<AskHearth fill />);
+    const first = render(<AskOakTend fill />);
     await settle();
     expect(
       screen.getByText("That's your 3 free questions for today. They reset tomorrow.")
@@ -114,7 +114,7 @@ describe("a spent daily allowance", () => {
     // Leave and come back: this is the exact trip that used to hand back an
     // open composer that refused everything typed into it.
     first.unmount();
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await settle();
     expect(
       screen.getByText("That's your 3 free questions for today. They reset tomorrow.")
@@ -128,7 +128,7 @@ describe("a spent daily allowance", () => {
     seedLock(3, now);
     vi.spyOn(Date, "now").mockReturnValue(askResetAt(now) + 1000);
 
-    render(<AskHearth fill />);
+    render(<AskOakTend fill />);
     await settle();
     expect(screen.getByPlaceholderText("Ask anything")).toBeInTheDocument();
     expect(
@@ -140,7 +140,7 @@ describe("a spent daily allowance", () => {
   it("never locks the pro copilot off the homeowner's spent day", async () => {
     seedLock(3);
     render(
-      <AskHearth
+      <AskOakTend
         fill
         endpoint="/api/pro-ask"
         storageKeyBase="hearth_pro_ask_chat"

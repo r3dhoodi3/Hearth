@@ -2,15 +2,18 @@
 // event bus that tells the app a good moment to ask has just happened.
 //
 // WEB TODAY: every function here is a no-op or a plain flag. Nothing in this
-// file imports a Capacitor package, and nothing may, until the native wrapper
-// build actually exists: the packages assume a Capacitor runtime, they would
-// either fail to resolve in the web build or ship dead native code to every
-// browser visitor, and neither is worth paying for a call that cannot fire.
+// file imports a Capacitor package. UPDATE (2026-09-07, appstore-execute):
+// the Capacitor native app shell now exists (capacitor.config.ts, ios/,
+// android/ - see docs/APP-STORE-SUBMISSION.md), but
+// @capacitor-community/in-app-review specifically was not one of the plugins
+// that pass installed (it was out of scope for that checklist), so this file
+// is still deliberately unfinished rather than half-wired: adding the static
+// import below without the package present would break the build, and this
+// file's own review test (src/lib/reviewPrompt.test.ts) still asserts no
+// static Capacitor import here for exactly that reason.
 //
-// WHEN THE CAPACITOR/iOS WRAPPER IS BUILT, this one file is what changes (or
-// is aliased to a native twin at build time). Add
-// @capacitor-community/in-app-review (or @capawesome/capacitor-app-review) in
-// THAT build only and fill in requestPlatformReview():
+// TO FINISH THIS: install @capacitor-community/in-app-review (or
+// @capawesome/capacitor-app-review) and fill in requestPlatformReview():
 //
 //   import { Capacitor } from "@capacitor/core";
 //   import { InAppReview } from "@capacitor-community/in-app-review";
@@ -50,7 +53,7 @@ export type ReviewMoment = "plan_built" | "job_hired";
 
 // Dispatched the instant a positive outcome lands, by whatever component owns
 // that success state. ReviewPrompt.tsx is the only listener.
-export const REVIEW_MOMENT_EVENT = "hearth:review-moment";
+export const REVIEW_MOMENT_EVENT = "oaktend:review-moment";
 
 // The moment also goes in sessionStorage, not just the event, for two reasons:
 // the success state is often followed by a redirect (the rehire flow lands

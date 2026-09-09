@@ -18,7 +18,7 @@ import {
   PRO_LEADS_HREF,
 } from "@/lib/constants";
 
-// Hearth Pro perk: instant new-job alerts. When a homeowner posts a job, every
+// OakTend Pro perk: instant new-job alerts. When a homeowner posts a job, every
 // contractor whose categories cover it AND who holds a live Pro membership gets
 // pinged right away through sendNotification (in-app now, email/SMS too once
 // the provider env vars are set). Free pros lose nothing: the job board and
@@ -76,6 +76,13 @@ export type NewLeadAlertInput = {
   // to pass it got full email/SMS), so every call site must now name its
   // choice explicitly.
   externalChannels: boolean;
+  // SEC-1: the auth user id of the homeowner who posted this job. A
+  // dual-side account (a contractors row AND a properties row on the same
+  // auth user) must never be pinged about its own job. Optional only so a
+  // caller that genuinely cannot resolve it (there is none today - both
+  // call sites have `user.id` in hand) degrades to the old behavior rather
+  // than throwing; every real call site must pass it.
+  posterUserId?: string | null;
 };
 
 // Returns the user ids that were alerted (empty on any failure), so the caller
@@ -216,11 +223,16 @@ export async function alertProsForNewLead(
       });
     }
 
+    // SEC-1: never alert the poster about their own job, even if a
+    // dual-side account's contractors row matched the category.
+    const posterUserId = lead.posterUserId ?? null;
     const candidateIds = Array.from(
       new Set(
         contractors
           .map((c) => c.user_id)
-          .filter((id): id is string => Boolean(id))
+          .filter(
+            (id): id is string => Boolean(id) && id !== posterUserId
+          )
       )
     );
     if (candidateIds.length === 0) return alerted;
@@ -311,7 +323,7 @@ export async function alertProsForNewLead(
     // per-recipient semantics must stay in lockstep with that function's:
     // the same notifications row is written for every target, and the same
     // opt-out rules decide the outbound channels. The ONLY thing restated here
-    // is the insert. Everything after it - the Hearth Plus gate, the CAN-SPAM
+    // is the insert. Everything after it - the OakTend Plus gate, the CAN-SPAM
     // email opt-out, the TCPA consent and quiet-hours checks - still runs
     // inside notify.ts, through sendOutboundChannels, so there is one copy of
     // those rules and not two. If you add a step to sendNotification, put it in

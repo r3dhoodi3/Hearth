@@ -9,11 +9,11 @@ import { renderOgCard, OG_SIZE, OG_CONTENT_TYPE } from "@/lib/ogCard";
 
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
-export const alt = "Hearth guide: Home maintenance schedule: how often to do everything";
+export const alt = "OakTend guide: Home maintenance schedule: how often to do everything";
 
 export default function OgImage() {
   return renderOgCard(
     "Home maintenance schedule: how often to do everything",
-    "A Hearth home guide"
+    "An OakTend home guide"
   );
 }

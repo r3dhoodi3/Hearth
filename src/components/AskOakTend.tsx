@@ -414,7 +414,7 @@ function WaitingPill() {
 // own conversation without colliding with the homeowner chat.
 const DEFAULT_STORAGE_KEY = "hearth_ask_chat";
 const DEFAULT_RETENTION_KEY = "hearth_ask_retention";
-const SYNC_EVENT = "hearth:ask-updated";
+const SYNC_EVENT = "oaktend:ask-updated";
 // Remembered answer to "which plan is this viewer on?", written from the
 // server's own verdict on every reply (see the meter fields below: freeLimit,
 // freeRemaining, askTier). It drives things that both have to be decided
@@ -631,8 +631,8 @@ export function freshest(inMemory: Msg[], stored: Msg[]): Msg[] {
 }
 
 const DEFAULT_GREETING =
-  "Hi, I'm Hearth. If you have any questions about your home, feel free to ask.";
-const DEFAULT_HEADING_TITLE = "Ask Hearth";
+  "Hi, I'm OakTend. If you have any questions about your home, feel free to ask.";
+const DEFAULT_HEADING_TITLE = "Ask OakTend";
 // Names itself as AI explicitly, not just "assistant": California's bot
 // disclosure law (B&P 17940-17943) wants this clear and conspicuous, and
 // persistent rather than only in the first message. This heading renders
@@ -643,7 +643,31 @@ const DEFAULT_HEADING_TITLE = "Ask Hearth";
 const DEFAULT_HEADING_SUBTITLE =
   "Your home AI assistant. Answers use your systems, ages, and any issues.";
 const DEFAULT_DISCLAIMER =
-  "Hearth's cost figures are ballpark estimates. Confirm with a local pro before you commit.";
+  "OakTend's cost figures are ballpark estimates. Confirm with a local pro before you commit.";
+
+// The point-of-interaction bot disclosure B&P 17940-17941 wants (see
+// 11-ai-disclosure.md section 1): shown at the TOP of every Ask session,
+// above the first message, every time the chat opens - not just once, and
+// not dismissible, so there is never a state where the chat is open and this
+// line is not visible. Distinct from AiNotice near the composer below, which
+// carries the ballpark-estimate caveat instead; this is the plain "you are
+// talking to software" line the law wants at the point of interaction.
+// Shared by both render branches below (compact card and full dock) and by
+// both sides of the marketplace - the pro copilot (src/app/pro/ask/page.tsx)
+// renders this same AskOakTend component, just with its own headingSubtitle.
+function AiChatDisclosure() {
+  return (
+    <p className="text-[11px] text-stone-500 max-sm:text-xs dark:text-stone-400">
+      You&apos;re chatting with an AI assistant, not a person.{" "}
+      <Link
+        href="/ai-disclosure"
+        className="underline decoration-dotted hover:text-stone-600 dark:hover:text-stone-300"
+      >
+        How it works
+      </Link>
+    </p>
+  );
+}
 
 // `fill` = take the full height of its container (the Messages pane); otherwise
 // it renders as a compact card (/search). `suggestions` are starter questions
@@ -651,7 +675,7 @@ const DEFAULT_DISCLAIMER =
 // personalized opener (e.g. referencing their systems/issues).
 // `initialQuestion` is a question handed to a freshly mounted instance (a ?q=
 // on /ask or /chats); it is submitted once.
-export default function AskHearth({
+export default function AskOakTend({
   fill = false,
   suggestions,
   greeting,
@@ -677,7 +701,7 @@ export default function AskHearth({
   // server component.
   replaceUrlAfterInitial?: string;
   // Which API to talk to and where to keep the conversation. Defaults keep the
-  // homeowner "Ask Hearth" behavior identical; the pro copilot overrides them.
+  // homeowner "Ask OakTend" behavior identical; the pro copilot overrides them.
   endpoint?: string;
   storageKeyBase?: string;
   retentionKeyBase?: string;
@@ -1461,13 +1485,13 @@ export default function AskHearth({
   // order), so two mounted panes can never both answer it.
   useEffect(() => {
     function onAsk(e: Event) {
-      if ((e as any).__hearthHandled) return;
-      (e as any).__hearthHandled = true;
+      if ((e as any).__oakTendHandled) return;
+      (e as any).__oakTendHandled = true;
       const q = (e as CustomEvent).detail;
       if (typeof q === "string") submitRef.current(q);
     }
-    window.addEventListener("hearth:ask-question", onAsk);
-    return () => window.removeEventListener("hearth:ask-question", onAsk);
+    window.addEventListener("oaktend:ask-question", onAsk);
+    return () => window.removeEventListener("oaktend:ask-question", onAsk);
   }, []);
 
   // Submit a question handed in by the dock when it opened for an event that
@@ -1852,13 +1876,13 @@ export default function AskHearth({
           after one). */}
       {photoLocked && !atFreeLimit && (
         <p className="mb-2 text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
-          {/* The pro copilot gates photos on Hearth PRO, not Plus (see
+          {/* The pro copilot gates photos on OakTend PRO, not Plus (see
               src/app/api/pro-ask/route.ts), and it shares this component. The
               link itself already comes from the server's own locked reply, so
               only the product name has to follow the endpoint. */}
           {endpoint === "/api/ask"
-            ? "Photos need Hearth Plus."
-            : "Photos need Hearth Pro."}{" "}
+            ? "Photos need OakTend Plus."
+            : "Photos need OakTend Pro."}{" "}
           <Link
             href={plusLink.href}
             // Phone only: padding grows an inline link to a 44px touch area
@@ -1933,14 +1957,14 @@ export default function AskHearth({
             // with no reason given.
             <button
               type="button"
-              aria-label="Attach a photo, requires Hearth Plus"
-              title="Attach a photo (Hearth Plus)"
+              aria-label="Attach a photo, requires OakTend Plus"
+              title="Attach a photo (OakTend Plus)"
               onClick={() => setPhotoLocked(true)}
               className="flex items-center gap-1 rounded-lg border border-stone-200 px-2 text-stone-500 hover:border-bark-500 hover:text-bark-700 max-sm:min-h-11 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-300"
             >
               {photoIcon}
               {/* Matches the dashboard's Plus chip (see ToolsMenu.tsx). The
-                  button's aria-label already says "requires Hearth Plus", so
+                  button's aria-label already says "requires OakTend Plus", so
                   this is aria-hidden rather than repeating it for a reader. */}
               <span
                 aria-hidden="true"
@@ -2067,6 +2091,9 @@ export default function AskHearth({
       <div className="card border-bark-100 bg-bark-50 dark:border-bark-700 dark:bg-bark-700/20">
         <p className="text-sm font-semibold text-bark-700 dark:text-stone-300">{headingTitle}</p>
         <p className="text-xs text-bark-700 dark:text-stone-300">{headingSubtitle}</p>
+        <div className="mt-1">
+          <AiChatDisclosure />
+        </div>
 
         {(hasConversation || loading) && (
           <div
@@ -2150,6 +2177,7 @@ export default function AskHearth({
           </button>
         </div>
       </div>
+      <AiChatDisclosure />
 
       <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto py-2">
         {messages.map((m, i) => bubble(m, i, i === messages.length - 1))}

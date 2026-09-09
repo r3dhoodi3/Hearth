@@ -105,9 +105,19 @@ vi.mock("@/lib/supabase/server", () => ({
     // A fixed id keeps the rendered variant deterministic for these tests;
     // the sub-line's exact wording is asserted nowhere here, only that the
     // card renders, so either arm satisfies the suite.
+    //
+    // getSession, not just getUser: perf-2 2026-09-08 switched the page to
+    // src/lib/auth.ts's cached getUser(), which reads the session cookie via
+    // supabase.auth.getSession() (no live auth-server round trip) rather than
+    // calling supabase.auth.getUser() directly. Same fixed id either way.
     auth: {
       getUser: async () => ({
         data: { user: { id: "00000000-0000-4000-8000-000000000001" } },
+      }),
+      getSession: async () => ({
+        data: {
+          session: { user: { id: "00000000-0000-4000-8000-000000000001" } },
+        },
       }),
     },
   })),
@@ -136,7 +146,7 @@ async function renderForecast(over: Partial<typeof fixtures> = {}) {
   return render(element as React.ReactElement);
 }
 
-describe("forecast page, Hearth Plus member", () => {
+describe("forecast page, OakTend Plus member", () => {
   it("shows the push-it-out step for a system, with a range and no fake precision", async () => {
     await renderForecast();
     expect(
@@ -263,7 +273,7 @@ describe("forecast page, free reader", () => {
     expect(
       screen.getByText(/Your full breakdown is ready/)
     ).toBeInTheDocument();
-    const cta = screen.getByRole("link", { name: "Get Hearth Plus" });
+    const cta = screen.getByRole("link", { name: "Get OakTend Plus" });
     expect(cta).toHaveAttribute("href", "/plus?reason=forecast");
   });
 

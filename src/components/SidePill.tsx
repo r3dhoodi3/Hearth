@@ -3,7 +3,7 @@
 // when hasPro is true, ProNav.tsx only when hasHome is true, so a single-side
 // account sees nothing new here. One accent color, no gradient, matching the
 // flat-color design rule; the accent follows whichever side's own token the
-// calling nav already uses (bark for Nav.tsx, hearth for ProNav.tsx) so this
+// calling nav already uses (bark for Nav.tsx, oaktend for ProNav.tsx) so this
 // never introduces a third brand color.
 //
 // `label` is a free string: usually a short side name ("Home" / "Business"),
@@ -16,7 +16,7 @@ export default function SidePill({
   className = "",
 }: {
   label: string;
-  accent: "bark" | "hearth";
+  accent: "bark" | "oaktend";
   // "md" is the standard header pill; "sm" is a tighter pill for spots where it
   // has to tuck into a smaller gap (the pro desktop badge under the wordmark).
   size?: "sm" | "md";
@@ -25,7 +25,7 @@ export default function SidePill({
   const tone =
     accent === "bark"
       ? "bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300"
-      : "bg-hearth-100 text-hearth-700 dark:bg-hearth-700 dark:text-stone-300";
+      : "bg-oaktend-100 text-oaktend-700 dark:bg-oaktend-700 dark:text-stone-300";
   const sizing =
     size === "sm" ? "px-1.5 py-0 text-[11px]" : "px-2 py-0.5 text-[13px]";
   return (

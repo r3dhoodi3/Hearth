@@ -19,12 +19,12 @@ export default function MarkChatSeen({
     } catch {
       /* localStorage unavailable */
     }
-    window.dispatchEvent(new Event("hearth:chat-seen"));
+    window.dispatchEvent(new Event("oaktend:chat-seen"));
     // Persist it server-side too (the cookie survives a reload), then refresh
     // the badge once more once that write lands.
     action(leadId)
       .then(() => {
-        window.dispatchEvent(new Event("hearth:chat-seen"));
+        window.dispatchEvent(new Event("oaktend:chat-seen"));
       })
       .catch(() => {
         // Fail soft: the local seen-time above already cleared the badge, and

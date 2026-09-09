@@ -47,13 +47,13 @@ function toBase64(file: File): Promise<string> {
 // estimate guessed, so a scan can legitimately lower the score too.
 function scoreMessage(before: number, after: number): string {
   if (after > before)
-    return `Nice. Your Home Health Score moved from ${before} to ${after}.`;
+    return `Nice. Your Home Health Score moved from ${before}/100 to ${after}/100.`;
   if (after < before)
-    return `Your Home Health Score moved from ${before} to ${after}, now that we know more.`;
-  return `Your Home Health Score stayed at ${after} - this one was already accounted for.`;
+    return `Your Home Health Score moved from ${before}/100 to ${after}/100, now that we know more.`;
+  return `Your Home Health Score stayed at ${after}/100 - this one was already accounted for.`;
 }
 
-// One card in the "walk your home" flow: snap the data plate, Hearth reads a
+// One card in the "walk your home" flow: snap the data plate, OakTend reads a
 // SUGGESTION off it (never auto-written), the owner confirms or edits it, and
 // the card shows the real Home Health Score payoff for that one scan.
 //
@@ -152,14 +152,14 @@ export default function SystemCaptureCard({
       // or unconfigured key is not a bad photo.
       if (!read && data?.reason === "rate_limited") {
         failNote =
-          "You've hit today's AI limit, so Hearth can't read the photo right now. Fill in what you can and confirm.";
+          "You've hit today's AI limit, so OakTend can't read the photo right now. Fill in what you can and confirm.";
       } else if (!read && data?.reason === "busy") {
         // An owner-wide ceiling, or a burst window filled by another tool
         // (this route no longer counts toward the burst limit, so a normal
         // walkthrough never trips it). Their own allowance is untouched, so
         // do not tell them they are out for the day.
         failNote =
-          "Hearth's AI is busy right now. Fill in what you can and confirm.";
+          "OakTend's AI is busy right now. Fill in what you can and confirm.";
       } else if (!read && data?.reason === "no_key") {
         failNote =
           "Automatic reading isn't set up yet. Fill in what you can and confirm.";
@@ -182,7 +182,7 @@ export default function SystemCaptureCard({
     setSuggestion(read ?? BLANK_SUGGESTION);
     setNote(
       read
-        ? "Here's what Hearth read off the label. Check it and confirm."
+        ? "Here's what OakTend read off the label. Check it and confirm."
         : failNote
     );
     setPhase("review");
@@ -251,7 +251,7 @@ export default function SystemCaptureCard({
               Snap the data plate
             </span>
             <span className="text-xs text-stone-500 dark:text-stone-400">
-              Hearth reads the brand, model, and age off it
+              OakTend reads the brand, model, and age off it
             </span>
             <input
               type="file"

@@ -6,7 +6,7 @@ import { getUserProfile } from "@/lib/user";
 import { assessSystem } from "@/lib/health";
 import { labelFor, SYSTEM_TYPES, ISSUE_CATEGORIES } from "@/lib/constants";
 
-// A short, proactive opener for Ask Hearth. It names the single most important
+// A short, proactive opener for Ask OakTend. It names the single most important
 // thing about the home right now, so the assistant speaks first instead of
 // waiting to be asked. This is the "voice" that a plain chatbot lacks. Returns
 // undefined when there is nothing worth leading with, so the assistant falls

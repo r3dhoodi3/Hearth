@@ -21,7 +21,7 @@ type Browser = Awaited<ReturnType<typeof getSupabase>>;
 // below is just a safety net for missed/dropped realtime events (e.g. a
 // channel that silently disconnects), so it runs on a slow 2-minute cadence
 // rather than duplicating what realtime already does every 30s. A focus
-// refresh and the "hearth:chat-seen" event both re-poll immediately for the
+// refresh and the "oaktend:chat-seen" event both re-poll immediately for the
 // cases that matter most (tab regains focus, user just opened a conversation).
 const SEEN_COOKIE: Record<string, string> = {
   homeowner: "hearth_ho_chat_seen",
@@ -145,12 +145,12 @@ export function useUnreadPoll(role: UnreadRole, enabled: boolean): number {
     // Opening a conversation marks it read and fires this event; re-poll at once
     // so the count clears immediately instead of lingering until the next poll.
     const onSeen = () => poll();
-    window.addEventListener("hearth:chat-seen", onSeen);
+    window.addEventListener("oaktend:chat-seen", onSeen);
     const t = setInterval(poll, 120000);
     return () => {
       active = false;
       window.removeEventListener("focus", onFocus);
-      window.removeEventListener("hearth:chat-seen", onSeen);
+      window.removeEventListener("oaktend:chat-seen", onSeen);
       clearInterval(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

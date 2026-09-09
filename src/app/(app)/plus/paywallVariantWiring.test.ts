@@ -31,7 +31,7 @@ const lib = src("../../../lib/paywallExperiment.ts");
 describe("the checkout actions honor the variant server-side", () => {
   it.each([
     ["homeowner Plus", plusAction],
-    ["Hearth Pro", proAction],
+    ["OakTend Pro", proAction],
   ])("%s derives the variant from the verified user id", (_l, source) => {
     expect(source).toContain(
       'import { variantForUser } from "@/lib/paywallExperiment";'

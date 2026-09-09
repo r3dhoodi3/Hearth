@@ -6,7 +6,7 @@ import { safeNextPath } from "@/lib/safeNext";
 
 export const metadata: Metadata = {
   title: "Join a home",
-  description: "Join a household on Hearth.",
+  description: "Join a household on OakTend.",
 };
 
 const UUID_RE =
@@ -73,7 +73,7 @@ export default async function JoinHouseholdPage(
       <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
         <div className="card text-center">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-            Join a home on Hearth
+            Join a home on OakTend
           </h1>
           <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
             Someone shared a QR code inviting you to share day to day access
@@ -82,7 +82,7 @@ export default async function JoinHouseholdPage(
           </p>
 
           {/*
-            Hearth is a web app with no installable app to "download", so the
+            OakTend is a web app with no installable app to "download", so the
             new-here path is account creation, not an app-store link.
             Opening this page already stamped the scan-grace extension above
             (migration 0097), so this visitor now has a 30 minute window to
@@ -149,7 +149,7 @@ function InvalidState({ reason }: { reason?: string | null }) {
       ? "This home already has its maximum number of members. Ask the owner to remove someone, or ask them for a fresh code once there's room."
       : reason === "rate_limited"
         ? "Too many attempts just now. Wait a minute, then ask for a fresh code."
-        : "This code has expired or isn't valid anymore. QR codes on Hearth refresh every 5 minutes.";
+        : "This code has expired or isn't valid anymore. QR codes on OakTend refresh every 5 minutes.";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">

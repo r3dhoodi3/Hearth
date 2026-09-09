@@ -121,7 +121,7 @@ export default function SetupChecklist({ items }: { items: SetupItem[] }) {
                 // max-sm: only - below 40px tall as a plain text link, these
                 // were confirmed too small to tap reliably on a phone.
                 // Desktop keeps the original compact inline link untouched.
-                className="shrink-0 text-sm font-medium text-hearth-700 hover:underline max-sm:flex max-sm:min-h-11 max-sm:items-center max-sm:py-2 dark:text-hearth-300"
+                className="shrink-0 text-sm font-medium text-oaktend-700 hover:underline max-sm:flex max-sm:min-h-11 max-sm:items-center max-sm:py-2 dark:text-oaktend-300"
               >
                 {item.linkLabel} →
               </Link>

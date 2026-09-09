@@ -15,16 +15,16 @@ import { generateText, hasClaudeKey, isRateLimitError } from "@/lib/claude";
 
 export const runtime = "nodejs";
 
-// Insurance Requote Packet (Hearth Plus): builds a plain-language summary of
-// the home from the facts Hearth actually has on file (location, size, age,
+// Insurance Requote Packet (OakTend Plus): builds a plain-language summary of
+// the home from the facts OakTend actually has on file (location, size, age,
 // systems and their install years, recent completed maintenance, current
 // premium and renewal date) that the owner can hand to insurance agents when
 // shopping for quotes. The packet also lists coverage questions to ask and
-// what to compare beyond price. The homeowner shares it themselves: Hearth
+// what to compare beyond price. The homeowner shares it themselves: OakTend
 // never contacts insurers and never promises savings.
 //
 // Input:  none (everything comes from the active property, so a caller can't
-//         feed the model made-up numbers under Hearth's tone)
+//         feed the model made-up numbers under OakTend's tone)
 // Output: { packet } | { packet: null, reason: "no_key" | "rate_limited" | "failed" }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
 
   const currentYear = new Date().getFullYear();
 
-  // Only facts Hearth actually has. Anything else the packet needs becomes a
+  // Only facts OakTend actually has. Anything else the packet needs becomes a
   // bracketed placeholder the owner fills in.
   const facts: string[] = [];
   if (property.city || property.state) {

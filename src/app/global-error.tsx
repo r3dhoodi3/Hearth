@@ -59,7 +59,7 @@ export default function GlobalError({}: {
               fontSize: "14px",
               fontWeight: 600,
               color: "#ffffff",
-              // hearth-600 from tailwind.config.ts, hard-coded since
+              // oaktend-600 from tailwind.config.ts, hard-coded since
               // Tailwind may not have loaded here.
               backgroundColor: "#915d32",
               border: "none",

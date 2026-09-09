@@ -22,17 +22,23 @@ function Fixture({
   message = "",
   issueId = "",
   serverError = null,
+  email = "jane@example.com",
+  phone = "",
   onSubmit,
 }: {
   message?: string;
   issueId?: string;
   serverError?: string | null;
+  email?: string;
+  phone?: string;
   onSubmit: (e: React.FormEvent) => void;
 }) {
   return (
     <form onSubmit={onSubmit}>
       <input type="hidden" name="issue_id" defaultValue={issueId} />
       <textarea name="message" defaultValue={message} />
+      <input name="homeowner_email" defaultValue={email} />
+      <input name="homeowner_phone" defaultValue={phone} />
       <PostJobButton serverError={serverError} />
     </form>
   );
@@ -42,6 +48,8 @@ function renderForm(props: {
   message?: string;
   issueId?: string;
   serverError?: string | null;
+  email?: string;
+  phone?: string;
 } = {}) {
   const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
   const view = render(<Fixture {...props} onSubmit={onSubmit} />);
@@ -60,16 +68,16 @@ function renderForm(props: {
 }
 
 describe("PostJobButton", () => {
-  it("blocks submit and shows an error when the message is under 20 characters", () => {
+  it("blocks submit and shows an error when the message is under 10 characters", () => {
     const { onSubmit } = renderForm({ message: "too short" });
     fireEvent.click(screen.getByRole("button", { name: "Post job" }));
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "at least 20 characters"
+      "at least 10 characters"
     );
   });
 
-  it("allows submit once the message reaches 20 characters", () => {
+  it("allows submit once the message reaches 10 characters", () => {
     const { onSubmit } = renderForm({
       message: "Fix the leaky kitchen faucet please",
     });
@@ -158,6 +166,8 @@ describe("PostJobButton", () => {
           name="message"
           defaultValue="Fix the leaky kitchen faucet please"
         />
+        <input name="homeowner_email" defaultValue="jane@example.com" />
+        <input name="homeowner_phone" defaultValue="" />
         <PostJobButton serverError="Please pick a valid job category." />
       </form>
     );
@@ -183,13 +193,16 @@ describe("PostJobButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Post job" }));
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "at least 20 characters"
+      "at least 10 characters"
     );
   });
 
   it("clears a previous error once the message is long enough", () => {
     renderForm({ message: "short" });
-    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    const textareas = screen.getAllByRole(
+      "textbox"
+    ) as HTMLTextAreaElement[];
+    const textarea = textareas[0];
     const button = screen.getByRole("button", { name: "Post job" });
     fireEvent.click(button);
     expect(screen.getByRole("alert")).toBeInTheDocument();
@@ -198,6 +211,43 @@ describe("PostJobButton", () => {
       target: { value: "Now this description is long enough to pass" },
     });
     fireEvent.click(button);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  // B1: at least one of email or phone must be filled. Each field alone is
+  // still optional (a pro only needs one path in).
+  it("blocks submit and shows an error when both email and phone are blank", () => {
+    const { onSubmit } = renderForm({
+      message: "Fix the leaky kitchen faucet please",
+      email: "",
+      phone: "",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Post job" }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "email or phone number"
+    );
+  });
+
+  it("allows submit with only a phone number and no email", () => {
+    const { onSubmit } = renderForm({
+      message: "Fix the leaky kitchen faucet please",
+      email: "",
+      phone: "9495551234",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Post job" }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("allows submit with only an email and no phone", () => {
+    const { onSubmit } = renderForm({
+      message: "Fix the leaky kitchen faucet please",
+      email: "jane@example.com",
+      phone: "",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Post job" }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

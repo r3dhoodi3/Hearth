@@ -58,9 +58,9 @@ export default async function ProLayout({
         <header className="border-b border-stone-200 bg-white dark:border-white/10 dark:bg-stone-900">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
             <span className="flex items-center gap-2 text-lg font-semibold text-stone-900 dark:text-stone-100">
-              <Logo className="h-6 w-6 text-hearth-700 dark:text-hearth-400" />
+              <Logo className="h-6 w-6 text-oaktend-700 dark:text-oaktend-400" />
               <span>
-                Hearth{" "}
+                OakTend{" "}
                 <span className="font-normal text-stone-500 dark:text-stone-400">for Pros</span>
               </span>
             </span>
@@ -74,7 +74,7 @@ export default async function ProLayout({
             </form>
           </div>
         </header>
-        <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+        <main id="main" className="mx-auto max-w-5xl px-6 py-8">{children}</main>
       </div>
     );
   }
@@ -109,7 +109,7 @@ export default async function ProLayout({
     member || (established && (draftsLeft === null || draftsLeft > 0));
   const backOfficeHref = canUseBackOffice ? "/pro/tools" : "/pro/plus?reason=tools";
 
-  // Whether this contractor may still start a first-time Hearth Pro free
+  // Whether this contractor may still start a first-time OakTend Pro free
   // trial: the same "no live and no leftover Pro-side subscriptions row"
   // signal src/app/pro/billing/page.tsx used to compute (trialEligible there,
   // now moved here since ProTrialNudge is mounted once, in the shell, rather
@@ -131,7 +131,7 @@ export default async function ProLayout({
       {/* Extra bottom padding below lg keeps content clear of the fixed bottom
           tab bar. It was sm:pb-8; the bar now runs to lg (ProNav.tsx), so the
           padding follows it. Desktop at lg and up keeps today's pb-8. */}
-      <main className="mx-auto max-w-5xl px-6 pb-24 pt-8 lg:pb-8">
+      <main id="main" className="mx-auto max-w-5xl px-6 pb-24 pt-8 lg:pb-8">
         {children}
       </main>
       {/* The footer sits outside <main>, so main's pb-24 does not cover it and
@@ -150,7 +150,7 @@ export default async function ProLayout({
       </footer>
       {/* The floating copilot dock used to mount here on every pro screen. It
           is gone on purpose: the copilot lives in Messages now (the pinned Ask
-          Hearth row at the top of /pro/chats, and /pro/ask behind it), so a
+          OakTend row at the top of /pro/chats, and /pro/ask behind it), so a
           pill floating over every other page was a second door to the same
           room - and on a phone it landed on top of the content. */}
       <NewMessageNotifier role="contractor" />

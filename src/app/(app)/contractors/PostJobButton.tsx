@@ -4,12 +4,16 @@ import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { COLD_START_FREE_POSTING } from "@/lib/constants";
 import { markPushMoment } from "@/lib/pushPrompt";
+import {
+  normalizeContactEmail,
+  normalizeContactPhone,
+} from "@/lib/contactFields";
 
-// The same 20-character floor postJobAction enforces on the server. Catching it
+// The same 10-character floor postJobAction enforces on the server. Catching it
 // here first means a too-short post never submits, so the form (and any photos
 // already uploaded into its hidden inputs) is never wiped by the server-side
 // redirect that drops the POST body.
-const MIN_DESCRIPTION = 20;
+const MIN_DESCRIPTION = 10;
 
 // Submit button for the post-a-job form. Disables itself while the action is in
 // flight so a double-click can't post the same job twice, and blocks submit
@@ -66,7 +70,7 @@ export default function PostJobButton({
       (form.elements.namedItem("issue_id") as HTMLInputElement | null)?.value ??
       "";
 
-    // Mirror postJobAction exactly: a standalone post needs 20+ characters; a
+    // Mirror postJobAction exactly: a standalone post needs 10+ characters; a
     // post linked to an issue can fall back to that issue's own description
     // only when the box is left blank, so a blank-but-linked post is allowed
     // while a short (non-empty) one is not.
@@ -76,11 +80,49 @@ export default function PostJobButton({
     if (tooShort) {
       e.preventDefault();
       setError(
-        "Please describe the job in at least 20 characters so pros know what they're applying to."
+        "Please describe the job in at least 10 characters so pros know what they're applying to."
       );
       box?.focus();
       return;
     }
+
+    // B1: require at least one way to reach the homeowner. Both fields are
+    // marked optional individually (a pro only needs one), but the pair
+    // together can't both be blank, or an applying pro has no way to reach
+    // them before a match is made.
+    const emailBox = form.elements.namedItem(
+      "homeowner_email"
+    ) as HTMLInputElement | null;
+    const phoneBox = form.elements.namedItem(
+      "homeowner_phone"
+    ) as HTMLInputElement | null;
+    const emailTyped = (emailBox?.value ?? "").trim();
+    const phoneTyped = (phoneBox?.value ?? "").trim();
+    // Mirror the server's shape checks (src/lib/contactFields.ts) so a typo
+    // is caught here, where the form and its already-uploaded photos survive,
+    // instead of on the server redirect that drops both. A blank email box is
+    // still fine: the action falls back to the signed-in account's address.
+    const emailOk = emailTyped === "" || normalizeContactEmail(emailTyped) !== null;
+    const phoneOk = phoneTyped === "" || normalizeContactPhone(phoneTyped) !== null;
+    if (!emailOk || !phoneOk) {
+      e.preventDefault();
+      setError(
+        "That email address or phone number doesn't look right. Please check it and post again."
+      );
+      (emailOk ? phoneBox : emailBox)?.focus();
+      return;
+    }
+    // Both boxes cleared: ask for one back here rather than posting a lead a
+    // pro can only reach through whatever address happens to be on the
+    // account. The server still has the final word (it falls back to the
+    // signed-in user's auth email) - this is the friendlier, earlier stop.
+    if (emailTyped === "" && phoneTyped === "") {
+      e.preventDefault();
+      setError("Please add an email or phone number so pros can reach you.");
+      (emailBox ?? phoneBox)?.focus();
+      return;
+    }
+
     setError(null);
     // Posting a job is the moment the push offer makes sense: pros are about to
     // reply and the homeowner will want to know when they do. Stamped here
@@ -98,6 +140,10 @@ export default function PostJobButton({
           {shownError}
         </p>
       )}
+      <p className="text-xs text-stone-500 dark:text-stone-400">
+        Pros who pay to apply will see your name, address, phone (if added),
+        and the details below.
+      </p>
       <button
         ref={btnRef}
         onClick={check}

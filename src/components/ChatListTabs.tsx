@@ -18,6 +18,8 @@
 // conversation visible and highlighted in the list beside it.
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
+import { Sparkles } from "lucide-react";
 
 export type ChatListTab = "active" | "closed";
 
@@ -40,6 +42,8 @@ export default function ChatListTabs({
   pinned,
   activeRows,
   closedRows,
+  mobileAskHref,
+  mobileAskLabel = "Chat with AI",
 }: {
   /** True while a thread is open on a phone, where the list pane hides. */
   hiddenOnMobile: boolean;
@@ -51,10 +55,20 @@ export default function ChatListTabs({
   /** Empty-state sentence for each tab, in each side's own voice. */
   activeEmpty: string;
   closedEmpty: string;
-  /** Rows pinned above the filter (Ask Hearth and friends). Always visible. */
+  /** Rows pinned above the filter (Ask OakTend and friends). Always visible. */
   pinned: ReactNode;
   activeRows: ReactNode;
   closedRows: ReactNode;
+  /** Where the phone-only "Chat with AI" button below the list goes (the
+      assistant's full-screen route, /ask or /pro/ask). The pinned row above
+      already opens the same place, but it reads as just another conversation
+      row in the list - a tester never noticed it was tappable. This is a
+      second, unmistakably-a-button door to the same destination, so nobody
+      leaves Messages thinking there is no way to talk to the assistant.
+      Omit to render nothing here (every current caller passes it). */
+  mobileAskHref?: string;
+  /** Button text. Defaults to "Chat with AI". */
+  mobileAskLabel?: string;
 }) {
   const [tab, setTab] = useState<ChatListTab>(initialTab);
 
@@ -95,7 +109,7 @@ export default function ChatListTabs({
 
       <ul className="max-h-[40vh] min-h-0 divide-y divide-stone-100 overflow-y-auto rounded-xl border border-stone-200 bg-white dark:divide-white/10 dark:border-white/10 dark:bg-stone-800 md:max-h-none md:flex-1">
         {/* Pinned rows sit above the filter and never leave, whichever tab is
-            on: Ask Hearth is an assistant, not a conversation with a status. */}
+            on: Ask OakTend is an assistant, not a conversation with a status. */}
         {pinned}
         {tab === "active" ? (
           <>
@@ -109,6 +123,21 @@ export default function ChatListTabs({
           </>
         )}
       </ul>
+
+      {/* Phone only: a plain, obviously-tappable button to the assistant,
+          below the list. md:hidden, matching the wrapper's own md breakpoint
+          above (that is where this stops being a single pane and the desktop
+          layout can select the assistant inline) - sm:hidden left 640-767px,
+          still the one-pane phone layout, with no button at all. */}
+      {mobileAskHref && (
+        <Link
+          href={mobileAskHref}
+          className="btn-secondary flex min-h-11 w-full shrink-0 items-center justify-center gap-2 md:hidden"
+        >
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+          {mobileAskLabel}
+        </Link>
+      )}
     </div>
   );
 }

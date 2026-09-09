@@ -72,7 +72,7 @@ describe("the per-day figures the hero lines render", () => {
     expect(formatUsd(yearlyPerDay(PLUS_PLAN))).toBe("$0.11");
   });
 
-  it("reads as about $0.66 a day for Hearth Pro", () => {
+  it("reads as about $0.66 a day for OakTend Pro", () => {
     expect(formatUsd(yearlyPerDay(PRO_PLAN))).toBe("$0.66");
   });
 

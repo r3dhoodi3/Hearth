@@ -1,10 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { startPlusCheckoutAction } from "./actions";
 import SubmitButton from "@/components/SubmitButton";
 import AutoRenewalTerms from "@/components/AutoRenewalTerms";
+import AutoRenewalConsentCheckbox from "@/components/AutoRenewalConsentCheckbox";
+import BillingLegalLine from "@/components/BillingLegalLine";
+import { isNativeApp } from "@/lib/platform";
+import NativePlusCheckout from "./NativePlusCheckout";
 import {
   PLUS_PLAN,
   PLUS_INCLUDED_HOMES,
@@ -62,7 +66,7 @@ const PLUS_BULLETS = [
   "Plan and forecast, in full",
   "Quote analyzer, home report",
   "Every alert, every channel",
-  `${PLUS_INCLUDED_HOMES} homes, more Ask Hearth questions every day`,
+  `${PLUS_INCLUDED_HOMES} homes, more Ask OakTend questions every day`,
 ];
 
 // What the free tier actually includes, so the third card reads as a plan
@@ -144,11 +148,41 @@ export default function PlanToggle({
   trialEligible?: boolean;
 }) {
   const [choice, setChoice] = useState<Choice>("monthly");
+  // The required auto-renewal consent checkbox (Cal. Bus. & Prof. Code
+  // 17602(a)(2)): unchecked by default, gating the checkout button below
+  // until it is checked. One state for the whole form, since the plan cards
+  // change the price the disclosure quotes but never the fact of agreeing to
+  // it.
+  const [consent, setConsent] = useState(false);
+  // Native app shell (Capacitor iOS/Android): starts false on every render
+  // (server AND the client's first paint) and flips in an effect AFTER
+  // mount, never read during render before that. This is the standard
+  // "browser-only API, avoid a hydration mismatch" pattern - isNativeApp()
+  // reads window.Capacitor synchronously, and Capacitor's bridge can already
+  // exist by the time this component hydrates, so checking it during the
+  // render itself would make the client's first render disagree with the
+  // server-rendered HTML. A plain web visitor's isNativeApp() is always
+  // false, so this state never moves for them and the web output is
+  // unaffected either way.
+  const [isNative, setIsNative] = useState(false);
+  useEffect(() => {
+    setIsNative(isNativeApp());
+  }, []);
   // The cadence the form posts. Free is not a cadence, so it falls back to the
   // anchor plan; the button is disabled in that state, so nothing can actually
   // be submitted while it is showing.
   const plan: Plan = choice === "free" ? "monthly" : choice;
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  // APPLE 3.1.1 / GOOGLE PLAY BILLING: inside the native app shell, OakTend
+  // Plus is a StoreKit/Play Billing purchase, never a Stripe Checkout
+  // redirect - see src/lib/nativeClientHeader.ts for the server-side twin of
+  // this check. Every hook above still runs on every render (native or not),
+  // so this early return is a plain conditional render, not a conditional
+  // hook call.
+  if (isNative) {
+    return <NativePlusCheckout />;
+  }
 
   // Roving tabindex: one stop for the whole group, arrows move the selection
   // the way a native radio group does. Space and Enter are already handled by
@@ -246,7 +280,7 @@ export default function PlanToggle({
       ? "Keep Free"
       : trialEligible
         ? `Start ${PLUS_PLAN.trialDays} free days`
-        : "Start Hearth Plus";
+        : "Start OakTend Plus";
 
   // The phone-only description panel below the row of cards. It reads `plan`,
   // not `choice`: `plan` is already the safe fallback to a real cadence (see
@@ -535,6 +569,7 @@ export default function PlanToggle({
             <div className="max-sm:hidden">
               <AutoRenewalTerms plan={plan} introEligible={trialEligible} />
             </div>
+            <AutoRenewalConsentCheckbox id="plus-consent" checked={consent} onChange={setConsent} />
           </>
         )}
 
@@ -557,12 +592,17 @@ export default function PlanToggle({
             <SubmitButton
               className="btn-primary w-full py-3"
               pendingLabel="Starting…"
+              disabled={!consent}
             >
               {buttonLabel}
             </SubmitButton>
           )}
         </div>
       </form>
+      {/* Cal. Bus. & Prof. Code 17538: legal name, address, and a route to the
+          refund policy, shown on the same screen as the checkout button
+          before any charge happens. */}
+      <BillingLegalLine className="text-center text-xs text-stone-500 max-sm:text-sm dark:text-stone-400" />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { knownApiError } from "./InspectionUpload";
 
 // knownApiError is the allowlist gate between /api/ingest-inspection's raw
-// `error` field and what gets printed to a homeowner: only a message Hearth
+// `error` field and what gets printed to a homeowner: only a message OakTend
 // itself wrote is ever shown, so a future exception (a stack trace, an
 // internal code) can't slip through verbatim. See ALLOWED_API_ERRORS in
 // InspectionUpload.tsx.

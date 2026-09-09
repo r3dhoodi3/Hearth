@@ -63,7 +63,7 @@ You already have this; it just needs to stop being shared with Production.
 
 1. dashboard.stripe.com, toggle **Test mode** on (top right).
 2. Developers -> API keys -> copy the **Secret key** (`sk_test_...`).
-3. Still in test mode, Products: re-create the Hearth Plus and pro membership
+3. Still in test mode, Products: re-create the OakTend Plus and pro membership
    prices so there are test-mode price ids. Copy each price id.
 4. Developers -> Webhooks: add an endpoint pointing at your preview URL
    (`https://<preview>.vercel.app/api/stripe/webhook`), same event list as live,

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // The pro side's free AI back-office drafts (migration 0145): two per
-// contractor account, then the Hearth Pro wall. Admin client mocked, so the
+// contractor account, then the OakTend Pro wall. Admin client mocked, so the
 // claim/refund contract is proved without a database.
 
 const rpc = vi.fn();

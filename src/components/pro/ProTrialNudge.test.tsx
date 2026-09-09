@@ -227,12 +227,18 @@ describe("ProTrialNudge: the full-screen takeover", () => {
     expect(
       screen.getByRole("radio", { name: /Yearly/, checked: true })
     ).toBeInTheDocument();
+    // The auto-renewal consent checkbox (Cal. Bus. & Prof. Code 17602(a)(2))
+    // gates the checkout button: unchecked, it's disabled.
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /automatic renewal terms/i })
+    );
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Start.*free trial/i }));
     });
     expect(mockStartCheckout).toHaveBeenCalledTimes(1);
     const posted = mockStartCheckout.mock.calls[0][0] as FormData;
     expect(posted.get("plan")).toBe("yearly");
+    expect(posted.get("consent_checkbox")).toBe("true");
   });
 
   it("switches the posted plan to monthly on tap", async () => {
@@ -334,8 +340,12 @@ describe("ProTrialNudge: the paywall experiment's hard arm", () => {
     expect(
       screen.queryByRole("button", { name: /free trial/i })
     ).not.toBeInTheDocument();
+    // The auto-renewal consent checkbox gates the checkout button here too.
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /automatic renewal terms/i })
+    );
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Get Hearth Pro" }));
+      fireEvent.click(screen.getByRole("button", { name: "Get OakTend Pro" }));
     });
     expect(mockStartCheckout).toHaveBeenCalledTimes(1);
     const posted = mockStartCheckout.mock.calls[0][0] as FormData;

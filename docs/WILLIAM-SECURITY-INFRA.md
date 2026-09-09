@@ -5,50 +5,112 @@ the owner-only account and money items. Items are ordered by impact. Each one is
 a dashboard setting or a paste, not code; the code-level protections are already
 in the repo.
 
-## Build request from Landen (2026-09-01): permit-based system verification
+## Build request from Landen (2026-09-01, spec expanded 2026-09-05): permit-based system verification
 
-WHAT. When a homeowner claims a home, onboarding seeds seven systems with
-install years guessed by arithmetic (build year + typical lifespans, see
+WHY. When a homeowner claims a home, onboarding seeds the systems with install
+years guessed by arithmetic (build year plus the typical lifespans in
+`DEFAULT_LIFESPANS`, src/lib/health.ts: roof 22, hvac 18, water_heater 11,
+electrical_panel 35, plumbing 50, windows 25, and so on; see
 claimPropertyAction in src/app/onboarding/actions.ts). City building permits
-are the free public record that turns those guesses into facts: a reroof,
-HVAC changeout, water heater swap, repipe, or panel upgrade almost always has
-a dated permit.
+are the free public record that turns those guesses into facts: a reroof, an
+HVAC changeout, a water heater swap, a repipe, a panel upgrade, a window
+retrofit almost always has a dated permit. "The city has a reroof permit from
+2016" is a fact no competitor shows, and it is what makes the health score
+believable. This is the one substantial engineering build on the board and it
+is William's to own end to end.
 
-HOW, v1 (free, no vendors). Goal is ALL of Orange County (Hearth serves the
-whole county since 0129; FV/HB is only the marketing order, never a product
-boundary). Do NOT build one scraper per city: most OC cities run one of a few
-permit-portal platforms (Accela Citizen Access, eTRAKiT/CentralSquare, Tyler
-EnerGov/CSS, and a couple of others), so build PLATFORM ADAPTERS:
-1. Survey which platform each OC city's permit portal runs (an afternoon of
-   clicking), then write one adapter per platform plus a small per-city config
-   (base URL, city name, quirks). Four to six adapters should cover most of
-   the county; one adapter instantly covers every city on that platform.
+SCOPE. All of Orange County (the product serves the whole county since
+migration 0129; FV/HB is only the marketing order). 34 cities plus the
+unincorporated county. Free, no data vendors (no Shovels at about $599/mo, no
+ATTOM), no city we have no users in.
+
+THE KEY IDEA: PLATFORM ADAPTERS, NOT CITY SCRAPERS. Cities do not build their
+own permit websites; they buy one of a handful of vendor portals and put a
+logo on it. One adapter per vendor covers every city on that vendor, and each
+new city is a few lines of config. The vendors expected to cover most of the
+county (the survey in step 1 confirms which city runs which; treat these as
+likely, not verified):
+
+| Adapter | Vendor portal | Notes |
+| --- | --- | --- |
+| accela | Accela Citizen Access (ACA) | The most common one in SoCal (Huntington Beach and Anaheim look like ACA). Search by address, results table, permit detail page. |
+| etrakit | eTRAKiT (CentralSquare) | Common in mid-size cities. Address search, permit list, detail page. |
+| tyler | Tyler EnerGov / Tyler CSS | Newer installs and recent upgrades. JSON-backed search endpoints behind the UI. |
+| opengov | OpenGov / ViewPoint Cloud | Smaller cities that moved online recently. Public records search. |
+| county | County of Orange portal | Unincorporated areas only. |
+| csv | Open-data export | Some cities publish permits as a downloadable CSV or an open-data API. Always check for this first; a free export beats a scraper. |
+
+Four to six adapters should cover most of the county. A city on a vendor we
+have not built simply keeps its arithmetic estimates; honest gaps are fine.
+
+Per-city config (one small object per city, no code):
+`{ city: "Huntington Beach", adapter: "accela", baseUrl: "...", agencyCode: "...", quirks: {...}, enabled: true }`.
+
+BUILD PLAN, in order. Each step is shippable on its own.
+
+1. Survey (an afternoon). Open every OC city's permit lookup page, record the
+   vendor, the base URL, whether an address search exists without a login,
+   whether an open-data export exists, and any captcha or WAF. Output: a
+   table checked into docs/permits/SURVEY.md and the per-city config file.
+   Roll out in the order users actually appear: FV and HB first, then wherever
+   claimed homes exist.
+2. Adapter interface plus the first adapter. One TypeScript interface:
+   `searchPermits(address, config) -> Permit[]` where a Permit is
+   `{ permitNumber, issuedDate, finaledDate?, type, description, contractor?, sourceUrl }`.
    Same engineering pattern as the CSLB license scraper (src/lib/cslb.ts):
-   polite rate limits, WAF-aware fetch, parse defensively, fail soft. Check
-   each city for an open-data permit export first (a free CSV beats a
-   scraper). Roll out city-by-city in the order users actually appear
-   (FV/HB first because marketing starts there), and accept honest gaps:
-   a city we cannot read just keeps its arithmetic estimates.
-2. Nightly cron: for each claimed property in a covered city, look up permits,
-   classify against the seven system types (reroof -> roof, mechanical/HVAC
-   changeout -> hvac, water heater -> water_heater, repipe -> plumbing,
-   service/panel upgrade -> electrical_panel, window retrofit -> windows).
-3. Update rule, non-negotiable: only rows the owner has NOT confirmed
-   (confirmed_at null) may be updated, and owner-entered data is never
-   overwritten. Permit-sourced years get a third provenance level between
-   arithmetic guess and owner-confirmed: show a "from city permit records"
-   badge in SystemRow, keep confirmed_at null (it stays reserved for the
-   owner's own confirmation).
-4. Surface it as a trust moment: a notification / profile note like "We found
-   the 2006 reroof permit for your home and updated your roof's age."
+   polite rate limits, WAF-aware fetch with a real user agent, parse
+   defensively, fail soft (an adapter error never blocks anything else),
+   fixtures from saved HTML so tests run offline. Start with whichever vendor
+   covers FV or HB.
+3. Classifier. Map permit text to the system types the app tracks. Keyword
+   table, case-insensitive, first match wins, with a confidence:
+   reroof / re-roof / roofing -> roof; HVAC / furnace / air conditioner /
+   condenser / mechanical changeout -> hvac; water heater / WH replacement ->
+   water_heater; repipe / re-pipe / plumbing -> plumbing; panel / service
+   upgrade / 200A / electrical service -> electrical_panel; window retrofit /
+   window replacement -> windows. Anything else is ignored. Unit tests on
+   real permit descriptions from the survey.
+4. Data model (one migration, pasted live by Landen as a PASTE-ME file, never
+   the CLI). On home_systems add `source` (enum: estimated, permit,
+   owner_confirmed; existing rows are estimated unless confirmed_at is set),
+   `source_ref` (permit number), `source_url`, `source_date`. New table
+   `property_permits` (property_id, permit_number, issued_date, type,
+   description, contractor_name, source_url, fetched_at, unique on
+   property_id + permit_number) so every permit we ever read is kept and the
+   lookup can be re-run without re-scraping. RLS: owner read only, no client
+   writes; the cron uses the service role.
+5. Nightly cron (Vercel cron, secret-gated like the others in vercel.json).
+   For each claimed property in an enabled city: skip if fetched within 7
+   days; run the adapter; store permits; classify; for each system whose
+   confirmed_at is null, if a permit gives a later install year than the
+   estimate, set install_year, source = permit, source_ref, source_url,
+   source_date. Batch by city, one request every few seconds, stop the city
+   on repeated errors, log counts. Look up each address at most weekly.
+6. UI. In SystemRow show a small "from city permit records" note with the
+   permit date and a link to the source when source = permit. Keep
+   confirmed_at reserved for the owner's own confirmation; a permit never
+   sets it. Health score treats a permit year like an estimate that happens
+   to be accurate (no scoring change needed).
+7. Trust moment. One notification per property when the first permit lands:
+   "We found the 2016 reroof permit for your home and updated your roof's age."
+   Reuse the notifications table and the existing bell.
 
-BONUS uses of the same data (later, do not block v1): permits name the
-contractor who did the work (warm pro-recruiting list for Landen), and fresh
-permits identify homeowners mid-project (marketing).
+RULES, non-negotiable:
+- Only rows the owner has NOT confirmed (confirmed_at null) may be updated.
+  Owner-entered data is never overwritten.
+- Never present a permit-derived year as owner-verified.
+- Cache everything; look up each address at most weekly; never hammer a city
+  portal; respect robots and rate limits; stop on a captcha.
+- No paid vendors at this stage; no city we have no users in.
 
-DO NOT: pay Shovels (~$599/mo) or ATTOM at this stage; scrape any city we have
-no users in; hammer city portals (cache results, look up each address at most
-weekly); present permit-derived years as owner-verified.
+DEFINITION OF DONE for v1: FV and HB (or the first two cities with users)
+live with real permits attached to real claimed homes, the classifier tests
+green, the cron running nightly without errors for a week, the note visible
+in SystemRow, and the survey doc showing the vendor for all 34 cities.
+
+BONUS, later, do not block v1: permits name the contractor who did the work
+(a warm pro-recruiting list for Landen), and fresh permits identify
+homeowners mid-project (marketing).
 
 ## Status update 2026-09-01 (read this first)
 
@@ -60,7 +122,7 @@ Where things stand as of tonight, so the list below reads against reality:
 - **A production redeploy on 09-01 activated env vars that had been sitting
   unapplied**: `ANTHROPIC_API_KEY` (re-entered as a shared variable), the
   three VAPID push keys, `RISK_HASH_SALT`, `RISK_ENFORCE`. Env edits in
-  Vercel do nothing until a redeploy; that is what had Ask Hearth down.
+  Vercel do nothing until a redeploy; that is what had Ask OakTend down.
 - **Stripe is in TEST mode in production ON PURPOSE** (Landen, 09-01: still
   testing, switches to the live key at go-live). The env-separation alert in
   the logs fires on every request until then; that is expected. At go-live:
@@ -110,6 +172,48 @@ House rules Landen holds every session to; they apply to yours too:
    byte-identical), and every homeowner-side phone change gets mirrored on
    the pro side in the same wave.
 
+## Follow-ups from 2026-09-08 (oaktend.com is live, read before the items below)
+
+Done today by Fable with Landen: Cloudflare DNS for oaktend.com (two DNS-only
+CNAMEs, root -> e40696a40108d92a.vercel-dns-017.com, www -> cname.vercel-dns.com),
+oaktend.com added to the Vercel project as the production domain with a
+certificate, www.oaktend.com as a 307 redirect to the root, and the Vercel
+project renamed from `hearth` to `oaktend` (team slug `hearth-test` unchanged).
+`gethearth.vercel.app` still answers, so nothing that points at it broke yet.
+Also merged your 13 commits into `wave/2026-09-07-overnight` (local, not pushed):
+`hearth-*` Tailwind tokens and the visible "Hearth" wordmark in your nav work
+were renamed to `oaktend`, and a review of the signup wave added a resend
+cooldown, a plain CAPTCHA error message, and a re-auth budget fix.
+
+What is still owed, in order. Items marked (Landen) need his logins or a secret.
+
+1. (Landen) Supabase -> Authentication -> URL Configuration: Site URL
+   `https://oaktend.com`, add `https://oaktend.com/**` to the redirect list.
+   Keep the `gethearth.vercel.app` entries until every link below is moved.
+2. (Landen) Vercel env: only 15 variables exist on the project. Missing and
+   read by the code: `ANTHROPIC_API_KEY` (every AI feature is dead without it),
+   `STRIPE_SECRET_KEY` plus the `STRIPE_PRICE_*` / `STRIPE_PRO_*` ids (checkout
+   and wallet deposits), `RISK_HASH_SALT`, `CRON_SECRET`, `RESEND_API_KEY` +
+   `RESEND_FROM`, the three `TWILIO_*` vars, `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.
+   After item 1: `NEXT_PUBLIC_SITE_URL` = `https://oaktend.com`, then redeploy.
+3. (Landen) Stripe -> Webhooks: endpoint to `https://oaktend.com/api/stripe/webhook`
+   and paste the new signing secret into `STRIPE_WEBHOOK_SECRET`.
+4. Turnstile: there is NO widget in Landen's Cloudflare account, so the
+   `captchaToken` plumbing you built runs with no key and is a no-op. Create
+   one (Turnstile -> Add widget, hostnames oaktend.com, www.oaktend.com,
+   gethearth.vercel.app, localhost), site key to Vercel as above, secret into
+   Supabase Attack Protection. Test password sign-in on a phone first; the
+   overnight audit saw error 600010 on the live sign-in page.
+5. Supabase email OTP expiry stays at 3600 seconds (Landen's call, 09-08).
+   The verify screen now has a 60 second resend cooldown and a 5 per page cap
+   instead.
+6. Cloudflare Email Routing for oaktend.com (hello, support, legal, privacy,
+   security) is still not set up. Do it before Resend goes live so replies to
+   the sending domain land somewhere.
+7. Once 1 to 3 are done and verified on oaktend.com, remove
+   `gethearth.vercel.app` from the Supabase redirect list and from Turnstile.
+   Do not delete the domain from Vercel; QR codes and printed cards use it.
+
 ## Before launch
 
 1. **RLS audit, live DB.** Run queries 1a and 1b from
@@ -126,7 +230,7 @@ House rules Landen holds every session to; they apply to yours too:
 3. **Signup captcha.** Supabase -> Authentication -> Attack Protection ->
    enable captcha, provider Cloudflare Turnstile. Needs a free Turnstile site
    key + secret from dash.cloudflare.com (Turnstile -> Add site, domain =
-   the Hearth domain). The secret goes in Supabase; the site key goes in
+   the OakTend domain). The secret goes in Supabase; the site key goes in
    Vercel as `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (the signup forms read it; if
    the forms do not yet render the widget, tell Landen and it is a small code
    change).
@@ -160,7 +264,7 @@ House rules Landen holds every session to; they apply to yours too:
     Calendar reminder for mid-January 2027 to regenerate
     (`C:\Users\lande\apple-secret\make-secret.js`, needs the .p8). Also
     rotate the Apple key `34UDQ3MTXM`: it was pasted into a chat on 08-21.
-12. Register Hearth's sending domain for Apple private relay email (Apple
+12. Register OakTend's sending domain for Apple private relay email (Apple
     portal -> Services -> Sign in with Apple for Email Communication) once
     Resend is live, or Hide-My-Email users never get mail.
 13. Block disposable email domains at signup (Supabase has no built-in list;

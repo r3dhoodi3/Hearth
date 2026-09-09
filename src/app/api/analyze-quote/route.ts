@@ -33,8 +33,8 @@ const MAX_TEXT_CHARS = 60_000;
 // catches payloads that were never going to be accepted anyway.
 const MAX_BODY_BYTES = 15_000_000;
 
-// AI Quote Analyzer (Hearth Plus): a homeowner uploads a photo of a
-// contractor's quote or pastes the text, and Hearth reads every line item,
+// AI Quote Analyzer (OakTend Plus): a homeowner uploads a photo of a
+// contractor's quote or pastes the text, and OakTend reads every line item,
 // compares the total against typical costs, flags padded/vague/duplicated
 // charges, and drafts a negotiation message. This is the "$150 instead of an
 // $800 quote" feature competitors use as their headline save.
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // The quote analyzer is a Hearth Plus feature, but every homeowner gets
+  // The quote analyzer is an OakTend Plus feature, but every homeowner gets
   // exactly one free check as a taste. A non-Plus user with an unused credit
   // (users.free_quote_used_at is null) claims it ATOMICALLY up front: a
   // conditional update that only matches while the column is still null, so
@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
   const image = typeof body.image === "string" ? body.image : "";
   const mime = typeof body.mime === "string" ? body.mime : "image/jpeg";
   // Pasted quote text, CAPPED. This was the cheapest way to push a large paid
-  // request at Hearth: the image had a size cap and the text had none, and a
+  // request at OakTend: the image had a size cap and the text had none, and a
   // single send was measured at over 57,000 input tokens. Sliced rather than
   // refused because a real quote never comes close to this, so anything past
   // it is padding, not line items.

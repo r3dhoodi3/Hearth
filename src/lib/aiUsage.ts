@@ -38,7 +38,7 @@ export const ASK_DAILY_PLUS = 15;
 // src/lib/constants.test.ts fails if the two ever drift.
 export const ASK_DAILY_TRIAL = ASK_DAILY_PLUS;
 
-// The PRO copilot's ceiling for a paying Hearth Pro member (and a Pro trial:
+// The PRO copilot's ceiling for a paying OakTend Pro member (and a Pro trial:
 // same rule the homeowner trial follows, parity with paid). A free pro is on
 // ASK_DAILY_FREE, exactly like a free homeowner - the copilot used to run on
 // the tool budget (DAILY_LIMIT_FREE, 25 a day), which is the document-scan
@@ -113,8 +113,8 @@ export const AI_GLOBAL_HOUR_BUCKET = "ai-global-hour";
 //
 // All three of these used to come back as one undifferentiated `overLimit`,
 // and the chat then told everyone the same thing: "you've used your 3 free
-// questions, Hearth Plus gives you more". That sentence is a lie in two of
-// the three cases. A tripped owner-wide breaker is Hearth's ceiling, not the
+// questions, OakTend Plus gives you more". That sentence is a lie in two of
+// the three cases. A tripped owner-wide breaker is OakTend's ceiling, not the
 // homeowner's, and a broken counter is a bug: neither is fixed by buying
 // anything, and pitching Plus to someone whose allowance is untouched is the
 // kind of thing people screenshot.
@@ -124,8 +124,8 @@ export const AI_GLOBAL_HOUR_BUCKET = "ai-global-hour";
 //  - "global"               an owner-wide spend breaker or ceiling tripped
 //  - "counter_unavailable"  the counter itself failed, so we denied to be safe
 //
-// The first two are real limits the person hit; the last two are Hearth's own
-// ceilings and Hearth's own bugs, and must never be worded as "you are out".
+// The first two are real limits the person hit; the last two are OakTend's own
+// ceilings and OakTend's own bugs, and must never be worded as "you are out".
 export type AiLimitReason =
   | "user_daily"
   | "user_burst"
@@ -244,7 +244,7 @@ export async function countAiUsage(
   if (globalDaily !== "ok" && !(await exemptFromGlobalDaily(userId, isPlus))) {
     // Hand back the usage bump above. The chat path has always done this
     // (countAskUsage -> refundAskUsage): this request is being turned away
-    // by HEARTH's ceiling, not the caller's, and charging them one of their
+    // by OAKTEND's ceiling, not the caller's, and charging them one of their
     // 25 for a request that never reached the model means an honest retry
     // burns their day. Best effort, exactly like refundAskUsage.
     await refundAiUsage(userId);
@@ -347,7 +347,7 @@ export async function countAskUsage(
   // AND IT DOES NOT REFUSE A MEMBER WHO HAS ACTUALLY PAID, exactly as in
   // countAiUsage above. The breaker is one shared bucket, so a swarm of free
   // accounts that spends the day's budget by 9am would otherwise take Ask
-  // Hearth away from every Plus member too - the cheap attack is not running
+  // OakTend away from every Plus member too - the cheap attack is not running
   // up the bill (the bucket caps that), it is blacking out the people who
   // paid. Still CONSULTED for everybody, because that call is what does the
   // counting and the bucket has to keep meaning "questions today"; only
@@ -881,7 +881,7 @@ function askOutputBucket(userId: string, surface: AskSurface): string {
  * FAILS OPEN, deliberately, unlike the gates above it. This is a second
  * ceiling behind the authoritative one: the per-user question cap still binds,
  * still fails closed, and already bounds the day. Failing closed here would
- * turn a single unreadable row into "Ask Hearth is down" for someone who has
+ * turn a single unreadable row into "Ask OakTend is down" for someone who has
  * asked nothing today, which is a much worse trade than one extra long answer.
  */
 export async function overAskOutputBudget(

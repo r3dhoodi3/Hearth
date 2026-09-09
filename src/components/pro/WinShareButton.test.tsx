@@ -18,7 +18,7 @@ describe("WinShareButton", () => {
     render(<WinShareButton leadId="lead-1" businessName="Ace Plumbing" />);
     const download = screen.getByText("Download") as HTMLAnchorElement;
     expect(download.getAttribute("href")).toBe("/api/win-card/lead-1");
-    expect(download.getAttribute("download")).toBe("hearth-win-ace-plumbing.png");
+    expect(download.getAttribute("download")).toBe("oaktend-win-ace-plumbing.png");
   });
 
   it("shares the win card as a file when the browser can accept files", async () => {
@@ -62,7 +62,7 @@ describe("WinShareButton", () => {
     await waitFor(() => expect(shareSpy).toHaveBeenCalledTimes(1));
     const call = shareSpy.mock.calls[0][0];
     expect(call.files).toBeUndefined();
-    expect(call.text).toBe("We just won a job on Hearth!");
+    expect(call.text).toBe("We just won a job on OakTend!");
   });
 
   it("opens the card in a new tab when no share API exists at all", async () => {

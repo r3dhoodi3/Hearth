@@ -235,7 +235,7 @@ describe("dashboard stat grid", () => {
 // The briefing used to end each line with a literal "→" glued to the last word
 // of a wrapped sentence: nothing to aim at, and nothing to visually scan for.
 // Each actionable item is one full-width link row now, at every width.
-describe("Hearth's briefing rows", () => {
+describe("OakTend's briefing rows", () => {
   it("renders an actionable item as a single link row that clears 44px", async () => {
     const { container } = await renderDashboard();
     const row = Array.from(container.querySelectorAll("a")).find((a) =>
@@ -300,7 +300,7 @@ describe("Tool tile order", () => {
 
   it("leaves the order alone for a reason with no matching tile", async () => {
     // "ask" is a real paywall reason (see plus/page.tsx) but none of these
-    // three tools is Ask Hearth, so nothing here should move.
+    // three tools is Ask OakTend, so nothing here should move.
     fixtures.lastReasonCookie = "ask";
     const { container } = await renderDashboard();
     expect(toolTileHrefs(container)).toEqual([
@@ -311,13 +311,13 @@ describe("Tool tile order", () => {
   });
 });
 
-// Ask Hearth has one entry point now, the pinned row at the top of the Messages
+// Ask OakTend has one entry point now, the pinned row at the top of the Messages
 // tab. The dashboard used to carry a phone-only door to it as well; scattering
 // doors is what made the assistant read as the whole product.
-describe("Ask Hearth entry point", () => {
-  it("carries no Ask Hearth door of its own", async () => {
+describe("Ask OakTend entry point", () => {
+  it("carries no Ask OakTend door of its own", async () => {
     const { queryByTestId, container } = await renderDashboard();
-    expect(queryByTestId("ask-hearth-card")).toBeNull();
+    expect(queryByTestId("ask-oaktend-card")).toBeNull();
     const askLinks = Array.from(container.querySelectorAll("a")).filter(
       (a) => a.getAttribute("href") === "/ask"
     );

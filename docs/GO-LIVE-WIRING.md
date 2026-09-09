@@ -27,7 +27,7 @@ The sending code in `src/lib/notify.ts` is real and dormant until keys exist.
 1. Create a Resend account and verify your sending domain (add the DNS records Resend gives
    you; wait for "verified").
 2. In Vercel, set `RESEND_API_KEY` and `RESEND_FROM` (must be an address on the verified
-   domain, e.g. `Hearth <hello@yourdomain.com>`).
+   domain, e.g. `OakTend <hello@yourdomain.com>`).
    Warning: if `RESEND_FROM` is left unset, the code falls back to Resend's sandbox sender,
    which only delivers to the account owner's inbox. Set both or neither.
 3. Verify: trigger any email path (e.g. the review-request flow or a cron that sends digests)
@@ -81,7 +81,7 @@ before any Products exist in the dashboard.
 
    Why that fallback exists: on 2026-08-30 "Switch to yearly" failed for every live
    subscriber, because with `STRIPE_PRICE_PLUS_YEARLY` unset the action pointed inline
-   price_data at the product the subscription already carried, and that "Hearth Plus"
+   price_data at the product the subscription already carried, and that "OakTend Plus"
    product had been archived in the connected account - Stripe refuses to attach a new
    price to an inactive product. Setting the env vars above avoids the whole class of
    problem; if you archive or replace a product in Stripe, update these values too.
@@ -96,7 +96,7 @@ before any Products exist in the dashboard.
 
 ## 6. AI (Anthropic)
 
-Every AI feature in the app (Ask Hearth, Ask Hearth for Pros, the quote analyzer,
+Every AI feature in the app (Ask OakTend, Ask OakTend for Pros, the quote analyzer,
 document and inspection reading, the tax appeal letter, the insurance packet, job
 drafting, and the pro back-office tools) calls Anthropic's Claude. Without the key
 those routes return an error; the rest of the app is unaffected.
@@ -107,10 +107,10 @@ those routes return an error; the rest of the app is unaffected.
    Production; set it in Preview too if you want the AI features to work there.
 3. `GEMINI_API_KEY` is no longer used by any code path. Delete it from Vercel and
    from any local `.env.local` so nobody mistakes it for a live dependency.
-4. Set a spend limit in the Anthropic console. Ask Hearth already caps usage per
+4. Set a spend limit in the Anthropic console. Ask OakTend already caps usage per
    user (3 questions a day on Free, 15 on Plus, plus a burst limit), but the spend
    limit is the backstop.
-5. Verify: ask Ask Hearth one question in production and confirm an answer comes
+5. Verify: ask Ask OakTend one question in production and confirm an answer comes
    back, then check the request appears in the Anthropic console's usage view.
 
 Privacy note for the record: Anthropic's paid API terms say API inputs and outputs
@@ -244,7 +244,7 @@ one commit rather than letting it throttle silently.
 
 ### Log prefixes worth a saved Vercel search
 
-`[ALERT]` marks the owner-wide ceilings tripping - the ones that mean Hearth is
+`[ALERT]` marks the owner-wide ceilings tripping - the ones that mean OakTend is
 refusing its own customers rather than an individual abusing their allowance:
 
 - `[ALERT] AI global spend breaker tripped ...` (`src/lib/aiUsage.ts`)
@@ -256,9 +256,9 @@ Nothing pages a human on these yet. Saving the search is the interim answer.
 
 ## 10. Phone notifications (Web Push)
 
-This is what makes a phone buzz when Hearth is CLOSED. It costs nothing per message: the
+This is what makes a phone buzz when OakTend is CLOSED. It costs nothing per message: the
 browser's own push service (Apple, Google, Mozilla) does the delivery, so it is free for
-homeowners and pros alike and is not a Hearth Plus perk. Code is in `src/lib/push.ts`,
+homeowners and pros alike and is not an OakTend Plus perk. Code is in `src/lib/push.ts`,
 `public/sw.js` and `src/app/api/push/subscribe`, dormant until the keys exist.
 
 1. Run the database bundle `supabase/PASTE-ME-live-2026-08-29-push.sql` (migration 0143,
@@ -276,7 +276,7 @@ homeowners and pros alike and is not a Hearth Plus perk. Code is in `src/lib/pus
 4. Verify on an iPhone. THIS IS THE STEP PEOPLE GET WRONG: iOS delivers Web Push only to a
    site that has been added to the Home Screen (iOS 16.4+). In a Safari tab there is no
    permission to grant, and the app says so instead of showing a dead button. So: open
-   Hearth in Safari, Share -> Add to Home Screen, open it from the new icon, then
+   OakTend in Safari, Share -> Add to Home Screen, open it from the new icon, then
    Account -> Notifications -> Turn on notifications and allow the prompt. On the pro side
    the same control is on My Business. Android Chrome works from a plain tab.
 5. Then have a second account send a message and confirm the notification arrives with the

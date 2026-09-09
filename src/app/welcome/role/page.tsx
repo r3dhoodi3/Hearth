@@ -7,9 +7,9 @@ import { safeNextPath } from "@/lib/safeNext";
 import { chooseRoleAction } from "./actions";
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
-  title: "Welcome to Hearth",
-  description: "Tell Hearth how you'll be using it to finish setting up.",
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
+  title: "Welcome to OakTend",
+  description: "Tell OakTend how you'll be using it to finish setting up.",
 };
 
 // Role picker for a brand-new OAuth user who arrived with no role - i.e. they
@@ -64,7 +64,7 @@ export default async function WelcomeRolePage(
       <div className="card">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-            Welcome to Hearth
+            Welcome to OakTend
           </h1>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
             One last thing: how will you be using it?

@@ -203,7 +203,7 @@ export async function loadRiskFacts(
   // turned a cohort into a device: DeviceFingerprint.tsx hashes user agent,
   // screen size, timezone offset, language and core count, and on one popular
   // phone model in one metro area that is the SAME hash for thousands of
-  // strangers. Five of them landing on Hearth in a week read as a five-account
+  // strangers. Five of them landing on OakTend in a week read as a five-account
   // device farm. The fingerprint now has its own much smaller weight below.
   const deviceLinked = withoutHousehold(linkedOf("device"));
   facts.accountsOnSameDevice = deviceLinked.size + 1;
@@ -285,7 +285,7 @@ export async function loadRiskFacts(
     // cancels inside their free trial, which is precisely what the product tells
     // people they may do ("cancelling before then costs nothing"), and it used
     // to be read into TWO separate facts off one row: this +40 and the
-    // linkedToTrialCanceller +25. One honest person deciding Hearth was not for
+    // linkedToTrialCanceller +25. One honest person deciding OakTend was not for
     // them cost their spouse 65 points. A cancelled trial is not a chargeback,
     // and it is certainly not evidence about the neighbours.
     const flaggedIds = new Set(

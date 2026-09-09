@@ -84,7 +84,7 @@ describe("pro pages keep their list reads bounded", () => {
   });
 });
 
-describe("the Ask Hearth greeting asks for one reminder, not all of them", () => {
+describe("the Ask OakTend greeting asks for one reminder, not all of them", () => {
   it("limits the maintenance_tasks read to the row it reads back", () => {
     const greeting = read("lib/greeting.ts");
     const tasksRead = greeting.slice(greeting.indexOf('"maintenance_tasks"'));

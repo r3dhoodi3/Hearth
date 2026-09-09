@@ -3,19 +3,19 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
 import { proGreeting } from "@/lib/proGreeting";
-import AskHearth from "@/components/AskHearth";
+import AskOakTend from "@/components/AskOakTend";
 import PhoneChatFrame from "@/components/PhoneChatFrame";
 
 // The opening line reflects leads that change under other people's hands, so
 // it is never cached, at any layer.
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Ask Hearth for Pros" };
+export const metadata: Metadata = { title: "Ask OakTend for Pros" };
 
 // The full-screen pro copilot, and the destination of the "Ask" tab in the
 // phone bottom nav (see ProNav.tsx). The floating dock is a desktop affordance
 // now, so on a phone this page IS the copilot: same component, same endpoint,
-// same stored conversation (AskHearth namespaces its history by user id, not
+// same stored conversation (AskOakTend namespaces its history by user id, not
 // by screen), just given the whole viewport instead of a 22rem card.
 //
 // `?q=` prefills and sends one question, mirroring the homeowner /ask page, so
@@ -42,11 +42,11 @@ export default async function ProAskPage(props: {
       {/* The chat pane carries its own visible heading, so a second one on top
           would be the same words twice and 3rem less conversation on a phone.
           The h1 stays for structure and screen readers. */}
-      <h1 className="sr-only">Ask Hearth for Pros</h1>
+      <h1 className="sr-only">Ask OakTend for Pros</h1>
       {/* Same frame the homeowner /ask page uses, so the two sides look like
           one feature. The sm: height is the desktop box, unchanged; below sm
           PhoneChatFrame pins the panel between the header and the keyboard
-          (see .hearth-chat-frame in globals.css) so the composer stays on
+          (see .oaktend-chat-frame in globals.css) so the composer stays on
           screen while you type. */}
       <PhoneChatFrame className="flex h-[calc(100dvh-14rem)] flex-col rounded-xl border border-stone-200 bg-white p-3 sm:h-[calc(100vh-12rem)] dark:border-white/10 dark:bg-stone-800">
         {/* Phone-only way back, mirroring the homeowner /ask page. This screen
@@ -58,7 +58,7 @@ export default async function ProAskPage(props: {
           href="/pro/chats"
           // Already sm:hidden, so these sizes are phone-only: 44px tall
           // and 16px, matching the homeowner /ask back link.
-          className="mb-2 -ml-2 inline-flex min-h-11 w-fit shrink-0 items-center gap-1 px-2 text-base font-medium text-hearth-700 hover:underline sm:hidden dark:text-hearth-300"
+          className="mb-2 -ml-2 inline-flex min-h-11 w-fit shrink-0 items-center gap-1 px-2 text-base font-medium text-oaktend-700 hover:underline sm:hidden dark:text-oaktend-300"
         >
           <span aria-hidden="true">←</span> All conversations
         </Link>
@@ -72,16 +72,16 @@ export default async function ProAskPage(props: {
               className="flex h-full flex-col justify-center gap-3 px-2 text-sm text-stone-700 dark:text-stone-300"
             >
               <p className="font-medium text-stone-900 dark:text-stone-100">
-                Ask Hearth opens once your business is verified
+                Ask OakTend opens once your business is verified
               </p>
               <p className="leading-relaxed">
                 Add a California license number we can confirm, or place your
-                first lead. Hearth Pro members get it right away.
+                first lead. OakTend Pro members get it right away.
               </p>
               <p className="flex flex-wrap gap-4">
                 <Link
                   href="/pro/profile"
-                  className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                  className="font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
                 >
                   Add your license
                 </Link>
@@ -89,9 +89,9 @@ export default async function ProAskPage(props: {
                   // ?reason=ask so /pro/plus opens on the Ask pitch rather
                   // than the general page: the pro tapped THIS door.
                   href="/pro/plus?reason=ask"
-                  className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+                  className="font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
                 >
-                  See Hearth Pro
+                  See OakTend Pro
                 </Link>
               </p>
             </div>
@@ -101,7 +101,7 @@ export default async function ProAskPage(props: {
               conversation, two ways in. replaceUrlAfterInitial drops the ?q=
               once the question has been handled, so a reload or a Back into
               this page doesn't ask it a second time. */
-          <AskHearth
+          <AskOakTend
             fill
             greeting={greeting}
             initialQuestion={q}
@@ -109,7 +109,7 @@ export default async function ProAskPage(props: {
             endpoint="/api/pro-ask"
             storageKeyBase="hearth_pro_ask_chat"
             retentionKeyBase="hearth_pro_ask_retention"
-            headingTitle="Ask Hearth for Pros"
+            headingTitle="Ask OakTend for Pros"
             headingSubtitle="Your business copilot"
           />
           )}

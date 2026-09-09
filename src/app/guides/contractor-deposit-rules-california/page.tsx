@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "article",
   },
   twitter: {
@@ -213,7 +213,7 @@ export default function ContractorDepositRulesGuide() {
 
         <div className="rounded-xl border border-stone-200 bg-white p-5 text-center dark:border-stone-700 dark:bg-stone-800/40">
           <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-300">
-            Keeping the whole job in one place makes this easier. Hearth chat
+            Keeping the whole job in one place makes this easier. OakTend chat
             keeps your messages and payment trail with a pro in one record you
             can look back on.
           </p>

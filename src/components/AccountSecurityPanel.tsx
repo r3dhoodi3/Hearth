@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import SubmitButton from "@/components/SubmitButton";
 import PasswordStrengthMeter from "@/components/PasswordStrengthMeter";
-import Turnstile, { CAPTCHA_ENABLED, type TurnstileHandle } from "@/components/Turnstile";
+import Turnstile, {
+  CAPTCHA_ENABLED,
+  useCaptchaGraceTimeout,
+  type TurnstileHandle,
+} from "@/components/Turnstile";
 import { sendSetPasswordLinkAction } from "@/lib/passwordSetup";
 
 // The one account-security surface, shared by the homeowner page
@@ -74,6 +78,11 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
   // ignores while its own CAPTCHA is off.
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRef = useRef<TurnstileHandle>(null);
+  // See useCaptchaGraceTimeout in Turnstile.tsx: gives up waiting on the
+  // widget after 8s so a stuck widget can't permanently disable this send.
+  const captchaTimedOut = useCaptchaGraceTimeout(
+    CAPTCHA_ENABLED && !captchaToken
+  );
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -83,8 +92,10 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
 
   async function send() {
     if (busy || cooldown > 0) return;
-    // Wait for a token when the CAPTCHA is on; a no-op when it's off.
-    if (CAPTCHA_ENABLED && !captchaToken) return;
+    // Wait for a token when the CAPTCHA is on; a no-op when it's off. Also a
+    // no-op once captchaTimedOut - see useCaptchaGraceTimeout in
+    // Turnstile.tsx - so a stuck widget can't block this forever.
+    if (CAPTCHA_ENABLED && !captchaToken && !captchaTimedOut) return;
     setBusy(true);
     setError(null);
     // finally, not a bare setBusy(false) on the happy path:
@@ -125,6 +136,12 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
       {/* The set-password email hits Supabase's CAPTCHA-gated endpoint, so it
           needs a Turnstile token. Renders nothing when no site key is set. */}
       <Turnstile ref={captchaRef} onToken={setCaptchaToken} />
+      {captchaTimedOut && (
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Verification could not load. Refresh the page or try again in a
+          minute.
+        </p>
+      )}
 
       {sent ? (
         <div className="space-y-3">
@@ -137,7 +154,11 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
           <button
             type="button"
             onClick={send}
-            disabled={busy || cooldown > 0 || (CAPTCHA_ENABLED && !captchaToken)}
+            disabled={
+              busy ||
+              cooldown > 0 ||
+              (CAPTCHA_ENABLED && !captchaToken && !captchaTimedOut)
+            }
             className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy
@@ -151,7 +172,11 @@ function SetPasswordCard({ providerName }: { providerName: string }) {
         <button
           type="button"
           onClick={send}
-          disabled={busy || cooldown > 0 || (CAPTCHA_ENABLED && !captchaToken)}
+          disabled={
+            busy ||
+            cooldown > 0 ||
+            (CAPTCHA_ENABLED && !captchaToken && !captchaTimedOut)
+          }
           className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Sending…" : "Set a password"}
@@ -224,6 +249,18 @@ export default function AccountSecurityPanel({
   const [emailCaptcha, setEmailCaptcha] = useState<string | null>(null);
   const [passwordCaptcha, setPasswordCaptcha] = useState<string | null>(null);
   const [deleteCaptcha, setDeleteCaptcha] = useState<string | null>(null);
+  // One grace timeout per form, same reasoning as SetPasswordCard above: a
+  // stuck widget must not permanently disable re-auth on someone's own
+  // account. See useCaptchaGraceTimeout in Turnstile.tsx.
+  const emailCaptchaTimedOut = useCaptchaGraceTimeout(
+    CAPTCHA_ENABLED && hasPassword && !emailCaptcha
+  );
+  const passwordCaptchaTimedOut = useCaptchaGraceTimeout(
+    CAPTCHA_ENABLED && !passwordCaptcha
+  );
+  const deleteCaptchaTimedOut = useCaptchaGraceTimeout(
+    CAPTCHA_ENABLED && hasPassword && !deleteCaptcha
+  );
 
   return (
     <div className="space-y-6">
@@ -295,13 +332,24 @@ export default function AccountSecurityPanel({
           {hasPassword && (
             <>
               <Turnstile onToken={setEmailCaptcha} />
+              {emailCaptchaTimedOut && (
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  Verification could not load. Refresh the page or try again
+                  in a minute.
+                </p>
+              )}
               <input type="hidden" name="captcha_token" value={emailCaptcha ?? ""} />
             </>
           )}
           <SubmitButton
             className="btn-primary"
             pendingLabel="Updating…"
-            disabled={CAPTCHA_ENABLED && hasPassword && !emailCaptcha}
+            disabled={
+              CAPTCHA_ENABLED &&
+              hasPassword &&
+              !emailCaptcha &&
+              !emailCaptchaTimedOut
+            }
           >
             Update Email
           </SubmitButton>
@@ -373,12 +421,20 @@ export default function AccountSecurityPanel({
                 server. Renders nothing when no site key is set; the hidden
                 input then submits "". */}
             <Turnstile onToken={setPasswordCaptcha} />
+            {passwordCaptchaTimedOut && (
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Verification could not load. Refresh the page or try again in
+                a minute.
+              </p>
+            )}
             <input type="hidden" name="captcha_token" value={passwordCaptcha ?? ""} />
 
             <SubmitButton
               className="btn-primary"
               pendingLabel="Updating…"
-              disabled={CAPTCHA_ENABLED && !passwordCaptcha}
+              disabled={
+                CAPTCHA_ENABLED && !passwordCaptcha && !passwordCaptchaTimedOut
+              }
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
@@ -474,8 +530,17 @@ export default function AccountSecurityPanel({
               className="mt-4 max-w-md space-y-4 border-t border-red-200 pt-4 dark:border-red-900/50"
             >
               <p className="text-sm font-bold text-red-800 dark:text-red-300">
-                This permanently deletes your account, your homes, systems,
-                documents, and messages. This cannot be undone.
+                This permanently deletes your account, homes, systems,
+                photos, and documents. This cannot be undone.
+              </p>
+              <p className="text-xs text-stone-600 dark:text-stone-400">
+                We keep billing records for 7 years, a record that you asked
+                us to delete, and messages or reviews already visible to
+                another user. See our{" "}
+                <Link href="/privacy" className="underline hover:text-stone-800 dark:hover:text-stone-200">
+                  Privacy Policy
+                </Link>
+                .
               </p>
               {hasPassword ? (
                 <div>
@@ -517,7 +582,7 @@ export default function AccountSecurityPanel({
                     />
                   </div>
                   <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                    You&apos;re deleting the Hearth account for{" "}
+                    You&apos;re deleting the OakTend account for{" "}
                     <span className="font-medium text-stone-900 dark:text-stone-100">
                       {email ?? "this address"}
                     </span>
@@ -533,6 +598,12 @@ export default function AccountSecurityPanel({
               {hasPassword && (
                 <>
                   <Turnstile onToken={setDeleteCaptcha} />
+                  {deleteCaptchaTimedOut && (
+                    <p className="text-xs text-stone-500 dark:text-stone-400">
+                      Verification could not load. Refresh the page or try
+                      again in a minute.
+                    </p>
+                  )}
                   <input type="hidden" name="captcha_token" value={deleteCaptcha ?? ""} />
                 </>
               )}
@@ -542,7 +613,10 @@ export default function AccountSecurityPanel({
                   pendingLabel="Deleting…"
                   disabled={
                     (!hasPassword && !confirmEmailMatches) ||
-                    (CAPTCHA_ENABLED && hasPassword && !deleteCaptcha)
+                    (CAPTCHA_ENABLED &&
+                      hasPassword &&
+                      !deleteCaptcha &&
+                      !deleteCaptchaTimedOut)
                   }
                 >
                   Permanently delete account

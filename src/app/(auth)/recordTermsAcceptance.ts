@@ -1,10 +1,12 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { recordRequestSignals, recordEmailSignals } from "@/lib/risk/signals";
 import { clientIpFromHeaders } from "@/lib/clientIp";
+import { trackServerEvent } from "@/lib/trackServer";
+import { CAMPAIGN_COOKIE, lookupCampaign } from "@/lib/campaigns";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -34,7 +36,14 @@ const VERSION = "2026-08-30";
 
 export async function recordTermsAcceptance(
   userId: string,
-  doc: "terms" | "pro_terms"
+  // "pro_terms_onboarding" (added for the onboarding-wizard acknowledgment
+  // checkbox, Pro Terms appendix) is deliberately its own doc key rather than
+  // reusing "pro_terms": the two checkboxes ask for materially different
+  // confirmations (18+/Terms-and-Privacy vs. independent-business/license/
+  // insurance/wallet-credit understanding), and reusing "pro_terms" would be
+  // silently no-op'd by this function's own idempotency guard below whenever
+  // the account already has a "pro_terms" row from contractor-signup.
+  doc: "terms" | "pro_terms" | "pro_terms_onboarding"
 ): Promise<void> {
   if (!UUID_RE.test(userId)) {
     console.error("recordTermsAcceptance: malformed userId", { userId, doc });
@@ -189,5 +198,40 @@ export async function recordTermsAcceptance(
   // a missing row, which is still visible/fixable from the admin side.
   if (error) {
     console.error("recordTermsAcceptance failed", { userId, doc, error });
+  }
+
+  // Campaign attribution (src/app/go/[code]/route.ts, src/lib/campaigns.ts).
+  // This function is the one place both the homeowner and contractor signup
+  // flows call at the moment an account is actually created (see the big
+  // comment at the top of this file), so it is also the right place to close
+  // the loop on a /go/ link: if the visitor still carries the first-party
+  // cookie the redirect set, log which code brought them here. Gated to the
+  // two INITIAL-signup docs, not "pro_terms_onboarding" (the later wizard
+  // acknowledgment), so this fires once per new account, the same moment
+  // signup_homeowner / signup_pro already do - and only past the idempotency
+  // guard above, so a second call for the same signup (confirmation-email
+  // flow hitting both this function's early call and /auth/callback) never
+  // double-logs.
+  //
+  // Re-validated against the allowlist here, even though the cookie is only
+  // ever minted by the /go/ route with an already-checked code: httpOnly
+  // stops a page script from reading or forging it, but not a hand-crafted
+  // request, and trackServerEvent inserts props raw (it does not run
+  // sanitizeTrackProps the way /api/track does), so this is the last gate
+  // before a value reaches app_events.props.
+  if (doc === "terms" || doc === "pro_terms") {
+    try {
+      const jar = await cookies();
+      const code = jar.get(CAMPAIGN_COOKIE)?.value ?? null;
+      if (code && lookupCampaign(code)) {
+        await trackServerEvent(verifiedUserId, "campaign_signup", { code });
+      }
+    } catch (campaignErr) {
+      console.error("recordTermsAcceptance: campaign_signup failed", {
+        userId: verifiedUserId,
+        doc,
+        campaignErr,
+      });
+    }
   }
 }

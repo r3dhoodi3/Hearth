@@ -285,7 +285,7 @@ describe("resolveAuthRole", () => {
   // So an EXISTING homeowner who tapped "Continue with Apple" on that page
   // came back to /onboarding, which for an account that already owns a home is
   // the "Add another home" screen - and on the free plan that screen is the
-  // cap wall: "Your first home is free. Adding another home is part of Hearth
+  // cap wall: "Your first home is free. Adding another home is part of OakTend
   // Plus." A person who did nothing but sign in was told to upgrade.
   //
   // The cap belongs to the explicit add-a-home action alone, so the sign-in

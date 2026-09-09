@@ -14,7 +14,7 @@ import {
   hasClaimedPromo,
 } from "@/lib/subscription";
 import { PRO_PLAN } from "@/lib/constants";
-import { billingTermsText } from "@/lib/billingTerms";
+import { billingTermsText, AUTO_RENEWAL_CHECKBOX_LABEL } from "@/lib/billingTerms";
 import {
   checkoutIdempotencyBucket,
   checkoutIdempotencyKey,
@@ -34,6 +34,10 @@ import { trialDecision, RISK_BLOCK_MESSAGE } from "@/lib/risk/decision";
 import { recordRequestSignals } from "@/lib/risk/signals";
 import { trackServerEvent } from "@/lib/trackServer";
 import { variantForUser } from "@/lib/paywallExperiment";
+import {
+  isNativeClientRequest,
+  NATIVE_STRIPE_BLOCKED_MESSAGE,
+} from "@/lib/nativeClientHeader";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -62,6 +66,9 @@ async function proIntroCouponId(): Promise<string | null> {
   const envId = process.env.STRIPE_PRO_INTRO_COUPON_ID;
   if (envId) return envId;
 
+  // Stripe coupon ids live in the Stripe account, not the brand: the coupon was
+  // created as "hearth-pro-intro" and renaming the string here would silently
+  // stop the intro discount. Set STRIPE_PRO_INTRO_COUPON_ID to override.
   const fallbackId = "hearth-pro-intro";
   try {
     await stripe.coupons.retrieve(fallbackId);
@@ -84,7 +91,7 @@ async function proIntroCouponId(): Promise<string | null> {
   }
 }
 
-// Start a Hearth Pro checkout (monthly or yearly). Uses the pre-created
+// Start an OakTend Pro checkout (monthly or yearly). Uses the pre-created
 // Stripe Price if one is configured, otherwise falls back to inline
 // price_data so the flow works before Products/Prices are set up in Stripe.
 export async function startProCheckoutAction(formData: FormData) {
@@ -112,6 +119,30 @@ export async function startProCheckoutAction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
+  // APPLE 3.1.1 / GOOGLE PLAY BILLING: same gate as
+  // startPlusCheckoutAction's twin in src/app/(app)/plus/actions.ts - see
+  // that comment and src/lib/nativeClientHeader.ts for the full reasoning.
+  // OakTend Pro membership is a digital unlock, so it must sell through IAP
+  // on native, never Stripe.
+  if (await isNativeClientRequest()) {
+    await setFlash(NATIVE_STRIPE_BLOCKED_MESSAGE, "error");
+    redirect("/pro/plus");
+  }
+
+  // REQUIRE THE AUTO-RENEWAL CONSENT CHECKBOX (Cal. Bus. & Prof. Code
+  // 17602(a)(2), as amended by AB 2863, effective July 1, 2025). Mirrors
+  // startPlusCheckoutAction's identical guard: the checkout screens
+  // (ProPlanToggle.tsx, ProTrialNudge.tsx) already disable their submit
+  // buttons until the box is checked, so this is the server-side brace for a
+  // request that never went through one of those buttons.
+  if (formData.get("consent_checkbox") !== "true") {
+    await setFlash(
+      "Check the box agreeing to the automatic renewal terms to continue.",
+      "error"
+    );
+    redirect("/pro/plus");
+  }
+
   // Membership is a contractor perk bundle, so only a set-up company can buy
   // it. It never changes which leads anyone can see or apply to.
   const contractor = await getCurrentContractor();
@@ -134,7 +165,7 @@ export async function startProCheckoutAction(formData: FormData) {
           recurring: {
             interval: plan === "pro_yearly" ? ("year" as const) : ("month" as const),
           },
-          product_data: { name: "Hearth Pro" },
+          product_data: { name: "OakTend Pro" },
         },
       };
 
@@ -159,7 +190,7 @@ export async function startProCheckoutAction(formData: FormData) {
     (existing.status === "active" || existing.status === "trialing");
   if (liveExisting) {
     await setFlash(
-      "You already have a Hearth Pro membership. No need to buy it twice.",
+      "You already have an OakTend Pro membership. No need to buy it twice.",
       "info"
     );
     redirect("/pro/plus");
@@ -218,7 +249,7 @@ export async function startProCheckoutAction(formData: FormData) {
     }
     if (alreadyMember) {
       await setFlash(
-        "You already have a Hearth Pro membership. No need to buy it twice.",
+        "You already have an OakTend Pro membership. No need to buy it twice.",
         "info"
       );
       redirect("/pro/plus");
@@ -625,6 +656,12 @@ export async function startProCheckoutAction(formData: FormData) {
           plan,
           consent_terms: consentTerms,
           consent_at: consentAt,
+          // The affirmative checkbox itself (Cal. Bus. & Prof. Code
+          // 17602(a)(2)), alongside the disclosure text it confirms. The
+          // guard above already refused to reach this point unless the
+          // posted value was exactly "true".
+          consent_checkbox: "true",
+          consent_checkbox_label: AUTO_RENEWAL_CHECKBOX_LABEL,
           // Session-level twin of intro_step_up above, for the OTHER half of
           // the rollback: checkout.session.expired. An abandoned checkout never
           // produces a subscription at all, so the webhook has nothing but this
@@ -789,7 +826,19 @@ export async function resumeProMembershipAction() {
 // customer id when no Pro-side row exists yet (same Stripe customer).
 export async function manageProBillingAction() {
   const sub = (await getProSubscription()) ?? (await getSubscription());
-  if (!sub?.stripe_customer_id) redirect("/pro/plus");
+  // Pro-side twin of the same branch in src/app/(app)/plus/actions.ts's
+  // manageBillingAction: a membership bought through the App Store / Play
+  // Store has no Stripe customer, and a silent bounce back to /pro/plus reads
+  // as a dead button.
+  if (!sub?.stripe_customer_id) {
+    if (sub) {
+      await setFlash(
+        "This membership was bought in the app, so it is managed in your App Store or Play Store subscription settings.",
+        "info"
+      );
+    }
+    redirect("/pro/plus");
+  }
 
   const portal = await stripe.billingPortal.sessions.create({
     customer: sub.stripe_customer_id,

@@ -9,7 +9,7 @@ const STAGE_LABEL: Record<string, string> = {
 
 const STAGE_STYLE: Record<string, string> = {
   lead: "border-stone-200 bg-stone-50 text-stone-600 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300",
-  quoted: "border-hearth-200 bg-hearth-50 text-hearth-700 dark:border-hearth-500/30 dark:bg-hearth-500/15 dark:text-hearth-300",
+  quoted: "border-oaktend-200 bg-oaktend-50 text-oaktend-700 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300",
   won: "border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300",
   lost: "border-stone-200 bg-stone-100 text-stone-500 dark:border-white/10 dark:bg-stone-700 dark:text-stone-400",
 };
@@ -79,7 +79,7 @@ export default function ClientRow({
           {client.phone && (
             <a
               href={`tel:${client.phone}`}
-              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+              className="font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
             >
               {client.phone}
             </a>
@@ -87,7 +87,7 @@ export default function ClientRow({
           {client.email && (
             <a
               href={`mailto:${client.email}`}
-              className="break-all font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+              className="break-all font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
             >
               {client.email}
             </a>
@@ -109,7 +109,7 @@ export default function ClientRow({
           {client.lead_id && (
             <Link
               href={`/pro/chats?lead=${client.lead_id}`}
-              className="font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+              className="font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
             >
               Open chat
             </Link>

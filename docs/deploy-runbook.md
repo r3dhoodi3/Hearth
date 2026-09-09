@@ -1,4 +1,4 @@
-# Hearth Production Go-Live Runbook
+# OakTend Production Go-Live Runbook
 
 Compiled 2026-07-07 from deploy-hardening research grounded in this exact repo
 (14 crons in vercel.json, the 4 Stripe webhook events the code handles, every

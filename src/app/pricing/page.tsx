@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import BillingLegalLine from "@/components/BillingLegalLine";
 import {
   PLUS_PLAN,
   COLD_START_FREE_POSTING,
@@ -40,11 +41,11 @@ export const revalidate = 3600;
 // its own literal copy of the title (see that file's comment for why).
 const TITLE = "Pricing";
 const DESCRIPTION =
-  "Hearth pricing, in plain terms. Your first home is free with no card. Hearth Plus is optional, with an honest auto-renewing subscription you can cancel anytime.";
+  "OakTend pricing, in plain terms. Your first home is free with no card. OakTend Plus is optional, with an honest auto-renewing subscription you can cancel anytime.";
 const CANONICAL = `${SITE_URL}/pricing`;
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: TITLE,
   description: DESCRIPTION,
   alternates: {
@@ -54,7 +55,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "website",
     // og:image comes from the colocated opengraph-image.tsx; Next wires it
     // up automatically for this segment.
@@ -95,7 +96,7 @@ const FREE_FEATURES = [
   "Two free AI document reads and one free inspection report import",
   "Your home's value estimate and how much equity you have",
   COLD_START_FREE_POSTING
-    ? "Post jobs and get quotes from local pros, unlimited while Hearth is new"
+    ? "Post jobs and get quotes from local pros, unlimited while OakTend is new"
     : "Post up to 3 jobs at a time and get quotes from local pros",
   "Every alert, in the app",
 ];
@@ -126,15 +127,15 @@ export default function PricingPage() {
           href="/"
           className="text-stone-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-400 dark:hover:text-stone-300"
         >
-          ← Hearth
+          ← OakTend
         </Link>
       </p>
 
       <h1 className="mt-4 text-3xl font-semibold text-stone-900 sm:text-4xl dark:text-stone-100">
-        Simple pricing. Most of Hearth is free.
+        Simple pricing. Most of OakTend is free.
       </h1>
       <p className="mt-3 text-base leading-relaxed text-stone-600 dark:text-stone-300">
-        Your first home is free to track, with no card. Hearth Plus is an
+        Your first home is free to track, with no card. OakTend Plus is an
         optional subscription for the tools that save you real money on repairs.
         Here is exactly what each one costs and what you get.
       </p>
@@ -173,7 +174,7 @@ export default function PricingPage() {
               "free" is a plan rather than a teaser. */}
           <p className="mt-auto pt-4 text-sm text-stone-500 dark:text-stone-400">
             Caps: one home, one plan build, one quote check, one home value
-            estimate, {FREE_ASK_PER_DAY} Ask Hearth questions a day (text
+            estimate, {FREE_ASK_PER_DAY} Ask OakTend questions a day (text
             only).
           </p>
         </div>
@@ -185,7 +186,7 @@ export default function PricingPage() {
           </span>
           <div>
             <p className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-              Hearth Plus, yearly
+              OakTend Plus, yearly
             </p>
             <p className="mt-3 text-3xl font-semibold text-stone-900 dark:text-stone-100">
               {YEARLY}
@@ -235,7 +236,7 @@ export default function PricingPage() {
         <div className="card order-3 flex flex-col">
           <div>
             <p className="text-xl font-semibold text-stone-900 dark:text-stone-100">
-              Hearth Plus, monthly
+              OakTend Plus, monthly
             </p>
             <p className="mt-3 text-3xl font-semibold text-stone-900 dark:text-stone-100">
               {MONTHLY}
@@ -265,7 +266,7 @@ export default function PricingPage() {
         </div>
       </div>
 
-      {/* Plain disclosure of Ask Hearth's daily cap, so the AI features above
+      {/* Plain disclosure of Ask OakTend's daily cap, so the AI features above
           never read as unlimited. The FREE number is READ from
           src/lib/constants.ts rather than typed: it mirrors ASK_DAILY_FREE in
           src/lib/aiUsage.ts, which is what /api/ask actually enforces (the tool
@@ -277,7 +278,7 @@ export default function PricingPage() {
           has to be true, and the trial runs on the same ceiling as a paid
           plan. */}
       <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-        Ask Hearth, the AI assistant, is capped at {FREE_ASK_PER_DAY} text
+        Ask OakTend, the AI assistant, is capped at {FREE_ASK_PER_DAY} text
         questions a day on Free, so it stays fast and available for everyone.
         Plus raises that limit and adds photo answers. The {TRIAL_DAYS} free
         days include everything Plus includes, at the same daily limit.
@@ -305,6 +306,9 @@ export default function PricingPage() {
           free trial, you are never charged, and if you cancel later you keep
           Plus until the end of the period you already paid for.
         </p>
+        {/* Cal. Bus. & Prof. Code 17538: legal name, address, and a route to
+            the refund policy, shown before purchase. */}
+        <BillingLegalLine className="mt-3 text-sm text-stone-500 dark:text-stone-400" />
       </div>
 
       {/* What stays free forever, so "free" isn't a bait word. */}
@@ -317,7 +321,7 @@ export default function PricingPage() {
           and storing anything you like, however much of it), your
           first maintenance plan, and posting jobs to local pros are free to use
           and always will be. You never need a card for any of it, and you can
-          get a lot out of Hearth without ever paying a cent. Plus is there only
+          get a lot out of OakTend without ever paying a cent. Plus is there only
           if you want the money-saving tools on top.
         </p>
       </div>

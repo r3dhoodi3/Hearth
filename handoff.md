@@ -1,4 +1,4 @@
-# Hearth handoff
+# OakTend handoff
 
 > The dated sections below are the running history, newest additions at the top.
 > Start with **LATEST** for the current state and what is still owed.
@@ -58,7 +58,7 @@ teams (running at time of writing). Live: main `87fc50a`, deploying.
 2. Fake message toasts fixed (dual-role self-message leak) via shared
    src/lib/sideLeads.ts.
 3. Post-review popups -> one centered modal card.
-4. Messages Active/Closed tabs, both sides, Ask Hearth pinned on Active.
+4. Messages Active/Closed tabs, both sides, Ask OakTend pinned on Active.
 5. Smart search: as-you-type destination + FAQ suggestions, both sides; pro
    search is new (src/lib/searchSuggestions.ts, faqIndex.ts).
 6. Report-a-bug: first qualifying report grants $5 once (race-proof SQL),
@@ -330,14 +330,14 @@ files (lib/homeWins, api/wins-card, HomeWinsShare) and the middleware allowlist.
   system-message forgery, Ask assistant-turn injection, free-user Plus mislabel, duplicate
   homes, double-submit latches, Next.js 15.5.24 (AVIF RCE). 16-agent audit -> 7 workers -> 3
   verifiers. No cross-tenant breach or auth bypass found.
-- HOME WINS (45bf94f + 350766d): new positive-only shareable card (years on Hearth, systems in
+- HOME WINS (45bf94f + 350766d): new positive-only shareable card (years on OakTend, systems in
   great shape, tasks handled; encouraging starter for new homes; NO score, NO dollar figure).
   Public OG card /api/wins-card/[code], privacy-verified (first name + counts only, no
   address/value). Dismissible dashboard card. Removable in ~4 files. Middleware fix made the
   share route publicly fetchable (it was 307ing to signin - caught by smoke test).
 - UX WAVE (472e34d):
   - Lead-credit WORDING was actually WRONG (root cause of Landen's confusion): copy + the Ask
-    Hearth Pro AI prompt still described the pre-0107 rule ("only first bid, then a lost bid is
+    OakTend Pro AI prompt still described the pre-0107 rule ("only first bid, then a lost bid is
     a lost fee, license required"). Rewrote every instance to the true rule: every lost bid gets
     100% back as credit (not cash), no limit, 60 days. Copy only, no logic change.
   - "Try Pro 3 days" -> full-screen takeover paywall (X, wordmark, "3 Day Free Trial", plan
@@ -410,7 +410,7 @@ HomeAlerts, WeatherStrip, dashboard/page+loading, ReminderItem, GlobalSearch. Pr
 wizardSteps+OnboardingCompanyForm, profile/PublicProfileForm, actions, crm/actions+[id]/page,
 HomeView, leads/LeadsBoard+page, plus/PlusScreens, JobStatusSelect, new leadStatusLabel.ts,
 PhoneInput. Onboarding/auth/notify: onboarding/actions+OnboardingForm, sideActions,
-contractor-signup, NotificationBell. AI: api/ask, api/pro-ask, AskHearth, api/home-alerts,
+contractor-signup, NotificationBell. AI: api/ask, api/pro-ask, AskOakTend, api/home-alerts,
 api/pro-widget, next.config.mjs. Subscription: lib/subscription (new hasActivePaidProPlan).
 NEW SQL: supabase/migrations/0151_night_security_2026_08_30.sql +
 supabase/PASTE-ME-live-2026-08-30-night.sql.
@@ -424,8 +424,8 @@ cap enforced at the DB (one Plus sub can't feed unlimited alias AI - migration 0
 contact_phone validated client+server; HomeAlerts freeze/recall panel no longer silently
 hidden on soft nav; chat no longer snaps to bottom on every poll; three dashboard 390px
 overflow fixes. MED: is_pro_member active-only so a free trial can't get the 10% lead discount
-(SQL + TS preview aligned via hasActivePaidProPlan); system-message "Hearth verified..."
-forgery blocked (0151); Ask Hearth client-authored assistant-turn injection dropped; free
+(SQL + TS preview aligned via hasActivePaidProPlan); system-message "OakTend verified..."
+forgery blocked (0151); Ask OakTend client-authored assistant-turn injection dropped; free
 users no longer mislabeled Plus on refusal paths; duplicate home rows blocked (code guard +
 unique index incl. unit); double-submit latches across pro checkout/deposit/finish/plus
 buttons; CRM note timeline + Active-jobs link + status-label drift; home-alerts + pro-widget
@@ -517,7 +517,7 @@ middleware. AI: Haiku routing for cheap tasks, abuse ceilings. Security (red tea
 
 ---
 
-## Hearth handoff (2026-08-24)
+## OakTend handoff (2026-08-24)
 
 Snapshot after the overnight build + the 08-23/24 morning items shipped and the
 live test site was wired up. Everything below is on `main` and deployed to
@@ -541,7 +541,7 @@ Sign-in inputs are `#email` / `#password`. Use the Playwright runner at
 (PERSONA-README.md there; set `base` to the vercel URL). None of these accounts
 own a home or company yet, so each agent will go through onboarding first. When
 done, delete them: `delete from auth.users where email like 'hearth-test-%@example.com';`
-(service role). NOTE: to actually reach Ask Hearth on the live site the account
+(service role). NOTE: to actually reach Ask OakTend on the live site the account
 needs a claimed home; claiming needs a REAL Orange County address (the address
 suggest + county lookup will reject fakes by design).
 
@@ -573,7 +573,7 @@ suggest + county lookup will reject fakes by design).
 - All AI on Anthropic Claude Sonnet 5 via the SDK; Gemini removed; voice
   on-device. Prompt caching fixed (nonce was defeating it). thinking off +
   effort low on chat (~20% faster).
-- Ask Hearth limits: 3/day free text, 15/day Plus with photos, 6/min chat
+- Ask OakTend limits: 3/day free text, 15/day Plus with photos, 6/min chat
   burst, 10/5min tool burst, 1500/hour global brake, fail-closed, atomic
   refunds, bounded request bodies on all 13 AI routes, home-only topic guard,
   claimed home required.
@@ -581,7 +581,7 @@ suggest + county lookup will reject fakes by design).
   privacy cards, weather strip (night labels, 7-day tap forecast, ZIP fallback,
   8s deadline), ~40 tap targets, home-report CTA, emergency textarea zoom, CRM
   loading state, billing table, post-a-job option values, per-system
-  placeholders, Ask Hearth retry for an orphaned question, cycling wait pill.
+  placeholders, Ask OakTend retry for an orphaned question, cycling wait pill.
 - Security (2 sweep rounds): middleware matcher anchored to asset prefixes
   (`.png` suffix no longer skips auth), /ask guarded with a drift test, sitemap
   filtered, custom category moderation at write AND render, upload path
@@ -599,7 +599,7 @@ suggest + county lookup will reject fakes by design).
   exit popup (deliberately not built).
 - Self-service home deletion removed (people could cycle homes to reset the
   free-home cap); "Contact us" line instead; server refuses a replayed delete.
-- Ask Hearth moved into the Messages tab (pinned row) on both sides; bottom nav
+- Ask OakTend moved into the Messages tab (pinned row) on both sides; bottom nav
   back to 4 tabs.
 - Household QR link `[object Promise]` fixed (missed await from Next 15).
 
@@ -629,14 +629,14 @@ suggest + county lookup will reject fakes by design).
 - Concurrent `next dev` on one `.next` corrupted it twice (chunk 404s, dead
   hydration); fixed with one server on 3100 + isolated dist dirs. Several
   persona "blockers" were this, re-verified clean.
-- Ask Hearth answers still take 10+ seconds; streaming is the next real lever.
+- Ask OakTend answers still take 10+ seconds; streaming is the next real lever.
 
 ## Next steps
 
 1. Run the 5-agent live test above, fix what it finds, delete the test accounts.
 2. Landen: add `TWILIO_*` to Vercel when turning SMS on; rotate the three
    exposed keys; test Apple sign-in on the phone with a real Google account.
-3. Ask Hearth streaming (latency); a home-details editor (year built / sqft /
+3. Ask OakTend streaming (latency); a home-details editor (year built / sqft /
    beds / baths have no post-onboarding form).
 4. William: `docs/WILLIAM-SECURITY-INFRA.md` (14 items). Legal:
    `docs/LEGAL-TODO.md`.
@@ -645,7 +645,7 @@ suggest + county lookup will reject fakes by design).
 
 - Annual Plus has no free trial now (billed day one). Revert in
   `src/lib/billingTerms.ts` (`trialApplies`) if you meant the trial on both.
-- Ask Hearth in Messages replaced the separate Ask tab built earlier that night.
+- Ask OakTend in Messages replaced the separate Ask tab built earlier that night.
 - Condo units are display-only: ownership match is street-level, a unit claim is
   recorded "unverified" on purpose (the provider returns the building record).
   Consequence: a condo owner's job post will not fan out over email/SMS until
@@ -661,7 +661,7 @@ Runner + shots + step files: `C:\Users\lande\AppData\Local\Temp\claude\C--Users-
 BLOCKERS on live
 1. Homeowner onboarding rejects EVERY real address ("We couldn't find that address"). T1 and T2 tried 6 real HB/FV addresses, all rejected. Cause: RentCast call failing on Vercel; `src/lib/parcel.ts` returns null for 401/429/timeout AND for a true miss, `src/app/onboarding/actions.ts:318` refuses both, and the miss is cached 24h in parcel_cache. The local key (`.env.local`) returns a full record for 9063 Warner Ave. Landen added `RENTCAST_API_KEY` to Vercel + redeployed 08-24 evening; retest still rejected (cache not cleared yet). TODO: run `delete from parcel_cache where source = 'none';` (service role), then retest a claim. CODE FIX still needed: third ParcelFacts source ("unavailable") for HTTP errors/timeouts, not cached, not refused, falls back to manual entry.
 2. /pro/plus "Try Pro free for 3 days" -> server 500 + error boundary (Stripe checkout never loads). shot t3-38.
-3. Ask Hearth on the pro side: "temporarily unavailable" within 500ms. Check ANTHROPIC_API_KEY on Vercel really applied (redeploy after adding?). Homeowner-side Ask untested (blocked by 1).
+3. Ask OakTend on the pro side: "temporarily unavailable" within 500ms. Check ANTHROPIC_API_KEY on Vercel really applied (redeploy after adding?). Homeowner-side Ask untested (blocked by 1).
 
 BAD / ANNOYING
 - Address autocomplete needs the city typed; street-only ("Magnolia", "Heil Ave") returns nothing, placeholder gives no hint. Some queries return unrelated streets. (T1, T2)
@@ -683,7 +683,7 @@ CLEANUP when done: `delete from auth.users where email like 'hearth-test-%@examp
 Blocker 1 (address rejection) CONFIRMED FIXED on live after Landen added RENTCAST_API_KEY to Vercel + redeployed + cleared parcel_cache misses: claims now reach the confirm step and the dashboard (7 systems, weather). Homeowner testers T1b/T2b/T5b re-run OK past onboarding.
 
 Still broken on live, OWNER ACTIONS:
-- Ask Hearth (both sides) still "temporarily unavailable" after Landen added a NEW Anthropic key (created 08-26, named for Vercel production) and redeployed. The route's hasClaudeKey() reads process.env.ANTHROPIC_API_KEY at runtime, so the deployment does not see it: check the var is on the Production scope, exact name, then redeploy again. Old key must be revoked at console.anthropic.com.
+- Ask OakTend (both sides) still "temporarily unavailable" after Landen added a NEW Anthropic key (created 08-26, named for Vercel production) and redeployed. The route's hasClaudeKey() reads process.env.ANTHROPIC_API_KEY at runtime, so the deployment does not see it: check the var is on the Production scope, exact name, then redeploy again. Old key must be revoked at console.anthropic.com.
 - Stripe: BOTH checkouts fail on live (homeowner /plus: flash "We couldn't start checkout"; /pro/plus: 500 until the rethrow fix ships). stripe.checkout.sessions.create throws with an identical digest on both cadences. Check Vercel Production: STRIPE_SECRET_KEY (live sk_live_), STRIPE_PRICE_PLUS_MONTHLY/_YEARLY and STRIPE_PRO_MONTHLY/_YEARLY_PRICE_ID (must be live-mode price ids matching that key), NEXT_PUBLIC_SITE_URL. Vercel function logs for the POST will show the real Stripe message.
 - Landen reported "contractor page isn't working on phone" but has not said which URL; every contractor page probed at 390px rendered for the test accounts.
 
@@ -715,7 +715,7 @@ FIRST STEPS NEXT SESSION
 4. Then ask Landen for the commit/push go-ahead (never assume it).
 
 OWNER REMINDERS (Landen asked to be reminded)
-- Ask Hearth is DOWN on live: ANTHROPIC_API_KEY not reaching the Production deployment. Check scope = Production, exact name, redeploy, test /ask. Revoke the old key.
+- Ask OakTend is DOWN on live: ANTHROPIC_API_KEY not reaching the Production deployment. Check scope = Production, exact name, redeploy, test /ask. Revoke the old key.
 - Stripe: BOTH checkouts fail on live. Check STRIPE_SECRET_KEY + the 4 price ids are live-mode from one account, NEXT_PUBLIC_SITE_URL set; Vercel function logs show the real error.
 - Before running the account-risk paste: set RISK_HASH_SALT in Vercel (random 32+ chars, never rotate). Keep RISK_ENFORCE unset (log-only) for the first week.
 - Live DB pastes ready, in order: PASTE-ME-live-2026-08-26-all-oc.sql, PASTE-ME-live-2026-08-26-db-ownership.sql, PASTE-ME-live-2026-08-26-account-risk.sql (each with verify queries). Run only after the matching code is deployed.
@@ -770,7 +770,7 @@ Root causes worth remembering:
 - Leads list empty everywhere since 0105 added `direct_to` (second FK to contractors): PostgREST PGRST201 ambiguous embed, error swallowed; fixed with `contractors!contractor_leads_contractor_id_fkey` via src/lib/leadJoin.ts. This is why "posted job vanished" showed up in 3 tester reports.
 - RentCast answers a miss with HTTP 404; the code treated every non-ok as "unavailable" (never cached, re-billed, fake-address gate unreachable). Now 404 = miss, retry on connect failure, body read bounded; a miss proceeds to manual entry (product call).
 - Photon substitutes the nearest house number; now filtered when the query has a number.
-- Ask Hearth transcript: `messagesRef.current = messages` in the render body could roll the list backwards; removed; answers saved while streaming; storage quota handled.
+- Ask OakTend transcript: `messagesRef.current = messages` in the render body could roll the list backwards; removed; answers saved while streaming; storage quota handled.
 - Dual-role unread badge counted the account's own outgoing business messages (RLS lets either party read the lead).
 - Live DB constraint `contractors_launch_cities_subset` still pre-0129 (HB + FV only) until Landen pastes 0129-0132; every pro tester hit it.
 - Aborting a stream refunded the question (unlimited free tier); `public.users` had no column lock (counters resettable via PostgREST); both fixed (askStream `gone` flag, 0139 trigger).
@@ -785,7 +785,7 @@ Ten checker agents read the whole overnight diff after round 3. Their findings w
 
 What they caught and what changed:
 - Claim path trusted hidden parcel fields from the form; server now re-derives them.
-- Ask Hearth: clearing a chat while an answer streamed let the answer come back (generation counter now stales it); a clear in one tab did not clear the other (storage listener); an empty model reply spent a question without a refund (refund + idempotent refundOnce); abort refunds capped at 5/hour per user; pro Ask photo answers are Pro-only; trial accounts see "your 8 questions for today" instead of a Plus upsell.
+- Ask OakTend: clearing a chat while an answer streamed let the answer come back (generation counter now stales it); a clear in one tab did not clear the other (storage listener); an empty model reply spent a question without a refund (refund + idempotent refundOnce); abort refunds capped at 5/hour per user; pro Ask photo answers are Pro-only; trial accounts see "your 8 questions for today" instead of a Plus upsell.
 - Payments: the trial is reserved (claim_promo "plus_trial") before the Stripe session is created and released if checkout expires, so two tabs cannot start two trials; customer.subscription.updated can no longer resurrect a canceled row; free/Plus/trial numbers come from constants (drift test); dunning notice ids fall back when invoice.id is missing; the /plus decision cache only holds "charged today" decisions (a cached "3 days free" could go stale against a checkout that bills today).
 - Desktop header: HomeSwitcher could not shrink (sm:min-w-[auto]) so the address collided with Home / Browse Pros at every width. Now truncates; probe clean at 1024 to 1920. 640-1023 still collides (pre-existing, structural, see STATUS.md).
 - Phone: job-card Edit/Close are 44px, the posted banner scrolls clear of the header (scroll-mt was on the wrong element), the tip box shows once, app guide snoozes for the tab after a route change instead of re-opening.
@@ -797,13 +797,13 @@ Not done: 640-1023 header shell decision; RISK_ENFORCE is still off (log-only), 
 ## Wave 2026-08-29/30 (overnight)
 
 ### Goals
-Everything Landen asked for on the evening of 2026-08-29: iMessage-style phone composer, Ask Hearth only in Messages, plan parity, checkout bug, pro Home/Leads split with retention hooks and paywall parity, feedback credit, owner name, push notifications, rating prompt, eyesight pass, thank-you pages, share images, breadcrumbs, analytics, and the security checklist.
+Everything Landen asked for on the evening of 2026-08-29: iMessage-style phone composer, Ask OakTend only in Messages, plan parity, checkout bug, pro Home/Leads split with retention hooks and paywall parity, feedback credit, owner name, push notifications, rating prompt, eyesight pass, thank-you pages, share images, breadcrumbs, analytics, and the security checklist.
 
 ### Current state
 All of it is in this commit, gate green (tsc 0, eslint 0, vitest 178 files / 2463, build 0), two verifiers (V1 security: blockers fixed; V2 regression: PUSH yes). Not active on live until the owner pastes the SQL bundle and sets the VAPID env.
 
 ### Files touched
-About 320 paths (183 modified, about 110 new): src/components (AskHearth, LeadChat, PhoneChatFrame, NotificationBell, Push*, Breadcrumbs, RememberedDetails, ReviewPrompt, ProNudge, ProChip, ProTrialNudge), src/lib (useVisualViewport, askLock, csrf, sessionActivity, logSafe, uploadGuard, envGuard, push*, trackServer, checkoutReservation, checkoutIdempotency, promoClaimRef, proHome*, proFeedback*, nativeReview, reviewPrompt), pro pages (page = Home, leads/, feedback/, plus, billing, chats, onboarding, profile), homeowner pages (plus, dashboard, chats, ask, account/*, contact/thanks, guides OG), api routes (push/subscribe, pro-tools, pro-ask, ask, stripe webhook, pro-compliance), migrations 0141-0146 + PASTE-ME files + PASTE-ME-ALL-PENDING-2026-08-30.sql, docs (SECURITY-OPS, ENVIRONMENTS, BACKUPS-AND-RESTORE, ANALYTICS, GO-LIVE-WIRING), public/sw.js.
+About 320 paths (183 modified, about 110 new): src/components (AskOakTend, LeadChat, PhoneChatFrame, NotificationBell, Push*, Breadcrumbs, RememberedDetails, ReviewPrompt, ProNudge, ProChip, ProTrialNudge), src/lib (useVisualViewport, askLock, csrf, sessionActivity, logSafe, uploadGuard, envGuard, push*, trackServer, checkoutReservation, checkoutIdempotency, promoClaimRef, proHome*, proFeedback*, nativeReview, reviewPrompt), pro pages (page = Home, leads/, feedback/, plus, billing, chats, onboarding, profile), homeowner pages (plus, dashboard, chats, ask, account/*, contact/thanks, guides OG), api routes (push/subscribe, pro-tools, pro-ask, ask, stripe webhook, pro-compliance), migrations 0141-0146 + PASTE-ME files + PASTE-ME-ALL-PENDING-2026-08-30.sql, docs (SECURITY-OPS, ENVIRONMENTS, BACKUPS-AND-RESTORE, ANALYTICS, GO-LIVE-WIRING), public/sw.js.
 
 ### What changed
 See STATUS.md "Wave 2026-08-29/30" for the product list. Review fixes applied by the lead after the verifiers: env guard test-Stripe warn-only (REQUIRE_LIVE_STRIPE=1 makes it fatal), idle sign-out scope local, free drafts fail closed without 0145, license unlock via admin client (0069 allowlist), owner_name in CONTRACTOR_COLUMNS, push upsert via admin client (shared device takeover), webhook rollback also releases session-scoped reservations, owner-name hint says it is public, feedback credit capped at $5 inside SQL.
@@ -813,5 +813,5 @@ Nothing in the gate. Not verifiable without a device or live keys: real iOS keyb
 
 ### Next steps
 1. Owner: SQL bundle, VAPID env + redeploy, Supabase Auth settings, RLS audit results, plan/backups check, /api/health firewall rule, environments split, Apple key rotation.
-2. Live checks (5 agents), 10-persona click-everything wave, red team incl. Ask Hearth and account break-ins, fix loop, then the CEO-level product pass.
+2. Live checks (5 agents), 10-persona click-everything wave, red team incl. Ask OakTend and account break-ins, fix loop, then the CEO-level product pass.
 3. Hardening queue: server upload route for the 7 direct-to-storage uploads; convert 3 own-row admin reads; pro-logos bucket privacy; lead_quotes/invoices realtime publication; breadcrumbs on pro/profile, pro/billing, pro/crm/[id].

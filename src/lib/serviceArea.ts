@@ -86,7 +86,7 @@ export function isOrangeCountyZip(zip: string): boolean {
 // does not gate anything.
 export const LAUNCH_COMMUNITIES = ["Ladera Ranch", "Midway City"] as const;
 
-// The cities Hearth launches in, in canonical order: since migration 0129 that
+// The cities OakTend launches in, in canonical order: since migration 0129 that
 // is all of Orange County, the 34 incorporated cities (OC_INCORPORATED_CITIES
 // in ./ocCities.ts, one list, not two that drift) plus the two communities
 // above, 36 names. Everything city-shaped reads this: the signup/profile
@@ -118,7 +118,7 @@ export const LAUNCH_AREA_LABEL = "all of Orange County";
 // such a file can only export async functions, which is why the client copy
 // used to be duplicated by hand.
 export const LAUNCH_ONLY_MESSAGE =
-  `Hearth serves ${LAUNCH_AREA_LABEL} right now. We added you to the ` +
+  `OakTend serves ${LAUNCH_AREA_LABEL} right now. We added you to the ` +
   "waitlist and will email you the moment we expand to your area.";
 
 // The post-time twin of the message above, for a home that was claimed before
@@ -128,7 +128,7 @@ export const LAUNCH_ONLY_MESSAGE =
 // LAUNCH_ONLY_MESSAGE on purpose: nothing is being added to a waitlist here,
 // and the home is already claimed.
 export const OUT_OF_AREA_POST_MESSAGE =
-  `Hearth pros serve ${LAUNCH_AREA_LABEL} right now, and this home is ` +
+  `OakTend pros serve ${LAUNCH_AREA_LABEL} right now, and this home is ` +
   "outside that area. We'll email you the moment we expand.";
 
 // Which launch city each Orange County ZIP belongs to. Since 0129 this covers

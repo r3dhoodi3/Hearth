@@ -15,7 +15,7 @@ export default function OpenChatButton({
       type="button"
       onClick={() =>
         window.dispatchEvent(
-          new CustomEvent("hearth:open-chat", { detail: { leadId, name } })
+          new CustomEvent("oaktend:open-chat", { detail: { leadId, name } })
         )
       }
       className="text-sm font-medium text-bark-700 hover:underline"

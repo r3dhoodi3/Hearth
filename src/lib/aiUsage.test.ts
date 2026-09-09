@@ -85,18 +85,18 @@ describe("the homeowner chat route", () => {
   });
 
   it("refuses to answer for an account with no home on file", () => {
-    // Ask Hearth's whole value is that it answers for THIS house, and a
+    // Ask OakTend's whole value is that it answers for THIS house, and a
     // throwaway account with no property is how you farm free questions.
     expect(askRoute).toContain("getProperties");
     expect(askRoute).toContain(
-      "Add your home first and Ask Hearth can answer for it."
+      "Add your home first and Ask OakTend can answer for it."
     );
     expect(askRoute).toContain('href: "/onboarding"');
   });
 
   it("still gates photos behind Plus", () => {
     expect(askRoute).toContain("newTurnHasImage");
-    expect(askRoute).toContain("Photo questions are part of Hearth Plus.");
+    expect(askRoute).toContain("Photo questions are part of OakTend Plus.");
   });
 });
 
@@ -124,7 +124,7 @@ describe("refusals say WHOSE limit was hit", () => {
     // the neutral busy line with no upsell link attached.
     expect(askRoute).toContain('reason !== "user_daily"');
     expect(askRoute).toContain(
-      "Ask Hearth is busy right now. Try again in a few minutes."
+      "Ask OakTend is busy right now. Try again in a few minutes."
     );
     expect(proAskRoute).toContain('reason !== "user_daily"');
   });
@@ -727,7 +727,7 @@ describe("the pro copilot is metered like the homeowner chat", () => {
   it("never prints the pro number in the copy", () => {
     // Limits are described, not counted, everywhere a pro can see them.
     const messages = proAskRoute.slice(proAskRoute.indexOf("if (overLimit)"));
-    expect(messages).toContain("Hearth Pro raises your daily limit");
+    expect(messages).toContain("OakTend Pro raises your daily limit");
     expect(messages.slice(0, 1200)).not.toMatch(/\b20\b/);
   });
 });

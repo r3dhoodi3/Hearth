@@ -115,10 +115,10 @@ export default async function HouseholdPage() {
           {invitesToMe.map((invite) => (
             <div
               key={invite.id}
-              className="rounded-2xl border border-hearth-200 bg-hearth-50 p-5 dark:border-hearth-800/40 dark:bg-hearth-900/30"
+              className="rounded-2xl border border-oaktend-200 bg-oaktend-50 p-5 dark:border-oaktend-800/40 dark:bg-oaktend-900/30"
             >
               <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
-                You have been invited to join a home on Hearth.
+                You have been invited to join a home on OakTend.
               </p>
               <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                 Invited on {new Date(invite.created_at).toLocaleDateString()}.

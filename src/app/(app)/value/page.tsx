@@ -444,7 +444,7 @@ export default async function ValuePage() {
               )}
               <div className="rounded-lg border border-bark-100 bg-bark-50 p-4 text-center dark:border-bark-700/40 dark:bg-bark-700/30">
                 <p className="text-sm text-bark-700 dark:text-stone-300">
-                  The value and equity above are your real numbers. Hearth Plus
+                  The value and equity above are your real numbers. OakTend Plus
                   opens the year-by-year trend behind them, so you can see how
                   your equity has built up, and keeps the estimate current with
                   a monthly refresh.

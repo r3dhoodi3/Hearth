@@ -62,7 +62,7 @@ export function isStaleDeployError(err: unknown): boolean {
 // sessionStorage key holding the epoch-ms of the last automatic reload. Session
 // scope on purpose: the guard should reset when the tab closes, and it must
 // not leak between tabs (each tab skews independently).
-const RELOAD_AT_KEY = "hearth-stale-reload-at";
+const RELOAD_AT_KEY = "oaktend-stale-reload-at";
 
 // Belt for the braces: if sessionStorage is unavailable (private mode with
 // storage blocked), this module-level flag still stops a same-page loop. It
@@ -121,4 +121,4 @@ export function __resetStaleDeployLatch(): void {
 // The one line shown wherever a stale page heals itself. Short and calm on
 // purpose: the reload is already happening, nothing is being asked of them.
 export const STALE_RELOAD_MESSAGE =
-  "Hearth just updated. Reloading this page...";
+  "OakTend just updated. Reloading this page...";

@@ -31,7 +31,7 @@ const TABS = [
     label: "Your Public Page",
     short: "Public page",
     title: "Your Public Page",
-    subtitle: "Share your Hearth page and manage what appears on it.",
+    subtitle: "Share your OakTend page and manage what appears on it.",
   },
   {
     key: "projects" as const,

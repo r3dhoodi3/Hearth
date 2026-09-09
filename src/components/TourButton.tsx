@@ -14,11 +14,11 @@ import { APP_GUIDE_EVENT } from "@/lib/appGuide";
 //
 // Icon-only to match the other header controls (search, bell), with an
 // accessible name. Accent follows the shell: bark on the homeowner side,
-// hearth on the pro side, same split every other two-shell control makes.
+// oaktend on the pro side, same split every other two-shell control makes.
 const ACCENT = {
   homeowner:
     "text-stone-500 hover:bg-bark-50 hover:text-bark-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300",
-  pro: "text-stone-500 hover:bg-hearth-50 hover:text-hearth-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300",
+  pro: "text-stone-500 hover:bg-oaktend-50 hover:text-oaktend-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300",
 } as const;
 
 export default function TourButton({

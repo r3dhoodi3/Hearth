@@ -20,7 +20,7 @@ describe("InviteNeighbor: standing /account card (no moment prop)", () => {
     render(<InviteNeighbor code="ABCD1234" />);
     expect(screen.getByText("Invite a neighbor")).toBeInTheDocument();
     expect(
-      screen.getByText("Hearth grows street by street. If it's been useful, pass it along.")
+      screen.getByText("OakTend grows street by street. If it's been useful, pass it along.")
     ).toBeInTheDocument();
     expect(screen.queryByText("Not now")).toBeNull();
   });

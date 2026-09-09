@@ -4,16 +4,16 @@ import { ogFontOption } from "@/lib/ogFont";
 // Default social share card for every page that doesn't own a more specific
 // one (the pro profile page has its own: src/app/p/[id]/opengraph-image.tsx).
 // Flat single-color background, no gradient, matching the rest of the brand:
-// this is the same hearth-600 ember accent .btn-primary uses (see
+// this is the same oaktend-600 ember accent .btn-primary uses (see
 // tailwind.config.ts), inlined as a hex value since satori (what next/og's
 // ImageResponse renders with) can't read Tailwind classes.
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "Hearth: your home, looked after";
+export const alt = "OakTend: your home, looked after";
 
-const HEARTH_600 = "#b8442a";
-const HEARTH_100 = "#f6e4dc";
+const OAKTEND_600 = "#b8442a";
+const OAKTEND_100 = "#f6e4dc";
 
 export default function OgImage() {
   return new ImageResponse(
@@ -26,7 +26,7 @@ export default function OgImage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: HEARTH_600,
+          background: OAKTEND_600,
           fontFamily: "sans-serif",
         }}
       >
@@ -54,13 +54,13 @@ export default function OgImage() {
             />
           </svg>
           <div style={{ fontSize: 96, fontWeight: 700, color: "#fff" }}>
-            Hearth
+            OakTend
           </div>
         </div>
         <div
           style={{
             fontSize: 40,
-            color: HEARTH_100,
+            color: OAKTEND_100,
             marginTop: 32,
             maxWidth: 900,
             textAlign: "center",

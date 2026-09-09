@@ -129,7 +129,7 @@ export default function ProToolsClient({
   const [paywalled, setPaywalled] = useState(false);
 
   // Show only the trades this pro actually lists on their profile, so the
-  // dropdown isn't a wall of every category on Hearth. If they haven't
+  // dropdown isn't a wall of every category on OakTend. If they haven't
   // picked any yet, fall back to the full list so the tool still works.
   const cats = categories.length
     ? JOB_CATEGORIES.filter((c) => categories.includes(c.value))
@@ -152,6 +152,11 @@ export default function ProToolsClient({
   const [estCategory, setEstCategory] = useState(initialLead?.category ?? "");
   const [estPrice, setEstPrice] = useState(prefillAmount);
   const [estMaterials, setEstMaterials] = useState("");
+  // Inline validation for the two fields C1 made mandatory: category and
+  // price. Cleared as soon as the pro fixes the field, not just on the next
+  // generate() attempt, so the message doesn't linger after it's fixed.
+  const [estCategoryError, setEstCategoryError] = useState<string | null>(null);
+  const [estPriceError, setEstPriceError] = useState<string | null>(null);
 
   // Invoice fields
   const [invDescription, setInvDescription] = useState(prefillDescription);
@@ -263,7 +268,7 @@ export default function ProToolsClient({
         return;
       }
       if (resp.status === 403) {
-        setPjError("This tool is part of the Hearth Pro membership.");
+        setPjError("This tool is part of the OakTend Pro membership.");
         return;
       }
 
@@ -307,6 +312,8 @@ export default function ProToolsClient({
   function switchTool(next: Tool) {
     setTool(next);
     setError(null);
+    setEstCategoryError(null);
+    setEstPriceError(null);
     setCopied(false);
     setSendPickerOpen(false);
     setSendError(null);
@@ -320,6 +327,18 @@ export default function ProToolsClient({
         setError("Describe the job first.");
         return;
       }
+      const catErr = estCategory ? null : "Pick a job category.";
+      // Mirrors the server's bound in src/app/api/pro-tools/route.ts so the
+      // refusal lands inline under the field instead of as a generic error
+      // at the top. The server is still the gate; this is only the message.
+      const priceErr = !estPrice.trim()
+        ? "Enter your price."
+        : !/\d/.test(estPrice) || /^\s*\$?\s*-/.test(estPrice)
+          ? "Enter your price as a dollar amount."
+          : null;
+      setEstCategoryError(catErr);
+      setEstPriceError(priceErr);
+      if (catErr || priceErr) return;
       payload = {
         tool,
         description: estDescription,
@@ -401,7 +420,7 @@ export default function ProToolsClient({
         return;
       }
       if (resp.status === 403) {
-        setError("This tool is part of the Hearth Pro membership.");
+        setError("This tool is part of the OakTend Pro membership.");
         return;
       }
       // Free drafts spent. Not an error the pro did anything wrong with, so it
@@ -537,24 +556,28 @@ export default function ProToolsClient({
               get back a written estimate with a scope, line items, and terms.
             </p>
             <div>
-              <label className="label">The job, in your words</label>
+              <label htmlFor="est-description" className="label">The job, in your words</label>
               <textarea
+                id="est-description"
                 value={estDescription}
                 onChange={(e) => {
                   setEstDescription(e.target.value);
                   saveComposeDraftDebounced("tool", "estimate", e.target.value);
                 }}
                 rows={4}
-                placeholder="Tear out the old 40-gallon water heater in the garage, haul it away, install a new 50-gallon gas unit, new supply lines and expansion tank, bring the venting up to code"
                 className="input"
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="label">Job category (optional)</label>
+                <label htmlFor="est-category" className="label">Job category</label>
                 <select
+                  id="est-category"
                   value={estCategory}
-                  onChange={(e) => setEstCategory(e.target.value)}
+                  onChange={(e) => {
+                    setEstCategory(e.target.value);
+                    if (e.target.value) setEstCategoryError(null);
+                  }}
                   className="input"
                 >
                   <option value="">- pick one -</option>
@@ -564,25 +587,34 @@ export default function ProToolsClient({
                     </option>
                   ))}
                 </select>
+                {estCategoryError && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">{estCategoryError}</p>
+                )}
               </div>
               <div>
-                <label className="label">Your price (optional)</label>
+                <label htmlFor="est-price" className="label">Your price</label>
                 <input
+                  id="est-price"
                   type="text"
                   value={estPrice}
-                  onChange={(e) => setEstPrice(e.target.value)}
-                  placeholder="$1,850 all-in"
+                  onChange={(e) => {
+                    setEstPrice(e.target.value);
+                    if (e.target.value.trim()) setEstPriceError(null);
+                  }}
                   className="input"
                 />
+                {estPriceError && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">{estPriceError}</p>
+                )}
               </div>
             </div>
             <div>
-              <label className="label">Materials notes (optional)</label>
+              <label htmlFor="est-materials" className="label">Materials notes (optional)</label>
               <textarea
+                id="est-materials"
                 value={estMaterials}
                 onChange={(e) => setEstMaterials(e.target.value)}
                 rows={2}
-                placeholder="Rheem 50-gal, about $650 in materials"
                 className="input"
               />
             </div>
@@ -606,7 +638,7 @@ export default function ProToolsClient({
                 </p>
               )}
 
-              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-200 px-4 py-3 text-center hover:border-hearth-300 hover:bg-hearth-100 dark:border-stone-700 dark:hover:border-hearth-400 dark:hover:bg-hearth-900/40">
+              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-200 px-4 py-3 text-center hover:border-oaktend-300 hover:bg-oaktend-100 dark:border-stone-700 dark:hover:border-oaktend-400 dark:hover:bg-oaktend-900/40">
                 <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
                   {pjBusy
                     ? "Reading your document…"
@@ -679,35 +711,35 @@ export default function ProToolsClient({
               get back clean invoice text with a work summary and payment note.
             </p>
             <div>
-              <label className="label">The job, in your words</label>
+              <label htmlFor="inv-description" className="label">The job, in your words</label>
               <textarea
+                id="inv-description"
                 value={invDescription}
                 onChange={(e) => {
                   setInvDescription(e.target.value);
                   saveComposeDraftDebounced("tool", "invoice", e.target.value);
                 }}
                 rows={3}
-                placeholder="Replaced the water heater at the Hendersons' place on Maple St, finished Tuesday"
                 className="input"
               />
             </div>
             <div>
-              <label className="label">Amount due</label>
+              <label htmlFor="inv-amount" className="label">Amount due</label>
               <input
+                id="inv-amount"
                 type="text"
                 value={invAmount}
                 onChange={(e) => setInvAmount(e.target.value)}
-                placeholder="$1,450"
                 className="input"
               />
             </div>
             <div>
-              <label className="label">What was done (optional)</label>
+              <label htmlFor="inv-work-done" className="label">What was done (optional)</label>
               <textarea
+                id="inv-work-done"
                 value={invWorkDone}
                 onChange={(e) => setInvWorkDone(e.target.value)}
                 rows={2}
-                placeholder="New 50-gal unit, new supply lines, hauled away the old one, tested everything"
                 className="input"
               />
             </div>
@@ -743,7 +775,6 @@ export default function ProToolsClient({
                   saveComposeDraftDebounced("tool", "followup", e.target.value);
                 }}
                 rows={3}
-                placeholder="Quoted them $1,850 for a water heater swap last Thursday, seemed interested but haven't heard back"
                 className="input"
               />
             </div>
@@ -824,7 +855,6 @@ export default function ProToolsClient({
                   type="text"
                   value={odAmount}
                   onChange={(e) => setOdAmount(e.target.value)}
-                  placeholder="$1,450"
                   className="input"
                 />
               </div>
@@ -834,7 +864,6 @@ export default function ProToolsClient({
                   type="text"
                   value={odOverdue}
                   onChange={(e) => setOdOverdue(e.target.value)}
-                  placeholder="About 2 weeks"
                   className="input"
                 />
               </div>
@@ -848,7 +877,6 @@ export default function ProToolsClient({
                   setOdJob(e.target.value);
                   saveComposeDraftDebounced("tool", "overdue", e.target.value);
                 }}
-                placeholder="Water heater replacement at the Hendersons' place"
                 className="input"
               />
             </div>
@@ -858,7 +886,6 @@ export default function ProToolsClient({
                 value={odContext}
                 onChange={(e) => setOdContext(e.target.value)}
                 rows={2}
-                placeholder="Already sent one reminder last week, no reply yet"
                 className="input"
               />
             </div>
@@ -871,15 +898,15 @@ export default function ProToolsClient({
           // The wall, in place of the button: a plain statement of what was
           // used up and what Pro adds, with the one door out. Never a cold
           // 402, never a disabled button with no explanation.
-          <div className="rounded-lg border border-hearth-200 bg-hearth-50 p-3 dark:border-hearth-500/30 dark:bg-hearth-500/15">
-            <p className="text-sm text-hearth-800 dark:text-hearth-200">
+          <div className="rounded-lg border border-oaktend-200 bg-oaktend-50 p-3 dark:border-oaktend-500/30 dark:bg-oaktend-500/15">
+            <p className="text-sm text-oaktend-800 dark:text-oaktend-200">
               {PRO_TOOLS_PAYWALL.message}
             </p>
             <Link
               href={PRO_TOOLS_PAYWALL.link}
               className="btn-primary mt-3 text-sm"
             >
-              See Hearth Pro
+              See OakTend Pro
             </Link>
           </div>
         ) : (
@@ -911,7 +938,7 @@ export default function ProToolsClient({
               type="button"
               onClick={copyResult}
               // Phone only: 16px tall before.
-              className="shrink-0 text-xs font-medium text-hearth-700 hover:text-hearth-800 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-hearth-300 dark:hover:text-hearth-200"
+              className="shrink-0 text-xs font-medium text-oaktend-700 hover:text-oaktend-800 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-sm dark:text-oaktend-300 dark:hover:text-oaktend-200"
             >
               {copied ? "Copied" : "Copy"}
             </button>
@@ -927,7 +954,7 @@ export default function ProToolsClient({
               setDrafts((d) => ({ ...d, [tool]: e.target.value }))
             }
             rows={10}
-            className="w-full whitespace-pre-wrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm max-sm:text-base max-sm:leading-relaxed text-stone-700 focus:border-hearth-500 focus:outline-none focus:ring-1 focus:ring-hearth-500 dark:border-white/10 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-hearth-400 dark:focus:ring-hearth-400"
+            className="w-full whitespace-pre-wrap rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm max-sm:text-base max-sm:leading-relaxed text-stone-700 focus:border-oaktend-500 focus:outline-none focus:ring-1 focus:ring-oaktend-500 dark:border-white/10 dark:bg-stone-900 dark:text-stone-100 dark:focus:border-oaktend-400 dark:focus:ring-oaktend-400"
           />
           <AiNotice detail="This is a starting point: read it over and edit anything before you send or post it, because it goes out under your name." />
 

@@ -51,10 +51,10 @@ export default function Nav({
   ];
 
   // Phone AND TABLET bottom bar: the same four destinations as the top strip.
-  // Ask Hearth briefly had a tab of its own here, which made five tabs on a
+  // Ask OakTend briefly had a tab of its own here, which made five tabs on a
   // 390px screen and gave the assistant a top-level home it doesn't need. It
   // lives inside Messages instead - a pinned conversation at the top of /chats
-  // that opens the full-screen /ask view (see AskHearthRow), with NavLinks
+  // that opens the full-screen /ask view (see AskOakTendRow), with NavLinks
   // treating /ask as a child of Messages so the tab stays lit while you're in
   // there. There is no floating pill any more, at any width: Messages is the
   // only door.
@@ -62,7 +62,7 @@ export default function Nav({
   // THE SHELL BREAKPOINT IS `lg`, NOT `sm` (changed 2026-08-30). The top strip
   // used to switch on at sm (640px) but only had room for itself from about
   // 1024px up, so between those two widths the nav pills painted straight over
-  // the "Hearth" wordmark and the home address. Everything that used to say
+  // the "OakTend" wordmark and the home address. Everything that used to say
   // "below sm the tab bar exists" now says "below lg". Desktop at 1024px and
   // up is unchanged; tablets get the phone-style bottom bar instead of a
   // colliding top strip.
@@ -103,11 +103,11 @@ export default function Nav({
                 useful label and the logo alone identifies the app. The Home
                 badge - only for accounts that hold both sides (hasPro) - tucks
                 under the wordmark, small and out of flow (absolute + top-full)
-                so "Hearth" stays centered and level with the rest of the toolbar
+                so "OakTend" stays centered and level with the rest of the toolbar
                 and the row's height (set by the h-11 controls) does not grow.
                 The max-sm twin below the header row still owns sub-sm. */}
             <span className="relative hidden leading-tight sm:inline-block">
-              Hearth
+              OakTend
               {hasPro && (
                 <SidePill
                   label="Home"
@@ -138,7 +138,7 @@ export default function Nav({
             was not: with the switcher pinned to min-width:auto from sm up,
             the left group held its full content width, this group refused to
             give any back, and between roughly 1024 and 1680px the address ran
-            underneath the nav pills - "Hearth · 3831 [Home]ve[Browse Pros]".
+            underneath the nav pills - "OakTend · 3831 [Home]ve[Browse Pros]".
             If either half is ever made unshrinkable again, that returns. */}
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {/* Primary destinations. Desktop (lg and up) keeps this exact top
@@ -225,7 +225,7 @@ export default function Nav({
       {/* Phone twin of the desktop SidePill above. Its own quiet line under the
           wordmark rather than risking a wrap on the tight phone header. Matches
           the pro header's mobile pill positioning exactly: pl-12 starts it under
-          the "H" of "Hearth" (past the h-6 logo + gap), and -mt-5 pulls it up
+          the "H" of "OakTend" (past the h-6 logo + gap), and -mt-5 pulls it up
           under the wordmark (the header row's py-2.5 + line-height otherwise
           leave a visible gap). */}
       {hasPro && (

@@ -48,7 +48,7 @@ import {
 // or not) - separate from the automated in-app request Pro members already
 // get on the Won transition (see PRO_CRM_FEATURES's "Automated review
 // requests" card above, requestReviewForWonLead in src/lib/reviewRequest.ts).
-// Never auto-sent: the pro's own phone does the sending, Hearth only builds
+// Never auto-sent: the pro's own phone does the sending, OakTend only builds
 // the text. The link reuses the exact same /contractors?review=<leadId>
 // path the automated request notifies with, so either path lands the
 // homeowner on the same review row. Message-building itself lives in
@@ -92,7 +92,7 @@ function WonReviewAsk({
   );
 }
 
-// The premium CRM upgrades a Hearth Pro membership adds on top of the free
+// The premium CRM upgrades an OakTend Pro membership adds on top of the free
 // pipeline. Honest framing: only things that actually work in the app today
 // may appear here. Tapping a card sends a non-member to /pro/plus, and a
 // member to the real tool (via `href`).
@@ -192,7 +192,7 @@ export default function CrmView({
 }) {
   // CR5#7: the manual form starts collapsed behind an "Add someone else"
   // button whenever there is a one-tap suggestion to try first - typing a
-  // name Hearth already knows from a job is the more effortful path, so it
+  // name OakTend already knows from a job is the more effortful path, so it
   // no longer leads. With no suggestions (the common single-client case)
   // the form is just there, exactly as before.
   const [showAddForm, setShowAddForm] = useState(() => suggestions.length === 0);
@@ -283,7 +283,7 @@ export default function CrmView({
         </section>
       )}
 
-      {/* CR5#7: suggestions from jobs Hearth already knows about come first,
+      {/* CR5#7: suggestions from jobs OakTend already knows about come first,
           above the manual form - one tap beats retyping a name. */}
       {suggestions.length > 0 && (
         <section className="space-y-3">
@@ -482,7 +482,7 @@ export default function CrmView({
           <div>
             <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
               More with Pro{" "}
-              <span className="chip ml-1 bg-hearth-100 align-middle text-hearth-800 dark:bg-hearth-900 dark:text-hearth-200">
+              <span className="chip ml-1 bg-oaktend-100 align-middle text-oaktend-800 dark:bg-oaktend-900 dark:text-oaktend-200">
                 Pro
               </span>
             </h2>
@@ -499,7 +499,7 @@ export default function CrmView({
           {!member && (
             <Link href="/pro/plus" className="btn-primary shrink-0">
               {hasProSubscriptionRow
-                ? "See Hearth Pro"
+                ? "See OakTend Pro"
                 : `Try Pro free for ${PRO_PLAN.trialDays} days`}
             </Link>
           )}
@@ -512,19 +512,19 @@ export default function CrmView({
               <Link
                 key={f.title}
                 href={href}
-                className="card group ring-1 ring-transparent transition hover:ring-hearth-300 dark:hover:ring-hearth-400"
+                className="card group ring-1 ring-transparent transition hover:ring-oaktend-300 dark:hover:ring-oaktend-400"
               >
                 <div className="flex items-center justify-between">
                   <span className="icon-chip">
                     <f.icon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   {!member && (
-                    <span className="chip bg-hearth-100 text-hearth-800 dark:bg-hearth-900 dark:text-hearth-200">
+                    <span className="chip bg-oaktend-100 text-oaktend-800 dark:bg-oaktend-900 dark:text-oaktend-200">
                       Pro
                     </span>
                   )}
                 </div>
-                <p className="mt-2 font-semibold text-stone-900 group-hover:text-hearth-800 dark:text-stone-100 dark:group-hover:text-hearth-300">
+                <p className="mt-2 font-semibold text-stone-900 group-hover:text-oaktend-800 dark:text-stone-100 dark:group-hover:text-oaktend-300">
                   {f.title}
                 </p>
                 <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{f.body}</p>

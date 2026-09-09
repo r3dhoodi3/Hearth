@@ -40,7 +40,7 @@ import {
 // is not actually a quote, the route skips stage 2 entirely (see
 // notAQuoteDiagnosis), so that path stays a single call.
 
-// A rough mapping from a job category to the closest system_type Hearth
+// A rough mapping from a job category to the closest system_type OakTend
 // already keeps a national cost range for, so stage 2 gets a grounded
 // baseline instead of guessing. Categories with no clean match (structural,
 // remodeling, landscaping, cleaning, painting, home_inspection, pest,

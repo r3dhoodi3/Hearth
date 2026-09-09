@@ -92,16 +92,20 @@ export default async function ProCrmPage(
   // The search box narrows the grouped list below; the stage tiles, the
   // follow up digest, and the job suggestions all stay based on every client
   // so the pipeline overview never shifts just because someone is searching.
-  let displayClients = clients;
-  if (q) {
-    const { data: filteredRows } = await supabase
-      .from("pro_clients")
-      .select("*")
-      .eq("contractor_id", contractor.id)
-      .ilike("client_name", `%${q}%`)
-      .order("created_at", { ascending: false });
-    displayClients = filteredRows ?? [];
-  }
+  //
+  // Filtered in memory off the `clients` array the Promise.all above already
+  // fetched, instead of firing a second, sequential ilike query against the
+  // same table: `clients` already holds every one of this contractor's rows
+  // (RLS scopes it, no limit on the read), so a second Supabase round trip
+  // here bought nothing but latency on every search. Plain .includes() after
+  // lowercasing both sides matches Postgres ILIKE's case-insensitive substring
+  // semantics for the ASCII names this form collects, and `clients` is already
+  // ordered by created_at desc, so the filtered result keeps that order too.
+  const displayClients = q
+    ? clients.filter((c) =>
+        c.client_name.toLowerCase().includes(q.toLowerCase())
+      )
+    : clients;
 
   const clientIds = clients.map((c) => c.id);
   const { data: noteRows } =
@@ -196,7 +200,7 @@ export default async function ProCrmPage(
         // "A row exists" is what makes CrmView drop the trial wording, and the
         // paywall experiment's "hard" arm must read the same way: no trial is
         // on offer for that account, so the teaser's CTA takes the plain
-        // "See Hearth Pro" branch (src/lib/paywallExperiment.ts).
+        // "See OakTend Pro" branch (src/lib/paywallExperiment.ts).
         hasProSubscriptionRow={
           Boolean(proSub) ||
           variantForUser(contractor.user_id ?? null) === "hard"

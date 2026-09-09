@@ -1,6 +1,7 @@
-import { type NextRequest } from "next/server";
+import { type NextFetchEvent, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { attachDeviceCookie } from "@/lib/risk/cookies";
+import { logGpcSignalOncePerSession } from "@/lib/gpc";
 
 // Opt-in stopwatch for the middleware itself, off unless HEARTH_MW_TIMING=1 is
 // set on the server. It exists because the middleware runs before Next starts
@@ -10,7 +11,7 @@ import { attachDeviceCookie } from "@/lib/risk/cookies";
 // never carries anything but a duration.
 const TIMING = process.env.HEARTH_MW_TIMING === "1";
 
-export async function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const startedAt = TIMING ? performance.now() : 0;
 
   // updateSession owns the auth decision, exactly as before: it decides whether
@@ -26,6 +27,35 @@ export async function middleware(request: NextRequest) {
   // this does not change which paths are guarded, only what rides along on the
   // response.
   const withDevice = attachDeviceCookie(request, response);
+
+  // Global Privacy Control (src/lib/gpc.ts): the first time this browser
+  // session sends "Sec-GPC: 1", log the first-party app_event
+  // "gpc_signal_seen" and set a session cookie so it is not logged again.
+  // OakTend does not sell or share personal information, so this changes no
+  // other behavior - see that file's module comment for why the log is still
+  // worth having. No user id is available at this layer (middleware never
+  // decodes the session further than updateSession already does), so this
+  // passes null, same as any signed-out visitor.
+  //
+  // Fire-and-forget, never blocking: logGpcSignalOncePerSession does its
+  // header/cookie check and calls response.cookies.set() synchronously before
+  // its first await, so `withDevice` already carries the cookie by the time
+  // this line returns control here. The DB insert behind that first await is
+  // handed to event.waitUntil so it finishes in the background instead of
+  // adding a network round trip to every request. Wrapped in try/catch so a
+  // synchronous throw here (there should never be one; trackServerEvent
+  // already swallows its own errors) can never take the request down with it.
+  try {
+    const gpcLogged = logGpcSignalOncePerSession(
+      request.headers,
+      request.cookies,
+      withDevice.cookies,
+      null
+    );
+    event.waitUntil(gpcLogged.catch(() => {}));
+  } catch {
+    // Best effort only - see comment above.
+  }
 
   if (TIMING) {
     withDevice.headers.set(

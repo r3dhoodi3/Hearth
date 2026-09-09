@@ -28,7 +28,7 @@ export default function ReferralCard({ code }: { code: string }) {
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Refer a pro</h2>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
           Know a good contractor? When a pro you refer wins their first job on
-          Hearth, you both get $25 of application credit, up to 10 referrals a
+          OakTend, you both get $25 of application credit, up to 10 referrals a
           year.
         </p>
       </div>

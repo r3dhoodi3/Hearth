@@ -107,7 +107,7 @@ export default function ReportSheet({
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           disabled={busy}
-          className="input w-full text-sm"
+          className="input w-full"
           aria-label="Reason"
         >
           {REPORT_REASONS.map((r) => (
@@ -126,7 +126,7 @@ export default function ReportSheet({
         disabled={busy}
         placeholder="Anything else we should know? (optional)"
         aria-label="Anything else we should know"
-        className="input mt-2 w-full text-sm"
+        className="input mt-2 w-full"
       />
 
       {error && (

@@ -1,5 +1,5 @@
 "use client";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 // Cloudflare Turnstile widget for the auth forms. Renders ONLY when
 // NEXT_PUBLIC_TURNSTILE_SITE_KEY is set, so with no key this is a no-op and the
@@ -106,3 +106,41 @@ const Turnstile = forwardRef<
 });
 
 export default Turnstile;
+
+// Every consumer of this widget gates its submit button on
+// `CAPTCHA_ENABLED && !captchaToken`, and until now that had no way out if the
+// widget itself never called back: no network path from the browser to
+// challenges.cloudflare.com (an ad blocker, a captive portal, a CSP that
+// blocks it - see next.config.mjs's SCRIPT_SRC, which graduates from
+// report-only to enforcing at some point and needs the Turnstile host added
+// there for exactly this reason), a Cloudflare-side outage, or the widget's
+// own "error-callback" firing (it calls onToken(null), which looks identical
+// to "hasn't solved yet" to that same check) all left the button disabled
+// forever with no way for a real, human visitor to ever sign in.
+//
+// This does not weaken the CAPTCHA: it only decides how long a consumer waits
+// for a token before giving up and submitting with none, which is the exact
+// same request shape every one of these forms already sends when
+// NEXT_PUBLIC_TURNSTILE_SITE_KEY isn't set at all (captchaToken: undefined).
+// If Supabase's own Attack Protection CAPTCHA is actually on, it rejects that
+// request with a normal, retryable error that friendlyAuthError already turns
+// into readable copy - the visitor sees a message and can try again, instead
+// of staring at a button that will never turn on. If Supabase's CAPTCHA is
+// off (as it was as of the 2026-09-04 handoff), the request just succeeds.
+// Either way, a client-side widget failure can no longer be the single point
+// of failure for signing in.
+//
+// active: pass false once a token already exists (or before the widget is
+// even relevant) so the timer never starts, and true while still waiting.
+// Flipping active back to false unmounts the pending timer via the effect's
+// own cleanup, same as any other effect-scoped timer.
+export function useCaptchaGraceTimeout(active: boolean, ms = 8000): boolean {
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const timer = setTimeout(() => setTimedOut(true), ms);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+  return timedOut;
+}

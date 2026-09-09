@@ -10,7 +10,7 @@ import {
   writeAskLock,
 } from "./askLock";
 
-// The bug these rules exist for: running out of Ask Hearth questions, tapping
+// The bug these rules exist for: running out of Ask OakTend questions, tapping
 // away, and coming back to an open composer that silently refuses everything
 // typed into it. The lock has to survive the trip, and it has to end when the
 // server's day does - never later.

@@ -245,6 +245,27 @@ describe("postJobAction failure paths", () => {
     expect(setFlash).toHaveBeenCalledWith(POST_JOB_ERRORS.description, "error");
   });
 
+  // B1: a lead with no way to reach the homeowner is dead weight for a pro
+  // who just paid to apply. homeowner_email falls back to the signed-in
+  // user's auth email (sessionUser.email), so this test blanks that out too
+  // to actually exercise the "both are empty" floor.
+  it("a post with no email and no phone is refused with a message", async () => {
+    const originalEmail = sessionUser.email;
+    sessionUser.email = "";
+    try {
+      const url = new URL(
+        await runAndCatchRedirect(
+          fd({ ...FILLED, homeowner_email: "", homeowner_phone: "" })
+        ),
+        "https://example.test"
+      );
+      expect(url.searchParams.get("error")).toBe("contact");
+      expect(setFlash).toHaveBeenCalledWith(POST_JOB_ERRORS.contact, "error");
+    } finally {
+      sessionUser.email = originalEmail;
+    }
+  });
+
   it("a major-tier job with no budget is refused with a message", async () => {
     const url = new URL(
       await runAndCatchRedirect(fd({ ...FILLED, category: "remodeling" })),

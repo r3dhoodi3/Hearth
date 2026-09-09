@@ -43,12 +43,12 @@ describe("ToolsMenu phone sheet", () => {
     ]);
   });
 
-  // Ask Hearth has one entry point now, the pinned row at the top of the
+  // Ask OakTend has one entry point now, the pinned row at the top of the
   // Messages tab. This sheet used to carry a second door to it on phones; a
   // link back in here is the regression this test exists to catch.
-  it("offers no Ask Hearth link, in the sheet or the desktop dropdown", () => {
+  it("offers no Ask OakTend link, in the sheet or the desktop dropdown", () => {
     openMenu();
-    expect(screen.queryAllByRole("link", { name: "Ask Hearth" })).toHaveLength(0);
+    expect(screen.queryAllByRole("link", { name: "Ask OakTend" })).toHaveLength(0);
     expect(
       screen.queryAllByRole("link").filter((l) => l.getAttribute("href") === "/ask")
     ).toHaveLength(0);

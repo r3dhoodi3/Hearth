@@ -87,7 +87,7 @@ export default function PrintQrButton({
 
       ctx.font = "36px system-ui, -apple-system, sans-serif";
       ctx.fillStyle = "#57534e";
-      ctx.fillText("Find us on Hearth", textX, 330);
+      ctx.fillText("Find us on OakTend", textX, 330);
 
       const shortLink = url.replace(/^https?:\/\//, "");
       fitFont(ctx, shortLink, textMaxWidth, 40, "bold");
@@ -103,10 +103,10 @@ export default function PrintQrButton({
         businessName
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "") || "hearth";
+          .replace(/^-+|-+$/g, "") || "oaktend";
       const a = document.createElement("a");
       a.href = pngUrl;
-      a.download = `hearth-qr-print-${slug}.png`;
+      a.download = `oaktend-qr-print-${slug}.png`;
       a.click();
     } catch {
       // Generation failing (canvas unavailable, the dynamic import throwing)
@@ -125,7 +125,7 @@ export default function PrintQrButton({
         Print your QR code
       </h3>
       <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-        A ready-to-print PNG with your QR code, business name, and Hearth
+        A ready-to-print PNG with your QR code, business name, and OakTend
         link in one image, sized for a truck magnet or an invoice footer.
       </p>
       <button

@@ -38,7 +38,7 @@ function isVercelProduction(env: NodeJS.ProcessEnv): boolean {
 // The staging Supabase project, named by its own variable rather than
 // hard-coded. The owner sets STAGING_SUPABASE_URL (or the shorter
 // STAGING_SUPABASE_PROJECT_REF, the 20-character subdomain of the project URL)
-// once on BOTH environments when he creates hearth-staging. Naming it in the
+// once on BOTH environments when he creates oaktend-staging. Naming it in the
 // environment rather than in this file means the check starts working the day
 // the project exists, with no deploy, and it cannot go stale when the project
 // is re-created.

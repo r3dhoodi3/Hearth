@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>OakTend</title>
+  <!--
+    FALLBACK LOADER, NOT THE APP. Capacitor's webDir has to point at a real
+    folder with an index.html even though the real config (capacitor.config.ts)
+    uses server.url to load https://oaktend.com directly, because Next.js
+    server actions and dynamic routes cannot be statically exported into a
+    bundle Capacitor could ship instead. This page is what shows for a moment
+    on first native launch before that remote load takes over, and it is the
+    fallback if the remote load fails outright (no network, DNS hiccup, etc.)
+    - see the "REMOTE-URL PATTERN" comment at the top of capacitor.config.ts.
+
+    Plain redirect, no JS framework: nothing here needs to be interactive.
+  -->
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #fbf7f2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #57534e;
+    }
+    p { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <p>Loading OakTend&hellip;</p>
+  <script>
+    // Same fallback target production oaktend.com/open uses: a static shell
+    // that always paints before the auth-aware dashboard takes over.
+    window.location.replace("https://oaktend.com/open?source=native-fallback");
+  </script>
+</body>
+</html>

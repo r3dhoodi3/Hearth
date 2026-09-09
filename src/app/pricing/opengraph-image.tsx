@@ -9,11 +9,11 @@ import { renderOgCard, OG_SIZE, OG_CONTENT_TYPE } from "@/lib/ogCard";
 
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
-export const alt = "Hearth pricing";
+export const alt = "OakTend pricing";
 
 export default function OgImage() {
   return renderOgCard(
     "Pricing",
-    "Your first home is free. Hearth Plus starts at $1.99/week."
+    "Your first home is free. OakTend Plus starts at $1.99/week."
   );
 }

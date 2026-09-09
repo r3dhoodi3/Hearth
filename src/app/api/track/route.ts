@@ -29,7 +29,7 @@ const MAX_PROPS_CHARS = 1024;
 // those names here would let a visitor forge server-only analytics (e.g. a
 // fake job_won) - comment only, not code, on purpose.
 const CLIENT_ALLOWED_EVENTS = new Set([
-  "post_job_from_chat", // AskHearth.tsx
+  "post_job_from_chat", // AskOakTend.tsx
   "hero_demo_play", // HeroDemoPlayer.tsx
   "signup_homeowner", // homeowner-signup/page.tsx
   "push_enabled", // PushSettingsCard.tsx, both sides (props.side tells them apart)
@@ -52,7 +52,7 @@ const CLIENT_ALLOWED_EVENTS = new Set([
 
 // Sink for src/lib/analytics.ts's track(). Inserts into app_events with the
 // service-role client (no anon/authenticated RLS policy exists for this
-// table on purpose, see migration 0091), and degrades gracefully to a log
+// table on purpose, see migration 0093), and degrades gracefully to a log
 // line if the table hasn't been migrated onto the live DB yet. Never fails
 // the caller: analytics must never be able to break the app.
 export async function POST(req: NextRequest) {
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     if (error && !isMissingSchemaError(error)) {
       console.error("track: insert failed:", error.message ?? error);
     } else if (error) {
-      // app_events migration (0091) hasn't run on this DB yet: log instead
+      // app_events migration (0093) hasn't run on this DB yet: log instead
       // of dropping the event silently, same graceful-degrade pattern used
       // elsewhere for not-yet-migrated tables.
       //

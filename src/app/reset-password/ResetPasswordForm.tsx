@@ -9,6 +9,7 @@ import { passwordRecoveryRedirectTo } from "@/lib/passwordRecovery";
 import { clearPasswordRecoveryAction } from "./actions";
 import Turnstile, {
   CAPTCHA_ENABLED,
+  useCaptchaGraceTimeout,
   type TurnstileHandle,
 } from "@/components/Turnstile";
 
@@ -41,6 +42,11 @@ export default function ResetPasswordForm({
   // captchaToken: undefined.
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileHandle>(null);
+  // See useCaptchaGraceTimeout in Turnstile.tsx: gives up waiting on the
+  // widget after 8s so a stuck widget can't permanently disable the request.
+  const captchaTimedOut = useCaptchaGraceTimeout(
+    CAPTCHA_ENABLED && !captchaToken
+  );
 
   async function onRequest(e: React.FormEvent) {
     e.preventDefault();
@@ -187,12 +193,21 @@ export default function ResetPasswordForm({
             </div>
             {/* Gates the reset-email request ONLY. Renders nothing until
                 NEXT_PUBLIC_TURNSTILE_SITE_KEY is set; when it is, the submit
-                stays disabled until the CAPTCHA is solved so we never fire a
-                token-required request with no token. */}
+                stays disabled until the CAPTCHA is solved - or until
+                captchaTimedOut gives up after 8s, so a stuck widget can never
+                strand someone who needs to reset their password. */}
             <Turnstile ref={turnstileRef} onToken={setCaptchaToken} />
+            {captchaTimedOut && (
+              <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+                Verification could not load. Refresh the page or try again in
+                a minute.
+              </p>
+            )}
             <button
               className="btn-primary w-full"
-              disabled={busy || (CAPTCHA_ENABLED && !captchaToken)}
+              disabled={
+                busy || (CAPTCHA_ENABLED && !captchaToken && !captchaTimedOut)
+              }
             >
               {busy ? "Sending…" : "Send reset link"}
             </button>

@@ -95,7 +95,7 @@ describe("PrintQrButton (CR4#3)", () => {
 
     await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
     const anchor = createdAnchors[createdAnchors.length - 1];
-    expect(anchor.download).toBe("hearth-qr-print-ace-plumbing.png");
+    expect(anchor.download).toBe("oaktend-qr-print-ace-plumbing.png");
     expect(anchor.href).toBe("data:image/png;base64,fakecomposite");
     expect(screen.queryByText(/Couldn/)).toBeNull();
   });

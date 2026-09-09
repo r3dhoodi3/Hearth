@@ -95,7 +95,7 @@ export function buildSetupItems(input: {
       label: canUploadLogo ? "Upload your logo" : "Upload your logo (Pro)",
       done: logoDone,
       href: canUploadLogo ? "/pro/profile" : "/pro/plus?reason=logo",
-      linkLabel: canUploadLogo ? "Add logo" : "See Hearth Pro",
+      linkLabel: canUploadLogo ? "Add logo" : "See OakTend Pro",
       optional: !canUploadLogo,
     },
     {

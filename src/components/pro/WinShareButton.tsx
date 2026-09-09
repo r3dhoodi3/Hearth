@@ -10,7 +10,7 @@ import InlineSpinner from "@/components/InlineSpinner";
 // re-checks ownership and win state on the server, so this component only
 // ever needs the lead id. It renders no homeowner data itself: the card
 // behind it carries none either (business name and logo, category, city and
-// state, real rating, Hearth branding only) - and that same card already
+// state, real rating, OakTend branding only) - and that same card already
 // bakes the pro's public page link directly into the image, so no separate
 // attribution URL needs to ride alongside the file (win-card also requires
 // the pro's own session to load, so a bare link to it isn't something a
@@ -37,12 +37,12 @@ export default function WinShareButton({
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "win";
-  const fileName = `hearth-win-${slug}.png`;
+  const fileName = `oaktend-win-${slug}.png`;
 
   async function handleShare() {
     setPending(true);
     try {
-      const text = "We just won a job on Hearth!";
+      const text = "We just won a job on OakTend!";
       if (typeof navigator !== "undefined" && navigator.share) {
         if (typeof navigator.canShare === "function") {
           try {

@@ -24,9 +24,9 @@ const HeroDemoPlayer = dynamic(() => import("./HeroDemoPlayer"), {
     <DemoPoster
       styles={styles}
       label="From leak to booked pro"
-      sub="Watch someone use Hearth, 30 seconds"
+      sub="Watch someone use OakTend, 30 seconds"
       duration="0:30"
-      ariaLabel="Play the Hearth demo, about 30 seconds, with sound"
+      ariaLabel="Play the OakTend demo, about 30 seconds, with sound"
     />
   ),
 });

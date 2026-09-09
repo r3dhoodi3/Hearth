@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // src/lib/claude.ts imports "server-only" (throws outside a server component)
 // and the Anthropic SDK (wants a real key and a real network). Both are
 // stubbed so the REQUEST BUILDING runs for real, which is the point: this file
-// pins which model every feature in Hearth actually calls, and what shape the
+// pins which model every feature in OakTend actually calls, and what shape the
 // request is in when it gets there.
 vi.mock("server-only", () => ({}));
 
@@ -223,7 +223,7 @@ describe("the table decides the request", () => {
   it("keeps effort and thinking on the strong model", async () => {
     await generateText({
       route: "ask",
-      system: "You are Hearth.",
+      system: "You are OakTend.",
       prompt: "Why is my heater loud?",
     });
     expect(created[0].body.model).toBe(MODEL);
@@ -234,7 +234,7 @@ describe("the table decides the request", () => {
 
   it("still honours an explicit override, so old call sites and tests hold", async () => {
     await generateText({
-      system: "You are Hearth.",
+      system: "You are OakTend.",
       prompt: "Hi",
       maxTokens: 777,
       effort: "medium",

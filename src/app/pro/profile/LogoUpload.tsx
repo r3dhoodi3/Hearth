@@ -35,7 +35,7 @@ export default function LogoUpload({
     // logos on unauthenticated pro pages, which makes it the worst place for
     // the client's old `file.type.startsWith("image/")` check to have let
     // image/svg+xml through: an SVG can carry a <script> and would execute on
-    // Hearth's own storage/proxy origin against any visitor viewing that pro's
+    // OakTend's own storage/proxy origin against any visitor viewing that pro's
     // page (security audit finding #7).
     const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
     if (file.type === "image/svg+xml") {
@@ -108,7 +108,7 @@ export default function LogoUpload({
           accept="image/png,image/jpeg,image/webp"
           onChange={onPick}
           disabled={busy}
-          className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-hearth-100 file:px-3 file:py-1.5 file:text-hearth-800 dark:text-stone-300 dark:file:bg-hearth-900/40 dark:file:text-hearth-200"
+          className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-oaktend-100 file:px-3 file:py-1.5 file:text-oaktend-800 dark:text-stone-300 dark:file:bg-oaktend-900/40 dark:file:text-oaktend-200"
         />
       </div>
       {busy && (

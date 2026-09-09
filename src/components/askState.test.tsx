@@ -6,13 +6,13 @@ import {
   isUnanswered,
   lastUserMessage,
   type Msg,
-} from "./AskHearth";
+} from "./AskOakTend";
 
-// The pure state reads Ask Hearth makes about a conversation. Each one exists
+// The pure state reads Ask OakTend makes about a conversation. Each one exists
 // because of a specific way the chat used to misbehave, so the cases below are
 // those bugs, not coverage for its own sake.
 
-const greeting: Msg = { role: "assistant", content: "Hi, I'm Hearth." };
+const greeting: Msg = { role: "assistant", content: "Hi, I'm OakTend." };
 const ask = (content: string): Msg => ({ role: "user", content, ts: 1 });
 const reply = (content: string): Msg => ({
   role: "assistant",

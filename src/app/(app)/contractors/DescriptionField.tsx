@@ -19,7 +19,7 @@ const DRAFT_STAGES = [
 // owner then edits it, they don't originate it). The call is never fired on
 // attach: it costs money and plenty of owners would rather just type.
 //
-// The 20-character server floor (postJobAction) is untouched: a drafted
+// The 10-character server floor (postJobAction) is untouched: a drafted
 // description is normal text in the same box, and PostJobButton still checks
 // the same minimum before submit.
 export default function DescriptionField({
@@ -86,7 +86,7 @@ export default function DescriptionField({
       const reason = data?.reason;
       if (reason === "rate_limited") {
         setError(
-          "You've hit today's AI limit, so Hearth can't draft this right now. You can still type the description yourself."
+          "You've hit today's AI limit, so OakTend can't draft this right now. You can still type the description yourself."
         );
       } else if (reason === "no_key") {
         setError(
@@ -126,7 +126,7 @@ export default function DescriptionField({
 
   return (
     <div>
-      {/* Not labeled optional: postJobAction enforces a 20-character floor
+      {/* Not labeled optional: postJobAction enforces a 10-character floor
           on the description for a standalone post (a post linked to an
           issue can fall back to the issue's own description). minLength
           surfaces that floor in the browser before the action rejects it. */}
@@ -160,7 +160,7 @@ export default function DescriptionField({
         id="job-details"
         className="textarea"
         rows={3}
-        minLength={20}
+        minLength={10}
         // A ceiling on the box, far above anything a real description needs.
         // The server never trusts it (postJobAction caps the value it echoes
         // into a failure URL at 1000 characters of its own accord, since a
@@ -204,7 +204,7 @@ export default function DescriptionField({
         </div>
       )}
       <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-        A sentence or two helps pros quote accurately (20 characters minimum).
+        A sentence or two helps pros quote accurately (10 characters minimum).
         {/* Same stability rule as the header button above: mounted whenever a
             photo is attached, so this line's height is reserved for the
             whole time a photo could be drafted from, and typing (handTyped)
@@ -215,7 +215,7 @@ export default function DescriptionField({
             under a tap that started on the button (see PostJobButton). */}
         {photoUrl && (
           <span className={handTyped ? "invisible" : ""} aria-hidden={handTyped}>
-            {" "}Or let Hearth draft it from your photo, then edit.
+            {" "}Or let OakTend draft it from your photo, then edit.
           </span>
         )}
       </p>

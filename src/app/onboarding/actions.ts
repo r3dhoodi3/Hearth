@@ -23,7 +23,7 @@ import { claimAddressGate } from "@/lib/parcelGate";
 import { plausibleHomeFigure } from "@/lib/parcelSanity";
 import { sameStreetAddress } from "@/lib/addressMatch";
 import { verifyAddressExists } from "@/lib/addressVerify";
-import { DEFAULT_LIFESPANS } from "@/lib/health";
+import { buildStarterSystems } from "@/lib/starterSystems";
 import { ownsPlus, getExtraHomeSlots } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
 import { safeNextPath } from "@/lib/safeNext";
@@ -44,19 +44,13 @@ import {
   FIELD_MAX,
 } from "@/lib/formFields";
 
-// Systems virtually every home has, auto-added so the owner doesn't start from
-// a blank inventory. Install years are ESTIMATED from the build year; real
-// install/repair/remodel dates come from permit data once that API is wired.
-const STARTER_SYSTEMS = [
-  "foundation",
-  "plumbing",
-  "electrical_panel",
-  "roof",
-  "hvac",
-  "water_heater",
-  "windows",
-];
-const CURRENT_YEAR = new Date().getFullYear();
+// The starter-inventory seed list and its install-year math used to live
+// here as STARTER_SYSTEMS + inline logic. Both moved to
+// src/lib/starterSystems.ts (buildStarterSystems) so the "which systems does
+// this home get, and when were they estimated to have been installed" logic
+// is a pure function with its own unit tests, not only exercised end to end
+// through this action. See the starter-inventory block below, right after
+// the new property is claimed.
 
 // What a homeowner is told when the records source ran and came back with
 // nothing for the address they typed. Names the two things that actually fix
@@ -64,6 +58,17 @@ const CURRENT_YEAR = new Date().getFullYear();
 // blaming them or pretending it might work on a retry.
 const ADDRESS_NOT_FOUND_MESSAGE =
   "We couldn't find that address. Check the spelling or pick a suggestion.";
+
+// B8: what the SECOND person to claim one address is told. Three real ways
+// out, in the order they actually happen, because a bare "already registered"
+// is a dead end and this is the one refusal a genuine new owner can hit:
+//   - a housemate or partner wants in on a home someone else already set up
+//   - a landlord/owner of a different unit at the same street address
+//   - someone who just bought the place from the person holding the row
+// The last one cannot be self-served (it needs a human to move the home), so
+// it names support rather than pretending a button exists.
+const ADDRESS_ALREADY_CLAIMED =
+  "This address is already registered to another account. If you share this home, ask them to send you a household invite. If it's a separate unit, add the unit number and try again. If you just bought this home, contact support and we'll move it over.";
 
 // Is a real property-records source configured at all? source: "none" in
 // ParcelFacts covers both "the county has no record of this address" and "no
@@ -126,7 +131,7 @@ function validPurchaseDate(v: string | null): string | null {
 }
 
 // Records an out-of-area lead in market_waitlist (0074) for the signed-in
-// user, so Hearth can email them when it expands to their ZIP. Shared by
+// user, so OakTend can email them when it expands to their ZIP. Shared by
 // every launch-city gate below AND by OnboardingForm.tsx's own faster
 // client-side ZIP check: that check short-circuits before ever calling
 // lookupParcelAction, so without a direct call here someone rejected right
@@ -196,7 +201,7 @@ export async function joinMarketWaitlistAction(
 // the homeowner in dev and was replaced by the caller's generic "That didn't go
 // through. Please try again." in production. The out-of-area case was the worst
 // of them: the visitor was silently added to the waitlist and then told to try
-// again, with no way to learn Hearth simply isn't in their city.
+// again, with no way to learn OakTend simply isn't in their city.
 //
 // `waitlisted` rides along on the out-of-area refusal only, so the caller's
 // waitlist panel can tell "you're on the list" from "we couldn't save you" -
@@ -239,7 +244,7 @@ export async function lookupParcelAction(
     return { ok: false, error: "Enter a valid 5-digit ZIP code." };
   }
   // Launch-restriction gate: the launch area only (isLaunchZip), which since
-  // 0129 is all of Orange County - Hearth has no pros anywhere else, and the
+  // 0129 is all of Orange County - OakTend has no pros anywhere else, and the
   // pro-side gates (open_jobs_for_me / apply_to_lead, migrations 0124/0126/
   // 0129) refuse those jobs too, so accepting the address here would strand
   // the homeowner with a job no pro can ever see. Checked before the rate limiter/RentCast call
@@ -299,8 +304,11 @@ export async function lookupParcelAction(
   // ownership, so shipping them here (they're visible in the action response
   // in devtools) would hand a forged claim the answer key. claimPropertyAction
   // re-fetches the full ParcelFacts server-side via lookupParcel, so nothing
-  // that legitimately needs them loses access.
-  const { owner_names, owner_type, owner_occupied, ...publicFacts } =
+  // that legitimately needs them loses access. home_features (garage/pool/
+  // fireplace flags for the starter-seed expansion, src/lib/starterSystems.ts)
+  // joins this strip list for the same reason: claimPropertyAction reads it
+  // off its own server-side lookup below, never off this response.
+  const { owner_names, owner_type, owner_occupied, home_features, ...publicFacts } =
     await lookupParcel(
       cappedStreet,
       zip.trim(),
@@ -469,7 +477,7 @@ export async function claimPropertyAction(
   // locked, visible ZIP box carried no `name` at all, so the only `zip` in the
   // POST came from a second, freely editable box inside the optional-details
   // disclosure - clearing that box refused the homeowner's own claim with
-  // "Hearth isn't in your area yet" and filed them on the out-of-area
+  // "OakTend isn't in your area yet" and filed them on the out-of-area
   // waitlist. See OnboardingForm.tsx.
   // =========================================================================
   const normalizeStreet = (s: string) =>
@@ -939,6 +947,74 @@ export async function claimPropertyAction(
     redirect(nextDup ?? "/dashboard?welcome=1");
   }
 
+  // =========================================================================
+  // B8: LOCK THE ADDRESS - no one else may claim this same home as owner.
+  //
+  // The check above only ever sees THIS user's own rows (it runs on the
+  // RLS-bound `supabase` client, and "properties owner select" from 0002
+  // scopes reads that way on purpose). A second, unrelated account claiming
+  // the exact same street address as its own "owner" row was never refused:
+  // two people could each end up with a home row for one house, each seeing
+  // themselves as the owner. Household invites are unaffected - joining a
+  // household adds a row to household_members against the EXISTING property
+  // (src/app/(app)/household/actions.ts), it never creates a second
+  // properties row, so a genuine housemate never hits this.
+  //
+  // Admin client (`limiter`, already constructed above for the rate-limit
+  // calls): RLS would hide another owner's row from this session, which is
+  // exactly the collision this check exists to catch, so it has to read past
+  // it. Same normalization as the same-user guard just above, scoped to the
+  // same ZIP (claimZip is guaranteed non-empty here: the launch-area gate
+  // above already refused a blank one) and excluding this user's own rows,
+  // which the check above already handled.
+  //
+  // The DB backstop for this - a unique index on (address, zip, unit) with NO
+  // user_id in its key - is migration 0162_properties_address_unique_global.sql
+  // (index name properties_address_unique). properties_owner_address_unique
+  // (0151) is a different, narrower index: scoped PER OWNER, it only stops
+  // the SAME person double-claiming.
+  //
+  // NARROWED IN THE DATABASE, not just in JS. Asking for every row in the ZIP
+  // and filtering here reads the whole neighborhood, and PostgREST caps a
+  // response at its configured max-rows (1000 by default): once a ZIP holds
+  // more homes than that, the colliding row could fall off the end of the
+  // page and the guard would silently pass. The ILIKE pattern below is the
+  // normalized street with each space turned into "%" (so "123  Main St" and
+  // "123 Main St" both match) and every LIKE metacharacter or PostgREST
+  // filter separator turned into "_" (one-character wildcard, which still
+  // matches the original character). It only narrows: the authoritative
+  // comparison is still the exact normalized one in JS below.
+  const normalizedClaimUnit = String(unit ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+  if (normalizedClaimStreet) {
+    const streetPattern = normalizedClaimStreet
+      .replace(/[%_\,().'"]/g, "_")
+      .replace(/ /g, "%");
+    const { data: otherOwnerRows } = await limiter
+      .from("properties")
+      .select("id, user_id, address_line1, unit")
+      .eq("zip", claimZip)
+      .neq("user_id", user.id)
+      .ilike("address_line1", streetPattern)
+      .limit(200);
+    const otherOwnerClaim = (otherOwnerRows ?? []).find(
+      (row: any) =>
+        String(row.unit ?? "")
+          .trim()
+          .replace(/\s+/g, " ")
+          .toLowerCase() === normalizedClaimUnit &&
+        String(row.address_line1 ?? "")
+          .trim()
+          .replace(/\s+/g, " ")
+          .toLowerCase() === normalizedClaimStreet
+    );
+    if (otherOwnerClaim) {
+      return err(ADDRESS_ALREADY_CLAIMED);
+    }
+  }
+
   // extendedRow's enrichment fields (everything migration 0066 adds) aren't
   // in src/lib/database.types.ts yet, so this call is cast to any - same
   // pattern as saveHomeValueAction (value/actions.ts) and
@@ -1027,6 +1103,27 @@ export async function claimPropertyAction(
         "error"
       );
       redirect("/plus");
+    }
+    // B8: A LOST RACE against the properties_address_unique index (migration
+    // 0162) - the app-level check above already looked for another owner's
+    // row on this address, but two truly concurrent claims of the same home
+    // can both pass that check before either insert lands. Postgres 23505
+    // (unique_violation) here means someone else's claim landed first in that
+    // gap; answer with the same honest copy the app-level check gives.
+    //
+    // Matched on the quoted constraint name specifically (not a bare
+    // .includes("properties_address_unique"), which "properties_owner_
+    // address_unique" would also match): that other index is the SAME-user
+    // double-submit guard (0151), a different race with a different, kinder
+    // answer (nothing to do here - the earlier same-user duplicate check
+    // above already redirects that case to the home they already have before
+    // any insert is attempted).
+    if (
+      error?.code === "23505" &&
+      typeof error.message === "string" &&
+      error.message.includes('"properties_address_unique"')
+    ) {
+      return err(ADDRESS_ALREADY_CLAIMED);
     }
     return err("We couldn't claim your home just now. Please try again.");
   }
@@ -1222,61 +1319,41 @@ export async function claimPropertyAction(
   });
 
   // Surface research: pre-build a starter inventory so the owner doesn't add
-  // every system manually. Year is estimated from the build year (assuming each
-  // system was replaced around the end of its typical life). Every row is
-  // created UNCONFIRMED: confirmed_at stays at its null default (migration
-  // 0056: null = still an estimate), which is what lets the UI treat these
-  // years as guesses rather than owner-verified facts. Don't set the column
-  // explicitly here - the live DB may not have run 0056 yet (see the fallback
-  // in walkthrough/actions.ts), and the default is already correct.
+  // every system manually. The list itself - now well beyond the original 7 -
+  // and the install-year math both live in buildStarterSystems
+  // (src/lib/starterSystems.ts), a pure function unit-tested on its own
+  // (src/lib/starterSystems.test.ts) rather than only exercised end to end
+  // through this action. Every row is created UNCONFIRMED: confirmed_at stays
+  // at its null default (migration 0056: null = still an estimate), which is
+  // what lets the UI treat these years as guesses rather than owner-verified
+  // facts. Don't set the column explicitly here - the live DB may not have
+  // run 0056 yet (see the fallback in walkthrough/actions.ts), and the
+  // default is already correct.
   const yearBuilt = int("year_built", 1700, 2100);
-  const starterRows = STARTER_SYSTEMS.map((system_type) => {
-    const lifespan = DEFAULT_LIFESPANS[system_type] ?? 20;
-    let install_year: number | null = null;
-    if (yearBuilt) {
-      const age = CURRENT_YEAR - yearBuilt;
-      if (age <= 0) {
-        // Brand-new (or future-dated) build: everything installed at build.
-        install_year = yearBuilt;
-      } else {
-        // Years since the most recent assumed replacement. When home age is
-        // an exact multiple of the lifespan, the system is at the END of its
-        // life, not brand new: a 75-year-old home does not get a brand-new
-        // 75-year foundation.
-        const yearsIntoCycle = age % lifespan || lifespan;
-        install_year = CURRENT_YEAR - yearsIntoCycle;
-      }
-    }
-    // Real material read off the RentCast property record when available
-    // (roof/foundation/hvac - see deriveSystemFacts in src/lib/parcel.ts),
-    // otherwise left null same as before.
-    //
-    // Coerced rather than trusted even now that the map comes from the server:
-    // system_facts is TYPED Record<string, string>, but its values are built
-    // out of a third-party JSON body, and a type annotation is not a runtime
-    // check - a number, an object, or a page-long string would land on the
-    // column exactly as it arrived. Same coercion parseFacts uses in
-    // ./draft.ts, with the tighter 120-char cap this column wants.
-    const material = systemFacts[system_type];
-    return {
-      property_id: created.id,
-      system_type,
-      install_year,
-      expected_lifespan_years: lifespan,
-      // No per-system note: confirmed_at null already marks the row as an
-      // estimate, and the "auto-estimated" notice lives at the top of the
-      // Home Profile page instead.
-      notes: null as string | null,
-      material_or_model:
-        typeof material === "string" ? material.slice(0, 120) : null,
-    };
-  });
-  // A silent failure here is the difference between a dashboard that shows
-  // seven systems and their first issues on day one and one that shows an
-  // empty inventory with no explanation - and this insert used to swallow its
-  // error entirely. It still must never fail the claim (the home is already
-  // saved), so the fallback is a second, narrower insert with only the columns
-  // that have existed since 0001, then a logged give-up.
+  // Same "different building" gate `systemFacts` above already applies
+  // (parcelFactsMatchClaim): a record describing a DIFFERENT street than the
+  // one being claimed must never seed this home's garage, pool, or fireplace
+  // rows off some other building's amenities.
+  const seedFeatures = parcelFactsMatchClaim
+    ? claimFacts?.home_features ?? null
+    : null;
+  const starterRows = buildStarterSystems({
+    yearBuilt,
+    sqft: baseRow.sqft,
+    propertyType: baseRow.property_type,
+    lotSizeSqft: baseRow.lot_size_sqft,
+    // Roof/foundation/hvac material text, already derived server-side by
+    // deriveSystemFacts (src/lib/parcel.ts) and already gated on
+    // parcelFactsMatchClaim above - reused rather than re-derived.
+    materials: systemFacts,
+    facts: seedFeatures,
+  }).map((row) => ({ property_id: created.id, ...row }));
+  // A silent failure here is the difference between a dashboard that shows a
+  // real starter inventory on day one and one that shows an empty inventory
+  // with no explanation - and this insert used to swallow its error entirely.
+  // It still must never fail the claim (the home is already saved), so the
+  // fallback is a second, narrower insert with only the columns that have
+  // existed since 0001, then a logged give-up.
   const { error: seedError } = await supabase
     .from("home_systems")
     .insert(starterRows);

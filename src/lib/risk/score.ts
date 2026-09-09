@@ -107,7 +107,7 @@ export type RiskFacts = {
 //   click - a fresh card costs money or a stolen number.
 //
 //   So a shared card is pinned to the medium edge deliberately: 40 is exactly
-//   MEDIUM_AT, which means "this card is already on another Hearth account", on
+//   MEDIUM_AT, which means "this card is already on another OakTend account", on
 //   its own and with nothing else known, always costs the free trial and never
 //   costs the sale. That is the whole point of the system in one number. It used
 //   to be 35, which is `low`, which meant the single most useful thing this

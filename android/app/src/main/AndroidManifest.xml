@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Custom scheme deep link (2026-09-07, appstore-execute): the
+                 oaktend:// callback Supabase's OAuth flow uses on native (see
+                 src/lib/native/useNativeAppListeners.ts's appUrlOpen handler
+                 and capacitor.config.ts). Shows an "Open in OakTend?" prompt
+                 the first time, same as any custom-scheme deep link. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="oaktend" />
+            </intent-filter>
+
+            <!-- Android App Links (Universal Links' Android equivalent) for
+                 https://oaktend.com/* - opens shared job/report links and
+                 notification taps directly in-app with no prompt, once
+                 android:autoVerify checks out against
+                 src/app/.well-known/assetlinks.json/route.ts (needs the real
+                 release-signing SHA-256 fingerprint filled in there first -
+                 see docs/APP-STORE-SUBMISSION.md step 5). TODO(appstore):
+                 confirm autoVerify passes (Settings > Apps > OakTend > Open
+                 by default, or `adb shell pm get-app-links`) once that file
+                 has the real fingerprint. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="oaktend.com" />
+            </intent-filter>
+
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Push notifications (Android 13+/API 33+ requires runtime consent for
+         this permission specifically - @capacitor/push-notifications'
+         requestPermissions() call in src/lib/native/push.ts triggers that
+         prompt). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+</manifest>

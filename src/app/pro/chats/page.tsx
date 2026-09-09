@@ -295,7 +295,7 @@ export default async function ProChatsPage(props: {
 
       {/* The list always renders, even with no homeowner conversations yet:
           the pinned copilot row lives at the top of it, and on a phone that
-          row is the only way into Ask Hearth for Pros (the bottom bar is back
+          row is the only way into Ask OakTend for Pros (the bottom bar is back
           to four tabs and the floating pill is desktop-only). The old
           "no conversations yet" card is a row inside the list now.
 

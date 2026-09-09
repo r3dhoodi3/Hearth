@@ -48,9 +48,9 @@ export type FaqEntry = {
 export const FAQ_INDEX: FaqEntry[] = [
   // ---- Homeowner ----
   {
-    question: "Is Hearth free?",
+    question: "Is OakTend free?",
     answer:
-      "Your first home is free to track, with no card, forever. Hearth Plus is an optional subscription for the money-saving tools on top.",
+      "Your first home is free to track, with no card, forever. OakTend Plus is an optional subscription for the money-saving tools on top.",
     keywords: ["price", "pricing", "cost", "pay", "plan", "subscription"],
     side: "homeowner",
     href: "/pricing",
@@ -61,14 +61,14 @@ export const FAQ_INDEX: FaqEntry[] = [
     // once-per-account eligibility), and this static index has no user
     // context. The plan picker itself always states the exact deal for the
     // account before any charge.
-    question: "How does the Hearth Plus trial work?",
+    question: "How does the OakTend Plus trial work?",
     answer: `When your account is offered the free trial, the first ${PLUS_PLAN.trialDays} days cost nothing and you can cancel before they end without being charged. The plan picker always shows your exact deal, and after any free days the plan renews at its own price until you cancel.`,
     keywords: ["trial", "free days", "billing", "renew", "plus"],
     side: "homeowner",
     href: "/pricing",
   },
   {
-    question: "How do I cancel Hearth Plus?",
+    question: "How do I cancel OakTend Plus?",
     answer:
       "You can cancel anytime from your account with one button, nothing to call or email. If your plan started with free trial days and you cancel during them you are never charged, and if you cancel later you keep Plus until the end of the period you already paid for.",
     keywords: ["cancel", "unsubscribe", "refund", "billing", "plus"],
@@ -76,24 +76,24 @@ export const FAQ_INDEX: FaqEntry[] = [
     href: "/plus",
   },
   {
-    question: "How many questions can I ask Hearth a day?",
-    answer: `Ask Hearth is capped at ${FREE_ASK_PER_DAY} text questions a day on Free, so it stays fast and available for everyone. Plus raises that limit and adds photo answers.`,
+    question: "How many questions can I ask OakTend a day?",
+    answer: `Ask OakTend is capped at ${FREE_ASK_PER_DAY} text questions a day on Free, so it stays fast and available for everyone. Plus raises that limit and adds photo answers.`,
     keywords: ["ask", "limit", "cap", "ai", "questions", "daily"],
     side: "homeowner",
-    href: "/chats?lead=ask-hearth",
+    href: "/chats?lead=ask-oaktend",
   },
   {
-    question: "What is Ask Hearth?",
+    question: "What is Ask OakTend?",
     answer:
-      "Ask Hearth is your home assistant. It answers questions using your own systems and their ages, reads photos of labels or documents, and can log issues, set reminders, and post jobs for you.",
+      "Ask OakTend is your home assistant. It answers questions using your own systems and their ages, reads photos of labels or documents, and can log issues, set reminders, and post jobs for you.",
     keywords: ["ask", "ai", "assistant", "chat", "help"],
     side: "homeowner",
-    href: "/chats?lead=ask-hearth",
+    href: "/chats?lead=ask-oaktend",
   },
   {
-    question: "How does Hearth know about my home?",
+    question: "How does OakTend know about my home?",
     answer:
-      "When you claim your address, Hearth looks up public property records and builds a starter profile. You can add or edit your systems, their ages, and their condition at any time from the Home page.",
+      "When you claim your address, OakTend looks up public property records and builds a starter profile. You can add or edit your systems, their ages, and their condition at any time from the Home page.",
     keywords: ["claim", "address", "property", "records", "systems", "profile"],
     side: "homeowner",
     href: "/dashboard",
@@ -101,7 +101,7 @@ export const FAQ_INDEX: FaqEntry[] = [
   {
     question: "How do I get quotes from contractors?",
     answer:
-      "Post a job from the Post a Job page or ask Hearth to help. Local pros can then message you, and any price they send in chat is captured so you can compare them side by side.",
+      "Post a job from the Post a Job page or ask OakTend to help. Local pros can then message you, and any price they send in chat is captured so you can compare them side by side.",
     keywords: ["quote", "contractor", "pro", "hire", "estimate", "job"],
     side: "homeowner",
     href: "/contractors",
@@ -115,9 +115,9 @@ export const FAQ_INDEX: FaqEntry[] = [
     href: "/account/privacy",
   },
   {
-    question: "How does Hearth decide when something needs maintenance?",
+    question: "How does OakTend decide when something needs maintenance?",
     answer:
-      "Hearth uses your system's typical lifespan and the age you gave it to flag what is coming due.",
+      "OakTend uses your system's typical lifespan and the age you gave it to flag what is coming due.",
     keywords: ["maintenance", "reminder", "schedule", "due", "lifespan"],
     side: "homeowner",
     href: "/guides/home-maintenance-schedule",
@@ -125,14 +125,14 @@ export const FAQ_INDEX: FaqEntry[] = [
   {
     question: "How do I know if a contractor's quote is fair?",
     answer:
-      "Ask Hearth to read the quote with you, or check it against the red flags in our guide.",
+      "Ask OakTend to read the quote with you, or check it against the red flags in our guide.",
     keywords: ["quote", "fair", "price", "overcharge", "analyzer"],
     side: "homeowner",
     href: "/guides/is-my-contractor-quote-fair",
   },
   {
     question: "How many homes can I track?",
-    answer: `Your first home is free. Hearth Plus lets you track up to ${PLUS_INCLUDED_HOMES} homes in one place.`,
+    answer: `Your first home is free. OakTend Plus lets you track up to ${PLUS_INCLUDED_HOMES} homes in one place.`,
     keywords: ["homes", "multiple", "properties", "second", "rental"],
     side: "homeowner",
     href: "/pricing",

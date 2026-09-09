@@ -7,11 +7,11 @@ import { renderOgCard, OG_SIZE, OG_CONTENT_TYPE } from "@/lib/ogCard";
 
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
-export const alt = "Hearth for Pros";
+export const alt = "OakTend for Pros";
 
 export default function OgImage() {
   return renderOgCard(
-    "Hearth for Pros",
+    "OakTend for Pros",
     "Real local leads. Pay only when you apply."
   );
 }

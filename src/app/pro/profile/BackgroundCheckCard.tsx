@@ -25,7 +25,7 @@ export default function BackgroundCheckCard({
 }: {
   contractor: Contractor;
   // Paid lead applications this pro has, counted server-side (see
-  // countPaidLeadApplications). Hearth pays Checkr per check, so the perk is
+  // countPaidLeadApplications). OakTend pays Checkr per check, so the perk is
   // earned rather than granted at signup. Null means the count could not be
   // read; the card treats that the same way the server action does - as not
   // yet unlocked - so the UI never offers a button the action will refuse.
@@ -42,11 +42,11 @@ export default function BackgroundCheckCard({
       <div>
         <h2 className="font-semibold text-stone-900 dark:text-stone-100">Background check</h2>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          Run by Checkr, a background check provider. Hearth covers the cost:
+          Run by Checkr, a background check provider. OakTend covers the cost:
           it&apos;s free for you, and it unlocks after{" "}
           {BACKGROUND_CHECK_MIN_PAID_LEADS} paid leads. Consent and the check
           itself happen on Checkr&apos;s site, after they email you an
-          invitation. Hearth only ever sees a pass / no-pass result, never the
+          invitation. OakTend only ever sees a pass / no-pass result, never the
           report itself.
         </p>
       </div>
@@ -100,7 +100,7 @@ export default function BackgroundCheckCard({
         <div className="space-y-1.5">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-100 dark:bg-stone-700">
             <div
-              className="h-full rounded-full bg-hearth-500 transition-all"
+              className="h-full rounded-full bg-oaktend-500 transition-all"
               style={{
                 width: `${Math.round(
                   (paidLeadsKnown / BACKGROUND_CHECK_MIN_PAID_LEADS) * 100
@@ -117,7 +117,7 @@ export default function BackgroundCheckCard({
       ) : hasEmail ? (
         <form action={startBackgroundCheckAction} className="space-y-2">
           {/* Legal name, not the business name: the check runs against a
-              person. Sent to Checkr only, never stored by Hearth. */}
+              person. Sent to Checkr only, never stored by OakTend. */}
           <div className="flex flex-wrap gap-2">
             <input
               name="legal_first_name"
@@ -135,7 +135,7 @@ export default function BackgroundCheckCard({
             />
           </div>
           <p className="text-xs text-stone-500 dark:text-stone-400">
-            Your legal name goes to Checkr to run the check. Hearth doesn&apos;t
+            Your legal name goes to Checkr to run the check. OakTend doesn&apos;t
             store it.
           </p>
           {/* SubmitButton, not a bare <button>: this kicks off a real Checkr

@@ -11,7 +11,7 @@ import { ClipboardList, MessageSquare, Wrench, Gift } from "lucide-react";
 // rather than duplicated JSX so the two pages can't drift out of sync, the
 // same way GuideCta is shared across the /guides pages.
 //
-// Schema.org: Service, not LocalBusiness. Hearth is an online service with
+// Schema.org: Service, not LocalBusiness. OakTend is an online service with
 // no physical storefront in either city (the pros it connects homeowners to
 // are the local businesses); claiming LocalBusiness here would be the same
 // kind of overreach the /p/[id] pro pages explicitly avoid for a pro's own
@@ -40,11 +40,11 @@ const VALUE = [
   {
     icon: ClipboardList,
     title: "A maintenance plan built around your home",
-    body: "Hearth turns your home's age, systems, and history into a plan of what to check and when, not a generic checklist.",
+    body: "OakTend turns your home's age, systems, and history into a plan of what to check and when, not a generic checklist.",
   },
   {
     icon: MessageSquare,
-    title: "Ask Hearth anything about your house",
+    title: "Ask OakTend anything about your house",
     body: "Get answers about your systems, their ages, and what's likely to need attention next, any time.",
   },
   {
@@ -89,7 +89,7 @@ export function buildCityServiceJsonLd(city: string, siteUrl: string, path: stri
     serviceType: "Home maintenance management",
     provider: {
       "@type": "Organization",
-      name: "Hearth",
+      name: "OakTend",
       url: siteUrl,
     },
     areaServed: {
@@ -114,7 +114,7 @@ export default function CityLandingPage({
           href="/"
           className="flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100"
         >
-          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
+          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> OakTend
         </Link>
         <SessionCta signedOutHref="/homeowner-signup" />
       </header>
@@ -128,11 +128,11 @@ export default function CityLandingPage({
             {housingParagraph}
           </p>
           {/* This is a per-city page, so say out loud that the city is not the
-              whole service area. Hearth serves the entire county, and a reader
+              whole service area. OakTend serves the entire county, and a reader
               who landed here from a city search should not conclude the
               neighboring town is unserved. */}
           <p className="mx-auto mt-3 max-w-xl text-sm text-stone-500 dark:text-stone-400">
-            Hearth serves {LAUNCH_AREA_LABEL}, California, not just {city}.
+            OakTend serves {LAUNCH_AREA_LABEL}, California, not just {city}.
           </p>
           <SessionCta
             signedOutHref="/homeowner-signup"
@@ -142,7 +142,7 @@ export default function CityLandingPage({
 
         <section className="mt-14">
           <h2 className="text-center text-xl font-semibold text-stone-900 dark:text-stone-100">
-            What Hearth does
+            What OakTend does
           </h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {VALUE.map((v) => (
@@ -183,7 +183,7 @@ export default function CityLandingPage({
 
       <footer className="mx-auto max-w-2xl border-t border-stone-200 px-6 py-6 text-center dark:border-white/10">
         <p className="inline-flex w-full items-center justify-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-          <Logo className="h-4 w-4 text-bark-700 dark:text-stone-400" /> Hearth · Your home, looked after
+          <Logo className="h-4 w-4 text-bark-700 dark:text-stone-400" /> OakTend · Your home, looked after
         </p>
         <p className="mt-2 text-xs">
           <Link

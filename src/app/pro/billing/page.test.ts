@@ -145,13 +145,13 @@ describe("pro billing: balance cards sit side by side on a phone", () => {
     );
 
     const cashNumberClass =
-      "stat-number mt-1 text-4xl max-sm:text-xl text-hearth-900 dark:text-hearth-200";
+      "stat-number mt-1 text-4xl max-sm:text-xl text-oaktend-900 dark:text-oaktend-200";
     const bonusNumberClass =
       "stat-number mt-1 text-2xl max-sm:text-xl text-amber-900 dark:text-amber-300";
     expect(view).toContain(`<p className="${cashNumberClass}">`);
     expect(view).toContain(`<p className="${bonusNumberClass}">`);
     expect(stripMaxSm(cashNumberClass)).toEqual(
-      stripMaxSm("stat-number mt-1 text-4xl text-hearth-900 dark:text-hearth-200")
+      stripMaxSm("stat-number mt-1 text-4xl text-oaktend-900 dark:text-oaktend-200")
     );
     expect(stripMaxSm(bonusNumberClass)).toEqual(
       stripMaxSm("stat-number mt-1 text-2xl text-amber-900 dark:text-amber-300")

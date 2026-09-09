@@ -42,7 +42,7 @@ export default function HomeSwitcher({
   // the address runs straight under whatever is beside it. On a phone that
   // was the Tools button ("8892 ConstitutiTools"); on a 1024-1680px desktop
   // it was the nav strip, which is shrink-0, so a long address rendered as
-  // "Hearth · 3831 [Home]ve[Browse Pros]". The address yields (truncated,
+  // "OakTend · 3831 [Home]ve[Browse Pros]". The address yields (truncated,
   // with the full one in the aria-label and in the open menu) and the nav
   // links keep their room at every width.
   return (
@@ -130,7 +130,7 @@ export default function HomeSwitcher({
           </Link>
           {homes.length >= 1 && (
             <p className="px-2 pb-1 text-xs text-stone-500 max-sm:text-sm dark:text-stone-400">
-              Free includes 1 home. Hearth Plus unlocks up to 5.
+              Free includes 1 home. OakTend Plus unlocks up to 5.
             </p>
           )}
           {/* No self-serve delete (see homeActions.ts removeHomeAction): a

@@ -1,3 +1,4 @@
+import HashScroll from "@/components/HashScroll";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -213,7 +214,9 @@ export default async function ProBusinessPage() {
       })();
 
   return (
-    <BusinessView
+    <>
+      <HashScroll />
+      <BusinessView
       timeToApplyStat={timeToApplyStat}
       showApplySpeedNudge={showApplySpeedNudge}
       isPro={isPro}
@@ -296,6 +299,7 @@ export default async function ProBusinessPage() {
         comment: (r.comment ?? null) as string | null,
       }))}
       profileUrl={profileUrl}
-    />
+      />
+    </>
   );
 }

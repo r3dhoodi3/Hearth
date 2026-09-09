@@ -1,14 +1,21 @@
-# App Store approval checklist for a future Hearth iOS app
+> **Superseded 2026-09-07.** See `docs/APP-STORE-SUBMISSION.md` for the current plan: the
+> Capacitor scaffold now exists (`capacitor.config.ts`, `ios/`, `android/`), and the decision on
+> item 3 below changed - OakTend Plus and OakTend Pro membership now sell through Apple/Google IAP
+> (RevenueCat), not "sell on web, app honors the entitlement" as this file recommended. The lead-fee
+> and wallet-deposit reasoning in item 3 (3.1.3(e), Stripe stays) is unchanged and still current.
+> This file is kept for its dated research; do not follow item 3's membership recommendation.
+
+# App Store approval checklist for a future OakTend iOS app
 
 Researched 2026-08-19 against Apple's live App Review Guidelines
-(https://developer.apple.com/app-store/review/guidelines/). Hearth has no iOS app yet; this is
+(https://developer.apple.com/app-store/review/guidelines/). OakTend has no iOS app yet; this is
 the list of things App Review will actually check for a two-sided home-services marketplace, so
 nothing here is a surprise the week of submission. Companion doc: APPLE-SIGN-IN-SETUP.md (the
 web-side Apple login setup, whose Apple Developer artifacts an iOS build reuses).
 
 ## 1. Login services (Guideline 4.8) - BLOCKING, already solved on web
 
-Because Hearth offers Google sign-in, the iOS app must also offer a privacy-focused equivalent:
+Because OakTend offers Google sign-in, the iOS app must also offer a privacy-focused equivalent:
 one that limits data collection to name and email, lets users keep their email private, and does
 not collect app interactions for advertising without consent. Sign in with Apple satisfies this
 and is what reviewers expect in practice (since the 2022 rewrite, Apple's own service is no
@@ -19,7 +26,7 @@ be appended to the Supabase Apple provider's Client IDs list (web Services ID st
 ## 2. Account deletion in-app (Guideline 5.1.1(v)) - BLOCKING, mostly solved
 
 Apps that support account creation must offer account DELETION inside the app - findable, not a
-link to a website form with extra steps, and a real deletion, not deactivation. Hearth already
+link to a website form with extra steps, and a real deletion, not deactivation. OakTend already
 has account deletion; the iOS build must expose it in its own UI. Reference:
 https://developer.apple.com/support/offering-account-deletion-in-your-app/
 
@@ -53,9 +60,9 @@ shell; the experience must feel adapted to iOS, not a bookmark.
   what third-party SDKs collect (Supabase, Stripe, any analytics, the AI provider calls). A
   mismatch between the labels, the privacy policy, and observed network behavior is a top
   rejection cause. https://developer.apple.com/app-store/app-privacy-details/
-- App Tracking Transparency: only needed if Hearth tracks users across OTHER companies' apps and
+- App Tracking Transparency: only needed if OakTend tracks users across OTHER companies' apps and
   sites (ad SDKs, cross-app identifiers). First-party analytics do not trigger it. As built
-  today, Hearth needs no ATT prompt and the label should say "no tracking" - keep it that way.
+  today, OakTend needs no ATT prompt and the label should say "no tracking" - keep it that way.
 
 ## 6. Review logistics (Guideline 2.1 App Completeness)
 

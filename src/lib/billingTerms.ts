@@ -1,4 +1,5 @@
 import { PLUS_PLAN, PRO_PLAN } from "@/lib/constants";
+import { LEGAL } from "@/lib/legal";
 
 // The ONE place the auto-renewal disclosure language lives, for both paid
 // memberships. Five surfaces have to say the same thing about a recurring
@@ -45,8 +46,24 @@ export type PaidPlan = "weekly" | "monthly" | "yearly" | "pro_monthly" | "pro_ye
 export const TRIAL_PLAN_SWITCH_MESSAGE =
   "You can switch plans once your free days end.";
 
+// The exact label on the required auto-renewal consent checkbox (Cal. Bus. &
+// Prof. Code 17602(a)(2), as amended by AB 2863, effective July 1, 2025): an
+// affirmative, unchecked-by-default box the buyer has to check before the
+// checkout button will submit. One literal string, imported by every checkout
+// screen and by the server actions that write it into the Stripe metadata, so
+// the box on screen and the record of what was agreed to can never say two
+// different things.
+export const AUTO_RENEWAL_CHECKBOX_LABEL =
+  "I agree to the automatic renewal terms above.";
+
+// The sentence shown directly under the itemized terms, above the checkbox:
+// what checking it means. Same string everywhere it appears, for the same
+// reason as the label above.
+export const AUTO_RENEWAL_CONSENT_LINE =
+  "By checking the box below, you agree to these automatic renewal terms.";
+
 export type BillingTerms = {
-  // "Hearth Plus", "Hearth Pro" - the thing being bought.
+  // "OakTend Plus", "OakTend Pro" - the thing being bought.
   product: string;
   // What is charged right now, at checkout.
   chargedToday: string;
@@ -66,6 +83,12 @@ export type BillingTerms = {
   cancel: string;
   // Where that cancel control lives, for links.
   cancelPath: string;
+  // "By checking the box below, you agree to these automatic renewal terms."
+  // Same string on every plan; kept on the object (rather than read as the
+  // bare constant everywhere) so a checkout screen that already has `terms`
+  // in scope never has to import a second thing to render it in the right
+  // order, directly under the itemized list and above the checkbox.
+  consentLine: string;
 };
 
 function money(amount: number): string {
@@ -105,7 +128,7 @@ export function billingTerms(
   introEligible: boolean
 ): BillingTerms {
   const pro = plan === "pro_monthly" || plan === "pro_yearly";
-  const product = pro ? "Hearth Pro" : "Hearth Plus";
+  const product = pro ? `${LEGAL.brand} Pro` : `${LEGAL.brand} Plus`;
   const cancelPath = pro ? "/pro/plus" : "/plus";
   // Named in plain language rather than as a URL path: this sentence is read
   // aloud in an email and inside a Stripe consent record as often as it is
@@ -113,7 +136,7 @@ export function billingTerms(
   // page it names is the one cancelPath links to, so the fact is identical.
   const cancel = `Cancel anytime from your ${product} page using the Cancel membership button. Cancelling takes effect at the end of the period you have already paid for, and there is nothing to call or email.`;
 
-  // Hearth Pro: every brand-new member, on either cadence, starts on the same
+  // OakTend Pro: every brand-new member, on either cadence, starts on the same
   // free trial (a Stripe trial, so the card is collected at checkout but
   // nothing is charged until it ends). `introEligible` mirrors the exact "no
   // existing Pro subscription" signal startProCheckoutAction uses, so a
@@ -140,6 +163,7 @@ export function billingTerms(
         summary: stepUp,
         cancel: `${cancel} If you cancel before the ${trialDays}-day trial ends, you will not be charged anything.`,
         cancelPath,
+        consentLine: AUTO_RENEWAL_CONSENT_LINE,
       };
     }
 
@@ -151,10 +175,11 @@ export function billingTerms(
       summary: `${price} today, and it renews ${recurEvery} until you cancel.`,
       cancel,
       cancelPath,
+      consentLine: AUTO_RENEWAL_CONSENT_LINE,
     };
   }
 
-  // Hearth Plus: weekly, monthly, or yearly. Every one of the three carries the
+  // OakTend Plus: weekly, monthly, or yearly. Every one of the three carries the
   // same 3 free days for an eligible account (see trialApplies above), and
   // Stripe then renews at the cadence the buyer picked, so the step-up sentence
   // below is built per cadence rather than hard-coded to weekly.
@@ -189,6 +214,7 @@ export function billingTerms(
       summary: stepUp,
       cancel: `${cancel} If you cancel before the ${trialDays}-day trial ends, you will not be charged anything.`,
       cancelPath,
+      consentLine: AUTO_RENEWAL_CONSENT_LINE,
     };
   }
 
@@ -202,6 +228,7 @@ export function billingTerms(
     summary: `${price} today, and it renews ${recurEvery} until you cancel.`,
     cancel,
     cancelPath,
+    consentLine: AUTO_RENEWAL_CONSENT_LINE,
   };
 }
 

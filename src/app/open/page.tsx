@@ -24,12 +24,12 @@ export default function OpenPage() {
     <main className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-bark-50 px-6 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-center dark:bg-stone-900">
       <div className="flex items-center gap-2 text-2xl font-semibold text-stone-900 dark:text-stone-100">
         <Logo className="h-8 w-8 text-bark-700 dark:text-stone-400" />
-        <span>Hearth</span>
+        <span>OakTend</span>
       </div>
       {/* animate-pulse doubles as the spinner: a quiet fade loop reads as
           "working" without shipping a keyframe or an extra element. */}
       <p className="animate-pulse text-sm text-stone-500 dark:text-stone-400">
-        Opening Hearth...
+        Opening OakTend...
       </p>
       <OpenRedirect />
       {/* With JavaScript off the redirect above never runs, so hand over a
@@ -37,7 +37,7 @@ export default function OpenPage() {
           forever. */}
       <noscript>
         <a href="/dashboard" className="text-sm underline">
-          Open Hearth
+          Open OakTend
         </a>
       </noscript>
     </main>

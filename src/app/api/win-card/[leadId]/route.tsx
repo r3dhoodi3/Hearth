@@ -15,23 +15,23 @@ export const runtime = "nodejs";
 // ever shows the pro's own business name and logo, the job's trade category,
 // the city and state parsed from the lead's snapshot address (never the
 // street segment), the pro's real star rating and review count when they
-// have at least one review, and Hearth's own branding plus their public page
+// have at least one review, and OakTend's own branding plus their public page
 // link. Because no homeowner data ever reaches this route or the image it
 // renders, there is no consent flow to build or check here.
 //
 // Visual style matches src/app/p/[id]/opengraph-image.tsx exactly: same
-// warm hearth palette, same 1200x630 size, same hand drawn Star (satori's
+// warm OakTend palette, same 1200x630 size, same hand drawn Star (satori's
 // default font has no reliable star glyph, so stars stay SVG rather than a
 // unicode character).
 
 const size = { width: 1200, height: 630 };
 
-// Warm hearth palette (tailwind.config.ts), copied from opengraph-image.tsx
+// Warm OakTend palette (tailwind.config.ts), copied from opengraph-image.tsx
 // so both share cards read as the same product.
-const HEARTH_50 = "#fbf7f2";
-const HEARTH_500 = "#a9743f";
-const HEARTH_700 = "#73482b";
-const HEARTH_900 = "#4f3324";
+const OAKTEND_50 = "#fbf7f2";
+const OAKTEND_500 = "#a9743f";
+const OAKTEND_700 = "#73482b";
+const OAKTEND_900 = "#4f3324";
 const STONE_400 = "#a8a29e";
 const STONE_300 = "#d6d3d1";
 const AMBER_500 = "#f59e0b";
@@ -66,11 +66,11 @@ function Wordmark() {
           width: 14,
           height: 14,
           borderRadius: 9999,
-          backgroundColor: HEARTH_500,
+          backgroundColor: OAKTEND_500,
         }}
       />
-      <div style={{ fontSize: 34, fontWeight: 700, color: HEARTH_700 }}>
-        Hearth
+      <div style={{ fontSize: 34, fontWeight: 700, color: OAKTEND_700 }}>
+        OakTend
       </div>
     </div>
   );
@@ -228,8 +228,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ leadId: s
   const categoryLabel = labelFor(JOB_CATEGORIES, leadRow.category);
   const location = cityState(leadRow.property_address);
   const celebrationLine = location
-    ? `Another ${categoryLabel} job won in ${location} on Hearth.`
-    : `Another ${categoryLabel} job won on Hearth.`;
+    ? `Another ${categoryLabel} job won in ${location} on OakTend.`
+    : `Another ${categoryLabel} job won on OakTend.`;
 
   return new ImageResponse(
     (
@@ -241,7 +241,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ leadId: s
           flexDirection: "column",
           justifyContent: "center",
           padding: "0 80px",
-          background: HEARTH_50,
+          background: OAKTEND_50,
           position: "relative",
           fontFamily: "sans-serif",
         }}
@@ -262,7 +262,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ leadId: s
             style={{
               fontSize: contractor.name.length > 28 ? 46 : 56,
               fontWeight: 700,
-              color: HEARTH_900,
+              color: OAKTEND_900,
               lineHeight: 1.1,
               maxWidth: 900,
             }}
@@ -278,7 +278,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ leadId: s
             marginTop: 28,
           }}
         >
-          <div style={{ fontSize: 32, color: HEARTH_700, fontWeight: 600 }}>
+          <div style={{ fontSize: 32, color: OAKTEND_700, fontWeight: 600 }}>
             {categoryLabel}
           </div>
         </div>
@@ -287,7 +287,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ leadId: s
           style={{
             fontSize: 44,
             fontWeight: 700,
-            color: HEARTH_900,
+            color: OAKTEND_900,
             lineHeight: 1.25,
             marginTop: 28,
             maxWidth: 1000,
@@ -310,7 +310,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ leadId: s
                 <Star key={i} filled={i < fullStars} />
               ))}
             </div>
-            <div style={{ fontSize: 38, fontWeight: 700, color: HEARTH_900 }}>
+            <div style={{ fontSize: 38, fontWeight: 700, color: OAKTEND_900 }}>
               {contractor.rating}
             </div>
             <div style={{ fontSize: 30, color: STONE_400 }}>
@@ -320,7 +320,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ leadId: s
           </div>
         )}
 
-        <div style={{ fontSize: 28, color: HEARTH_700, marginTop: 32 }}>
+        <div style={{ fontSize: 28, color: OAKTEND_700, marginTop: 32 }}>
           {publicPageUrl}
         </div>
 
@@ -331,7 +331,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ leadId: s
             left: 0,
             width: "100%",
             height: 14,
-            backgroundColor: HEARTH_500,
+            backgroundColor: OAKTEND_500,
           }}
         />
       </div>

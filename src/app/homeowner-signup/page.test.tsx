@@ -43,11 +43,11 @@ describe("homeowner sign-up value bullets", () => {
       )
     ).toBeNull();
     expect(
-      screen.queryByText("Scan a warranty or receipt and Hearth files it for you")
+      screen.queryByText("Scan a warranty or receipt and OakTend files it for you")
     ).toBeNull();
     // The subtitle stays as the one line of value copy on the account door.
     expect(
-      screen.getByText("Start tracking your home with Hearth.")
+      screen.getByText("Start tracking your home with OakTend.")
     ).toBeInTheDocument();
   });
 });

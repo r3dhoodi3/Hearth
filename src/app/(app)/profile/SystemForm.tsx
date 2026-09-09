@@ -56,6 +56,24 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
             ))}
           </select>
         </div>
+        {/* B7: "Other" needs a name - there's no type-specific label to fall
+            back on. Inline, right under the type picker, not buried at the
+            bottom of the form. */}
+        {systemType === "other" && (
+          <div>
+            <label className="label" htmlFor="other-system-label">
+              What is it?
+            </label>
+            <input
+              id="other-system-label"
+              name="other_label"
+              className="input"
+              placeholder="e.g. Pool pump"
+              maxLength={80}
+              required
+            />
+          </div>
+        )}
         <div>
           <label className="label">{materialLabel(systemType)} (optional)</label>
           <MaterialSelect key={systemType} systemType={systemType} />
@@ -100,7 +118,7 @@ export default function SystemForm({ propertyId }: { propertyId: string }) {
             <option value="1">1 (failing)</option>
           </select>
         </div>
-        {/* HVAC only: filter size + reminder cadence, so Hearth can nudge the
+        {/* HVAC only: filter size + reminder cadence, so OakTend can nudge the
             owner when it is time for a fresh filter (consumables autopilot). */}
         {systemType === "hvac" && (
           <>

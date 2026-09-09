@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "article",
   },
   twitter: {
@@ -157,7 +157,7 @@ export default function SlabLeakSignsGuide() {
             a reflection of how well any individual home has been cared for.
           </p>
           <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-            See what Hearth offers homeowners in{" "}
+            See what OakTend offers homeowners in{" "}
             <Link href="/fountain-valley" className="text-bark-700 hover:underline dark:text-stone-300">
               Fountain Valley
             </Link>{" "}

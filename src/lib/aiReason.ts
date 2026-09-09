@@ -12,7 +12,7 @@ import type { AiLimitReason } from "@/lib/aiUsage";
 //  - A BURST refusal read as "you are out for the day". It is not: the person
 //    is a few seconds early, their allowance is untouched, and the honest
 //    answer is "give it a minute", not a trip to the billing page.
-//  - An owner-wide ceiling read the same way. That one is Hearth's ceiling,
+//  - An owner-wide ceiling read the same way. That one is OakTend's ceiling,
 //    not theirs, and telling someone who has used nothing today that they hit
 //    a limit is simply false.
 //
@@ -23,7 +23,7 @@ import type { AiLimitReason } from "@/lib/aiUsage";
 // meaningfully do three different things, and no more. "rate_limited" is the
 // one case where the person's own allowance is genuinely spent (offer more
 // room). "busy" means come back shortly, with nothing to buy and nothing to
-// fix. "unavailable" means Hearth could not tell, which is a bug on our side.
+// fix. "unavailable" means OakTend could not tell, which is a bug on our side.
 export type AiClientReason = "rate_limited" | "busy" | "unavailable";
 
 export type AiReasonPayload = {
@@ -41,14 +41,14 @@ const DAILY_COPY = "You've hit today's AI limit. It resets at midnight.";
 // retry, and it clears itself.
 const BURST_COPY = "Give it a minute and try again.";
 
-// An owner-wide breaker or hourly ceiling. Hearth's own ceiling, so it is
-// worded as Hearth being busy, with no upsell attached.
-const BUSY_COPY = "Hearth's AI is busy right now. Try again in a few minutes.";
+// An owner-wide breaker or hourly ceiling. OakTend's own ceiling, so it is
+// worded as OakTend being busy, with no upsell attached.
+const BUSY_COPY = "OakTend's AI is busy right now. Try again in a few minutes.";
 
 // The counter itself failed and we denied to be safe. Not a limit, a bug, and
 // the person has nothing to fix on their end.
 const UNAVAILABLE_COPY =
-  "Hearth couldn't check your usage just now. Please try again in a few minutes.";
+  "OakTend couldn't check your usage just now. Please try again in a few minutes.";
 
 /**
  * Turn a counter refusal into the two fields every tool route sends back.

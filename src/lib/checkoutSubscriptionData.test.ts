@@ -149,7 +149,7 @@ describe("the default cadence flowing into a disclosure", () => {
 
   it("quotes the yearly Pro price when nothing was submitted", () => {
     const terms = billingTerms(proPlanFor(null), true);
-    expect(terms.product).toBe("Hearth Pro");
+    expect(terms.product).toBe("OakTend Pro");
     expect(terms.recurring).toContain(`$${PRO_PLAN.yearly.toFixed(2)}`);
     expect(terms.recurring).toContain("every 12 months");
   });
@@ -283,10 +283,10 @@ describe("the Plus trial rides on every cadence", () => {
   });
 });
 
-describe("billingTerms for Hearth Pro", () => {
+describe("billingTerms for OakTend Pro", () => {
   it("leads with the free trial and charges nothing today", () => {
     const terms = billingTerms("pro_monthly", true);
-    expect(terms.product).toBe("Hearth Pro");
+    expect(terms.product).toBe("OakTend Pro");
     expect(terms.chargedToday).toContain("Nothing today");
     expect(terms.stepUp).toContain(`Free for ${PRO_PLAN.trialDays} days`);
     expect(terms.recurring).toContain(`$${PRO_PLAN.monthly.toFixed(2)}`);
@@ -322,7 +322,7 @@ describe("billingTerms for Hearth Pro", () => {
 
   it("leaves the homeowner Plus disclosure alone", () => {
     const terms = billingTerms("weekly", true);
-    expect(terms.product).toBe("Hearth Plus");
+    expect(terms.product).toBe("OakTend Plus");
     expect(terms.chargedToday).toContain(
       `Your first ${PLUS_PLAN.trialDays} days are free`
     );

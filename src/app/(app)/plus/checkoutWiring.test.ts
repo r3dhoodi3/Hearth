@@ -25,7 +25,7 @@ const webhook = src("../../api/stripe/webhook/route.ts");
 
 const cases: Array<[string, string]> = [
   ["homeowner Plus", plusAction],
-  ["Hearth Pro", proAction],
+  ["OakTend Pro", proAction],
 ];
 
 describe("the idempotency key covers everything that can vary", () => {

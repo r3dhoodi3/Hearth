@@ -18,9 +18,9 @@ import InlineSpinner from "@/components/InlineSpinner";
 //
 // Exactly ONE follow-up appears after a successful submit (owner ask,
 // 2026-08-30: two stacked prompts after one review was too much): a CENTERED
-// "Invite a neighbor" modal card with the homeowner's OWN Hearth invite link
+// "Invite a neighbor" modal card with the homeowner's OWN OakTend invite link
 // (their lazy referral code, migration 0099 - see inviteActions.ts). It shares
-// Hearth itself, not the pro, and is honest neighbor-to-neighbor sharing with
+// OakTend itself, not the pro, and is honest neighbor-to-neighbor sharing with
 // no reward, credit, or wallet of any kind. The code is fetched lazily so the
 // modal only appears if a link can actually be produced, it shows at most once
 // per submission, and dismissing it (X, scrim tap, Escape, or "Not now") is
@@ -122,8 +122,8 @@ export default function ReviewButton({
     try {
       const url = inviteUrl();
       const shareData = {
-        title: "Hearth",
-        text: "I've been using Hearth to keep on top of my house. Thought you might find it handy for yours:",
+        title: "OakTend",
+        text: "I've been using OakTend to keep on top of my house. Thought you might find it handy for yours:",
         url,
       };
       if (typeof navigator !== "undefined" && navigator.share) {
@@ -184,7 +184,7 @@ export default function ReviewButton({
                   if (res.ok) {
                     setOpen(false);
                     // Arm the neighbor-invite modal on every successful
-                    // submit, whatever the rating: sharing Hearth with a
+                    // submit, whatever the rating: sharing OakTend with a
                     // neighbor isn't about the pro's stars.
                     setJustSubmitted(true);
                   } else {
@@ -237,6 +237,11 @@ export default function ReviewButton({
                   {error}
                 </p>
               )}
+
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Reviews are never paid for and never removed for being
+                negative. Only post about your own experience on this job.
+              </p>
 
               <div className="flex gap-2">
                 <button

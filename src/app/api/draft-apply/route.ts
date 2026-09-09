@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       message: null,
       reason: "locked",
-      error: "Drafting opens once your business is verified: add a California license number we can confirm, or place your first lead. Hearth Pro members get it right away.",
+      error: "Drafting opens once your business is verified: add a California license number we can confirm, or place your first lead. OakTend Pro members get it right away.",
     });
   }
 
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
   const cats = contractor.categories ?? [];
 
   // Per-user daily cap so a single account can't run up the paid model bill.
-  // Shares the ai_usage counter (and the Plus ceiling) with Ask Hearth, so it
+  // Shares the ai_usage counter (and the Plus ceiling) with Ask OakTend, so it
   // resets cleanly at midnight and one pro can't farm drafts all day. An
   // active Pro membership counts as the higher tier here: a paying pro who
   // already used the AI back office shouldn't hit the free ceiling on drafts.

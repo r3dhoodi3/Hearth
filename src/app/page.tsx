@@ -6,6 +6,7 @@ import { getVerifiedUser } from "@/lib/auth";
 import { getSides, landingFor } from "@/lib/contractor";
 import { FOUNDER, PLUS_PLAN } from "@/lib/constants";
 import { LAUNCH_AREA_LABEL } from "@/lib/serviceArea";
+import { LEGAL_LINKS } from "@/lib/legal";
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/Logo";
@@ -39,7 +40,7 @@ const landingJsonLd = [
   {
     "@context": "https://schema.org",
     "@type": "WebApplication",
-    name: "Hearth",
+    name: "OakTend",
     url: SITE_URL,
     applicationCategory: "LifestyleApplication",
     operatingSystem: "iOS, Android, Web",
@@ -47,13 +48,13 @@ const landingJsonLd = [
     offers: [
       {
         "@type": "Offer",
-        name: "Hearth (first home)",
+        name: "OakTend (first home)",
         price: "0",
         priceCurrency: "USD",
       },
       {
         "@type": "Offer",
-        name: "Hearth Plus (yearly)",
+        name: "OakTend Plus (yearly)",
         price: String(PLUS_PLAN.yearly),
         priceCurrency: "USD",
       },
@@ -159,17 +160,17 @@ export default async function Home(props: {
     {
       icon: Bell,
       title: "Know before it breaks",
-      body: "Hearth watches for storms, recalls, and aging systems like your water heater or furnace, then sends the alert. You never have to check.",
+      body: "OakTend watches for storms, recalls, and aging systems like your water heater or furnace, then sends the alert. You never have to check.",
     },
     {
       icon: MessageSquare,
       title: "Answers about your home",
-      body: "Ask Hearth anything. It knows what's in your home, how old each thing is, and its history.",
+      body: "Ask OakTend anything. It knows what's in your home, how old each thing is, and its history.",
     },
     {
       icon: Wrench,
       title: "The right pro, fast",
-      body: "Post the job once and Hearth fills in your home's details for you, so local pros can quote it fast.",
+      body: "Post the job once and OakTend fills in your home's details for you, so local pros can quote it fast.",
     },
   ];
 
@@ -181,15 +182,15 @@ export default async function Home(props: {
   const FAQ_ITEMS: { q: string; a: string; node?: React.ReactNode }[] = [
     {
       q: "Is it really free?",
-      a: "Yes. Your first home is free, no card needed. Hearth makes money two ways: an optional Plus plan, and a fee pros pay when they apply to a job.",
+      a: "Yes. Your first home is free, no card needed. OakTend makes money two ways: an optional Plus plan, and a fee pros pay when they apply to a job.",
     },
     {
       q: "What do you do with my data?",
-      a: "Your home details are stored in our database and used to run Hearth: reminders, alerts, and answers about your house. We don't sell your personal data, and we don't let ad companies track what you do here. When you post a job, a pro sees only what's needed to quote it. The full details are in the privacy policy.",
+      a: "Your home details are stored in our database and used to run OakTend: reminders, alerts, and answers about your house. We don't sell your personal data, and we don't let ad companies track what you do here. When you post a job, a pro sees only what's needed to quote it. The full details are in the privacy policy.",
       node: (
         <>
           Your home details are stored in our database and used to run
-          Hearth: reminders, alerts, and answers about your house. We
+          OakTend: reminders, alerts, and answers about your house. We
           don&apos;t sell your personal data, and we don&apos;t let ad
           companies track what you do here. When you post a job, a pro sees only
           what&apos;s needed to quote it. The full details are in the{" "}
@@ -205,15 +206,15 @@ export default async function Home(props: {
     },
     {
       q: "Who are the pros?",
-      a: "Local pros who set up their own Hearth profiles. If a pro has a California license number, we check it live with the state's contractor license board (the CSLB) and show the result. Some trades, like handyman work or cleaning, don't require a license, so not every pro will have that badge. Pros can also complete an optional background check, which shows on their profile if they do. You always see exactly what's been verified and what hasn't.",
+      a: "Local pros who set up their own OakTend profiles. If a pro has a California license number, we check it live with the state's contractor license board (the CSLB) and show the result. Some trades, like handyman work or cleaning, don't require a license, so not every pro will have that badge. Pros can also complete an optional background check, which shows on their profile if they do. You always see exactly what's been verified and what hasn't.",
     },
     {
       q: "Will I get flooded with calls once I post a job?",
-      a: "No. Your contact info stays private until you pick a pro yourself, and at most three pros can apply to any job. Until you choose someone, the conversation happens inside Hearth, not on your phone.",
+      a: "No. Your contact info stays private until you pick a pro yourself, and at most three pros can apply to any job. Until you choose someone, the conversation happens inside OakTend, not on your phone.",
     },
     {
-      q: "Where is Hearth available?",
-      a: "We're serving all of Orange County, California right now, with local pros across the county. If you're outside Orange County you can still sign up and join the waitlist, which is how we decide where Hearth goes next.",
+      q: "Where is OakTend available?",
+      a: "We're serving all of Orange County, California right now, with local pros across the county. If you're outside Orange County you can still sign up and join the waitlist, which is how we decide where OakTend goes next.",
     },
     {
       q: "What does Plus cost?",
@@ -221,10 +222,10 @@ export default async function Home(props: {
       // loud. They come with every cadence now (trialApplies in
       // src/lib/billingTerms.ts), so the answer states the one rule instead of
       // three exceptions.
-      a: "Hearth itself stays free for your first home. Hearth Plus is optional: $1.99/wk, $4.99/mo, or $39.99/yr (about $3.33/mo), whichever you pick. Your first 3 days are free on any of them, once per account. After the free days we charge your card automatically at the price of the plan you picked unless you cancel, and you can cancel anytime.",
+      a: "OakTend itself stays free for your first home. OakTend Plus is optional: $1.99/wk, $4.99/mo, or $39.99/yr (about $3.33/mo), whichever you pick. Your first 3 days are free on any of them, once per account. After the free days we charge your card automatically at the price of the plan you picked unless you cancel, and you can cancel anytime.",
       node: (
         <>
-          Hearth itself stays free for your first home. Hearth Plus is
+          OakTend itself stays free for your first home. OakTend Plus is
           optional: $1.99/wk, $4.99/mo, or $39.99/yr (about $3.33/mo),
           whichever you pick. Your first 3 days are free on any of them, once
           per account. After the free days we charge your card automatically at
@@ -246,7 +247,7 @@ export default async function Home(props: {
     },
     {
       q: "What happens if I cancel or delete my account?",
-      a: "Canceling Hearth Plus just stops the subscription: you keep your account and home data, and lose the Plus tools. Deleting your account is separate and permanent: it removes your data from Hearth. One thing to know: if you already shared details with a pro through a job or message, they may keep their own copy in their own business records.",
+      a: "Canceling OakTend Plus just stops the subscription: you keep your account and home data, and lose the Plus tools. Deleting your account is separate and permanent: it removes your data from OakTend. One thing to know: if you already shared details with a pro through a job or message, they may keep their own copy in their own business records.",
     },
   ];
 
@@ -268,7 +269,7 @@ export default async function Home(props: {
     },
     {
       n: "3",
-      text: "Once you've added a few details, Hearth works out what needs attention and what it should cost, automatically.",
+      text: "Once you've added a few details, OakTend works out what needs attention and what it should cost, automatically.",
     },
   ];
 
@@ -354,12 +355,12 @@ export default async function Home(props: {
   ];
 
   return (
-    <main className="pb-16">
+    <main id="main" className="pb-16">
       <StructuredData data={landingJsonLd} />
       {/* Warm band wraps header, hero, and the product preview: a single
-          flat fill, hearth-50 in light and stone-900 in dark (matching the
+          flat fill, oaktend-50 in light and stone-900 in dark (matching the
           body), no gradient. */}
-      <div className="bg-hearth-50 dark:bg-stone-900">
+      <div className="bg-oaktend-50 dark:bg-stone-900">
         <div className="mx-auto max-w-5xl px-6 pt-6">
           {/* PHONE ONLY (sm:hidden, see PhoneLanding.tsx). Below `sm` this
               block IS the landing page: wordmark, one line, a hero photo, two
@@ -374,7 +375,7 @@ export default async function Home(props: {
           {/* Slim header: wordmark left, theme switch + quiet pro door right */}
           <header className="flex items-center justify-between max-sm:hidden">
             <span className="inline-flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100">
-              <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth
+              <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> OakTend
             </span>
             <div className="flex items-center gap-2">
               <ThemeToggle />
@@ -395,7 +396,7 @@ export default async function Home(props: {
                     header two rows tall. Short label on mobile, unchanged
                     wording from sm up. */}
                 <span className="sm:hidden">For Pros</span>
-                <span className="hidden sm:inline">Hearth for Pros</span>
+                <span className="hidden sm:inline">OakTend for Pros</span>
               </Link>
               {/* Sign in, rightmost. Solid bark (the brand brown, same tone as
                   btn-primary) so the returning-user door reads as a real
@@ -420,7 +421,7 @@ export default async function Home(props: {
                 Know what your home needs before it costs you
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-stone-600 dark:text-stone-400">
-                Hearth checks on your home for you and warns you before things
+                OakTend checks on your home for you and warns you before things
                 break. When you need a pro, post the job once and the quotes
                 come to you.
               </p>
@@ -507,7 +508,7 @@ export default async function Home(props: {
 
       {/* Trust strip: three already-true signals in the green "all clear"
           pill, the same tone as the hero reassurance row. No invented
-          numbers - only what Hearth actually does today. */}
+          numbers - only what OakTend actually does today. */}
       <section className="mt-8 max-sm:hidden">
         <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
           What we check
@@ -556,7 +557,7 @@ export default async function Home(props: {
       {/* Value */}
       <section className="mt-16 max-sm:hidden sm:mt-24">
         <h2 className="text-center text-2xl font-semibold text-stone-900 dark:text-stone-100 [text-wrap:balance]">
-          What Hearth watches for you
+          What OakTend watches for you
         </h2>
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           {VALUE.map((v) => (
@@ -581,7 +582,7 @@ export default async function Home(props: {
           what you choose to share.
         </p>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-stone-300">
-          Hearth started close to home and now serves homeowners across{" "}
+          OakTend started close to home and now serves homeowners across{" "}
           {LAUNCH_AREA_LABEL}, California, from Seal Beach to San Clemente.
         </p>
         {/* Contact form works with no session and no owner-fillable fields,
@@ -669,7 +670,7 @@ export default async function Home(props: {
           href="/pros"
           className="mt-5 inline-block rounded-lg border border-stone-500 px-6 py-2.5 font-medium text-white hover:border-white hover:bg-white/10"
         >
-          Explore Hearth for Pros
+          Explore OakTend for Pros
         </Link>
       </section>
 
@@ -736,7 +737,7 @@ export default async function Home(props: {
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-              Hearth
+              OakTend
             </p>
             <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
               <li>
@@ -766,26 +767,22 @@ export default async function Home(props: {
               Fine print
             </p>
             <ul className="mt-2 space-y-1.5 text-sm text-stone-600 dark:text-stone-400">
-              <li>
-                <Link href="/privacy" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                  Privacy
-                </Link>
-              </li>
-              <li>
-                <Link href="/terms" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                  Terms
-                </Link>
-              </li>
-              <li>
-                <Link href="/ai-disclosure" className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
-                  How we use AI
-                </Link>
-              </li>
+              {/* Source of truth: LEGAL_LINKS in src/lib/legal.ts, so a new
+                  legal document only needs adding there, not in every footer
+                  that lists them. */}
+              {LEGAL_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="hover:text-bark-700 hover:underline dark:hover:text-stone-300">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
               {/* Was a mailto: to FOUNDER.email; a raw address in a
                   site-wide footer is exactly the kind of thing spam
                   scrapers find first. Always rendered now, unlike the old
                   conditional, since the contact form needs no owner-fillable
-                  field to work. */}
+                  field to work. Not in LEGAL_LINKS: it's a contact channel,
+                  not a legal document. */}
               <li>
                 <Link
                   href="/contact"
@@ -798,32 +795,31 @@ export default async function Home(props: {
           </div>
         </div>
         <p className="mt-8 inline-flex w-full items-center justify-center gap-2 pb-2 text-xs text-stone-500 dark:text-stone-400">
-          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> Hearth · Your home,
+          <Logo className="h-6 w-6 text-bark-700 dark:text-stone-400" /> OakTend · Your home,
           looked after
         </p>
       </footer>
 
-      {/* PHONE ONLY footer. Two links, not four: "I'm a contractor" (now a
-          full-width door button) and "Emergency help" already sit in
-          PhoneLanding a few hundred pixels up this same short screen, and
-          repeating them down here would read as a mistake rather than a
-          footer. Terms has no other phone door, so it gets one. */}
-      <footer className="mt-16 flex items-center justify-center gap-5 text-sm text-stone-500 sm:hidden dark:text-stone-400">
+      {/* PHONE ONLY footer. "I'm a contractor" (now a full-width door button)
+          and "Emergency help" already sit in PhoneLanding a few hundred
+          pixels up this same short screen, and repeating them down here
+          would read as a mistake rather than a footer, so only the legal
+          links (from LEGAL_LINKS, same source as the desktop footer above)
+          get a phone door. flex-wrap because that list is now longer than
+          two items. */}
+      <footer className="mt-16 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm text-stone-500 sm:hidden dark:text-stone-400">
         {/* min-h-11 with the text left small: py-1 alone gave these a 24px
             target. This whole footer is sm:hidden, so nothing here reaches
             desktop. */}
-        <Link
-          href="/privacy"
-          className="inline-flex min-h-11 items-center py-1 hover:text-bark-700 dark:hover:text-stone-300"
-        >
-          Privacy
-        </Link>
-        <Link
-          href="/terms"
-          className="inline-flex min-h-11 items-center py-1 hover:text-bark-700 dark:hover:text-stone-300"
-        >
-          Terms
-        </Link>
+        {LEGAL_LINKS.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="inline-flex min-h-11 items-center py-1 hover:text-bark-700 dark:hover:text-stone-300"
+          >
+            {link.label}
+          </Link>
+        ))}
       </footer>
       </div>
     </main>

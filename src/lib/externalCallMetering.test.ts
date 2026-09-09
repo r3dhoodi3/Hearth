@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 
-// Two outbound third-party calls that a signed-in account could make Hearth
+// Two outbound third-party calls that a signed-in account could make OakTend
 // repeat without limit: the lazy ownership re-check on a job post (RentCast,
 // billed per call) and the address autocomplete (Photon, a free community
 // service that can only defend itself by blocking our egress IPs).
@@ -121,7 +121,7 @@ describe("address-suggest cannot be turned into a flood at Photon", () => {
 
   it("declares an owner-wide bucket on top of the per-user one", () => {
     // The per-user limit bounds one account. Photon's only defence against N
-    // accounts is blocking the source, and the source is Hearth's shared
+    // accounts is blocking the source, and the source is OakTend's shared
     // Vercel egress IPs - so the punishment lands on the whole deployment.
     expect(route).toContain('SUGGEST_GLOBAL_BUCKET = "suggest-global-min"');
     expect(route).toContain("p_window_seconds: 60");

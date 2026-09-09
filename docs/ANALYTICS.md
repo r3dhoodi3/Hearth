@@ -1,8 +1,8 @@
 # Analytics
 
-Hearth's analytics is first-party only: no PostHog, Plausible, Vercel
+OakTend's analytics is first-party only: no PostHog, Plausible, Vercel
 Analytics, or any other third-party vendor. Every event is a row in
-`public.app_events` (migration 0091), written either by the client sink at
+`public.app_events` (migration 0093), written either by the client sink at
 `src/app/api/track/route.ts` (fed by `track()` in `src/lib/analytics.ts`) or
 directly by server code through `trackServerEvent()` in
 `src/lib/trackServer.ts`. This choice is not a preference, it is a
@@ -34,7 +34,7 @@ exists to be queried directly against the database.
 
 Every `props` payload is ids and enums only. Never free text, never an
 email, phone number, or address, and never a homeowner's actual question to
-Ask Hearth. A number (a count, a plan name, a reason code) is fine; a string
+Ask OakTend. A number (a count, a plan name, a reason code) is fine; a string
 someone typed into a form is not. `props` is capped at 1024 serialized
 characters by the client route and is logged with a redactor
 (`src/lib/logSafe.ts`) if the table is ever missing, but the payload rule
@@ -96,6 +96,35 @@ same as `src/app/(app)/contractors/actions.ts`.
 `job_won`, `pro_apply`, `direct_request` (server, pro/homeowner-crossing
 events already wired).
 
+### Campaign links
+
+`src/app/go/[code]/route.ts`, the first-party redirect behind every
+`oaktend.com/go/<code>` bio link and Story sticker in the 2026-09 social
+launch (`OakTend-marketing/growth/PRODUCTION-BRIEF.md` item 1). Codes are a
+fixed allowlist in `src/lib/campaigns.ts` - `trackServerEvent` does not
+sanitize props, so a code is only ever logged as itself when it is on that
+list; anything else is logged as the fixed literal `unknown_code`, never the
+caller-supplied string.
+
+| Event | Fires | Side |
+|---|---|---|
+| `campaign_click` | `src/app/go/[code]/route.ts`, on every GET, before the redirect. `props: { code, channel, label, ua_family, referer_host }` - `code` is either a real allowlisted value or the literal `unknown_code`; `channel` is `tiktok`, `instagram`, or `other`; `ua_family` is `mobile` or `desktop`, never the raw User-Agent; `referer_host` is a hostname only, or `null` | Server |
+| `campaign_signup` | `src/app/(auth)/recordTermsAcceptance.ts`, at the same point it records `terms`/`pro_terms` acceptance for a brand-new homeowner or contractor account - only when the `oaktend_campaign` cookie the `/go/` route set is present and still resolves to a real code. `props: { code }` | Server |
+
+**Clicks and signups per code, last 7 days**
+
+```sql
+select
+  props ->> 'code' as code,
+  count(*) filter (where event = 'campaign_click')  as clicks,
+  count(*) filter (where event = 'campaign_signup') as signups
+from public.app_events
+where event in ('campaign_click', 'campaign_signup')
+  and created_at >= now() - interval '7 days'
+group by 1
+order by clicks desc nulls last;
+```
+
 ### Performance
 
 | Event | Fires | Side |
@@ -153,7 +182,7 @@ order by saw_paywall desc nulls last;
 counts land in the `null` reason row - useful as an overall total, not a
 per-reason breakdown for those two columns.)
 
-**3. Ask Hearth usage per day**
+**3. Ask OakTend usage per day**
 
 ```sql
 select
@@ -198,16 +227,26 @@ order by started desc nulls last;
 
 ## Privacy
 
-Hearth does not sell or share personal data with any third party, and
-nothing in this pipeline changes that. `app_events` rows live in Hearth's own
+OakTend does not sell or share personal data with any third party, and
+nothing in this pipeline changes that. `app_events` rows live in OakTend's own
 database, are linked to an account only when one is signed in, and are never
 sold, licensed, or shared with any third-party ad or analytics company - the
 same commitment already stated in `src/app/privacy/page.tsx`. Under
 CCPA/CPRA, "sale" and "share" are defined broadly enough to cover far more
-than a literal cash transaction, and Hearth's core data (home address,
+than a literal cash transaction, and OakTend's core data (home address,
 financial details) counts as sensitive personal information, so this is a
 hard line, not a preference that could shift later. What remains legitimately
 available from this data is aggregate, de-identified statistics with no path
 back to an individual record - for example, "the median Orange County home
 spends $X/year on maintenance" - published or licensed as a statistic, never
 as rows tied to a person.
+
+`gpc_signal_seen` (`src/lib/gpc.ts`, via `trackServerEvent`): logged the first
+time a signed-in user's browser sends the Global Privacy Control header
+(`Sec-GPC: 1`) in a session, at most once per session. Signed-out visitors
+only get the session cookie, never a row: an anonymous client could drop the
+cookie and resend the header on every request, which would be an unbounded
+service-role insert (red-team finding, 2026-09-02). No props. Since OakTend
+does not sell or share data, honoring GPC changes no behavior - this event
+exists only as proof the signal was seen. Not yet wired into a request path;
+see the comment at the top of `src/lib/gpc.ts` for where it hooks in.

@@ -8,8 +8,8 @@ that only the account owner (Landen) can do.
 ## Why bother now
 
 App Store Review Guideline 4.8 ("Login Services") requires an equivalent Apple login option in
-any app that offers a third-party or social login such as Google. Hearth already offers Google.
-So the day a Hearth iOS app is submitted, a missing Apple option is an automatic rejection.
+any app that offers a third-party or social login such as Google. OakTend already offers Google.
+So the day an OakTend iOS app is submitted, a missing Apple option is an automatic rejection.
 
 Doing it on web first is the cheap version of that work: the Apple Developer account, the App ID,
 the Services ID, and the signing key are the same artifacts an iOS submission needs later. Getting
@@ -38,7 +38,7 @@ pre-configuration state.
 - Your Supabase project ref (the subdomain in your Supabase URL, e.g. the `abcdefghij` in
   `https://abcdefghij.supabase.co`). It is in `.env.local` as part of
   `NEXT_PUBLIC_SUPABASE_URL`, and in the Supabase dashboard under Project Settings > General.
-- Your production domain (the one Hearth is actually served from). Apple will not accept a
+- Your production domain (the one OakTend is actually served from). Apple will not accept a
   localhost or a raw Vercel preview URL as a registered web domain, so do this against the real
   domain once it is live.
 
@@ -47,7 +47,7 @@ pre-configuration state.
 In the Apple Developer portal: Certificates, Identifiers & Profiles > Identifiers > the blue "+".
 
 1. Choose "App IDs", then "App".
-2. Description: `Hearth`. Bundle ID: explicit, reverse-DNS, something like
+2. Description: `OakTend`. Bundle ID: explicit, reverse-DNS, something like
    `com.yourdomain.hearth`. Write this down - the Services ID in step 2 must be different from
    it, and a future iOS app must use exactly this one.
 3. In the Capabilities list, tick "Sign in with Apple". Leave it on the default "Enable as a
@@ -59,7 +59,7 @@ In the Apple Developer portal: Certificates, Identifiers & Profiles > Identifier
 Same Identifiers screen, "+" again.
 
 1. Choose "Services IDs".
-2. Description: `Hearth Web`. Identifier: something like `com.yourdomain.hearth.web`. It must NOT
+2. Description: `OakTend Web`. Identifier: something like `com.yourdomain.hearth.web`. It must NOT
    equal the App ID from step 1.
 3. Register, then click back into the new Services ID to configure it.
 4. Tick "Sign in with Apple", then click "Configure".
@@ -72,9 +72,9 @@ Same Identifiers screen, "+" again.
    https://<project-ref>.supabase.co/auth/v1/callback
    ```
 
-   Substitute your real project ref. This is the Supabase URL, NOT a Hearth URL and NOT
+   Substitute your real project ref. This is the Supabase URL, NOT an OakTend URL and NOT
    `/auth/callback` on your own domain. Apple redirects to Supabase, Supabase finishes the
-   exchange and then sends the browser to Hearth's own `/auth/callback?code=...`, which is
+   exchange and then sends the browser to OakTend's own `/auth/callback?code=...`, which is
    where `src/app/auth/callback/route.ts` takes over. Getting this wrong is the single most
    common cause of an `invalid_client` error.
 8. Save, then Continue/Save on the outer screen too. Apple sometimes silently drops the domain
@@ -87,7 +87,7 @@ Same Identifiers screen, "+" again.
 
 Certificates, Identifiers & Profiles > Keys > "+".
 
-1. Key Name: `Hearth Sign in with Apple`.
+1. Key Name: `OakTend Sign in with Apple`.
 2. Tick "Sign in with Apple", click Configure, choose the App ID from step 1 as the primary,
    Save.
 3. Continue, Register, then Download. You get an `AuthKey_XXXXXXXXXX.p8` file.
@@ -125,7 +125,7 @@ rotate the secret for you. The form asks for two things:
   contents and it produces the JWT locally ("no keys leave your browser"; the tool is known not to
   work in Safari - use Chrome). Paste the resulting JWT into this field.
 
-**The six-month trap:** when that JWT expires, every Apple sign-in on Hearth starts failing
+**The six-month trap:** when that JWT expires, every Apple sign-in on OakTend starts failing
 SILENTLY - Supabase shows no warning and sends no email. Set a recurring calendar reminder for
 five months out, titled "Regenerate Apple client secret JWT and repaste into Supabase", and keep
 the .p8 plus these four values in your password manager so regeneration takes two minutes. If the
@@ -148,7 +148,7 @@ the "Continue with Apple" button is hidden everywhere until that value is exactl
    `invalid_client`, the Services ID or the Return URL is wrong (step 2). If you get "provider is
    not enabled", step 4 did not save. If you get an expired-secret error months later, that is
    Mode B biting - regenerate the JWT.
-3. Complete the sign-in. You should land back on Hearth, signed in, at `/welcome/role` (a brand
+3. Complete the sign-in. You should land back on OakTend, signed in, at `/welcome/role` (a brand
    new account with no role picks one there) or at your `?next=` destination.
 4. Repeat once from `/homeowner-signup` and once from `/contractor-signup` with a second Apple ID,
    and confirm each lands in the right onboarding. Those pages point the button at
@@ -160,29 +160,29 @@ the "Continue with Apple" button is hidden everywhere until that value is exactl
    that email to those users actually arrives.
 
 Local development note: Apple refuses localhost as a Services ID domain, but that mostly does not
-matter here - the Return URL registered with Apple is SUPABASE's callback, not Hearth's. Apple
+matter here - the Return URL registered with Apple is SUPABASE's callback, not OakTend's. Apple
 redirects to Supabase, and Supabase then redirects to whatever `redirectTo` the button passed. So
 Apple sign-in works from `npm run dev` as long as `http://localhost:3000/**` is in the Supabase
 Redirect URLs allow list (Authentication > URL Configuration).
 
-## Step 6 - Register Hearth's email senders for private relay (before email goes live)
+## Step 6 - Register OakTend's email senders for private relay (before email goes live)
 
 Apple's private relay (`@privaterelay.appleid.com`) only forwards mail from senders the app's
 developer account has registered. Anything else bounces with `550 5.1.1 unauthorized sender`.
 In the Apple Developer portal, under Services > "Sign in with Apple for Email Communication",
-register Hearth's sending domain AND every from-address (the Resend domain/addresses once
+register OakTend's sending domain AND every from-address (the Resend domain/addresses once
 GO-LIVE-WIRING happens), and make sure SPF/DKIM pass for them. Do this as part of turning Resend
 on, or every "Hide My Email" user silently never gets reminders, receipts, or confirmations.
 
 ## One behavior worth knowing
 
-Apple returns a user's name and email **only on the very first authorization** of Hearth by that
+Apple returns a user's name and email **only on the very first authorization** of OakTend by that
 Apple ID. Every subsequent sign-in returns the identity token alone. So if you delete a test user
 from Supabase and sign in again with the same Apple ID, the account comes back with no name
-attached, and there is no way to make Apple resend it except by revoking Hearth under
+attached, and there is no way to make Apple resend it except by revoking OakTend under
 Settings > Apple ID > Sign in with Apple on the device, then signing in again.
 
-This is not a bug in Hearth and needs no code handling: the callback's `full_name` backfill simply
+This is not a bug in OakTend and needs no code handling: the callback's `full_name` backfill simply
 has nothing to copy for those users, exactly like any other account that arrives without a name,
 and onboarding asks for the name directly anyway (it needs it for the county ownership-of-record
 match). Just do not be confused by it while testing.

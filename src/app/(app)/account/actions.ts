@@ -7,11 +7,19 @@ import { createClient as createJsClient } from "@supabase/supabase-js";
 import { passwordStatusFor } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { setFlash } from "@/lib/flash";
-import { friendlyAuthError } from "@/lib/friendlyAuthError";
+import {
+  CAPTCHA_FAILED_MESSAGE,
+  friendlyAuthError,
+  isCaptchaError,
+} from "@/lib/friendlyAuthError";
 import { stripe } from "@/lib/stripe";
 import { eraseUserData, type EraseSummary } from "@/lib/privacy";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
+import { sendNotification } from "@/lib/notify";
+import { smsOptinConfirmationAllowed } from "@/lib/smsOptinLimit";
+import { LEGAL } from "@/lib/legal";
+import { callAppleRevoke } from "@/lib/appleRevoke";
 
 // Password re-verification is a brute-force surface: updatePasswordAction,
 // updateEmailAction, and deleteAccountAction each take a current password and
@@ -89,7 +97,7 @@ export async function saveAccountAction(formData: FormData) {
   // CONSENT IS PER NUMBER, not per account. Somebody consented to texts at the
   // number they gave; typing a different one puts a phone that has never
   // agreed to anything on the account, and carrying the old flag over would
-  // have Hearth texting a stranger who may now hold that number. TCPA damages
+  // have OakTend texting a stranger who may now hold that number. TCPA damages
   // are per text, so the flag drops with the number and has to be re-granted.
   //
   // Only when a stored row was actually read (`current`): if the select
@@ -149,7 +157,8 @@ export async function saveAccountAction(formData: FormData) {
   // missing-column fingerprint, in which case there is nothing to store and
   // the name/phone save above still stands. Consent defaults to off in that
   // state, which is the safe direction.
-  const { error: consentError } = await createAdminClient()
+  const admin = createAdminClient();
+  const { error: consentError } = await admin
     .from("users")
     .update(consentFields)
     .eq("id", user.id);
@@ -160,6 +169,49 @@ export async function saveAccountAction(formData: FormData) {
       "error"
     );
     redirect("/account");
+  }
+
+  // SMS OPT-IN CONFIRMATION (09-sms-terms.md section 7, CTIA convention).
+  // Sent exactly once, the moment consent actually turns ON for a real
+  // number: gated on consentFields.sms_consent (the value that was just
+  // WRITTEN, which the phoneChanged override above may have forced back to
+  // false even though the submitted checkbox was ticked) and on
+  // !priorConsent, so a re-save that leaves consent already true never
+  // repeats it. Routed through sendNotification, the one door every
+  // notification goes through, so quiet hours, the outbound kill switch and
+  // the per-minute send brake in src/lib/notify.ts all still apply.
+  // "sms_optin_confirmation" is on the transactional allowlist
+  // (src/lib/notifyGating.ts) so it is never capped like a campaign. Best
+  // effort: a send failure here must never undo or block the account save
+  // that already succeeded above.
+  //
+  // RATE LIMITED, on top of the false -> true gate above: phone is
+  // unverified (see src/lib/smsOptinLimit.ts), so toggling consent off and
+  // back on repeatedly must not blast this text at whatever number is
+  // currently entered. See smsOptinConfirmationAllowed for the shared limit
+  // both this action and the pro-side twin enforce identically.
+  if (
+    !consentError &&
+    consentFields.sms_consent === true &&
+    !priorConsent &&
+    phone &&
+    (await smsOptinConfirmationAllowed(admin, user.id, phone))
+  ) {
+    try {
+      await sendNotification(supabase, {
+        userId: user.id,
+        kind: "sms_optin_confirmation",
+        // sendSms (src/lib/notify.ts) always appends its own "Reply STOP to
+        // opt out." after title+body, so that phrase is left out of this
+        // copy on purpose - repeating it here would say it twice.
+        title: `You're opted in to ${LEGAL.brand} text messages for account and job-related alerts.`,
+        body: "Msg&data rates may apply. Message frequency varies. Reply HELP for help.",
+        phone,
+        smsConsent: true,
+      });
+    } catch (err) {
+      console.error("saveAccountAction: opt-in confirmation send failed", err);
+    }
   }
 
   // Mirror the name into auth metadata too. This is what the toolbar reads, so
@@ -242,11 +294,6 @@ export async function updateEmailAction(formData: FormData) {
   // deleteAccountAction below.
   const { hasPassword } = await passwordStatusFor(user);
   if (hasPassword && user.email) {
-    if (await passwordAttemptsExhausted(user.id)) {
-      setFlash(PW_VERIFY_MESSAGE, "error");
-      redirect("/account/security");
-    }
-
     const current = (formData.get("current_password") as string) || "";
     // Verify the current password without disturbing the active session.
     const verifier = createJsClient(
@@ -261,6 +308,20 @@ export async function updateEmailAction(formData: FormData) {
         captchaToken: (formData.get("captcha_token") as string) || undefined,
       },
     });
+    // The CAPTCHA rejection is answered BEFORE the attempt is recorded, and it
+    // is the reason the sign-in call now runs before the budget check: a stale
+    // Turnstile token is not a password guess, and counting it burned the real
+    // owner's five attempts on a widget problem they could not see. Nothing is
+    // leaked by the new order, because an exhausted budget still stops the
+    // action below with the same message no matter how the sign-in went.
+    if (verifyError && isCaptchaError(verifyError)) {
+      setFlash(CAPTCHA_FAILED_MESSAGE, "error");
+      redirect("/account/security");
+    }
+    if (await passwordAttemptsExhausted(user.id)) {
+      setFlash(PW_VERIFY_MESSAGE, "error");
+      redirect("/account/security");
+    }
     if (verifyError) {
       setFlash("Current password is incorrect.", "error");
       redirect("/account/security");
@@ -305,11 +366,6 @@ export async function updatePasswordAction(formData: FormData) {
     redirect("/account/security");
   }
 
-  if (await passwordAttemptsExhausted(user.id)) {
-    setFlash(PW_VERIFY_MESSAGE, "error");
-    redirect("/account/security");
-  }
-
   // Verify the current password without disturbing the active session.
   const verifier = createJsClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -323,6 +379,17 @@ export async function updatePasswordAction(formData: FormData) {
       captchaToken: (formData.get("captcha_token") as string) || undefined,
     },
   });
+  // A CAPTCHA rejection is not a password guess, so it is answered before the
+  // attempt is recorded and costs nothing from the budget. See the same shape
+  // in updateEmailAction above.
+  if (verifyError && isCaptchaError(verifyError)) {
+    setFlash(CAPTCHA_FAILED_MESSAGE, "error");
+    redirect("/account/security");
+  }
+  if (await passwordAttemptsExhausted(user.id)) {
+    setFlash(PW_VERIFY_MESSAGE, "error");
+    redirect("/account/security");
+  }
   if (verifyError) {
     setFlash("Current password is incorrect.", "error");
     redirect("/account/security");
@@ -406,15 +473,19 @@ export async function deleteAccountAction(formData: FormData) {
   const { hasPassword } = await passwordStatusFor(user);
 
   // Both branches below, not just the password one: a wrong typed email is
-  // cheap to check, but nothing here should be retryable without limit.
-  if (await passwordAttemptsExhausted(user.id)) {
-    setFlash(PW_VERIFY_MESSAGE, "error");
-    redirect("/account/security");
-  }
-
+  // cheap to check, but nothing here should be retryable without limit. The
+  // attempt is recorded inside each branch rather than once up here, so a
+  // CAPTCHA rejection in the password branch can be answered without spending
+  // one; every other outcome still costs an attempt exactly as before.
   if (hasPassword) {
     const current = (formData.get("current_password") as string) || "";
     if (!current) {
+      // An empty box is still an attempt, so it is recorded: otherwise a loop
+      // of blank posts would sit entirely outside the budget.
+      if (await passwordAttemptsExhausted(user.id)) {
+        setFlash(PW_VERIFY_MESSAGE, "error");
+        redirect("/account/security");
+      }
       setFlash("Current password is incorrect.", "error");
       redirect("/account/security");
     }
@@ -432,6 +503,17 @@ export async function deleteAccountAction(formData: FormData) {
         captchaToken: (formData.get("captcha_token") as string) || undefined,
       },
     });
+    // A CAPTCHA rejection first, and before the attempt is recorded: it is not
+    // a password guess, and on the delete path especially, burning the budget
+    // on a widget failure blocks a right-to-delete for fifteen minutes.
+    if (verifyError && isCaptchaError(verifyError)) {
+      setFlash(CAPTCHA_FAILED_MESSAGE, "error");
+      redirect("/account/security");
+    }
+    if (await passwordAttemptsExhausted(user.id)) {
+      setFlash(PW_VERIFY_MESSAGE, "error");
+      redirect("/account/security");
+    }
     if (verifyError) {
       // Distinguish a genuinely wrong password from a throttle/network blip:
       // only "invalid login credentials" means the password was wrong. A
@@ -451,7 +533,12 @@ export async function deleteAccountAction(formData: FormData) {
     // that nobody destroys an account by clicking one button, and that whoever
     // types it has read which account they're about to delete. Compared here
     // as well as in the browser, because a server action accepts any FormData
-    // regardless of what the page rendered.
+    // regardless of what the page rendered. Limited too: no CAPTCHA is
+    // involved here, so the attempt is recorded up front as it always was.
+    if (await passwordAttemptsExhausted(user.id)) {
+      setFlash(PW_VERIFY_MESSAGE, "error");
+      redirect("/account/security");
+    }
     const typed = ((formData.get("confirm_email") as string) || "")
       .trim()
       .toLowerCase();
@@ -485,6 +572,29 @@ export async function deleteAccountAction(formData: FormData) {
         "error"
       );
       redirect("/account");
+    }
+  }
+
+  // APPLE 5.1.1(v): revoke the Sign in with Apple authorization for anyone
+  // who used it, before the auth user (and their identities) are gone. See
+  // src/lib/appleRevoke.ts for the full reasoning, including the known gap
+  // (no persisted Apple refresh token to revoke with today) - best effort,
+  // logged, never blocks deletion. user.identities is read from the SAME
+  // getUser() call already verified above, not a form field.
+  if (user.identities?.some((i) => i.provider === "apple")) {
+    try {
+      const result = await callAppleRevoke(null);
+      if (!result.attempted) {
+        console.warn(
+          `deleteAccountAction: Apple token revoke skipped for ${user.id}: ${result.reason}`
+        );
+      } else if (!result.ok) {
+        console.error(
+          `deleteAccountAction: Apple token revoke failed for ${user.id}: ${result.reason}`
+        );
+      }
+    } catch (err) {
+      console.error("deleteAccountAction: Apple revoke threw for", user.id, err);
     }
   }
 

@@ -1,4 +1,4 @@
-// The cities Hearth serves at launch, and the pure mapping from the
+// The cities OakTend serves at launch, and the pure mapping from the
 // checkboxes to what a contractors row actually stores.
 //
 // Neither pro signup nor the profile editor asks for a free-text service area

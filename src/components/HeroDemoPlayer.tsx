@@ -30,7 +30,7 @@ const TOTAL_BEATS = 80;
 const TOTAL_MS = TOTAL_BEATS * BEAT_MS;
 
 // Homeowner-only story (the pro side gets its own video later): someone
-// types the Hearth URL, sees the dashboard, adds their address, posts a job,
+// types the OakTend URL, sees the dashboard, adds their address, posts a job,
 // a notification pops, and the pro's quote gets accepted in Messages.
 // 78 beats = 29.25 seconds; the BOOKED payoff lands on beat 63 (~81%).
 type SceneDef = { id: string; beats: number; step: string | null };
@@ -112,7 +112,7 @@ function AppNav({
     // frame: nothing on the right edge may clip.
     <header className="flex items-center gap-2 border-b border-stone-200/70 bg-white/80 px-4 py-3">
       <span className="flex shrink-0 items-center gap-1.5 text-lg font-semibold text-stone-900" {...(logoX ? { "data-x": "navLogo" } : {})}>
-        <Logo className="h-6 w-6 text-hearth-700" /> Hearth
+        <Logo className="h-6 w-6 text-oaktend-700" /> OakTend
       </span>
       <span className="flex shrink-0 items-center gap-1 text-sm text-stone-600">
         123 Maple St <span className="text-[10px] text-stone-400">▾</span>
@@ -123,7 +123,7 @@ function AppNav({
             key={t}
             {...(msgTabX && t === "Messages" ? { "data-x": "msgTab" } : {})}
             className={`flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium ${
-              i === active ? "bg-hearth-100 text-hearth-800" : "text-stone-600"
+              i === active ? "bg-oaktend-100 text-oaktend-800" : "text-stone-600"
             }`}
           >
             {t}
@@ -150,7 +150,7 @@ function AppNav({
         <path d="M13.7 21a2 2 0 0 1-3.4 0" />
       </svg>
       <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-medium text-stone-700">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-hearth-100 text-sm font-semibold text-hearth-700">J</span>
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-oaktend-100 text-sm font-semibold text-oaktend-700">J</span>
         John Doe <span className="text-[10px] text-stone-400">▾</span>
       </span>
     </header>
@@ -940,13 +940,13 @@ export default function HeroDemoPlayer() {
     // (a real human-sounding voice). speechSynthesis above is only the
     // fallback if a file fails to load or play.
     const VO_TEXT = {
-      hook: "This is Hearth. Your home, looked after.",
+      hook: "This is OakTend. Your home, looked after.",
       address: "Just type your address to get started.",
-      dash: "Hearth gives your home a health score, and catches problems before they cost you.",
+      dash: "OakTend gives your home a health score, and catches problems before they cost you.",
       postjob: "Something break? Post a job in seconds, with the price up front.",
       chat: "A real quote from a local pro, straight to your messages.",
       booked: "Booked. That easy.",
-      end: "Hearth. Free for homeowners.",
+      end: "OakTend. Free for homeowners.",
     } as const;
     type VoKey = keyof typeof VO_TEXT;
     const voAudios: Partial<Record<VoKey, HTMLAudioElement>> = {};
@@ -1423,14 +1423,17 @@ export default function HeroDemoPlayer() {
     // Rough per-line durations (bytes / 96kbps) for caption pacing before
     // the audio's real duration is known.
     // Byte-derived from the actual Ava MP3s (96kbps): bytes / 12000 = sec.
+    // hook, dash and end were re-recorded on 2026-09-04 for the OakTend
+    // rename (same voice and rate: msedge-tts en-US-AvaNeural, -8%), so
+    // their numbers below are the new measured frame-walk durations.
     const VO_EST_MS: Record<VoKey, number> = {
-      hook: 3360,
+      hook: 3384,
       address: 2450,
-      dash: 5160,
+      dash: 5112,
       postjob: 4850,
       chat: 4200,
       booked: 2380,
-      end: 2980,
+      end: 3096,
     };
 
     // Captions ARE the narration: the spoken line renders in short chunks
@@ -1592,9 +1595,9 @@ export default function HeroDemoPlayer() {
     }
 
     function enterHook() {
-      // Cold open: the centered Hearth logo card is on screen from the very
+      // Cold open: the centered OakTend logo card is on screen from the very
       // first frame (no fade-in, no URL typing), lingers a moment while
-      // "This is Hearth" begins, then fades away to reveal the website.
+      // "This is OakTend" begins, then fades away to reveal the website.
       showPage("dashPage");
       cameraSnapWide();
       const s = q("[data-x='score']");
@@ -2307,11 +2310,11 @@ export default function HeroDemoPlayer() {
       ref={boxRef}
       className={styles.box}
       role="group"
-      aria-label="Hearth product demo, about 30 seconds, with sound"
+      aria-label="OakTend product demo, about 30 seconds, with sound"
       aria-describedby="hero-demo-desc"
     >
       <p id="hero-demo-desc" className="sr-only">
-        A fast animated walkthrough of Hearth. A homeowner types their address, sees their home&apos;s
+        A fast animated walkthrough of OakTend. A homeowner types their address, sees their home&apos;s
         health score and an alert the app caught, checks off a maintenance reminder, and posts a
         plumbing job with the price shown up front. Then a local pro browses open jobs, applies,
         and wins the job through an in-app chat thread. On-screen captions describe each step.
@@ -2319,7 +2322,7 @@ export default function HeroDemoPlayer() {
 
       <span className={styles.watermark}>
         <HouseMark />
-        Hearth
+        OakTend
       </span>
       <span className={styles.stepChip} data-x="stepChip"></span>
       <Link
@@ -2344,7 +2347,7 @@ export default function HeroDemoPlayer() {
               {/* ---------- Onboarding page (real site classes) ---------- */}
               <div className={styles.page} data-page="onboardPage">
                 <header className="flex items-center gap-2 border-b border-stone-200/70 bg-white/80 px-6 py-3 text-lg font-semibold text-stone-900">
-                  <Logo className="h-6 w-6 text-hearth-700" /> Hearth
+                  <Logo className="h-6 w-6 text-oaktend-700" /> OakTend
                 </header>
                 <div className="mx-auto max-w-md px-6 pt-12">
                   <h1 className="text-2xl font-semibold text-stone-900">Find your home</h1>
@@ -2389,7 +2392,7 @@ export default function HeroDemoPlayer() {
                     <div className="card">
                       <p className="stat-label">Open jobs</p>
                       <p className="stat-number mt-1 text-3xl">3</p>
-                      <p className="mt-2 text-sm text-hearth-700">View job postings →</p>
+                      <p className="mt-2 text-sm text-oaktend-700">View job postings →</p>
                     </div>
                     <div className="card">
                       <p className="stat-label">Home value</p>
@@ -2407,16 +2410,16 @@ export default function HeroDemoPlayer() {
                   <h2 className="mt-5 text-lg font-semibold text-stone-900">This month</h2>
                   <div className="card mt-2" data-x="briefing">
                     <p className="stat-label">
-                      Hearth&apos;s briefing
+                      OakTend&apos;s briefing
                     </p>
                     <div className="mt-2 space-y-1.5 text-sm text-stone-700">
                       <p>
                         • Your plumbing is near the end of its life. It is worth planning ahead.{" "}
-                        <span className="text-hearth-700">Plan it →</span>
+                        <span className="text-oaktend-700">Plan it →</span>
                       </p>
                       <p>
                         • Your roof is near the end of its life. It is worth planning ahead.{" "}
-                        <span className="text-hearth-700">Plan it →</span>
+                        <span className="text-oaktend-700">Plan it →</span>
                       </p>
                     </div>
                     <div className="mt-3 flex items-center justify-between text-sm text-stone-600">
@@ -2466,7 +2469,7 @@ export default function HeroDemoPlayer() {
                   {/* Notification card: pops with the demo's one ding, right
                       before the homeowner opens Messages. */}
                   <div className={cx("card absolute right-6 top-4 flex items-center gap-3", styles.notif)} data-x="notif">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-hearth-100 text-sm font-semibold text-hearth-700">T</span>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-oaktend-100 text-sm font-semibold text-oaktend-700">T</span>
                     <span>
                       <span className="block text-sm font-semibold text-stone-900">Tony R. sent you a quote</span>
                       <span className="block text-xs text-stone-500">Leaking kitchen faucet · replied in 18 min</span>
@@ -2483,13 +2486,13 @@ export default function HeroDemoPlayer() {
                   <h1 className="text-xl font-semibold text-stone-900">Messages</h1>
                   <div className="mt-3 grid grid-cols-[220px_1fr] gap-4">
                     <div className="card p-0">
-                      <div className="border-l-2 border-hearth-500 bg-hearth-50 px-4 py-3">
+                      <div className="border-l-2 border-oaktend-500 bg-oaktend-50 px-4 py-3">
                         <p className="text-sm font-semibold text-stone-900">Tony R. · Plumbing</p>
                         <p className="text-xs text-stone-500">Sent you a quote</p>
                       </div>
                       <div className="px-4 py-3">
                         <p className="text-sm text-stone-700">
-                          Ask Hearth
+                          Ask OakTend
                         </p>
                         <p className="text-xs text-stone-500">Your home assistant</p>
                       </div>
@@ -2510,7 +2513,7 @@ export default function HeroDemoPlayer() {
                           <span className="btn-primary" data-x="sendBtn">Send</span>
                         </div>
                         <p className="text-xs text-stone-500">
-                          Hearth&apos;s cost figures are ballpark estimates. Confirm with a local pro before you commit.
+                          OakTend&apos;s cost figures are ballpark estimates. Confirm with a local pro before you commit.
                         </p>
                       </div>
                     </div>
@@ -2521,8 +2524,8 @@ export default function HeroDemoPlayer() {
               {/* ---------- End card (real site classes) ---------- */}
               <div className={styles.page} data-page="endPage">
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-                  <Logo className="h-12 w-12 text-hearth-700" />
-                  <p className="text-2xl font-bold tracking-tight text-stone-900">Hearth</p>
+                  <Logo className="h-12 w-12 text-oaktend-700" />
+                  <p className="text-2xl font-bold tracking-tight text-stone-900">OakTend</p>
                   <p className="text-sm text-stone-600">Your home, looked after.</p>
                   <p className="mt-1 text-sm text-stone-500">
                     Home health score{" "}
@@ -2555,8 +2558,8 @@ export default function HeroDemoPlayer() {
             {/* Centered logo card: fades in as the site "loads" after the
                 URL is typed, fades out to reveal the dashboard. */}
             <div className={styles.introCard} data-x="intro" aria-hidden="true">
-              <Logo className="h-12 w-12 text-hearth-700" />
-              <span className={styles.introWord}>Hearth</span>
+              <Logo className="h-12 w-12 text-oaktend-700" />
+              <span className={styles.introWord}>OakTend</span>
               <span className={styles.introTag}>Your home, looked after.</span>
             </div>
             <span className={styles.flash} data-x="flash" aria-hidden="true"></span>
@@ -2646,13 +2649,13 @@ export default function HeroDemoPlayer() {
       </div>
 
       {!started && (
-        <button type="button" className={styles.posterOverlay} onClick={handlePlay} aria-label="Play the Hearth demo, about 30 seconds, with sound">
+        <button type="button" className={styles.posterOverlay} onClick={handlePlay} aria-label="Play the OakTend demo, about 30 seconds, with sound">
           <span className={styles.posterBg} aria-hidden="true"></span>
           <span className={styles.playCircle} aria-hidden="true">
             <svg viewBox="0 0 20 20" fill="currentColor"><path d="M6 4.5v11l9-5.5-9-5.5z" /></svg>
           </span>
           <span className={styles.posterLabel}>From leak to booked pro</span>
-          <span className={styles.posterSub}>Watch someone use Hearth, 30 seconds</span>
+          <span className={styles.posterSub}>Watch someone use OakTend, 30 seconds</span>
           <span className={styles.durationBadge}>0:30</span>
         </button>
       )}

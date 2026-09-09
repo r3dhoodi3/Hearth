@@ -120,7 +120,7 @@ export function FilePreviewThumb({
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  // SVG is excluded from the image branch on purpose: Hearth's upload spots
+  // SVG is excluded from the image branch on purpose: OakTend's upload spots
   // that accept images never accept image/svg+xml (it can carry a <script>),
   // so a picked SVG renders as a plain file card, matching what would
   // actually happen to it server-side.

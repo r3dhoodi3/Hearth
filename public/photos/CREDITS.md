@@ -1,6 +1,6 @@
 # Photo credits and license record
 
-All photos below are downloaded for use in Hearth (landing page, category, guide, and trust
+All photos below are downloaded for use in OakTend (landing page, category, guide, and trust
 sections). Every image is from a source whose license permits free commercial use with no
 attribution requirement. We keep this record for legal diligence even though attribution is not
 required.
@@ -146,5 +146,5 @@ original.
 - HVAC leak-detector shot (Pexels photo 5463580): passed over because a "Elitech" tool brand name
   was legible on the device. Chose the cleaner gauge photo instead.
 - Modern gray house with pergola/yard (Pexels photo 7587880): passed over as too cool-toned and
-  architectural/corporate; the two warmer homes above read better for Hearth.
+  architectural/corporate; the two warmer homes above read better for OakTend.
 - Blue-hour back-deck home (Pexels photo 20081378): passed over as too dark and moody for the set.

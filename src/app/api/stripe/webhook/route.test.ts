@@ -511,7 +511,7 @@ describe("a deposit chargeback freezes the contractor's account", () => {
   });
 });
 
-// Hearth Plus sells three cadences, so the plan the webhook stores has to be
+// OakTend Plus sells three cadences, so the plan the webhook stores has to be
 // derived from all three Stripe intervals. Weekly is the newest, and it is the
 // one that carries the free trial, so a subscription that renews every week
 // must never be recorded as a monthly (or unknown) plan: /plus's cadence copy,
@@ -645,7 +645,7 @@ describe("invoice.payment_failed flags the membership and warns the member", () 
     expect(sent.userId).toBe("u_1");
     expect(sent.kind).toBe("payment_failed");
     expect(sent.title).toBe(
-      "Your Hearth Plus payment didn't go through, update your card"
+      "Your OakTend Plus payment didn't go through, update your card"
     );
     // /plus is where manageBillingAction (the Stripe Customer Portal session)
     // lives; there is no standalone portal route in this app.
@@ -687,7 +687,7 @@ describe("invoice.payment_failed flags the membership and warns the member", () 
     await run(failedInvoice());
 
     const sent = notify.mock.calls[0][1] as Record<string, any>;
-    expect(sent.title).toContain("Hearth Pro");
+    expect(sent.title).toContain("OakTend Pro");
     expect(sent.url.startsWith("/pro/plus?")).toBe(true);
   });
 
@@ -787,7 +787,7 @@ describe("customer.subscription.trial_will_end quotes the real price", () => {
 
     const sent = notify.mock.calls[0][1] as Record<string, any>;
     expect(sent.body).toContain(formatUsd(PRO_PLAN.monthly));
-    expect(sent.title).toContain("Hearth Pro");
+    expect(sent.title).toContain("OakTend Pro");
   });
 
   it("names the date the trial ends", async () => {
@@ -795,7 +795,7 @@ describe("customer.subscription.trial_will_end quotes the real price", () => {
     await run(trialEvent());
 
     const sent = notify.mock.calls[0][1] as Record<string, any>;
-    expect(sent.title).toBe("Your Hearth Plus free trial ends on January 1, 2027");
+    expect(sent.title).toBe("Your OakTend Plus free trial ends on January 1, 2027");
   });
 
   it("shares its dup key with the renewal-reminders cron", async () => {

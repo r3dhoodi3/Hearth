@@ -207,7 +207,7 @@ export default async function ClientDetailPage(
           </p>
           <Link
             href={`/pro/chats?lead=${lead.id}`}
-            className="text-sm font-medium text-hearth-700 hover:underline dark:text-hearth-300"
+            className="text-sm font-medium text-oaktend-700 hover:underline dark:text-oaktend-300"
           >
             Open chat
           </Link>

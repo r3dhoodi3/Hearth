@@ -13,7 +13,7 @@ const MAX_LABEL = 80;
 const MAX_NOTE = 1000;
 
 // Quotes and invoices both notify the homeowner (email and SMS included), so
-// an unthrottled loop is a way to use Hearth to spam someone who once posted a
+// an unthrottled loop is a way to use OakTend to spam someone who once posted a
 // job. One shared budget across both, keyed on the contractor rather than the
 // user, so a pro can't split the same burst between the two composers. Same
 // fixed-window limiter (migration 0068) and same fail-open posture as the rest

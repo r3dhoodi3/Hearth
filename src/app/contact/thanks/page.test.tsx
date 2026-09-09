@@ -22,9 +22,9 @@ describe("ContactThanksPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("has one primary CTA back to Hearth and a secondary link to the guides", () => {
+  it("has one primary CTA back to OakTend and a secondary link to the guides", () => {
     render(<ContactThanksPage />);
-    const primary = screen.getByRole("link", { name: "Back to Hearth" });
+    const primary = screen.getByRole("link", { name: "Back to OakTend" });
     expect(primary).toHaveAttribute("href", "/");
     const secondary = screen.getByRole("link", { name: "Browse the guides" });
     expect(secondary).toHaveAttribute("href", "/guides");

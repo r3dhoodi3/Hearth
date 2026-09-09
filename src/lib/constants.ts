@@ -103,6 +103,21 @@ export const SYSTEM_TYPES = [
   { value: "sump_pump", label: "Sump pump"},
   { value: "sewer_line", label: "Sewer / septic"},
   { value: "fence", label: "Fence"},
+  // Starter-seed expansion (src/lib/starterSystems.ts): everyday household
+  // systems plus flagged extras RentCast can tell us a home has. Adding
+  // these here also makes them normal manual "Add a system" options, not
+  // just onboarding-only values.
+  { value: "pool", label: "Pool equipment"},
+  { value: "fireplace", label: "Fireplace / chimney"},
+  { value: "smoke_co_detector", label: "Smoke & CO detectors"},
+  { value: "dishwasher", label: "Dishwasher"},
+  { value: "range", label: "Range / oven"},
+  { value: "refrigerator", label: "Refrigerator"},
+  { value: "washer_dryer", label: "Washer / dryer"},
+  { value: "garbage_disposal", label: "Garbage disposal"},
+  { value: "irrigation", label: "Irrigation / sprinklers"},
+  { value: "water_softener", label: "Water softener"},
+  { value: "other", label: "Other"},
 ] as const;
 
 // Example Brand / Model values shown as PLACEHOLDERS in the walkthrough's
@@ -145,6 +160,20 @@ export const SYSTEM_FIELD_EXAMPLES: Record<string, SystemFieldExample> = {
   sump_pump: { brand: "Zoeller", model: "M53" },
   sewer_line: { brand: "", model: "ABS to main" },
   fence: { brand: "", model: "Cedar, 6 ft" },
+  pool: { brand: "Pentair", model: "IntelliFlo VSF" },
+  // Same reasoning as foundation: no plate to read on a fireplace or chimney.
+  fireplace: { brand: "", model: "" },
+  smoke_co_detector: { brand: "Kidde", model: "KN-COSM-IBA" },
+  dishwasher: { brand: "KitchenAid", model: "KDTM404KPS" },
+  range: { brand: "GE", model: "JGB735SPSS" },
+  refrigerator: { brand: "Samsung", model: "RF28R7351SG" },
+  washer_dryer: { brand: "LG", model: "WM3900HWA" },
+  garbage_disposal: { brand: "InSinkErator", model: "Badger 5" },
+  irrigation: { brand: "Rain Bird", model: "ESP-TM2" },
+  water_softener: { brand: "Culligan", model: "HE 1.25" },
+  // B7 ("Other" system with a free-text name): no plate to read for a system
+  // the type list doesn't already cover, so no example either.
+  other: { brand: "", model: "" },
 };
 
 // The examples for one system type. An unknown type (a value added to the DB
@@ -357,7 +386,7 @@ export const BUDGET_RANGES = [
 // Priced in three tiers keyed to job value + what a pro can bear (a lead is only
 // worth a slice of the expected job profit). Benchmarked below the big lead
 // marketplaces (Angi $15-85+/lead plus a ~$300/yr fee; Thumbtack ~$20-75) so
-// Hearth undercuts them, with no annual fee:
+// OakTend undercuts them, with no annual fee:
 //   Tier 1  $25  light / low-ticket work (cleaning, landscaping, painting,
 //                handyman)
 //   Tier 2  $50  skilled trades + replacements (plumbing, electrical, HVAC,
@@ -374,7 +403,7 @@ export const LEAD_TIER_FEES = { light: 25, skilled: 50, major: 99 } as const;
 // sync with major_lead_price_cents() in 0113 (4999 cents).
 export const MAJOR_INTRO_FEE = 49.99;
 
-// Hearth Pro members' lead-fee discount: 10% off every lead's apply fee.
+// OakTend Pro members' lead-fee discount: 10% off every lead's apply fee.
 // Owner's words: "if they buy it they start off with a 10% discount for
 // leads. It does NOT stack with the 15-30% [aging discount]. More incentive
 // to buy." Never combines with the aging markdown above: apply_to_lead
@@ -417,7 +446,7 @@ export function isMajorCategory(category: string): boolean {
   return LEAD_FEES[category] === LEAD_TIER_FEES.major;
 }
 
-// Hearth Pro membership (contractor side) pricing, USD. This is the ONE place
+// OakTend Pro membership (contractor side) pricing, USD. This is the ONE place
 // the prices live: the /pro/plus page and checkout both read from here, so a
 // price change is a one-line edit. Every brand-new Pro subscriber, on either
 // cadence, gets a trialDays free trial (a Stripe trial, so the card is
@@ -443,7 +472,7 @@ export const PRO_PLAN = {
   introFirstMonth: 9.99,
 } as const;
 
-// Hearth Plus membership (homeowner side) pricing, USD. Same role PRO_PLAN
+// OakTend Plus membership (homeowner side) pricing, USD. Same role PRO_PLAN
 // plays for the contractor side: the ONE place the homeowner prices live, so
 // the /plus page, the checkout action, the auto-renewal disclosure in
 // src/lib/billingTerms.ts, and the renewal-reminder cron can never quote a
@@ -458,7 +487,7 @@ export const PLUS_PLAN = {
   // subscription comparables rather than from a round number: the 2026 in-app
   // benchmarks put the median weekly plan around $7.48 and category weekly
   // medians at $4.99-$6.89, but those sit against monthly plans of $9.99-$12.99,
-  // roughly 2.3x the monthly rate on a per-month basis. Hearth's monthly is
+  // roughly 2.3x the monthly rate on a per-month basis. OakTend's monthly is
   // $4.99, less than half the market monthly median, so borrowing a market
   // weekly price would put weekly at 5x monthly and read as a trap rather than
   // as a low-commitment way in. Holding the same 1.5x-2.5x band against OUR
@@ -558,7 +587,7 @@ export function yearlyAsMonthly(plan: Pick<PlanPrices, "yearly">): number {
 // the same number.
 export const PLUS_INCLUDED_HOMES = 5;
 
-// Ask Hearth questions a day on Plus. MIRRORS ASK_DAILY_PLUS in
+// Ask OakTend questions a day on Plus. MIRRORS ASK_DAILY_PLUS in
 // src/lib/aiUsage.ts, which is the value the server actually enforces and
 // cannot be imported here: aiUsage.ts pulls in the service-role Supabase
 // client, which is "server-only" and fails the build the moment a client
@@ -567,14 +596,14 @@ export const PLUS_INCLUDED_HOMES = 5;
 // never quietly drift.
 export const PLUS_ASK_PER_DAY = 15;
 
-// Ask Hearth questions a day on the FREE tier. Mirrors ASK_DAILY_FREE in
+// Ask OakTend questions a day on the FREE tier. Mirrors ASK_DAILY_FREE in
 // src/lib/aiUsage.ts for exactly the reason above, and src/lib/constants.test.ts
 // fails if the two drift. This is the number every comparison table and pricing
 // page quotes in its "Free" column, all of which used to type the digit by hand
 // in four separate places.
 export const FREE_ASK_PER_DAY = 3;
 
-// Ask Hearth questions a day during the 3-day Plus trial, with photos. Mirrors
+// Ask OakTend questions a day during the 3-day Plus trial, with photos. Mirrors
 // ASK_DAILY_TRIAL in src/lib/aiUsage.ts for exactly the reason above, and
 // src/lib/constants.test.ts fails if the two drift.
 //
@@ -641,8 +670,8 @@ export const PRO_DEPOSIT_BOOST_PTS = 5;
 // apply_to_lead (supabase/migrations/0031_ghost_protection.sql).
 export const MAX_APPLICANTS_PER_JOB = 3;
 
-// Earn-in for the Hearth-funded Checkr background check. Every check costs
-// Hearth real money, so it unlocks after the pro has this many PAID lead
+// Earn-in for the OakTend-funded Checkr background check. Every check costs
+// OakTend real money, so it unlocks after the pro has this many PAID lead
 // applications (lead_applications rows with refunded_at null - a refunded
 // application was never a paid lead). Mirrored in the gate inside
 // startBackgroundCheckAction and in the progress line on BackgroundCheckCard,
@@ -682,6 +711,16 @@ export const SYSTEM_CATEGORY: Record<string, string> = {
   sump_pump: "plumbing",
   sewer_line: "plumbing",
   fence: "structural",
+  pool: "other",
+  fireplace: "other",
+  smoke_co_detector: "electrical",
+  dishwasher: "handyman",
+  range: "handyman",
+  refrigerator: "handyman",
+  washer_dryer: "handyman",
+  garbage_disposal: "plumbing",
+  irrigation: "landscaping",
+  water_softener: "plumbing",
 };
 
 export function categoryForSystem(systemType: string): string {
@@ -697,6 +736,15 @@ const MAKE_MODEL_SYSTEMS = new Set([
   "appliance",
   "garage_door",
   "sump_pump",
+  "pool",
+  "smoke_co_detector",
+  "dishwasher",
+  "range",
+  "refrigerator",
+  "washer_dryer",
+  "garbage_disposal",
+  "irrigation",
+  "water_softener",
 ]);
 
 export function materialLabel(systemType: string): string {
@@ -827,6 +875,18 @@ export const SYSTEM_MATERIALS: Record<string, string[]> = {
     "Basement Watchdog",
     "Superior Pump",
   ],
+  // --- material-based (no plate to read) ---
+  fireplace: ["Wood-burning masonry", "Gas insert", "Electric", "Prefab metal"],
+  // --- make / model (equipment brands) ---
+  pool: ["Pentair", "Hayward", "Jandy", "Zodiac", "Sta-Rite"],
+  smoke_co_detector: ["Kidde", "First Alert", "Nest Protect", "X-Sense"],
+  dishwasher: ["Bosch", "KitchenAid", "Whirlpool", "GE", "Samsung", "LG", "Maytag"],
+  range: ["GE", "Whirlpool", "Samsung", "LG", "Bosch", "Frigidaire", "KitchenAid"],
+  refrigerator: ["Samsung", "LG", "Whirlpool", "GE", "KitchenAid", "Frigidaire"],
+  washer_dryer: ["LG", "Samsung", "Whirlpool", "GE", "Maytag", "Speed Queen"],
+  garbage_disposal: ["InSinkErator", "Waste King", "Moen", "GE"],
+  irrigation: ["Rain Bird", "Hunter", "Toro", "Rachio"],
+  water_softener: ["Culligan", "Kinetico", "GE", "Whirlpool", "Fleck"],
 };
 
 export function materialsForSystem(systemType: string): string[] {
@@ -864,6 +924,20 @@ export const SYSTEM_TIPS: Record<string, string> = {
   sewer_line:
     "Avoid flushing grease or wipes and consider a camera inspection if drains run slow.",
   fence: "Reset leaning posts early and seal the wood so it does not rot at the base.",
+  pool: "Test and balance the water weekly and keep an eye on the pump and filter for leaks.",
+  fireplace: "Have the chimney swept and inspected once a year before you start using it.",
+  smoke_co_detector:
+    "Test them monthly and swap the whole unit after about 10 years, not just the battery.",
+  dishwasher: "Clean the filter and run an empty cleaning cycle every month or so.",
+  range: "Keep the burners and vent hood grease-free and check the oven door seal for gaps.",
+  refrigerator: "Vacuum the coils twice a year and keep the door seal clean so it doesn't run hot.",
+  washer_dryer:
+    "Clean the lint trap every load and check the dryer vent for buildup once a year.",
+  garbage_disposal:
+    "Run cold water while it's on and avoid grease, fibrous scraps, and eggshells.",
+  irrigation:
+    "Check for leaks and adjust the schedule with the seasons so you're not overwatering.",
+  water_softener: "Check the salt level monthly and clean the brine tank about once a year.",
 };
 
 export function tipForSystem(systemType: string): string {
@@ -889,6 +963,22 @@ export function labelFor(
   // Unknown values (legacy rows, options removed from a list) must never leak
   // as raw enums like "this_month" - humanize the underscores as a fallback.
   return list.find((o) => o.value === value)?.label ?? value.replace(/_/g, " ");
+}
+
+// B7: a system_type of "other" carries the owner's own free-text name
+// (home_systems.other_label, migration 0156) instead of the generic "Other"
+// SYSTEM_TYPES label. Falls back to plain labelFor for every other type, and
+// for an "other" row that has no label yet - a blank field, or a database
+// that hasn't run 0156 - so this is always safe to call everywhere
+// labelFor(SYSTEM_TYPES, ...) used to be.
+export function systemDisplayLabel(system: {
+  system_type: string;
+  other_label?: string | null;
+}): string {
+  if (system.system_type === "other" && system.other_label?.trim()) {
+    return system.other_label.trim();
+  }
+  return labelFor(SYSTEM_TYPES, system.system_type);
 }
 
 // Short seasonal maintenance checklist, shown on Home for the current season.

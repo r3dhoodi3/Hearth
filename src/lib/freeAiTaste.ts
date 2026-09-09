@@ -75,7 +75,7 @@ export const FREE_TASTE_PAYWALL: Record<
 export const FREE_PRO_DRAFTS = 2;
 
 export const PRO_TOOLS_PAYWALL = {
-  message: `You've used your ${FREE_PRO_DRAFTS} free drafts. Hearth Pro includes unlimited drafts: estimates, invoices, follow-ups, review responses, and overdue reminders.`,
+  message: `You've used your ${FREE_PRO_DRAFTS} free drafts. OakTend Pro includes unlimited drafts: estimates, invoices, follow-ups, review responses, and overdue reminders.`,
   link: "/pro/plus?reason=tools",
 };
 
@@ -90,7 +90,7 @@ export function proDraftMeterLabel(left: number): string {
 // The quote analyzer's one free check is older than this file and lives in its
 // own column (users.free_quote_used_at, migration 0030), so it is not part of
 // FREE_TASTE_PAYWALL above. Its refusal copy belongs here anyway: the repeat
-// attempt used to come back as a bare "This feature is part of Hearth Plus.",
+// attempt used to come back as a bare "This feature is part of OakTend Plus.",
 // the one cold, benefit-free wall in the app, hit at the exact moment somebody
 // has a second contractor bid in their hand. Same voice as the
 // /plus?reason=quote banner, and shared by the route and the component so the
@@ -102,7 +102,7 @@ export const QUOTE_TASTE_PAYWALL = {
 };
 
 // The meter a free account sees BEFORE it taps, never after the fact: state
-// the exact number and unit, in front of the button, the way Ask Hearth's
+// the exact number and unit, in front of the button, the way Ask OakTend's
 // "N of 3 free questions left today" does. Pure, so the copy is testable
 // without a database. `left` is what is actually left.
 export function tasteMeterLabel(feature: FreeAiFeature, left: number): string {

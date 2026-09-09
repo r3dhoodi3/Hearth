@@ -11,6 +11,7 @@ import {
   countPaidLeadApplications,
 } from "@/lib/contractor";
 import { sendNotification } from "@/lib/notify";
+import { smsOptinConfirmationAllowed } from "@/lib/smsOptinLimit";
 // ALWAYS awaited, everywhere in this file. setFlash writes its cookie through
 // Next's async cookies() store, and every call site here is followed by a
 // redirect() that throws immediately - so an un-awaited setFlash raced the
@@ -54,6 +55,7 @@ import {
   isAllowedValue,
 } from "@/lib/formFields";
 import { recordTermsAcceptance } from "@/app/(auth)/recordTermsAcceptance";
+import { LEGAL } from "@/lib/legal";
 import {
   majorLeadInsuranceGate,
   isInsuranceGateSqlError,
@@ -100,7 +102,7 @@ type LicenseVerifyResult = CslbLookupResult & {
 
 // The account holder's own name, for the identity check below. A sole
 // proprietor's CSLB record is registered to the PERSON ("DOE JOHN"), not to
-// the trade name they typed into Hearth, so the personal name has to be one
+// the trade name they typed into OakTend, so the personal name has to be one
 // of the candidates or every legitimate sole proprietor would fail. Reads the
 // users table with the admin client (0067 stripped column-level SELECT on
 // several tables and this runs server-side off an id resolved from the
@@ -123,7 +125,7 @@ async function accountFullName(
   }
 }
 
-// Is this license number already VERIFIED on some other Hearth account?
+// Is this license number already VERIFIED on some other OakTend account?
 //
 // One license, one account (migration 0125). This is the app-side half: it
 // gives the second claimant an honest, explainable "already verified
@@ -182,7 +184,7 @@ async function verifiedElsewhere(
 // fetch failure must never be treated as a failed license check.
 //
 // 0125: an 'active' license is not enough on its own. The CSLB-registered
-// name has to line up with a name Hearth knows for this account
+// name has to line up with a name OakTend knows for this account
 // (src/lib/licenseMatch.ts), and the number must not already be verified on
 // another account. Either gate failing writes 'failed' with a failure_reason
 // the profile page turns into plain-English copy plus a dispute form.
@@ -192,7 +194,7 @@ async function verifyContractorLicense(
   licenseNumber: string,
   currentVerifiedAt: string | null | undefined,
   currentDetail?: unknown,
-  // Every name Hearth knows for this account: the company name on the
+  // Every name OakTend knows for this account: the company name on the
   // contractors row and the account holder's own full name. A CSLB record
   // that matches NONE of them is somebody else's license (0125). Callers pass
   // what they have; nulls are ignored.
@@ -432,6 +434,40 @@ async function saveProSmsConsent(
       .update(fields)
       .eq("id", userId);
     if (error) throw error;
+
+    // SMS OPT-IN CONFIRMATION (09-sms-terms.md section 7, CTIA convention),
+    // pro-side twin of the homeowner send in
+    // src/app/(app)/account/actions.ts. Sent once, only on the fresh
+    // false -> true grant this function exists to record - never on a
+    // re-save that leaves consent already true. Best effort: a send failure
+    // here must never surface to the pro or block the company save that
+    // already succeeded above (see the outer catch's own comment).
+    const sendPhone =
+      (typeof fields.phone === "string" ? fields.phone : null) ??
+      (typeof current?.phone === "string" ? current.phone : null);
+    // RATE LIMITED, same shared check the homeowner-side twin in
+    // src/app/(app)/account/actions.ts runs, and for the same reason: phone
+    // is unverified, so a pro toggling consent off and on repeatedly must
+    // not blast this text at whatever number is currently entered. See
+    // src/lib/smsOptinLimit.ts.
+    if (
+      wants &&
+      !priorConsent &&
+      sendPhone &&
+      (await smsOptinConfirmationAllowed(admin, userId, sendPhone))
+    ) {
+      await sendNotification(admin, {
+        userId,
+        kind: "sms_optin_confirmation",
+        // sendSms (src/lib/notify.ts) always appends its own "Reply STOP to
+        // opt out." after title+body, so that phrase is deliberately left
+        // out of this copy - repeating it here would say it twice.
+        title: `You're opted in to ${LEGAL.brand} text messages for account and job-related alerts.`,
+        body: "Msg&data rates may apply. Message frequency varies. Reply HELP for help.",
+        phone: sendPhone,
+        smsConsent: true,
+      });
+    }
   } catch (err) {
     // Never blocks the company save. 0075 not being live answers the
     // missing-column fingerprint, in which case there is nothing to store and
@@ -682,7 +718,7 @@ export async function saveCompanyAction(formData: FormData) {
   }
 
   // Trial-abuse signals (src/lib/risk, migration 0130). A pro who burned a free
-  // Hearth Pro trial and came back under a new email usually brings the same
+  // OakTend Pro trial and came back under a new email usually brings the same
   // two things with them: the company's phone number and the company's name.
   // Both are normalized before hashing (digits only for the phone, punctuation
   // and legal suffixes stripped for the name, see normalizeSignalValue), so
@@ -771,7 +807,7 @@ export async function saveCompanyAction(formData: FormData) {
 
   // TCPA SMS CONSENT (users.sms_consent / sms_consent_at, migration 0075).
   //
-  // Why it is here at all: every pro-side text Hearth already builds and pays
+  // Why it is here at all: every pro-side text OakTend already builds and pays
   // for - the new-job alert, the winback credit, the weekly digest, the
   // compliance reminder - is dropped on the floor by the gate in
   // src/lib/notify.ts unless this column is true, and until now the pro side
@@ -1072,9 +1108,27 @@ export async function saveCompanyAction(formData: FormData) {
     return;
   }
 
+  // PRO TERMS ONBOARDING ACKNOWLEDGMENT (Pro Terms appendix), first-time
+  // company creation only - everything above this point in the function
+  // already returned for the edit (`existing`) path, so reaching here means
+  // this submit is creating the contractors row for the first time.
+  // Required, unlike the SMS checkbox: a pro cannot start applying to jobs
+  // without confirming they are an independent business, that any license
+  // listed is accurate, that they carry the insurance their work requires,
+  // and that lead-fee credit-back is wallet credit, not cash. Server-side
+  // floor under the wizard's own client-side gate
+  // (./onboarding/wizardSteps.ts case 2), the same discipline as the name/
+  // phone/city checks above it.
+  if (formData.get("pro_terms_ack") === null) {
+    await backToForm(
+      "Please confirm the Pro Terms acknowledgment to continue."
+    );
+    return;
+  }
+
   // Orange County launch gate (0074), first-time company creation only. A pro
   // who didn't check the box never gets a contractors row at all: instead
-  // they land on a waitlist so Hearth can reach out when it opens in their
+  // they land on a waitlist so OakTend can reach out when it opens in their
   // area. The signup form no longer routes here (its two city checkboxes
   // require at least one, and the guard above catches an empty answer), so
   // this now only catches a post that carries no service-area answer at all.
@@ -1413,6 +1467,13 @@ export async function saveCompanyAction(formData: FormData) {
   // gets a no-op, and the homeowner who just added a business gets the row
   // that was missing before.
   await recordTermsAcceptance(user.id, "pro_terms");
+  // The onboarding-wizard acknowledgment checked just above (independent
+  // business, license/insurance/wallet-credit understanding, 18+) is a
+  // materially different confirmation from the general pro_terms checkbox
+  // above, so it gets its own audit-trail doc key - reusing "pro_terms"
+  // here would be a silent no-op against the row that call just wrote (or
+  // already found).
+  await recordTermsAcceptance(user.id, "pro_terms_onboarding");
 
   // Preferred landing side. Only stamped when the account has NO side stamped
   // yet: a homeowner who adds a business keeps landing on their home until
@@ -1590,7 +1651,7 @@ export async function verifyLicenseNowAction(formData: FormData) {
     );
   } else if (result.failureReason === "duplicate_license") {
     await setFlash(
-      "This license number is already verified on a different Hearth account. If that's not you, file a dispute below and we'll look into it.",
+      "This license number is already verified on a different OakTend account. If that's not you, file a dispute below and we'll look into it.",
       "error"
     );
   } else if (result.decision === "verified") {
@@ -1619,12 +1680,12 @@ export async function verifyLicenseNowAction(formData: FormData) {
 // "Start my background check" button on /pro/profile (0057): opt-in only,
 // never auto-run. Creates a Checkr candidate + invitation and saves the
 // candidate id so the webhook (src/app/api/checkr/webhook) can match Checkr's
-// events back to this contractor. Checkr does the rest by email - Hearth
+// events back to this contractor. Checkr does the rest by email - OakTend
 // never collects the candidate's sensitive info itself.
 export async function startBackgroundCheckAction(formData: FormData) {
   const contractor = await assertContractor();
 
-  // Every check costs Hearth real money, so only the two states that
+  // Every check costs OakTend real money, so only the two states that
   // legitimately allow a (re)start may reach the Checkr API: 'none' (never
   // started) and 'consider' (retry after a non-clear result). 'invited',
   // 'pending', and 'clear' all bail out here as the cheap early exit; the
@@ -1652,9 +1713,9 @@ export async function startBackgroundCheckAction(formData: FormData) {
     return;
   }
 
-  // Earn-in gate: Hearth pays Checkr for every check, so the perk unlocks
+  // Earn-in gate: OakTend pays Checkr for every check, so the perk unlocks
   // after BACKGROUND_CHECK_MIN_PAID_LEADS paid lead applications rather than
-  // at signup. Without this, an account could be created, verified on Hearth's
+  // at signup. Without this, an account could be created, verified on OakTend's
   // dime, and abandoned the same afternoon.
   //
   // FAILS CLOSED on a count error (countPaidLeadApplications returns null):
@@ -1672,7 +1733,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
   }
   if (paidLeads < BACKGROUND_CHECK_MIN_PAID_LEADS) {
     await setFlash(
-      `Hearth covers your background check after ${BACKGROUND_CHECK_MIN_PAID_LEADS} paid leads - you're at ${paidLeads} of ${BACKGROUND_CHECK_MIN_PAID_LEADS}.`,
+      `OakTend covers your background check after ${BACKGROUND_CHECK_MIN_PAID_LEADS} paid leads - you're at ${paidLeads} of ${BACKGROUND_CHECK_MIN_PAID_LEADS}.`,
       "info"
     );
     revalidatePath("/pro/profile");
@@ -1682,7 +1743,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
   // The check runs against a PERSON, so it needs their legal name, not the
   // business name ("Bob's Plumbing LLC" split into first/last would risk a
   // check against a garbled identity). The card's form collects it
-  // explicitly and it goes only to Checkr, never stored by Hearth.
+  // explicitly and it goes only to Checkr, never stored by OakTend.
   const firstName = String(formData.get("legal_first_name") ?? "")
     .trim()
     .slice(0, 80);
@@ -1697,7 +1758,7 @@ export async function startBackgroundCheckAction(formData: FormData) {
 
   // Checkr requires a work location state. contractors.service_state (0046)
   // isn't in the generated types, so it's read off an any-cast; a pro who
-  // left it blank ("all states") falls back to CA, matching Hearth's
+  // left it blank ("all states") falls back to CA, matching OakTend's
   // current Orange County, CA launch markets.
   const workLocationState =
     (contractor as any).service_state || "CA";
@@ -1822,7 +1883,7 @@ export async function updateLeadStatusAction(formData: FormData) {
   const baseFlash = `Lead marked ${leadStatusLabel(status)}`;
   await setFlash(baseFlash);
 
-  // Hearth Pro perk: when a member marks a job Won, ask the homeowner for a
+  // OakTend Pro perk: when a member marks a job Won, ask the homeowner for a
   // review automatically. Only on the closed transition (never for lost /
   // accepted / new), only for live Pro plans, and best-effort throughout: a
   // hiccup here must never break the status update. `before` also proves the
@@ -1986,11 +2047,12 @@ export async function applyToJobAction(formData: FormData) {
   // protection still refunds an apply fee paid in that window), and this
   // never touches apply_to_lead's own SQL or any money logic.
   // payout_amount/created_at/category ride along for the stale-price guard
-  // below, so it costs no extra query.
+  // below, so it costs no extra query. property_id rides along too, for the
+  // SEC-1 self-apply guard right below.
   const admin = createAdminClient();
   const { data: leadClosedCheck, error: leadClosedError } = await admin
     .from("contractor_leads")
-    .select("owner_closed_at, payout_amount, created_at, category")
+    .select("owner_closed_at, payout_amount, created_at, category, property_id")
     .eq("id", leadId)
     .maybeSingle();
   if (leadClosedError && !isMissingSchemaError(leadClosedError)) {
@@ -2013,6 +2075,41 @@ export async function applyToJobAction(formData: FormData) {
   // Any error here (0092 not run yet, or an unrelated hiccup) falls through
   // and lets apply_to_lead run exactly as it did before this check existed:
   // this pre-check is advisory only and must never itself block a legit apply.
+
+  // SEC-1 belt-and-braces: a dual-side account (homeowner AND pro on the same
+  // auth user) must not be able to apply to, or pay to apply to, its own
+  // posted job. apply_to_lead (0153, patched by migration 0161) is the real
+  // enforcement; this is the friendly early refusal, same posture as every
+  // other advisory pre-check in this function - before the replay guard, the
+  // insurance gate, and every wallet read, so a refused apply moves no money
+  // and costs one extra narrow query. A read failure falls through (advisory
+  // only) and lets the SQL gate in apply_to_lead be the backstop.
+  const propertyId = !leadClosedError
+    ? ((leadClosedCheck as any)?.property_id as string | null) ?? null
+    : null;
+  if (propertyId) {
+    const { data: propertyOwnerRow, error: propertyOwnerError } = await admin
+      .from("properties")
+      .select("user_id")
+      .eq("id", propertyId)
+      .maybeSingle();
+    if (propertyOwnerError) {
+      console.error(
+        "applyToJobAction: self-apply owner pre-check failed:",
+        propertyOwnerError.message
+      );
+    } else if (
+      propertyOwnerRow?.user_id &&
+      propertyOwnerRow.user_id === (contractor as any).user_id
+    ) {
+      await setFlash("You cannot apply to your own job.", "error");
+      revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
+      return;
+    }
+  }
 
   // Replay guard: apply_to_lead returns true idempotently when this pro
   // already applied, and the success branch below would then re-send the
@@ -2120,6 +2217,11 @@ export async function applyToJobAction(formData: FormData) {
         "You already have an active job with this homeowner in this category. Message them there instead.",
         "error"
       );
+    } else if (error.message.includes("You cannot apply to your own job")) {
+      // SEC-1 backstop inside apply_to_lead (migration 0161) fired (normally
+      // the pre-check above catches this first; this covers a failed
+      // pre-check read or a direct RPC call). Same friendly copy either way.
+      await setFlash("You cannot apply to your own job.", "error");
     } else if (isInsuranceGateSqlError(error.message)) {
       // The 0153 backstop inside apply_to_lead fired (normally the pre-check
       // above catches this first; this covers a failed pre-check read or a

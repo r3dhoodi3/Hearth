@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic } from "lucide-react";
 
-// A mic button that dictates into the Ask Hearth box, using the browser's
+// A mic button that dictates into the Ask OakTend box, using the browser's
 // built-in Web Speech API (fast, free, on-device or through the browser's own
 // speech service). It streams INTERIM words into a small live bubble above the
 // button so the homeowner sees their words appear the moment they speak, and
@@ -11,7 +11,7 @@ import { Mic } from "lucide-react";
 //
 // There used to be a second mode here: getUserMedia + MediaRecorder, POSTing
 // the audio to /api/transcribe for a server-side transcript. That route was a
-// Gemini audio call, and it went away when Hearth moved to Claude, which has
+// Gemini audio call, and it went away when OakTend moved to Claude, which has
 // no audio transcription endpoint. So this is now speech-recognition only:
 // where SpeechRecognition does not exist (Firefox), or where it fails, the
 // button renders nothing and the homeowner types, rather than offering a mic

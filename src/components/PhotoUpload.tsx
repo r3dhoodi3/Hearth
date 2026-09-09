@@ -53,7 +53,7 @@ export default function PhotoUpload({
     // allowed_mime_types (migration 0079). `accept="image/*"` is only a
     // browser hint; without this check, a client `file.type.startsWith(
     // "image/")` test would still let image/svg+xml through, which can carry
-    // a <script> and gets served back off Hearth's own storage origin
+    // a <script> and gets served back off OakTend's own storage origin
     // (security audit finding #7). The bucket-level allow-list is the real
     // backstop once 0079 is applied live; this is defense-in-depth so the
     // upload never even starts and the rejection message is clear.
@@ -112,6 +112,9 @@ export default function PhotoUpload({
       <label className="label" htmlFor={id}>
         Photos (optional)
       </label>
+      <p className="mb-1 text-xs text-stone-500 dark:text-stone-400">
+        Only upload photos of property you own or have permission to share.
+      </p>
       <input
         id={id}
         type="file"
@@ -130,20 +133,46 @@ export default function PhotoUpload({
       <FilePreviewGrid files={pending} />
       <div className="mt-2 flex flex-wrap gap-2">
         {urls.map((u) => (
-          <button
-            key={u}
-            type="button"
-            onClick={() => setLightboxSrc(imgSrc(u) ?? u)}
-            className="block cursor-zoom-in"
-            aria-label="View photo full size"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imgSrc(u) ?? u}
-              alt="upload preview"
-              className="h-16 w-16 rounded-md object-cover"
-            />
-          </button>
+          <div key={u} className="relative">
+            <button
+              type="button"
+              onClick={() => setLightboxSrc(imgSrc(u) ?? u)}
+              className="block cursor-zoom-in"
+              aria-label="View photo full size"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imgSrc(u) ?? u}
+                alt="upload preview"
+                className="h-16 w-16 rounded-md object-cover"
+              />
+            </button>
+            {/* B4: let the owner drop a photo they didn't mean to attach
+                before submitting, instead of having to post (or cancel the
+                whole form) to undo a bad pick. Removes it from local state
+                only - the hidden photo_urls input for this url disappears
+                with it, so postJobAction never sees it - plus a best-effort
+                storage delete so it doesn't sit as an orphan object. */}
+            <button
+              type="button"
+              onClick={async () => {
+                setUrls((prev) => prev.filter((existing) => existing !== u));
+                const path = u.split("/home-photos/")[1];
+                if (!path) return;
+                try {
+                  const supabase = await getSupabase();
+                  await supabase.storage.from("home-photos").remove([path]);
+                } catch {
+                  // Best-effort cleanup only: the photo is already gone from
+                  // the form either way.
+                }
+              }}
+              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-stone-800 text-xs leading-none text-white shadow-sm hover:bg-stone-900 max-sm:-right-2 max-sm:-top-2 max-sm:h-6 max-sm:w-6 dark:bg-stone-600 dark:hover:bg-stone-500"
+              aria-label="Remove photo"
+            >
+              ×
+            </button>
+          </div>
         ))}
       </div>
       {urls.map((u) => (

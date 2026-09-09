@@ -66,7 +66,7 @@ export default function GoogleSignInButton({
       options: {
         redirectTo,
         // Always show Google's account chooser. Without this, a browser signed
-        // into a single Google account that already authorized Hearth gets
+        // into a single Google account that already authorized OakTend gets
         // silently logged straight in with no chance to pick a different
         // account.
         queryParams: { prompt: "select_account" },

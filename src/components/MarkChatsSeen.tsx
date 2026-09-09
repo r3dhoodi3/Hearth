@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 // Marks every conversation as read as soon as the Messages page is open, so the
 // top nav unread badge clears whenever the homeowner looks at their inbox. This
-// runs even when the default Ask Hearth pane is shown (no specific thread
+// runs even when the default Ask OakTend pane is shown (no specific thread
 // selected), which is the case the user hit where the badge would not clear.
 export default function MarkChatsSeen({
   leadIds,
@@ -23,10 +23,10 @@ export default function MarkChatsSeen({
     } catch {
       /* localStorage unavailable */
     }
-    window.dispatchEvent(new Event("hearth:chat-seen"));
+    window.dispatchEvent(new Event("oaktend:chat-seen"));
     action(leadIds)
       .then(() => {
-        window.dispatchEvent(new Event("hearth:chat-seen"));
+        window.dispatchEvent(new Event("oaktend:chat-seen"));
       })
       .catch(() => {
         // Fail soft: the local seen-times above already cleared the badge, and

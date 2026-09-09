@@ -112,7 +112,7 @@ export async function verifyAddressExists(
     const res = await fetch(photonSuggestUrl(q, zip || null), {
       signal: controller.signal,
       headers: {
-        "User-Agent": "Hearth/1.0 (+https://hearth.build)",
+        "User-Agent": "OakTend/1.0 (+https://oaktend.com)",
         Accept: "application/json",
       },
       cache: "no-store",

@@ -36,8 +36,8 @@ export default function ReviewShareRow({
   const [copied, setCopied] = useState(false);
   const [sharePending, setSharePending] = useState(false);
   const cardUrl = `/api/review-card/${reviewId}`;
-  const caption = `Thanks for the kind words! Find me on Hearth: ${profileUrl}`;
-  const fileName = `hearth-review-${reviewId}.png`;
+  const caption = `Thanks for the kind words! Find me on OakTend: ${profileUrl}`;
+  const fileName = `oaktend-review-${reviewId}.png`;
 
   async function copyCaption() {
     try {

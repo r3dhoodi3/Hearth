@@ -6,7 +6,17 @@ import "@testing-library/jest-dom/vitest";
 // Same rationale as Nav.test.tsx: stub the client subsystems that aren't
 // relevant to the "Business" side pill this test covers.
 vi.mock("@/components/NavLinks", () => ({ default: () => <div /> }));
-vi.mock("@/components/ProfileMenu", () => ({ default: () => <div /> }));
+// ProfileMenu is stubbed, but it records the links it was handed so the
+// back-office tests below can check the destination without rendering the
+// real menu (a client component with its own portals and focus handling).
+vi.mock("@/components/ProfileMenu", () => ({
+  default: ({ links }: { links: { href: string; label: string }[] }) => (
+    <div
+      data-testid="profile-menu"
+      data-links={JSON.stringify(links.map((l) => [l.href, l.label]))}
+    />
+  ),
+}));
 vi.mock("@/components/GlobalSearch", () => ({ default: () => <div /> }));
 vi.mock("@/components/NotificationBell", () => ({ default: () => <div /> }));
 vi.mock("@/components/UnreadProvider", () => ({
@@ -36,25 +46,26 @@ describe("ProNav side pill", () => {
   });
 });
 
-describe("ProNav back office button", () => {
-  // The button sits on the same header row as the bell, left of it, and its
-  // destination is whatever pro/layout.tsx computed - ProNav itself never
-  // decides between /pro/tools and the buy page.
-  it("links to /pro/tools when the pro can use the back office", () => {
+describe("ProNav back office entry", () => {
+  // Back office is no longer a header button (it duplicated the profile-menu
+  // entry); the menu entry is the one door, and its destination is whatever
+  // pro/layout.tsx computed - ProNav itself never decides between /pro/tools
+  // and the buy page.
+  function menuLinks() {
+    const el = screen.getAllByTestId("profile-menu")[0];
+    return JSON.parse(el.getAttribute("data-links") ?? "[]") as [string, string][];
+  }
+
+  it("sends Back office to /pro/tools when the pro can use it", () => {
     render(<ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/tools" />);
-    const link = screen.getByRole("link", { name: "AI back office" });
-    expect(link).toHaveAttribute("href", "/pro/tools");
-    // Always-on aria-label plus a text label that only shows from sm up
-    // (max-sm:justify-center px-0 hides it visually on the phone, but jsdom
-    // renders it regardless of viewport, so this checks it exists in markup).
-    expect(link).toHaveTextContent("Back office");
+    expect(menuLinks()).toContainEqual(["/pro/tools", "Back office"]);
+    expect(screen.queryByRole("link", { name: "AI back office" })).toBeNull();
   });
 
-  it("links to the buy page when the pro cannot use it yet", () => {
+  it("sends Back office to the buy page when the pro cannot use it yet", () => {
     render(
       <ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/plus?reason=tools" />
     );
-    const link = screen.getByRole("link", { name: "AI back office" });
-    expect(link).toHaveAttribute("href", "/pro/plus?reason=tools");
+    expect(menuLinks()).toContainEqual(["/pro/plus?reason=tools", "Back office"]);
   });
 });

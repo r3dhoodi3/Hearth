@@ -6,7 +6,7 @@ import LeadChat from "@/components/LeadChat";
 type ActiveChat = { leadId: string; name: string };
 
 // A floating chat window pinned to the bottom-right. Opens when an
-// "hearth:open-chat" event fires (see OpenChatButton). Can be minimized,
+// "oaktend:open-chat" event fires (see OpenChatButton). Can be minimized,
 // expanded, or closed. Render once per page; role is set by the page.
 export default function ChatDock({
   role = "contractor",
@@ -23,8 +23,8 @@ export default function ChatDock({
       setChat(detail);
       setMinimized(false);
     }
-    window.addEventListener("hearth:open-chat", onOpen);
-    return () => window.removeEventListener("hearth:open-chat", onOpen);
+    window.addEventListener("oaktend:open-chat", onOpen);
+    return () => window.removeEventListener("oaktend:open-chat", onOpen);
   }, []);
 
   if (!chat) return null;

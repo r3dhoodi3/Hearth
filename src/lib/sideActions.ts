@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSides } from "@/lib/contractor";
 import { setFlash } from "@/lib/flash";
 
-// Switches which side of Hearth this account lands on, from the profile menu
+// Switches which side of OakTend this account lands on, from the profile menu
 // in either nav (Nav.tsx / ProNav.tsx post to it).
 //
 // This is the ONE sanctioned way to change the side an ESTABLISHED account

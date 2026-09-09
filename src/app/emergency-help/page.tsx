@@ -20,7 +20,7 @@ import { FLOWS } from "@/app/(app)/emergency/content";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
-  // The root layout's title template appends "| Hearth"; don't repeat it here.
+  // The root layout's title template appends "| OakTend"; don't repeat it here.
   title: "Emergency help",
   description:
     "Fast, plain-English steps for a home emergency: burst pipe, gas smell, no heat, power out, sewage backup, or a leaking water heater. No account needed.",
@@ -39,7 +39,7 @@ export default function EmergencyHelpPage() {
           href="/"
           className="text-stone-500 hover:text-bark-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:text-base dark:text-stone-400 dark:hover:text-stone-300"
         >
-          ← Hearth
+          ← OakTend
         </Link>
       </p>
 
@@ -79,10 +79,10 @@ export default function EmergencyHelpPage() {
       {/* Calm CTA once the immediate danger is handled. */}
       <section className="card mt-8 space-y-3">
         <h2 className="font-semibold text-stone-900 dark:text-stone-100">
-          Once you are safe, Hearth can line up a local pro
+          Once you are safe, OakTend can line up a local pro
         </h2>
         <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-          Create a free account and Hearth will help you post the job and get a
+          Create a free account and OakTend will help you post the job and get a
           local pro on it, usually same day for an emergency. It&apos;s the fastest
           way to get someone out to your house.
         </p>
@@ -90,7 +90,7 @@ export default function EmergencyHelpPage() {
           Get a pro on it
         </Link>
         <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-          Already have a Hearth account? The in-app version at{" "}
+          Already have an OakTend account? The in-app version at{" "}
           <Link href="/emergency" className="text-bark-700 hover:underline dark:text-stone-300">
             Emergency
           </Link>{" "}

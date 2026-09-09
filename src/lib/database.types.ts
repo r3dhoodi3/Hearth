@@ -27,7 +27,7 @@ export interface CslbVerifyDetail {
   // sentence itself (migration 0125). 'name_mismatch': the license is active,
   // but CSLB registered it under a name that does not line up with this
   // account (src/lib/licenseMatch.ts). 'duplicate_license': the number is
-  // already verified on another Hearth account - deliberately says nothing
+  // already verified on another OakTend account - deliberately says nothing
   // about which one. 'duplicate_license_demoted_0125': written by migration
   // 0125's cleanup onto the later claimants of a number that had been verified
   // more than once before the unique index existed. Absent on an ordinary
@@ -41,7 +41,7 @@ export interface CslbVerifyDetail {
 
 // contractors.background_check_detail (migration 0057): report id, package
 // slug, completed_at, and the last processed webhook event id (for replay
-// dedupe in src/app/api/checkr/webhook). NEVER the report contents - Hearth
+// dedupe in src/app/api/checkr/webhook). NEVER the report contents - OakTend
 // stores status, not findings. All fields optional: an 'invited'/'none'
 // contractor has no report yet, and every branch merges onto whatever was
 // already here rather than replacing it wholesale.
@@ -215,6 +215,10 @@ export interface Database {
           notes: string | null;
           created_at: string;
           confirmed_at: string | null;
+          // B7 / migration 0156: free-text name for a system_type "other" row.
+          // Optional here (not `| null` required) since a database that hasn't
+          // run 0156 yet simply never returns this key at all.
+          other_label?: string | null;
         };
         Insert: {
           id?: string;
@@ -230,6 +234,7 @@ export interface Database {
           notes?: string | null;
           created_at?: string;
           confirmed_at?: string | null;
+          other_label?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["home_systems"]["Insert"]>;
         Relationships: [];
@@ -352,7 +357,7 @@ export interface Database {
           license_verified_status: "unverified" | "pending" | "verified" | "failed";
           license_verified_at: string | null;
           license_verify_detail: CslbVerifyDetail | null;
-          // Checkr background check (migration 0057). Opt-in, Hearth-paid;
+          // Checkr background check (migration 0057). Opt-in, OakTend-paid;
           // dormant without CHECKR_API_KEY (src/lib/checkr.ts).
           background_check_status: "none" | "invited" | "pending" | "clear" | "consider";
           background_checked_at: string | null;
@@ -382,7 +387,7 @@ export interface Database {
           rating: number | null;
           review_count: number;
           // Migration 0113: the pro's own Yelp / Google review pages, linked
-          // out to from the public profile. Hearth never imports the review
+          // out to from the public profile. OakTend never imports the review
           // text or star counts, it just points at them.
           yelp_url: string | null;
           google_reviews_url: string | null;

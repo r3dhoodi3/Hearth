@@ -1,7 +1,7 @@
 import { Skeleton } from "@/components/Skeleton";
 
 // Mirrors chats/page.tsx: heading, then the two-pane grid - the conversation
-// list (bordered, divided rows, the first a pinned "Ask Hearth" with a left
+// list (bordered, divided rows, the first a pinned "Ask OakTend" with a left
 // accent) on the left, the open-thread pane on the right (desktop only,
 // matching the page's md:flex and its tall calc height).
 export default function Loading() {

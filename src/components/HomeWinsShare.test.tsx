@@ -50,7 +50,7 @@ describe("HomeWinsShare", () => {
     );
     const download = screen.getByText("Download the image") as HTMLAnchorElement;
     expect(download.getAttribute("href")).toBe("/api/wins-card/ABCD1234");
-    expect(download.getAttribute("download")).toBe("hearth-home-wins.png");
+    expect(download.getAttribute("download")).toBe("oaktend-home-wins.png");
   });
 
   it("hides the download fallback when the share sheet accepts files (phones)", async () => {

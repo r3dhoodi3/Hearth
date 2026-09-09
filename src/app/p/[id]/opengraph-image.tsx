@@ -14,16 +14,16 @@ import { ogFontOption } from "@/lib/ogFont";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "Hearth pro profile";
+export const alt = "OakTend pro profile";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Warm hearth palette (tailwind.config.ts).
-const HEARTH_50 = "#fbf7f2";
-const HEARTH_500 = "#a9743f";
-const HEARTH_700 = "#73482b";
-const HEARTH_900 = "#4f3324";
+// Warm OakTend palette (tailwind.config.ts).
+const OAKTEND_50 = "#fbf7f2";
+const OAKTEND_500 = "#a9743f";
+const OAKTEND_700 = "#73482b";
+const OAKTEND_900 = "#4f3324";
 const STONE_400 = "#a8a29e";
 const STONE_300 = "#d6d3d1";
 const AMBER_500 = "#f59e0b";
@@ -92,11 +92,11 @@ function Wordmark() {
           width: 14,
           height: 14,
           borderRadius: 9999,
-          backgroundColor: HEARTH_500,
+          backgroundColor: OAKTEND_500,
         }}
       />
-      <div style={{ fontSize: 34, fontWeight: 700, color: HEARTH_700 }}>
-        Hearth
+      <div style={{ fontSize: 34, fontWeight: 700, color: OAKTEND_700 }}>
+        OakTend
       </div>
     </div>
   );
@@ -116,7 +116,7 @@ export default async function OgImage({
     flexDirection: "column" as const,
     justifyContent: "center",
     padding: "0 80px",
-    background: HEARTH_50,
+    background: OAKTEND_50,
     position: "relative" as const,
     fontFamily: "sans-serif",
   };
@@ -126,10 +126,10 @@ export default async function OgImage({
     return new ImageResponse(
       (
         <div style={{ ...frame, alignItems: "center" }}>
-          <div style={{ fontSize: 84, fontWeight: 700, color: HEARTH_900 }}>
-            Hearth
+          <div style={{ fontSize: 84, fontWeight: 700, color: OAKTEND_900 }}>
+            OakTend
           </div>
-          <div style={{ fontSize: 36, color: HEARTH_700, marginTop: 16 }}>
+          <div style={{ fontSize: 36, color: OAKTEND_700, marginTop: 16 }}>
             Trusted pros for your home
           </div>
         </div>
@@ -168,7 +168,7 @@ export default async function OgImage({
             style={{
               fontSize: displayName.length > 28 ? 58 : 76,
               fontWeight: 700,
-              color: HEARTH_900,
+              color: OAKTEND_900,
               lineHeight: 1.1,
               maxWidth: 1000,
             }}
@@ -191,7 +191,7 @@ export default async function OgImage({
                     <Star key={i} filled={i < fullStars} />
                   ))}
                 </div>
-                <div style={{ fontSize: 44, fontWeight: 700, color: HEARTH_900 }}>
+                <div style={{ fontSize: 44, fontWeight: 700, color: OAKTEND_900 }}>
                   {profile.rating}
                 </div>
                 <div style={{ fontSize: 36, color: STONE_400 }}>
@@ -201,13 +201,13 @@ export default async function OgImage({
               </>
             ) : (
               <div style={{ fontSize: 36, color: STONE_400 }}>
-                New on Hearth
+                New on OakTend
               </div>
             )}
           </div>
 
           {categoryLine && (
-            <div style={{ fontSize: 34, color: HEARTH_700, marginTop: 28 }}>
+            <div style={{ fontSize: 34, color: OAKTEND_700, marginTop: 28 }}>
               {categoryLine}
             </div>
           )}
@@ -219,7 +219,7 @@ export default async function OgImage({
               left: 0,
               width: "100%",
               height: 14,
-              backgroundColor: HEARTH_500,
+              backgroundColor: OAKTEND_500,
             }}
           />
         </div>
@@ -236,10 +236,10 @@ export default async function OgImage({
     return new ImageResponse(
       (
         <div style={{ ...frame, alignItems: "center" }}>
-          <div style={{ fontSize: 84, fontWeight: 700, color: HEARTH_900 }}>
-            Hearth
+          <div style={{ fontSize: 84, fontWeight: 700, color: OAKTEND_900 }}>
+            OakTend
           </div>
-          <div style={{ fontSize: 36, color: HEARTH_700, marginTop: 16 }}>
+          <div style={{ fontSize: 36, color: OAKTEND_700, marginTop: 16 }}>
             Trusted pros for your home
           </div>
         </div>

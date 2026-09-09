@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { fillLegalTokens } from "@/lib/legal";
 import {
   hasCurrentInsurance,
   majorLeadInsuranceGate,
@@ -89,8 +90,8 @@ describe("the copy itself", () => {
     );
   });
 
-  it("the upload link goes to the compliance card's page", () => {
-    expect(INSURANCE_UPLOAD_HREF).toBe("/pro/business");
+  it("the upload link deep-links to the compliance card's insurance row (C6)", () => {
+    expect(INSURANCE_UPLOAD_HREF).toBe("/pro/business#insurance");
   });
 
   it("recognizes the SQL backstop's raise text, wrapped or bare", () => {
@@ -205,26 +206,33 @@ describe("the actions carry the same gate (source pin)", () => {
 });
 
 describe("/pro-terms: the insurance and venue clause (source pin)", () => {
-  const terms = read("src/app/pro-terms/page.tsx");
+  // /pro-terms moved from hand-written JSX to src/content/legal/pro-terms.md,
+  // rendered by src/components/LegalDocument.tsx (see docs/LEGAL-TODO.md).
+  // fillLegalTokens mirrors what actually renders: the raw file still carries
+  // {{BRAND}}, not the literal word.
+  const terms = fillLegalTokens(read("src/content/legal/pro-terms.md"));
 
   it("requires liability insurance covering injury and property damage", () => {
     expect(terms).toContain("carry appropriate liability insurance");
     expect(terms).toContain("bodily injury and property damage");
-    // Not "...on file" in one piece: JSX wraps the sentence across lines.
     expect(terms).toContain("requires current proof of insurance");
   });
 
   it("states the venue relationship and sole responsibility", () => {
     expect(terms).toContain(
-      "Hearth is a venue that connects homeowners with independent"
+      "OakTend is a venue that connects homeowners with independent"
     );
     expect(terms).toContain("does not perform, supervise, or guarantee the");
     expect(terms).toContain("solely responsible for the work you perform");
   });
 
-  it("flags the clause for counsel per the repo's TODO(legal) convention", () => {
-    expect(terms).toContain(
-      "TODO(legal): have counsel review the insurance and venue clause wording"
-    );
+  it("flags the whole document set for counsel per docs/LEGAL-TODO.md", () => {
+    // The old inline `{/* TODO(legal): ... */}` comments scattered through
+    // the hand-written pages don't exist in published Markdown (they'd
+    // render as visible text, not a hidden dev note). LEGAL-TODO.md is the
+    // one place that now says every document, this clause included, still
+    // needs attorney sign-off.
+    const todo = read("docs/LEGAL-TODO.md");
+    expect(todo).toContain("Attorney review of every document");
   });
 });

@@ -3,7 +3,7 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "crypto";
 
-// Server-only. Opt-in background checks via Checkr (0057), paid by Hearth
+// Server-only. Opt-in background checks via Checkr (0057), paid by OakTend
 // once the pro has earned it (BACKGROUND_CHECK_MIN_PAID_LEADS paid lead
 // applications - the gate lives in startBackgroundCheckAction) -
 // there is no payment code anywhere in this file. Dormant without
@@ -32,7 +32,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 //     form-encoding the same way the confirmed /v1/invitations example does.
 //   - The default package slug: package slugs are configured per Checkr
 //     account/dashboard, so "basic_criminal" below is a placeholder that
-//     matches common Checkr naming, NOT a guaranteed-valid slug for Hearth's
+//     matches common Checkr naming, NOT a guaranteed-valid slug for OakTend's
 //     account. Set CHECKR_PACKAGE to the real slug before this goes live.
 //   - Webhook event JSON shape (event.type, event.id, event.data.object).
 //     Parsing below is deliberately defensive (reads either a nested
@@ -123,7 +123,7 @@ export type CreateCandidateResult =
 
 // Creates a Checkr candidate, then an invitation for the configured (or
 // default) package. Checkr emails the candidate directly from here on -
-// Hearth never collects SSNs, DOB, or any other sensitive candidate detail
+// OakTend never collects SSNs, DOB, or any other sensitive candidate detail
 // itself. Never throws: every failure resolves to { ok: false, error }.
 export async function createCandidateAndInvite(
   input: CreateCandidateInput

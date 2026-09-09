@@ -132,7 +132,7 @@ function whenLabel(i: number): string {
 // city, and each system's material_or_model. Editing material_or_model to a
 // fresh random string before every GET defeats the per-brand fetch cache (a
 // new brand string is always a cache miss) and floods Open-Meteo and CPSC
-// from Hearth's shared Vercel egress IPs - the same "the punishment lands on
+// from OakTend's shared Vercel egress IPs - the same "the punishment lands on
 // the whole deployment, and lasts as long as they decide it does" risk
 // address-suggest already guards Photon against (see
 // src/app/api/address-suggest/route.ts, which this mirrors). Same atomic
@@ -282,12 +282,12 @@ async function fetchWeather(
       // Next's fetch cache is keyed on the request URL, so without the state
       // somewhere in that URL, Springfield-IL and Springfield-MO homes would
       // still collide on the SAME cached (wrong-for-one-of-them) top match for
-      // 24h even though selection below is correct. `hearthState` is not a
+      // 24h even though selection below is correct. `oakTendState` is not a
       // real Open-Meteo parameter - the API ignores it (verified live: adding
       // it returns identical results) - it exists purely to partition the
       // cache key per state so each state gets its own cached response.
       const stateParam = state
-        ? `&hearthState=${encodeURIComponent(state)}`
+        ? `&oakTendState=${encodeURIComponent(state)}`
         : "";
       const geo = await fetchJson(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(

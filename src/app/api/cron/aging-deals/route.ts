@@ -9,7 +9,7 @@ import { MAX_APPLICANTS_PER_JOB,
 
 export const runtime = "nodejs";
 
-// Daily job (Vercel Cron, see vercel.json) that pings Hearth Pro members about
+// Daily job (Vercel Cron, see vercel.json) that pings OakTend Pro members about
 // aging-deal jobs in their trades: open, unassigned, not-yet-full jobs whose
 // apply fee JUST crossed a markdown tier (15% off at 3 days, 30% off at 7:
 // AGING_LEAD_TIERS, priced for real by lead_fee_cents() in migration 0028).

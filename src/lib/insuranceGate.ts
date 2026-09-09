@@ -17,9 +17,11 @@ import { isMajorCategory } from "@/lib/constants";
 // the requirement BEFORE any money or any form submit is in flight.
 
 // Where a pro adds their certificate of insurance: the compliance card in
-// the Account panel on the Business tab. Same destination proHome's expiry
-// chips already link to.
-export const INSURANCE_UPLOAD_HREF = "/pro/business";
+// the Account panel on the Business tab. #insurance (ComplianceCard.tsx)
+// deep-links straight to that row, not just the top of the page: it sits
+// inside a collapsed <details>, and browsers auto-open an ancestor <details>
+// and scroll to the target when a fragment link points inside it.
+export const INSURANCE_UPLOAD_HREF = "/pro/business#insurance";
 
 // The one friendly refusal, shown by the client-side gate and by the server
 // action's flash alike. Owner-approved copy; keep the three surfaces

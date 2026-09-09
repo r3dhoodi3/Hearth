@@ -12,18 +12,27 @@
 // on the server, so a shared or reloaded /pro/leads?sort=fee link paints
 // sorted, with no flash of the wrong order.
 
-export type LeadSort = "new" | "fee" | "deal";
+export type LeadSort = "new" | "fee";
 
 // Newest is the default, and the order the RPC already returns.
+//
+// C5 (2026-09-07 tester wave): a "Biggest deal" sort used to sit next to this
+// one, ordering by percent off. It competed with the "Cheapest fee" sort for
+// the same job on the same tap - two different "this is the deal" pitches on
+// one board read as confusing, not helpful, and "biggest deal" specifically
+// spotlighted the free aging markdown over the paid OakTend Pro lead discount
+// (the pricing priority per the growth research memory). "Cheapest fee" is
+// kept: it is the discount-source-agnostic bottom line, so a Pro member's
+// discounted price already sorts to the top under it without a second,
+// competing button.
 export const LEAD_SORT_OPTIONS: { value: LeadSort; label: string }[] = [
   { value: "new", label: "Newest" },
   { value: "fee", label: "Cheapest fee" },
-  { value: "deal", label: "Biggest deal" },
 ];
 
 /** Anything unknown (or missing) is the default order, never an error. */
 export function normalizeLeadSort(value: string | undefined | null): LeadSort {
-  return value === "fee" || value === "deal" ? value : "new";
+  return value === "fee" ? value : "new";
 }
 
 // The only two numbers a sort reads. Both are already resolved on the server
@@ -51,8 +60,5 @@ export function sortLeads<T extends SortableLead>(
   // to sort by the pre-intro fee, so a discounted card could sit below a
   // dearer one under "Cheapest fee".
   if (sort === "fee") out.sort((a, b) => a.feeCents - b.feeCents);
-  // Biggest markdown first, cheapest breaking a tie.
-  else if (sort === "deal")
-    out.sort((a, b) => b.off - a.off || a.feeCents - b.feeCents);
   return out;
 }

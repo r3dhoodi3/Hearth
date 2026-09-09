@@ -6,7 +6,7 @@ import { sendNotification } from "@/lib/notify";
 export const runtime = "nodejs";
 
 // Daily job (Vercel Cron, see vercel.json) that reminds a pro before their
-// contractor license or certificate of insurance lapses. Hearth only ever
+// contractor license or certificate of insurance lapses. OakTend only ever
 // read a date off the document the pro uploaded (see /api/pro-compliance):
 // this cron never claims to have verified anything, it just watches the
 // dates already on file and nudges.

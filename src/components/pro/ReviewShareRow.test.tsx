@@ -25,7 +25,7 @@ describe("ReviewShareRow", () => {
     render(<ReviewShareRow {...props} />);
     const download = screen.getByText("Download") as HTMLAnchorElement;
     expect(download.getAttribute("href")).toBe("/api/review-card/review-1");
-    expect(download.getAttribute("download")).toBe("hearth-review-review-1.png");
+    expect(download.getAttribute("download")).toBe("oaktend-review-review-1.png");
   });
 
   it("copies the caption with the profile URL", async () => {
@@ -40,7 +40,7 @@ describe("ReviewShareRow", () => {
 
     await waitFor(() => expect(screen.getByText("Copied!")).toBeInTheDocument());
     expect(writeText).toHaveBeenCalledWith(
-      "Thanks for the kind words! Find me on Hearth: https://hearth.example/p/ace-plumbing"
+      "Thanks for the kind words! Find me on OakTend: https://hearth.example/p/ace-plumbing"
     );
   });
 

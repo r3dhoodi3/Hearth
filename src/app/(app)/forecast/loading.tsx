@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/Skeleton";
 
 // Mirrors forecast/page.tsx once a forecast exists: the max-w-3xl wrapper,
 // header, the centered card-hero "set aside per month" block (the dominant
-// element), the Ask Hearth plan button, the repair reserve card, the "Start
+// element), the Ask OakTend plan button, the repair reserve card, the "Start
 // here" card, the "Line up quotes early" card, and the expected-spend-by-year
 // bar chart card.
 //

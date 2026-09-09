@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import GuideCta from "@/components/GuideCta";
 import Breadcrumbs, { BreadcrumbJsonLd } from "@/components/Breadcrumbs";
 
-// Public SEO guide. The task list below mirrors the tasks Hearth's own
+// Public SEO guide. The task list below mirrors the tasks OakTend's own
 // maintenance plan generator tracks (ALWAYS_SCHEDULE / SYSTEM_SCHEDULE in
 // src/lib/maintenancePlan.ts), so the "what to do" side of this page matches
 // the app exactly. The "how often" side intentionally does NOT quote that
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    siteName: "Hearth",
+    siteName: "OakTend",
     type: "article",
   },
   twitter: {

@@ -29,6 +29,7 @@ function job(
     city: null,
     severity: null,
     ownershipVerified: false,
+    homeownerDisplay: null,
     feeGlance: `$${feeCents / 100}`,
     glanceLine2: "",
     feeStr: `$${feeCents / 100}`,
@@ -128,9 +129,6 @@ describe("LeadsBoard sort", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cheapest fee" }));
     expect(order()).toEqual(["d", "b", "a"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Biggest deal" }));
-    expect(order()).toEqual(["b", "d", "a"]);
-
     // Newest is the array's own order, so it comes back with no request.
     fireEvent.click(screen.getByRole("button", { name: "Newest" }));
     expect(order()).toEqual(["a", "b", "d"]);
@@ -167,7 +165,7 @@ describe("LeadsBoard sort", () => {
   });
 });
 
-// Migration 0149: Hearth Pro members get 10% off every lead fee, never
+// Migration 0149: OakTend Pro members get 10% off every lead fee, never
 // stacked with the aging markdown. One card, one discount, one label.
 describe("LeadsBoard: member vs aging discount labels (0149)", () => {
   afterEach(() => cleanup());

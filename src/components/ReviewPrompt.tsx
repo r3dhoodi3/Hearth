@@ -41,9 +41,9 @@ import {
   type ReviewSessionPlan,
 } from "@/lib/reviewPrompt";
 
-// "ask"     -> Enjoying Hearth? (Love it / Not really)
+// "ask"     -> Enjoying OakTend? (Love it / Not really)
 // "rate"    -> thank you, here is the App Store link
-// "confirm" -> did you get a chance to rate Hearth? (Yes, done / Not yet)
+// "confirm" -> did you get a chance to rate OakTend? (Yes, done / Not yet)
 type Step = "hidden" | "ask" | "rate" | "confirm";
 
 // Wait this long after the page has settled before the card can appear, so it
@@ -83,9 +83,9 @@ function markSettled(): void {
   }
 }
 
-// The one review-prompt surface in the app: "Enjoying Hearth?" -> Love it /
+// The one review-prompt surface in the app: "Enjoying OakTend?" -> Love it /
 // Not really, then the App Store link, then an honest "did you get a chance to
-// rate Hearth?" when they come back. Never the native store prompt - see
+// rate OakTend?" when they come back. Never the native store prompt - see
 // requestNativeReview() in src/lib/reviewPrompt.ts for where that would plug
 // in on a native wrapper. Mounted once, globally, in src/app/(app)/layout.tsx.
 //
@@ -141,7 +141,7 @@ export default function ReviewPrompt() {
   // which say it outright) rule out putting a "do you like this app?" filter
   // in front of the system review sheet: that pattern - only happy people get
   // routed to the store - is exactly what the system API was created to
-  // replace. So inside the native shell the "Enjoying Hearth?" card never
+  // replace. So inside the native shell the "Enjoying OakTend?" card never
   // renders at all, nothing is gated on a "Love it" tap, and the OS is asked
   // directly at a positive moment. The web keeps its card: a web page is not
   // an App Store app, its "Rate on the App Store" link is a plain navigation,
@@ -150,7 +150,7 @@ export default function ReviewPrompt() {
   // Everything else the owner asked for still holds here: not the first
   // session, not on an excluded page, at most one ask per app open, the same
   // 15 to 20 minutes of real use, and only while somebody is actually
-  // touching the screen. requestNativeReview() adds Hearth's own three-a-year
+  // touching the screen. requestNativeReview() adds OakTend's own three-a-year
   // cap on top of the platform's.
   function evaluateNative() {
     if (isExcludedPath(pathnameRef.current)) return;
@@ -199,7 +199,7 @@ export default function ReviewPrompt() {
       : 0;
 
     // The follow-up comes first: somebody who already tapped through to the
-    // store is owed the honest question, not another "Enjoying Hearth?".
+    // store is owed the honest question, not another "Enjoying OakTend?".
     if (
       isEligibleForRateFollowUp({
         pathname: pathnameRef.current,
@@ -426,7 +426,7 @@ export default function ReviewPrompt() {
     // The link itself still opens the store (this is an <a>). All we record is
     // the INTENT: Apple never tells an app whether a rating was left, so
     // treating this tap as "done" was the bug - come back without rating and
-    // Hearth had already written you off. requestNativeReview() is where a
+    // OakTend had already written you off. requestNativeReview() is where a
     // native build would show SKStoreReviewController instead.
     requestNativeReview();
     recordReviewPromptEvent("rate_clicked");
@@ -478,10 +478,10 @@ export default function ReviewPrompt() {
   const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL;
   const title =
     step === "ask"
-      ? "Enjoying Hearth?"
+      ? "Enjoying OakTend?"
       : step === "rate"
-        ? "Rate Hearth"
-        : "Did you get a chance to rate Hearth?";
+        ? "Rate OakTend"
+        : "Did you get a chance to rate OakTend?";
 
   return (
     // Sits above the bottom tab bar (Nav.tsx: 3rem tall, plus the notch inset)
@@ -529,7 +529,7 @@ export default function ReviewPrompt() {
         {step === "rate" && (
           <div className="mt-3">
             <p className="text-sm text-stone-600 dark:text-stone-300">
-              Thank you. A quick rating helps other homeowners find Hearth.
+              Thank you. A quick rating helps other homeowners find OakTend.
             </p>
             {appStoreUrl && (
               <a
