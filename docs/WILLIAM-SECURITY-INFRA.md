@@ -172,6 +172,48 @@ House rules Landen holds every session to; they apply to yours too:
    byte-identical), and every homeowner-side phone change gets mirrored on
    the pro side in the same wave.
 
+## Follow-ups from 2026-09-08 (oaktend.com is live, read before the items below)
+
+Done today by Fable with Landen: Cloudflare DNS for oaktend.com (two DNS-only
+CNAMEs, root -> e40696a40108d92a.vercel-dns-017.com, www -> cname.vercel-dns.com),
+oaktend.com added to the Vercel project as the production domain with a
+certificate, www.oaktend.com as a 307 redirect to the root, and the Vercel
+project renamed from `hearth` to `oaktend` (team slug `hearth-test` unchanged).
+`gethearth.vercel.app` still answers, so nothing that points at it broke yet.
+Also merged your 13 commits into `wave/2026-09-07-overnight` (local, not pushed):
+`hearth-*` Tailwind tokens and the visible "Hearth" wordmark in your nav work
+were renamed to `oaktend`, and a review of the signup wave added a resend
+cooldown, a plain CAPTCHA error message, and a re-auth budget fix.
+
+What is still owed, in order. Items marked (Landen) need his logins or a secret.
+
+1. (Landen) Supabase -> Authentication -> URL Configuration: Site URL
+   `https://oaktend.com`, add `https://oaktend.com/**` to the redirect list.
+   Keep the `gethearth.vercel.app` entries until every link below is moved.
+2. (Landen) Vercel env: only 15 variables exist on the project. Missing and
+   read by the code: `ANTHROPIC_API_KEY` (every AI feature is dead without it),
+   `STRIPE_SECRET_KEY` plus the `STRIPE_PRICE_*` / `STRIPE_PRO_*` ids (checkout
+   and wallet deposits), `RISK_HASH_SALT`, `CRON_SECRET`, `RESEND_API_KEY` +
+   `RESEND_FROM`, the three `TWILIO_*` vars, `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.
+   After item 1: `NEXT_PUBLIC_SITE_URL` = `https://oaktend.com`, then redeploy.
+3. (Landen) Stripe -> Webhooks: endpoint to `https://oaktend.com/api/stripe/webhook`
+   and paste the new signing secret into `STRIPE_WEBHOOK_SECRET`.
+4. Turnstile: there is NO widget in Landen's Cloudflare account, so the
+   `captchaToken` plumbing you built runs with no key and is a no-op. Create
+   one (Turnstile -> Add widget, hostnames oaktend.com, www.oaktend.com,
+   gethearth.vercel.app, localhost), site key to Vercel as above, secret into
+   Supabase Attack Protection. Test password sign-in on a phone first; the
+   overnight audit saw error 600010 on the live sign-in page.
+5. Supabase email OTP expiry stays at 3600 seconds (Landen's call, 09-08).
+   The verify screen now has a 60 second resend cooldown and a 5 per page cap
+   instead.
+6. Cloudflare Email Routing for oaktend.com (hello, support, legal, privacy,
+   security) is still not set up. Do it before Resend goes live so replies to
+   the sending domain land somewhere.
+7. Once 1 to 3 are done and verified on oaktend.com, remove
+   `gethearth.vercel.app` from the Supabase redirect list and from Turnstile.
+   Do not delete the domain from Vercel; QR codes and printed cards use it.
+
 ## Before launch
 
 1. **RLS audit, live DB.** Run queries 1a and 1b from
