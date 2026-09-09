@@ -672,10 +672,22 @@ describe("no incentives, and nothing that could grow into one", () => {
     expect(component).toContain("if (nativeRef.current) return null;");
   });
 
-  it("adds no Capacitor dependency to the web build", () => {
+  it("nativeReview.ts itself still avoids a static Capacitor import", () => {
+    // As of 2026-09-07 (appstore-execute) the Capacitor native app shell is
+    // real, and package.json legitimately depends on several @capacitor/*
+    // packages (RevenueCat IAP, push, haptics, etc. - see
+    // capacitor.config.ts and docs/APP-STORE-SUBMISSION.md) - the original
+    // "package.json must never contain @capacitor" assertion this test used
+    // to make was written before that decision and is no longer the
+    // invariant worth guarding. What still holds: THIS file
+    // (src/lib/nativeReview.ts) specifically has not been upgraded to call
+    // a real in-app-review plugin yet (@capacitor-community/in-app-review is
+    // not one of the packages this pass installed - it was out of scope for
+    // tonight's App Store checklist), so it still reads window.Capacitor
+    // directly rather than statically importing a package that is not
+    // there, which is what this assertion actually checks.
     const adapter = read("src/lib/nativeReview.ts");
     expect(adapter).not.toMatch(/^import .*@capacitor/m);
-    expect(read("package.json")).not.toContain("@capacitor");
   });
 });
 

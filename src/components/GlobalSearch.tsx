@@ -235,7 +235,18 @@ export default function GlobalSearch({
           // sizes it is visible - including iPad-portrait touch - and iOS
           // Safari zooms the page on focus of any input under 16px. Same
           // reasoning as `.input` in globals.css.
-          className={`w-24 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-base text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:outline-none dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 ${focusBorder}`}
+          //
+          // max-lg:focus:w-24 (A1): below lg the header is still the compact
+          // shell (Nav.tsx switches its own top strip on at lg, not sm - see
+          // its comment), so this box, ToolsMenu, the bell and the profile
+          // menu are all fighting over the same tight row from 640 to
+          // 1023px - a phone or small tablet in landscape, or an iPad
+          // portrait. Growing 96px on focus in that row pushed the header's
+          // controls around ("makes the toolbar look weird when expanding").
+          // Pinning the focused width back to the resting one there removes
+          // the jump; lg and up (the real desktop top strip) keeps the
+          // original grow-on-focus untouched.
+          className={`w-24 rounded-full border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-base text-stone-700 transition-all placeholder:text-stone-500 focus:w-48 focus:outline-none max-lg:focus:w-24 dark:border-white/10 dark:bg-stone-900 dark:text-stone-200 ${focusBorder}`}
         />
       </form>
 

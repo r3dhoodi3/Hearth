@@ -90,8 +90,8 @@ describe("the copy itself", () => {
     );
   });
 
-  it("the upload link goes to the compliance card's page", () => {
-    expect(INSURANCE_UPLOAD_HREF).toBe("/pro/business");
+  it("the upload link deep-links to the compliance card's insurance row (C6)", () => {
+    expect(INSURANCE_UPLOAD_HREF).toBe("/pro/business#insurance");
   });
 
   it("recognizes the SQL backstop's raise text, wrapped or bare", () => {

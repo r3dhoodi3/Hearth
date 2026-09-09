@@ -29,6 +29,7 @@ function job(
     city: null,
     severity: null,
     ownershipVerified: false,
+    homeownerDisplay: null,
     feeGlance: `$${feeCents / 100}`,
     glanceLine2: "",
     feeStr: `$${feeCents / 100}`,
@@ -127,9 +128,6 @@ describe("LeadsBoard sort", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Cheapest fee" }));
     expect(order()).toEqual(["d", "b", "a"]);
-
-    fireEvent.click(screen.getByRole("button", { name: "Biggest deal" }));
-    expect(order()).toEqual(["b", "d", "a"]);
 
     // Newest is the array's own order, so it comes back with no request.
     fireEvent.click(screen.getByRole("button", { name: "Newest" }));

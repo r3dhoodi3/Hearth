@@ -25,6 +25,29 @@ export const DEFAULT_LIFESPANS: Record<string, number> = {
   sump_pump: 10,
   sewer_line: 50,
   fence: 18,
+  // Starter-seed expansion (src/lib/starterSystems.ts): everyday household
+  // systems the onboarding claim now seeds alongside the original 7, plus a
+  // few flagged extras RentCast can tell us a home has. National ballpark
+  // figures for the appliances (a real dishwasher/range/fridge dies on its
+  // own schedule, not the house's), a hardwired-detector service life for
+  // smoke/CO (NFPA: replace the whole unit at 10 years, not just the
+  // battery), and equipment-service figures for pool gear and irrigation
+  // controllers.
+  pool: 10,
+  fireplace: 20,
+  smoke_co_detector: 10,
+  dishwasher: 10,
+  range: 15,
+  refrigerator: 13,
+  washer_dryer: 12,
+  garbage_disposal: 12,
+  irrigation: 15,
+  water_softener: 12,
+  // B7: "other" (an unlisted system the owner named themselves) has no
+  // typical lifespan to draw on - assessSystem() already fell back to a
+  // bare 20 for any unrecognized system_type before this entry existed, so
+  // this is the same number made explicit rather than a behavior change.
+  other: 20,
 };
 
 // Rough national replacement cost RANGES (USD) plus a plain explanation of what

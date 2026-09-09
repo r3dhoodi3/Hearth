@@ -39,6 +39,10 @@ import { trialDecision, RISK_BLOCK_MESSAGE } from "@/lib/risk/decision";
 import { recordRequestSignals } from "@/lib/risk/signals";
 import { trackServerEvent } from "@/lib/trackServer";
 import { variantForUser } from "@/lib/paywallExperiment";
+import {
+  isNativeClientRequest,
+  NATIVE_STRIPE_BLOCKED_MESSAGE,
+} from "@/lib/nativeClientHeader";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -105,6 +109,22 @@ export async function startPlusCheckoutAction(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
+
+  // APPLE 3.1.1 / GOOGLE PLAY BILLING: a digital unlock (OakTend Plus)
+  // cannot sell through an outside payment processor from inside the native
+  // app shell. isNativeClientRequest() reads the X-OakTend-Client header the
+  // native build's fetch wrapper stamps (src/lib/nativeFetch.ts) - never the
+  // client-side isNativeApp() check alone, which a modified build or a
+  // scripted request could spoof. The native Plus screen renders the
+  // RevenueCat IAP button instead of this form (see PlanToggle.tsx), so a
+  // real native user never reaches this action; this refusal only matters
+  // against a bypassed/forged request. Lead-fee and wallet-deposit Stripe
+  // checkouts are NOT gated this way - see src/lib/nativeClientHeader.ts's
+  // module comment for the 3.1.3(e) reasoning that keeps those open.
+  if (await isNativeClientRequest()) {
+    await setFlash(NATIVE_STRIPE_BLOCKED_MESSAGE, "error");
+    redirect("/plus");
+  }
 
   // REQUIRE THE AUTO-RENEWAL CONSENT CHECKBOX (Cal. Bus. & Prof. Code
   // 17602(a)(2), as amended by AB 2863, effective July 1, 2025). The checkout
@@ -597,6 +617,18 @@ export async function setExtraHomesAction(formData: FormData) {
   const user = await getUser();
   if (!user) redirect("/signin");
 
+  // APPLE 3.1.1 / GOOGLE PLAY BILLING: extra home slots are a paid digital
+  // unlock bought INSIDE the app, exactly like the base Plus plan, so the same
+  // native refusal startPlusCheckoutAction applies has to apply here too - a
+  // native buyer who reached this action would otherwise be charged through
+  // Stripe for an in-app feature, which is the single clearest 3.1.1
+  // violation a reviewer can reproduce. Nothing changes for a web visitor: the
+  // header is never present on a browser request.
+  if (await isNativeClientRequest()) {
+    await setFlash(NATIVE_STRIPE_BLOCKED_MESSAGE, "error");
+    redirect("/plus");
+  }
+
   const sub = await getSubscription();
   if (!sub?.stripe_subscription_id) {
     await setFlash("Start OakTend Plus first, then you can add extra homes.", "error");
@@ -728,6 +760,17 @@ export async function setExtraHomesAction(formData: FormData) {
 export async function upgradeToYearlyAction() {
   const user = await getUser();
   if (!user) redirect("/signin");
+
+  // APPLE 3.1.1 / GOOGLE PLAY BILLING: a cadence upgrade takes an immediate
+  // prorated charge through Stripe, so it is a purchase, not a settings
+  // change. Same refusal as startPlusCheckoutAction / setExtraHomesAction; a
+  // native member changes cadence through the store's own subscription
+  // management (the disclosure block in NativePlusCheckout.tsx already points
+  // them there). Web is unaffected - the header only exists on native.
+  if (await isNativeClientRequest()) {
+    await setFlash(NATIVE_STRIPE_BLOCKED_MESSAGE, "error");
+    redirect("/plus");
+  }
 
   // getSubscription is scoped to the signed-in user, so this Stripe
   // subscription id is theirs by construction.
@@ -1111,7 +1154,20 @@ export async function resumeMembershipAction() {
 // Send the user to Stripe's billing portal to manage or cancel their plan.
 export async function manageBillingAction() {
   const sub = await getSubscription();
-  if (!sub?.stripe_customer_id) redirect("/plus");
+  // No Stripe customer means either "never subscribed" or "subscribed through
+  // the App Store / Play Store" (a RevenueCat-sourced row leaves both Stripe
+  // ids null - see src/app/api/iap/webhook/route.ts). The second case used to
+  // bounce silently back to /plus with no explanation, which reads as a dead
+  // button; say where that subscription is actually managed instead.
+  if (!sub?.stripe_customer_id) {
+    if (sub) {
+      await setFlash(
+        "This membership was bought in the app, so it is managed in your App Store or Play Store subscription settings.",
+        "info"
+      );
+    }
+    redirect("/plus");
+  }
 
   const portal = await stripe.billingPortal.sessions.create({
     customer: sub.stripe_customer_id,

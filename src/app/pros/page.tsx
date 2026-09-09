@@ -205,7 +205,7 @@ export default async function ProsLanding(props: {
     {
       icon: <Ban className="h-5 w-5" />,
       title: "No subscription required",
-      body: `Load your wallet with deposits from $5 and pay per application. An optional Pro membership adds perks like bonus credit and an AI back office, but it never changes which jobs you can see or apply to. ${NO_CONTRACT_LINE}`,
+      body: `Load your wallet with deposits from $10 and pay per application. An optional Pro membership adds perks like bonus credit and an AI back office, but it never changes which jobs you can see or apply to. ${NO_CONTRACT_LINE}`,
     },
   ];
 

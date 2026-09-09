@@ -2,16 +2,12 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
-  FEEDBACK_CREDIT_CENTS,
   FEEDBACK_MIN_MESSAGE,
   FEEDBACK_MAX_MESSAGE,
-  FEEDBACK_PROMO_KEY,
+  FEEDBACK_BOUNTY_CAP_LABEL,
   FEEDBACK_CARD_TITLE,
-  FEEDBACK_DEAL_NOTE,
-  FEEDBACK_REPEAT_NOTE,
-  FEEDBACK_THANKS_NOTE,
+  FEEDBACK_PENDING_NOTE,
   FEEDBACK_ERROR_COPY,
-  feedbackCreditDollars,
   validateFeedback,
 } from "@/lib/proFeedback";
 
@@ -37,31 +33,21 @@ function stripComments(body: string): string {
     .join("\n");
 }
 
-describe("pro feedback credit: the shape of the offer", () => {
-  it("is $5 of credit, once per contractor account", () => {
-    expect(FEEDBACK_CREDIT_CENTS).toBe(500);
-    expect(feedbackCreditDollars()).toBe("$5");
-    expect(FEEDBACK_PROMO_KEY).toBe("pro_feedback_credit");
-    expect(FEEDBACK_CARD_TITLE).toContain("$5 in lead credit");
+describe("pro feedback: the shape of the offer (C7, 2026-09-07)", () => {
+  it("promises review, not instant money, in the headline", () => {
+    // No dollar amount in the headline: nothing is instant any more.
+    expect(FEEDBACK_CARD_TITLE).not.toContain("$");
+    expect(FEEDBACK_CARD_TITLE.toLowerCase()).not.toContain("credit");
   });
 
-  it("states the money rule honestly and never promises pay for later reports", () => {
-    // First report pays instantly; later reports are read by a person and MAY
-    // earn a discretionary thank-you. "will" would be a promise the code does
-    // not keep, so it must not appear in either sentence about later reports.
-    expect(FEEDBACK_DEAL_NOTE).toContain("first report earns the $5");
-    expect(FEEDBACK_DEAL_NOTE).toContain("do not pay on their own");
-    expect(FEEDBACK_DEAL_NOTE).toContain("at our discretion");
-    expect(FEEDBACK_REPEAT_NOTE).toContain("already earned the $5");
-    expect(FEEDBACK_REPEAT_NOTE).toContain("at our discretion");
-    for (const note of [FEEDBACK_DEAL_NOTE, FEEDBACK_REPEAT_NOTE]) {
-      expect(note).not.toMatch(/will earn|will pay|will get/);
-    }
-  });
-
-  it("keeps the later-report confirmation quiet about money", () => {
-    expect(FEEDBACK_THANKS_NOTE).not.toContain("$");
-    expect(FEEDBACK_THANKS_NOTE.toLowerCase()).not.toContain("credit");
+  it("states the one honest sentence: reviewed, and up to $15 if verified", () => {
+    expect(FEEDBACK_PENDING_NOTE).toBe(
+      "Thanks. We review every report; verified bugs earn up to $15 in credit."
+    );
+    expect(FEEDBACK_BOUNTY_CAP_LABEL).toBe("$15");
+    // Never a promise: nothing here may say a report WILL pay, only that a
+    // verified one CAN.
+    expect(FEEDBACK_PENDING_NOTE).not.toMatch(/will earn|will pay|will get/);
   });
 });
 
@@ -247,5 +233,99 @@ describe("repeat reports (migration 0152)", () => {
     expect(code).not.toMatch(
       /(from|into|update|join)\s+(public\.)?app_feedback/i
     );
+  });
+});
+
+describe("verify_pro_feedback (migration 0157)", () => {
+  // C7 (2026-09-07): every report starts status='pending'; verify_pro_feedback
+  // is the only way credit can move, run by hand from the SQL editor after a
+  // person confirms a report is real. These assert the properties that make
+  // that safe: capped at $15, idempotent (only acts once per row), and
+  // service-role only, same discipline as 0144's grant_feedback_credit.
+  const sql = readFileSync(
+    fileURLToPath(
+      new URL(
+        "../../supabase/migrations/0157_pro_feedback_verified_credit.sql",
+        import.meta.url
+      )
+    ),
+    "utf8"
+  );
+
+  it("adds status/credited_cents/credited_at/review_note, pending by default", () => {
+    expect(sql).toContain(
+      "add column if not exists status text not null default 'pending'"
+    );
+    expect(sql).toContain(
+      "check (status in ('pending', 'verified', 'rejected'))"
+    );
+    expect(sql).toContain("add column if not exists credited_cents bigint");
+    expect(sql).toContain("add column if not exists credited_at timestamptz");
+    expect(sql).toContain("add column if not exists review_note text");
+  });
+
+  it("hard-caps the credit at $15 (1500 cents)", () => {
+    expect(sql).toContain("credited_cents >= 0 and credited_cents <= 1500");
+    expect(sql).toContain("or p_amount_cents > 1500 then");
+  });
+
+  it("is idempotent: only acts on a row still status='pending', locked first", () => {
+    expect(sql).toContain("for update;");
+    expect(sql).toContain("if v_status <> 'pending' then");
+    expect(sql).toContain("return false; -- already verified or rejected: never re-process");
+  });
+
+  it("credits through the same bonus_grants + wallet_transactions shape as 0144", () => {
+    const grant = sql.indexOf("insert into bonus_grants");
+    const wallet = sql.indexOf("update wallets");
+    const ledger = sql.indexOf("insert into wallet_transactions");
+    expect(grant).toBeGreaterThan(-1);
+    expect(wallet).toBeGreaterThan(grant);
+    expect(ledger).toBeGreaterThan(wallet);
+    expect(sql).toContain("'feedback_credit'");
+  });
+
+  it("a zero-amount call still marks the report verified with no wallet write", () => {
+    expect(sql).toContain("if p_amount_cents = 0 then\n    return true;");
+  });
+
+  it("is service-role only", () => {
+    expect(sql).toContain(
+      "revoke all on function public.verify_pro_feedback(uuid, bigint)\n  from public, anon, authenticated;"
+    );
+    expect(sql).toContain(
+      "grant execute on function public.verify_pro_feedback(uuid, bigint)\n  to service_role;"
+    );
+  });
+
+  it("never touches app_feedback", () => {
+    const code = stripComments(sql);
+    expect(code).not.toMatch(/(from|into|update|join)\s+(public\.)?app_feedback/i);
+  });
+});
+
+describe("the app no longer auto-credits (C7)", () => {
+  // The whole point of this wave: nothing in the request path can move money
+  // any more. grant_feedback_credit (0144) still exists in the database but
+  // must not be called from anywhere in the app.
+  const files = [
+    "./proFeedback.ts",
+    "./proFeedbackServer.ts",
+    "../app/pro/feedback/page.tsx",
+    "../app/pro/feedback/FeedbackForm.tsx",
+    "../app/pro/feedback/actions.ts",
+    "../app/pro/page.tsx",
+    "../app/pro/HomeView.tsx",
+    "../app/pro/help/page.tsx",
+    "../app/pro/help/HelpView.tsx",
+  ];
+
+  it("never calls grant_feedback_credit or reads promo_claims for feedback", () => {
+    for (const f of files) {
+      const code = stripComments(src(f));
+      expect(code, f).not.toContain("grant_feedback_credit");
+      expect(code, f).not.toContain("grantFeedbackCredit");
+      expect(code, f).not.toContain("FEEDBACK_PROMO_KEY");
+    }
   });
 });

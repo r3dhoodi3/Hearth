@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentContractor, isEstablishedPro } from "@/lib/contractor";
+import { getCurrentContractor } from "@/lib/contractor";
 import { ok, err, type ActionResult } from "@/lib/actionResult";
 import { PRO_LEADS_HREF } from "@/lib/constants";
 import {
@@ -10,42 +10,32 @@ import {
   validateFeedback,
   type FeedbackOutcome,
 } from "@/lib/proFeedback";
-import {
-  insertProFeedback,
-  grantFeedbackCredit,
-  proFeedbackRateLimitOk,
-  readFeedbackState,
-} from "@/lib/proFeedbackServer";
+import { insertProFeedback, proFeedbackRateLimitOk } from "@/lib/proFeedbackServer";
 
-// "Report a bug, get $5 in lead credit", the pro side only.
+// "Report a bug", the pro side only.
 //
 // See src/lib/proFeedback.ts for what this is and, more importantly, what it
 // is not: this is a private bug-report and product-feedback form, never an
-// app-store rating, and no copy or code path here may ever connect the credit
+// app-store rating, and no copy or code path here may ever connect any credit
 // to one.
 //
-// THE MONEY RULE. The first report a business ever sends earns the $5
-// immediately (once established, below). Every later report is stored and
-// pays NOTHING automatically: the once-ever gate is promo_claims' primary key
-// inside grant_feedback_credit (migration 0144), so two tabs submitting at
-// the same moment still move the money exactly once, and the loser is told
-// "thanks" rather than "credited". A discretionary thank-you for a later
-// report that uncovers something real is a human decision made while reading
-// pro_feedback rows, never a code path here.
+// THE MONEY RULE (C7, 2026-09-07). Every report stores as status='pending'
+// (the column default from migration 0157) and pays NOTHING automatically -
+// this action never touches the wallet. A person reads every report; a
+// report they confirm is real can earn up to $15 in bonus lead credit,
+// granted by hand through verify_pro_feedback() (0157) after review. That is
+// a human decision made outside this code path, never something a submit
+// here can trigger.
 //
 // Returns ActionResult rather than redirecting so the form can keep the pro's
-// typed note on screen when something is wrong with it. `outcome` picks the
-// success screen: "credited" (this submission moved the $5), "locked" (first
-// note stored, credit waiting on qualification), or "thanks" (stored, no
-// money, by design).
+// typed note on screen when something is wrong with it.
 export async function submitProFeedbackAction(input: {
   score: number;
   message: string;
   contactOk: boolean;
 }): Promise<ActionResult<{ outcome: FeedbackOutcome }>> {
   const contractor = await getCurrentContractor();
-  // Pro side only, and a company row is what makes someone a pro. No company,
-  // no wallet to credit and nothing this form is asking about.
+  // Pro side only, and a company row is what makes someone a pro.
   if (!contractor) return err("Only a business account can send this.");
 
   const message = String(input.message ?? "").slice(0, FEEDBACK_MAX_MESSAGE + 1);
@@ -71,44 +61,11 @@ export async function submitProFeedbackAction(input: {
   if (stored === "already") return err(FEEDBACK_ERROR_COPY.already);
   if (stored === "failed") return err(FEEDBACK_ERROR_COPY.failed);
 
-  // Which screen did this submission earn? The claimed read is advisory (it
-  // picks copy); the grant itself is the authority on money. Under a race,
-  // both tabs can read claimed=false and both call the grant, and the SQL
-  // function pays exactly one of them.
-  const [state, established] = await Promise.all([
-    readFeedbackState(contractor.id, contractor.user_id ?? ""),
-    // THE QUALIFYING GATE. Only an established business earns the credit: a
-    // verified license, a paid lead, a settled deposit, or a live Pro
-    // membership (isEstablishedPro, which fails closed). Without it, a
-    // throwaway signup plus twenty characters of text is a $5 vending
-    // machine. Their words still reach us either way; the row above is
-    // already stored, and the Home tab retries the grant once they qualify
-    // (see src/app/pro/page.tsx). The SQL function is idempotent, so that
-    // retry can never double pay.
-    isEstablishedPro(contractor.id),
-  ]);
-
-  let outcome: FeedbackOutcome;
-  if (state.claimed) {
-    outcome = "thanks";
-  } else if (established) {
-    outcome = (await grantFeedbackCredit(contractor.id))
-      ? "credited"
-      : // The grant refused: someone else's tab won the race, or the wallet
-        // write hiccuped (in which case the Home tab's retry still owes them
-        // the money). Either way, promising nothing here is the honest copy.
-        "thanks";
-  } else {
-    outcome = "locked";
-  }
-
-  // Both pro tabs read the wallet balance, and Home also reads the card's
-  // state, so both have to be dropped or the pro is told the money landed on
-  // one screen and not the other.
+  // Home and /pro/help both show whether this business has ever sent a
+  // report, so both have to be dropped or one screen shows stale state.
   revalidatePath("/pro");
   revalidatePath(PRO_LEADS_HREF);
-  revalidatePath("/pro/billing");
   revalidatePath("/pro/help");
 
-  return ok({ outcome });
+  return ok({ outcome: "pending" });
 }

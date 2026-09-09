@@ -215,6 +215,10 @@ export interface Database {
           notes: string | null;
           created_at: string;
           confirmed_at: string | null;
+          // B7 / migration 0156: free-text name for a system_type "other" row.
+          // Optional here (not `| null` required) since a database that hasn't
+          // run 0156 yet simply never returns this key at all.
+          other_label?: string | null;
         };
         Insert: {
           id?: string;
@@ -230,6 +234,7 @@ export interface Database {
           notes?: string | null;
           created_at?: string;
           confirmed_at?: string | null;
+          other_label?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["home_systems"]["Insert"]>;
         Relationships: [];

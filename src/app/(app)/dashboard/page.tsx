@@ -23,6 +23,7 @@ import {
   ISSUE_CATEGORIES,
   SEASONAL_TASKS,
   seasonForMonth,
+  systemDisplayLabel,
 } from "@/lib/constants";
 import { planTitles } from "@/lib/maintenancePlan";
 import SystemForm from "../profile/SystemForm";
@@ -33,6 +34,7 @@ import ChecklistProvider from "@/components/ChecklistProvider";
 import RememberedDetails from "@/components/RememberedDetails";
 import ReviewMomentReporter from "@/components/ReviewMomentReporter";
 import AhaEventReporter from "@/components/AhaEventReporter";
+import WelcomeScrollTop from "@/components/WelcomeScrollTop";
 import { AHA_HOME_SCORE } from "@/lib/trackAhaEvents";
 import ReminderItem from "./ReminderItem";
 import SystemsPhoneList from "./SystemsPhoneList";
@@ -649,6 +651,8 @@ export default async function HomePage(
       <WeatherStrip propertyId={property.id} />
 
       {searchParams.welcome && (
+        <>
+        <WelcomeScrollTop />
         <div className="rounded-xl border border-bark-100 bg-bark-50 p-4 dark:border-bark-700/40 dark:bg-bark-700/30">
           {sys.length > 0 ? (
             <>
@@ -684,6 +688,7 @@ export default async function HomePage(
             </p>
           )}
         </div>
+        </>
       )}
 
       {/* The address masthead used to live here: a big address line, the home
@@ -729,7 +734,16 @@ export default async function HomePage(
       {/* Key stats, kept above the fold so the Health Score is the first
           thing the owner sees. */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className={`card-hero border ${band.tone}`}>
+        {/* min-w-0: a CSS grid item's default min-width is auto, which lets it
+            grow past its track to fit its own content's min-content width
+            instead of wrapping - the classic "grid blowout." Below sm this
+            grid's single implicit column is exactly the viewport width, so a
+            wide line anywhere inside the open "Why this score?" breakdown
+            (A6: it opened running off the right edge of the screen) pushed
+            the whole card, and the page with it, past 390px. min-w-0 makes
+            the card obey the track's real width and forces everything inside
+            it to wrap within that instead. */}
+        <div className={`card-hero min-w-0 border ${band.tone}`}>
           <div className="flex items-center gap-1.5">
             <p className="stat-label text-sm">Home Health Score</p>
             {/* One plain sentence for "what does this number mean," separate
@@ -742,13 +756,21 @@ export default async function HomePage(
               </summary>
               <p className="mt-1 max-w-xs text-xs opacity-80">
                 Your home score is a quick read on how your home is doing. It
-                goes up when systems are in good shape and tasks are done,
-                and drops when something needs attention.
+                starts at 100 and drops for systems that are aging, past due,
+                or rated poor, and for open issues you&apos;ve reported.
               </p>
             </details>
           </div>
-          <p className="stat-number mt-1 text-4xl">{score}</p>
+          <p className="stat-number mt-1 text-4xl">{score}/100</p>
           <p className="text-sm">{mostlyEstimated ? "Estimated score" : band.label}</p>
+          {/* B10: the score recomputes fresh on every visit, so it can move
+              with no click of yours - a system quietly crossing into "aging"
+              on your home's birthday, or an issue you closed dropping off.
+              Said plainly so that never reads as a bug. */}
+          <p className="mt-1 text-xs opacity-70">
+            Updates on its own as systems age, get confirmed, or issues open
+            and close.
+          </p>
           <details className="group mt-2 text-sm">
             <summary className="focus-ring flex w-fit cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden opacity-80 hover:opacity-100 max-sm:min-h-11">
               <ChevronRight
@@ -782,9 +804,19 @@ export default async function HomePage(
                 href="/walkthrough"
                 className="mt-2 block font-medium underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
               >
+                {/* B10 (verifier pass). This line used to read "Improve your
+                    score: confirm your roof (+5 pts)", and the promise was
+                    backwards. An unconfirmed system deducts at HALF weight
+                    (isUnconfirmedEstimate in health.ts): setting confirmed_at
+                    turns the -5 into -10, so confirming a system whose
+                    estimated age was right LOWERS the number. It can raise it
+                    too, when the real install year turns out to be newer than
+                    the estimate - which is the actual point. So the copy now
+                    promises accuracy, which is true either way, instead of
+                    points, which was true in neither direction reliably. */}
                 {biggestLever
-                  ? `Confirm your ${labelFor(SYSTEM_TYPES, biggestLever.system.system_type).toLowerCase()} (+${biggestLever.pts} pts)`
-                  : "Confirm your systems"}
+                  ? `Make this score real: confirm your ${systemDisplayLabel(biggestLever.system).toLowerCase()}`
+                  : "Make this score real: confirm your systems"}
               </Link>
             )}
           </details>

@@ -495,6 +495,7 @@ export default async function HomeownerChatsPage(
           }
           activeRows={activeConvos.map(renderConvoRow)}
           closedRows={closedConvos.map(renderConvoRow)}
+          mobileAskHref="/ask"
         />
 
           {/* ---- Open thread (the only pane on phones once one is picked) ---- */}

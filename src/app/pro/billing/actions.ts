@@ -32,7 +32,7 @@ const DEPOSIT_DAILY_CENTS_CEILING = 500_000; // $5,000 of settled deposits / 24h
 export async function depositAction(formData: FormData) {
   const dollars = Number(formData.get("amount"));
   const cents = Math.round(dollars * 100);
-  if (!cents || cents < 500) redirect("/pro/billing"); // $5 minimum to deposit
+  if (!cents || cents < 1000) redirect("/pro/billing"); // $10 minimum to deposit
   // $2,000 maximum per deposit, shared with the webhook that does the actual
   // crediting (MAX_DEPOSIT_CENTS in src/lib/constants.ts) so the two ends can
   // never drift apart. This end bounds what our own form may ask Stripe for;

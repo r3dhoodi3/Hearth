@@ -1423,14 +1423,17 @@ export default function HeroDemoPlayer() {
     // Rough per-line durations (bytes / 96kbps) for caption pacing before
     // the audio's real duration is known.
     // Byte-derived from the actual Ava MP3s (96kbps): bytes / 12000 = sec.
+    // hook, dash and end were re-recorded on 2026-09-04 for the OakTend
+    // rename (same voice and rate: msedge-tts en-US-AvaNeural, -8%), so
+    // their numbers below are the new measured frame-walk durations.
     const VO_EST_MS: Record<VoKey, number> = {
-      hook: 3360,
+      hook: 3384,
       address: 2450,
-      dash: 5160,
+      dash: 5112,
       postjob: 4850,
       chat: 4200,
       booked: 2380,
-      end: 2980,
+      end: 3096,
     };
 
     // Captions ARE the narration: the spoken line renders in short chunks

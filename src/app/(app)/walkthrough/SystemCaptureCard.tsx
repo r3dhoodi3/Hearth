@@ -47,10 +47,10 @@ function toBase64(file: File): Promise<string> {
 // estimate guessed, so a scan can legitimately lower the score too.
 function scoreMessage(before: number, after: number): string {
   if (after > before)
-    return `Nice. Your Home Health Score moved from ${before} to ${after}.`;
+    return `Nice. Your Home Health Score moved from ${before}/100 to ${after}/100.`;
   if (after < before)
-    return `Your Home Health Score moved from ${before} to ${after}, now that we know more.`;
-  return `Your Home Health Score stayed at ${after} - this one was already accounted for.`;
+    return `Your Home Health Score moved from ${before}/100 to ${after}/100, now that we know more.`;
+  return `Your Home Health Score stayed at ${after}/100 - this one was already accounted for.`;
 }
 
 // One card in the "walk your home" flow: snap the data plate, OakTend reads a

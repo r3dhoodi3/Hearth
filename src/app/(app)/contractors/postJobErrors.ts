@@ -34,9 +34,17 @@ export const POST_JOB_ERRORS = {
     "You've reached today's posting limit. Please try again tomorrow.",
   category: "Please pick a valid job category.",
   description:
-    "Please describe the job in at least 20 characters so pros know what they're applying to.",
+    "Please describe the job in at least 10 characters so pros know what they're applying to.",
   description_photos:
-    "Please describe the job in at least 20 characters so pros know what they're applying to. Your photos weren't kept, so please re-attach them.",
+    "Please describe the job in at least 10 characters so pros know what they're applying to. Your photos weren't kept, so please re-attach them.",
+  contact:
+    "Please add an email or phone number so pros can reach you.",
+  contact_photos:
+    "Please add an email or phone number so pros can reach you. Your photos weren't kept, so please re-attach them.",
+  contact_format:
+    "That email address or phone number doesn't look right. Please check it and post again.",
+  contact_format_photos:
+    "That email address or phone number doesn't look right. Please check it and post again. Your photos weren't kept, so please re-attach them.",
   budget:
     "Pros need a budget range to bid seriously on projects this size. Please pick one and post again.",
   failed:

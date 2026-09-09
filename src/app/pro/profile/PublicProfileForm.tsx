@@ -484,7 +484,7 @@ export default function PublicProfileForm({
                               name="message"
                               rows={3}
                               maxLength={2000}
-                              className="input mt-1 text-sm"
+                              className="input mt-1"
                               placeholder={
                                 disputableReason === "name_mismatch"
                                   ? "Tell us how this license is yours - the name it is registered under, your dba, anything that helps."

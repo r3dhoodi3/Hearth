@@ -2,7 +2,7 @@
 
 OakTend's analytics is first-party only: no PostHog, Plausible, Vercel
 Analytics, or any other third-party vendor. Every event is a row in
-`public.app_events` (migration 0091), written either by the client sink at
+`public.app_events` (migration 0093), written either by the client sink at
 `src/app/api/track/route.ts` (fed by `track()` in `src/lib/analytics.ts`) or
 directly by server code through `trackServerEvent()` in
 `src/lib/trackServer.ts`. This choice is not a preference, it is a
@@ -95,6 +95,35 @@ same as `src/app/(app)/contractors/actions.ts`.
 `post_job_from_chat`, `hero_demo_play` (client, `CLIENT_ALLOWED_EVENTS`);
 `job_won`, `pro_apply`, `direct_request` (server, pro/homeowner-crossing
 events already wired).
+
+### Campaign links
+
+`src/app/go/[code]/route.ts`, the first-party redirect behind every
+`oaktend.com/go/<code>` bio link and Story sticker in the 2026-09 social
+launch (`OakTend-marketing/growth/PRODUCTION-BRIEF.md` item 1). Codes are a
+fixed allowlist in `src/lib/campaigns.ts` - `trackServerEvent` does not
+sanitize props, so a code is only ever logged as itself when it is on that
+list; anything else is logged as the fixed literal `unknown_code`, never the
+caller-supplied string.
+
+| Event | Fires | Side |
+|---|---|---|
+| `campaign_click` | `src/app/go/[code]/route.ts`, on every GET, before the redirect. `props: { code, channel, label, ua_family, referer_host }` - `code` is either a real allowlisted value or the literal `unknown_code`; `channel` is `tiktok`, `instagram`, or `other`; `ua_family` is `mobile` or `desktop`, never the raw User-Agent; `referer_host` is a hostname only, or `null` | Server |
+| `campaign_signup` | `src/app/(auth)/recordTermsAcceptance.ts`, at the same point it records `terms`/`pro_terms` acceptance for a brand-new homeowner or contractor account - only when the `oaktend_campaign` cookie the `/go/` route set is present and still resolves to a real code. `props: { code }` | Server |
+
+**Clicks and signups per code, last 7 days**
+
+```sql
+select
+  props ->> 'code' as code,
+  count(*) filter (where event = 'campaign_click')  as clicks,
+  count(*) filter (where event = 'campaign_signup') as signups
+from public.app_events
+where event in ('campaign_click', 'campaign_signup')
+  and created_at >= now() - interval '7 days'
+group by 1
+order by clicks desc nulls last;
+```
 
 ### Performance
 

@@ -217,7 +217,7 @@ describe("buildSetupItems", () => {
 
     const none = insurance(null);
     expect(none?.done).toBe(false);
-    expect(none?.href).toBe("/pro/business");
+    expect(none?.href).toBe("/pro/business#insurance");
     expect(none?.hint).toContain("Big jobs");
 
     expect(insurance("2099-01-01")?.done).toBe(true);

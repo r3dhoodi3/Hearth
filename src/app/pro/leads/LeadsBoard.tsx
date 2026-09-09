@@ -101,6 +101,10 @@ export type OpenJobVM = {
   city: string | null;
   severity: string | null;
   ownershipVerified: boolean;
+  /** First name + last initial only (C4), e.g. "Sarah M."; null if the lead
+   *  has no name on file. Never the full name: that only unlocks once the
+   *  homeowner accepts this pro (see AssignedJobVM.homeownerName). */
+  homeownerDisplay: string | null;
   /** Phone glance line: the fee slot, then timing/city. */
   feeGlance: string;
   glanceLine2: string;
@@ -536,6 +540,23 @@ export default function LeadsBoard({
                               Pro
                             </span>
                           )}
+                          {/* B5. The desktop row below has always labeled the
+                              first-big-ticket intro price; this phone line
+                              did not, so a $99 lead showing as $49.99 read as
+                              a silent ~50% discount for no stated reason -
+                              exactly what the 2026-09-07 tester reported
+                              seeing right after a job was posted. Never a
+                              price change without a visible reason. */}
+                          {j.introPrice && (
+                            <span className="chip ml-1 border border-oaktend-200 bg-oaktend-50 align-middle font-semibold text-oaktend-700 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300">
+                              First big-ticket
+                            </span>
+                          )}
+                          {j.discountKind === "aging" && (
+                            <span className="chip ml-1 border border-amber-200 bg-amber-100 align-middle font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
+                              {j.off}% off
+                            </span>
+                          )}
                         </span>
                       </div>
                       {j.glanceLine2 && (
@@ -556,6 +577,13 @@ export default function LeadsBoard({
                         {j.city ? (
                           <span className="font-normal text-stone-500 dark:text-stone-400">
                             in {j.city}
+                          </span>
+                        ) : null}
+                        {/* First name + last initial only (C4): who a pro
+                            would be applying to, before they pay to apply. */}
+                        {j.homeownerDisplay ? (
+                          <span className="font-normal text-stone-500 dark:text-stone-400">
+                            · {j.homeownerDisplay}
                           </span>
                         ) : null}
                       </span>

@@ -105,7 +105,7 @@ describe("pro billing: phone Details block replaces the disclaimers under the bu
     expect(block).toContain(
       "Deposits are non-refundable and can only be spent on leads."
     );
-    expect(block).toContain("Any amount from $5.");
+    expect(block).toContain("Minimum $10.");
     expect(block).toContain("without Pro leaves $");
   });
 });

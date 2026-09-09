@@ -108,7 +108,7 @@ export default async function WalkthroughPage(props: {
       <div className={`card-hero inline-flex items-center gap-4 border ${band.tone}`}>
         <div>
           <p className="stat-label">Home Health Score</p>
-          <p className="stat-number mt-1 text-3xl">{score}</p>
+          <p className="stat-number mt-1 text-3xl">{score}/100</p>
         </div>
         <p className="text-sm">{band.label}</p>
       </div>

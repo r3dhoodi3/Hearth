@@ -103,6 +103,21 @@ export const SYSTEM_TYPES = [
   { value: "sump_pump", label: "Sump pump"},
   { value: "sewer_line", label: "Sewer / septic"},
   { value: "fence", label: "Fence"},
+  // Starter-seed expansion (src/lib/starterSystems.ts): everyday household
+  // systems plus flagged extras RentCast can tell us a home has. Adding
+  // these here also makes them normal manual "Add a system" options, not
+  // just onboarding-only values.
+  { value: "pool", label: "Pool equipment"},
+  { value: "fireplace", label: "Fireplace / chimney"},
+  { value: "smoke_co_detector", label: "Smoke & CO detectors"},
+  { value: "dishwasher", label: "Dishwasher"},
+  { value: "range", label: "Range / oven"},
+  { value: "refrigerator", label: "Refrigerator"},
+  { value: "washer_dryer", label: "Washer / dryer"},
+  { value: "garbage_disposal", label: "Garbage disposal"},
+  { value: "irrigation", label: "Irrigation / sprinklers"},
+  { value: "water_softener", label: "Water softener"},
+  { value: "other", label: "Other"},
 ] as const;
 
 // Example Brand / Model values shown as PLACEHOLDERS in the walkthrough's
@@ -145,6 +160,20 @@ export const SYSTEM_FIELD_EXAMPLES: Record<string, SystemFieldExample> = {
   sump_pump: { brand: "Zoeller", model: "M53" },
   sewer_line: { brand: "", model: "ABS to main" },
   fence: { brand: "", model: "Cedar, 6 ft" },
+  pool: { brand: "Pentair", model: "IntelliFlo VSF" },
+  // Same reasoning as foundation: no plate to read on a fireplace or chimney.
+  fireplace: { brand: "", model: "" },
+  smoke_co_detector: { brand: "Kidde", model: "KN-COSM-IBA" },
+  dishwasher: { brand: "KitchenAid", model: "KDTM404KPS" },
+  range: { brand: "GE", model: "JGB735SPSS" },
+  refrigerator: { brand: "Samsung", model: "RF28R7351SG" },
+  washer_dryer: { brand: "LG", model: "WM3900HWA" },
+  garbage_disposal: { brand: "InSinkErator", model: "Badger 5" },
+  irrigation: { brand: "Rain Bird", model: "ESP-TM2" },
+  water_softener: { brand: "Culligan", model: "HE 1.25" },
+  // B7 ("Other" system with a free-text name): no plate to read for a system
+  // the type list doesn't already cover, so no example either.
+  other: { brand: "", model: "" },
 };
 
 // The examples for one system type. An unknown type (a value added to the DB
@@ -682,6 +711,16 @@ export const SYSTEM_CATEGORY: Record<string, string> = {
   sump_pump: "plumbing",
   sewer_line: "plumbing",
   fence: "structural",
+  pool: "other",
+  fireplace: "other",
+  smoke_co_detector: "electrical",
+  dishwasher: "handyman",
+  range: "handyman",
+  refrigerator: "handyman",
+  washer_dryer: "handyman",
+  garbage_disposal: "plumbing",
+  irrigation: "landscaping",
+  water_softener: "plumbing",
 };
 
 export function categoryForSystem(systemType: string): string {
@@ -697,6 +736,15 @@ const MAKE_MODEL_SYSTEMS = new Set([
   "appliance",
   "garage_door",
   "sump_pump",
+  "pool",
+  "smoke_co_detector",
+  "dishwasher",
+  "range",
+  "refrigerator",
+  "washer_dryer",
+  "garbage_disposal",
+  "irrigation",
+  "water_softener",
 ]);
 
 export function materialLabel(systemType: string): string {
@@ -827,6 +875,18 @@ export const SYSTEM_MATERIALS: Record<string, string[]> = {
     "Basement Watchdog",
     "Superior Pump",
   ],
+  // --- material-based (no plate to read) ---
+  fireplace: ["Wood-burning masonry", "Gas insert", "Electric", "Prefab metal"],
+  // --- make / model (equipment brands) ---
+  pool: ["Pentair", "Hayward", "Jandy", "Zodiac", "Sta-Rite"],
+  smoke_co_detector: ["Kidde", "First Alert", "Nest Protect", "X-Sense"],
+  dishwasher: ["Bosch", "KitchenAid", "Whirlpool", "GE", "Samsung", "LG", "Maytag"],
+  range: ["GE", "Whirlpool", "Samsung", "LG", "Bosch", "Frigidaire", "KitchenAid"],
+  refrigerator: ["Samsung", "LG", "Whirlpool", "GE", "KitchenAid", "Frigidaire"],
+  washer_dryer: ["LG", "Samsung", "Whirlpool", "GE", "Maytag", "Speed Queen"],
+  garbage_disposal: ["InSinkErator", "Waste King", "Moen", "GE"],
+  irrigation: ["Rain Bird", "Hunter", "Toro", "Rachio"],
+  water_softener: ["Culligan", "Kinetico", "GE", "Whirlpool", "Fleck"],
 };
 
 export function materialsForSystem(systemType: string): string[] {
@@ -864,6 +924,20 @@ export const SYSTEM_TIPS: Record<string, string> = {
   sewer_line:
     "Avoid flushing grease or wipes and consider a camera inspection if drains run slow.",
   fence: "Reset leaning posts early and seal the wood so it does not rot at the base.",
+  pool: "Test and balance the water weekly and keep an eye on the pump and filter for leaks.",
+  fireplace: "Have the chimney swept and inspected once a year before you start using it.",
+  smoke_co_detector:
+    "Test them monthly and swap the whole unit after about 10 years, not just the battery.",
+  dishwasher: "Clean the filter and run an empty cleaning cycle every month or so.",
+  range: "Keep the burners and vent hood grease-free and check the oven door seal for gaps.",
+  refrigerator: "Vacuum the coils twice a year and keep the door seal clean so it doesn't run hot.",
+  washer_dryer:
+    "Clean the lint trap every load and check the dryer vent for buildup once a year.",
+  garbage_disposal:
+    "Run cold water while it's on and avoid grease, fibrous scraps, and eggshells.",
+  irrigation:
+    "Check for leaks and adjust the schedule with the seasons so you're not overwatering.",
+  water_softener: "Check the salt level monthly and clean the brine tank about once a year.",
 };
 
 export function tipForSystem(systemType: string): string {
@@ -889,6 +963,22 @@ export function labelFor(
   // Unknown values (legacy rows, options removed from a list) must never leak
   // as raw enums like "this_month" - humanize the underscores as a fallback.
   return list.find((o) => o.value === value)?.label ?? value.replace(/_/g, " ");
+}
+
+// B7: a system_type of "other" carries the owner's own free-text name
+// (home_systems.other_label, migration 0156) instead of the generic "Other"
+// SYSTEM_TYPES label. Falls back to plain labelFor for every other type, and
+// for an "other" row that has no label yet - a blank field, or a database
+// that hasn't run 0156 - so this is always safe to call everywhere
+// labelFor(SYSTEM_TYPES, ...) used to be.
+export function systemDisplayLabel(system: {
+  system_type: string;
+  other_label?: string | null;
+}): string {
+  if (system.system_type === "other" && system.other_label?.trim()) {
+    return system.other_label.trim();
+  }
+  return labelFor(SYSTEM_TYPES, system.system_type);
 }
 
 // Short seasonal maintenance checklist, shown on Home for the current season.

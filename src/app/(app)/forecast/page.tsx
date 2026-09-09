@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth";
 import { getActiveProperty } from "@/lib/property";
 import { hasPlus } from "@/lib/subscription";
 import { variantForUser } from "@/lib/paywallExperiment";
@@ -216,13 +217,24 @@ export default async function ForecastPage() {
 
   // Paywall experiment (src/lib/paywallExperiment.ts): the unlock card's
   // sub-line must not promise the 3-day trial to a hard-variant account,
-  // whose checkout would refuse it. Only the free branch pays for the extra
-  // getUser round trip; members never reach the overlay. A missing id falls
-  // back to "soft", matching the lib's own default.
+  // whose checkout would refuse it. A missing id falls back to "soft",
+  // matching the lib's own default.
+  //
+  // perf-2 2026-09-08: this used to call supabase.auth.getUser() directly,
+  // which is a real network round trip to Supabase's auth server (measured
+  // 2026-08-30 at ~75ms) - NOT the cheap, request-cached src/lib/auth.ts
+  // getUser() every other id-only lookup on this page already goes through
+  // (getActiveProperty -> getProperties -> getUser(), and hasPlus's chain,
+  // both already awaited above). variantForUser only needs a user id for
+  // bucketing, not a re-verified one - checkout re-verifies for real before
+  // any money moves (see paywallExperiment.ts) - so the cheap cookie-backed
+  // getUser() is exactly the right tool here, same as the rest of this page,
+  // and it's free: this render already paid for it via getActiveProperty()
+  // above, so this line now makes zero extra network calls on any request.
   let paywallVariant: "soft" | "hard" = "soft";
   if (!plus) {
-    const { data: userData } = await supabase.auth.getUser();
-    paywallVariant = variantForUser(userData.user?.id ?? null);
+    const cachedUser = await getUser();
+    paywallVariant = variantForUser(cachedUser?.id ?? null);
   }
 
   // Same "open issues" query the Home page runs, so a resolved issue drops

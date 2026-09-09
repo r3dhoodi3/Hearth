@@ -378,7 +378,10 @@ export default async function ProDashboard(
       severity: j.issue_severity ?? null,
       ownershipVerified: Boolean(j.ownership_verified),
       feeGlance: feeGlanceLabel(fee, feeStr),
-      glanceLine2: [timingLabel, j.city ? `in ${j.city}` : null]
+      // First name + last initial only (C4, migration 0155): open_jobs_for_me
+      // truncates it server-side, so this is never the homeowner's full name.
+      homeownerDisplay: j.homeowner_display ?? null,
+      glanceLine2: [j.homeowner_display, timingLabel, j.city ? `in ${j.city}` : null]
         .filter(Boolean)
         .join(" · "),
       feeStr,

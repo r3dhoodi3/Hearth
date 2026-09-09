@@ -12,12 +12,12 @@ import {
 import { imgSrc } from "@/lib/storage";
 import {
   labelFor,
-  SYSTEM_TYPES,
   ISSUE_CATEGORIES,
   STARTER_SYSTEM_NOTE,
   categoryForSystem,
   tipForSystem,
   materialLabel,
+  systemDisplayLabel,
 } from "@/lib/constants";
 import type { HomeSystem } from "@/lib/database.types";
 import { updateSystemAction, deleteSystemAction } from "./actions";
@@ -101,7 +101,7 @@ export default function SystemRow({
 
   // Prefill a job posting from this system's card info when "Find a pro" is tapped.
   const proDesc =
-    `Need help with my ${labelFor(SYSTEM_TYPES, s.system_type)}.` +
+    `Need help with my ${systemDisplayLabel(s)}.` +
     (h.age != null ? ` It is about ${h.age} years old.` : "") +
     (s.material_or_model ? ` Material/model: ${s.material_or_model}.` : "") +
     (s.condition_rating
@@ -122,7 +122,7 @@ export default function SystemRow({
             can't be nested inside another form). */}
         <div className="flex items-center justify-between gap-2">
           <p className="font-medium text-stone-900 dark:text-stone-100">
-            {labelFor(SYSTEM_TYPES, s.system_type)}
+            {systemDisplayLabel(s)}
           </p>
           <form action={deleteSystemAction}>
             <input type="hidden" name="id" value={s.id} />
@@ -168,6 +168,24 @@ export default function SystemRow({
           <input type="hidden" name="id" value={s.id} />
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {/* B7: an "other" system's name is editable too, right at the top
+                of its own edit form (not buried among unrelated fields). */}
+            {s.system_type === "other" && (
+              <div className="col-span-1 sm:col-span-2">
+                <label className="label" htmlFor={`other-label-${s.id}`}>
+                  What is it?
+                </label>
+                <input
+                  id={`other-label-${s.id}`}
+                  name="other_label"
+                  className="input"
+                  placeholder="e.g. Pool pump"
+                  maxLength={80}
+                  defaultValue={s.other_label ?? ""}
+                  required
+                />
+              </div>
+            )}
             <div>
               <label className="label">Install year</label>
               <input
@@ -300,8 +318,7 @@ export default function SystemRow({
 
   return (
     <li
-      onClick={() => setExpanded((v) => !v)}
-      className={`card flex cursor-pointer items-start justify-between gap-4 ${
+      className={`card flex items-start justify-between gap-4 ${
         needsBorder
           ? "!border !border-red-400 dark:!border-red-500"
           : estimatedDue
@@ -310,9 +327,20 @@ export default function SystemRow({
       }`}
     >
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
+        {/* The row's own opener: a real button (not the old whole-<li>
+            onClick, which a keyboard could not reach at all), so tapping or
+            activating the system name opens its info right away - Edit used
+            to sit right next to it, which meant hitting it BY ACCIDENT while
+            reaching for the row was the more common outcome. Edit now lives
+            at the bottom of the expanded detail below instead. */}
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="focus-ring flex w-full flex-wrap items-center gap-2 text-left"
+        >
           <span className="font-medium text-stone-900 dark:text-stone-100">
-            {labelFor(SYSTEM_TYPES, s.system_type)}
+            {systemDisplayLabel(s)}
           </span>
           {/* One status badge. Must-do overrides the age-based stage, so a
               failing/urgent system can never read "Healthy". */}
@@ -327,20 +355,6 @@ export default function SystemRow({
           >
             {status.label}
           </span>
-        </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditing(true);
-          }}
-          // min-w-11 as well as min-h-11: the label is four characters, so the
-          // target measured 22x44 - tall enough and half as wide as it needs
-          // to be. Widening it costs the row no height. Both minimums are
-          // dropped from sm up, where this is a plain inline text link.
-          className="mt-0.5 inline-flex min-h-11 min-w-11 items-center justify-center text-xs font-medium text-bark-700 hover:underline sm:inline-block sm:min-h-0 sm:min-w-0"
-        >
-          Edit
         </button>
         {photos.length > 0 && !expanded && (
           <span className="ml-2 text-xs text-stone-500 dark:text-stone-400">
@@ -422,7 +436,7 @@ export default function SystemRow({
                     photos={photos.map((u) => ({
                       key: u,
                       src: imgSrc(u) ?? u,
-                      alt: `${labelFor(SYSTEM_TYPES, s.system_type)} photo`,
+                      alt: `${systemDisplayLabel(s)} photo`,
                     }))}
                   />
                 </dd>
@@ -448,6 +462,19 @@ export default function SystemRow({
                 </dd>
               </div>
             )}
+            {/* Edit lives here now, at the bottom of the detail, instead of
+                on the collapsed row: opening a system is the common tap,
+                editing it is the deliberate one, and the two no longer sit
+                close enough together to hit by accident. */}
+            <div className="col-span-1 sm:col-span-2 mt-1 border-t border-stone-200 pt-2 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="btn-secondary min-h-11 w-full sm:w-auto"
+              >
+                Edit
+              </button>
+            </div>
           </dl>
         )}
         {openIssue && (

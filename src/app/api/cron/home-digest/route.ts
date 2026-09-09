@@ -321,7 +321,7 @@ async function runCron(req: NextRequest) {
         if (systems.length > 0) {
           const { score } = scoreBreakdown(systems, openIssues);
           parts.push(
-            `Your home health score is ${score} (${scoreBand(
+            `Your home health score is ${score}/100 (${scoreBand(
               score
             ).label.toLowerCase()}).`
           );

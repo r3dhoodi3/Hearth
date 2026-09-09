@@ -15,6 +15,7 @@ import { eraseUserData, type EraseSummary } from "@/lib/privacy";
 import { cappedField, FIELD_MAX } from "@/lib/formFields";
 import { licenseDigits } from "@/lib/licenseMatch";
 import { isAcceptablePublicText, ABOUT_REJECTED } from "@/lib/publicText";
+import { callAppleRevoke } from "@/lib/appleRevoke";
 
 // Password re-verification is a brute-force surface: updatePasswordAction,
 // updateEmailAction, and deleteAccountAction each take a current password and
@@ -480,6 +481,27 @@ export async function deleteAccountAction(formData: FormData) {
         "error"
       );
       redirect("/pro/profile");
+    }
+  }
+
+  // APPLE 5.1.1(v): revoke the Sign in with Apple authorization for anyone
+  // who used it. Twin of the identical block in the homeowner
+  // deleteAccountAction (src/app/(app)/account/actions.ts) - see
+  // src/lib/appleRevoke.ts for the full reasoning and its known gap.
+  if (user.identities?.some((i) => i.provider === "apple")) {
+    try {
+      const result = await callAppleRevoke(null);
+      if (!result.attempted) {
+        console.warn(
+          `deleteAccountAction (pro): Apple token revoke skipped for ${user.id}: ${result.reason}`
+        );
+      } else if (!result.ok) {
+        console.error(
+          `deleteAccountAction (pro): Apple token revoke failed for ${user.id}: ${result.reason}`
+        );
+      }
+    } catch (err) {
+      console.error("deleteAccountAction (pro): Apple revoke threw for", user.id, err);
     }
   }
 

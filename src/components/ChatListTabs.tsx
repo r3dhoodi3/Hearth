@@ -18,6 +18,8 @@
 // conversation visible and highlighted in the list beside it.
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
+import { Sparkles } from "lucide-react";
 
 export type ChatListTab = "active" | "closed";
 
@@ -40,6 +42,8 @@ export default function ChatListTabs({
   pinned,
   activeRows,
   closedRows,
+  mobileAskHref,
+  mobileAskLabel = "Chat with AI",
 }: {
   /** True while a thread is open on a phone, where the list pane hides. */
   hiddenOnMobile: boolean;
@@ -55,6 +59,16 @@ export default function ChatListTabs({
   pinned: ReactNode;
   activeRows: ReactNode;
   closedRows: ReactNode;
+  /** Where the phone-only "Chat with AI" button below the list goes (the
+      assistant's full-screen route, /ask or /pro/ask). The pinned row above
+      already opens the same place, but it reads as just another conversation
+      row in the list - a tester never noticed it was tappable. This is a
+      second, unmistakably-a-button door to the same destination, so nobody
+      leaves Messages thinking there is no way to talk to the assistant.
+      Omit to render nothing here (every current caller passes it). */
+  mobileAskHref?: string;
+  /** Button text. Defaults to "Chat with AI". */
+  mobileAskLabel?: string;
 }) {
   const [tab, setTab] = useState<ChatListTab>(initialTab);
 
@@ -109,6 +123,21 @@ export default function ChatListTabs({
           </>
         )}
       </ul>
+
+      {/* Phone only: a plain, obviously-tappable button to the assistant,
+          below the list. md:hidden, matching the wrapper's own md breakpoint
+          above (that is where this stops being a single pane and the desktop
+          layout can select the assistant inline) - sm:hidden left 640-767px,
+          still the one-pane phone layout, with no button at all. */}
+      {mobileAskHref && (
+        <Link
+          href={mobileAskHref}
+          className="btn-secondary flex min-h-11 w-full shrink-0 items-center justify-center gap-2 md:hidden"
+        >
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+          {mobileAskLabel}
+        </Link>
+      )}
     </div>
   );
 }

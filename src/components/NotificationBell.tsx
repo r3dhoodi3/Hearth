@@ -145,16 +145,19 @@ export default function NotificationBell() {
   // Clears every unread notification, not just the batch currently loaded
   // (loadList above only marks-read the rows it fetched, which can leave the
   // badge count wrong if there are more unread than the current limit).
+  //
+  // Removes every row from view rather than just flipping read_at in place:
+  // this used to only dim the item (no visible change at all, since nothing
+  // in the row actually reads read_at), so "Mark all read" looked like it did
+  // nothing. Clearing the list is the visible, honest result of the label.
   async function markAllRead() {
-    // Optimistic: zero the badge and dim every item to read locally first,
-    // THEN fire the Supabase update in the background. There is nothing to
-    // roll back on failure - the worst case is a stale read_at that the next
-    // poll (or simply reopening the panel, which re-marks read on load)
-    // reconciles anyway, and that beats leaving the badge stuck on its old
-    // count while the request is still in flight.
-    setItems((cur) =>
-      cur.map((n) => (n.read_at ? n : { ...n, read_at: new Date().toISOString() }))
-    );
+    // Optimistic: empty the list and zero the badge locally first, THEN fire
+    // the Supabase update in the background. There is nothing to roll back on
+    // failure - the worst case is a stale read_at that the next poll (or
+    // simply reopening the panel) reconciles anyway, and that beats leaving
+    // the list stuck showing already-acknowledged rows while the request is
+    // still in flight.
+    setItems([]);
     setUnread(0);
     setMarkingRead(true);
     try {
@@ -167,6 +170,30 @@ export default function NotificationBell() {
       // Leave whatever was already shown; next poll will reconcile.
     } finally {
       setMarkingRead(false);
+    }
+  }
+
+  // Per-notification twin of markAllRead above, for the "mark as read" dot on
+  // a single row: this bug (clicking it did not make the notification
+  // disappear) was reported directly against ONE item, not the bulk button.
+  // Filters by id, not by the row's current read_at - loadList's own
+  // background mark-as-read-on-open (see its comment) can beat the user to
+  // setting read_at, and this must still remove the row either way, since the
+  // point is the tap itself getting a visible result, not the read state it
+  // happens to observe.
+  async function markOneRead(id: string) {
+    const wasUnread = items.some((n) => n.id === id && !n.read_at);
+    setItems((cur) => cur.filter((n) => n.id !== id));
+    if (wasUnread) setUnread((u) => Math.max(0, u - 1));
+    try {
+      const supabase = await getSupabase();
+      await supabase
+        .from("notifications")
+        .update({ read_at: new Date().toISOString() })
+        .eq("id", id);
+    } catch {
+      // Leave it removed; the next poll or panel open reconciles the badge
+      // either way, same posture as markAllRead above.
     }
   }
 
@@ -366,7 +393,14 @@ export default function NotificationBell() {
         <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
           Notifications
         </span>
-        {items.length > 0 && (
+        {/* Shown whenever there is anything to clear, by either measure: rows
+            on screen OR unread rows beyond the loaded batch. It cannot be
+            gated on `unread` alone - loadList's auto-mark-on-open marks the
+            fetched batch read within a few hundred ms of the panel opening,
+            which drops `unread` to 0 and would take the only bulk control off
+            screen right after every open. It cannot be gated on
+            items.some(unread) either, for the same reason. */}
+        {(items.length > 0 || unread > 0) && (
           <button
             type="button"
             onClick={markAllRead}
@@ -436,10 +470,24 @@ export default function NotificationBell() {
                   </p>
                 </>
               );
+              // The mark-as-read control sits OUTSIDE the row's own Link/div,
+              // never nested inside it: the row already navigates on tap, so
+              // it needs its own tap target next to it, not layered on top of
+              // one. It is gone the instant it is used (markOneRead removes
+              // the row from `items`, not just its read_at) - see markOneRead
+              // above for why that removal does not depend on the read_at
+              // value it happens to observe.
+              //
+              // Rendered on EVERY row, not only unread ones: loadList marks
+              // the whole fetched batch read a few hundred ms after the panel
+              // opens, so an unread-only control would flash once and then
+              // never be there when a thumb arrives. Unread rows get the
+              // filled dot (still "mark as read"), already-read rows get a
+              // plain x (dismiss).
               return (
                 <li
                   key={n.id}
-                  className="border-b border-stone-50 last:border-b-0 dark:border-white/5"
+                  className="flex items-stretch border-b border-stone-50 last:border-b-0 dark:border-white/5"
                 >
                   {n.url ? (
                     <Link
@@ -447,15 +495,42 @@ export default function NotificationBell() {
                       onClick={() => setOpen(false)}
                       // max-sm:min-h-11: a row is the tap target, so it stays
                       // at least 44px tall even for a one-line notification.
-                      className="block px-4 py-3 hover:bg-bark-50 max-sm:flex max-sm:min-h-11 max-sm:flex-col max-sm:justify-center dark:hover:bg-stone-600"
+                      className="block min-w-0 flex-1 px-4 py-3 hover:bg-bark-50 max-sm:flex max-sm:min-h-11 max-sm:flex-col max-sm:justify-center dark:hover:bg-stone-600"
                     >
                       {content}
                     </Link>
                   ) : (
-                    <div className="px-4 py-3 max-sm:flex max-sm:min-h-11 max-sm:flex-col max-sm:justify-center">
+                    <div className="min-w-0 flex-1 px-4 py-3 max-sm:flex max-sm:min-h-11 max-sm:flex-col max-sm:justify-center">
                       {content}
                     </div>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => markOneRead(n.id)}
+                    aria-label={
+                      n.read_at ? "Dismiss notification" : "Mark as read"
+                    }
+                    className="flex w-11 shrink-0 items-center justify-center text-stone-400 hover:text-bark-700 active:opacity-70 dark:text-stone-500 dark:hover:text-stone-300"
+                  >
+                    {n.read_at ? (
+                      <svg
+                        viewBox="0 0 20 20"
+                        className="h-3.5 w-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M5 5l10 10M15 5L5 15" />
+                      </svg>
+                    ) : (
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full bg-bark-600"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </button>
                 </li>
               );
             })}
@@ -540,14 +615,17 @@ export default function NotificationBell() {
         </div>
       )}
 
-      {/* PHONE: a bottom sheet instead of a dropdown. Closes the same way the
-          desktop dropdown does: a tap on the dimmed backdrop, a tap anywhere
-          else outside it, Escape, the X, or opening a notification.
-          Portalled to document.body rather than rendered here: this sits
-          inside the sticky header (z-40 homeowner, z-30 pro) and the fixed
-          bottom tab bar is also z-30, so a sheet left inside the header's
-          stacking context paints UNDER the tab bar on the pro side. The
-          portal puts it above everything. */}
+      {/* PHONE: a top sheet instead of a dropdown, anchored under the bell
+          rather than pinned to the bottom of the screen (a bottom sheet here
+          used to pull the eye - and, on a short page, the whole layout - down
+          to the far end of the screen for what is a header control). Closes
+          the same way the desktop dropdown does: a tap on the dimmed
+          backdrop, a tap anywhere else outside it, Escape, the X, or opening
+          a notification. Portalled to document.body rather than rendered
+          here: this sits inside the sticky header (z-40 homeowner, z-30 pro)
+          and the fixed bottom tab bar is also z-30, so a sheet left inside
+          the header's stacking context paints UNDER the tab bar on the pro
+          side. The portal puts it above everything. */}
       {shouldRender && isPhone && portalReady &&
         createPortal(
           <div data-testid="notification-sheet" className="sm:hidden">
@@ -566,19 +644,22 @@ export default function NotificationBell() {
               ref={panelRef}
               role="dialog"
               aria-label="Notifications"
-              // Anchored to the bottom of the screen and capped at 85% of the
-              // viewport, so the page behind stays visible enough to keep
-              // your place. flex-col + the list's flex-1 make the list the
-              // part that scrolls, never the sheet.
-              // overscroll-contain here as well as on the list: the list
-              // already refuses to hand a flick to the page, but a flick that
-              // starts on the sheet's header (not a scroll container) used to
-              // chain straight out of this box.
-              className={`fixed inset-x-0 bottom-0 z-[60] flex max-h-[85dvh] flex-col overflow-hidden overscroll-contain rounded-t-2xl border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-menu dark:border-white/10 dark:bg-stone-700 ${
-                open
-                  ? "motion-safe:animate-fade-slide-up"
-                  : "motion-safe:animate-fade-slide-down"
+              // Fixed just under the header (Nav/ProNav's row is about 3.5rem
+              // tall on a phone; the safe-area term covers the notch on top of
+              // that) instead of the bottom of the screen, with a few px on
+              // each side rather than flush edges, since it is no longer
+              // attached to one. Capped at 70dvh rather than 85: starting
+              // lower on the screen leaves less room below it before running
+              // off the bottom. flex-col + the list's flex-1 make the list
+              // the part that scrolls, never the sheet. overscroll-contain
+              // here as well as on the list: the list already refuses to hand
+              // a flick to the page, but a flick that starts on the sheet's
+              // own header (not a scroll container) used to chain straight
+              // out of this box.
+              className={`fixed inset-x-3 z-[60] flex max-h-[70dvh] flex-col overflow-hidden overscroll-contain rounded-2xl border border-stone-200 bg-white shadow-menu dark:border-white/10 dark:bg-stone-700 ${
+                open ? "motion-safe:animate-fade-scale" : "motion-safe:animate-fade-scale-out"
               }`}
+              style={{ top: "calc(env(safe-area-inset-top) + 4rem)" }}
             >
               {panelBody}
             </div>

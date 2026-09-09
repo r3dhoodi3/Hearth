@@ -6,10 +6,16 @@ import {
   type SortableLead,
 } from "@/lib/leadSort";
 
-// The comparators behind the three buttons on the leads board. They are shared
+// The comparators behind the two buttons on the leads board. They are shared
 // by the server's first paint (src/app/pro/leads/page.tsx hands the board the
 // order the URL asked for) and the client's instant re-sort
 // (src/app/pro/leads/LeadsBoard.tsx), so this is the one place the rules live.
+//
+// C5 (2026-09-07): "Biggest deal" used to be a third sort, ordering by percent
+// off. It competed with "Cheapest fee" as two different "this is the deal"
+// pitches on the same board, and spotlighted the free aging markdown over the
+// paid OakTend Pro lead discount. Removed; "Cheapest fee" already surfaces a
+// Pro member's discounted price without a second button.
 
 type Row = SortableLead & { id: string };
 
@@ -25,8 +31,9 @@ const ids = (r: Row[]) => r.map((x) => x.id);
 describe("normalizeLeadSort", () => {
   it("accepts the two real sorts and defaults everything else to newest", () => {
     expect(normalizeLeadSort("fee")).toBe("fee");
-    expect(normalizeLeadSort("deal")).toBe("deal");
     expect(normalizeLeadSort("new")).toBe("new");
+    // The retired third sort must fall back to newest, not throw.
+    expect(normalizeLeadSort("deal")).toBe("new");
     // A hand-typed or stale query string must never throw or blank the board.
     expect(normalizeLeadSort("cheapest")).toBe("new");
     expect(normalizeLeadSort("")).toBe("new");
@@ -44,9 +51,8 @@ describe("sortLeads", () => {
     expect(ids(sortLeads(rows, "fee"))).toEqual(["d", "b", "c", "a"]);
   });
 
-  it("biggest deal is the largest markdown first, cheapest breaking a tie", () => {
-    // b and c are both 40% off, so the cheaper one leads.
-    expect(ids(sortLeads(rows, "deal"))).toEqual(["b", "c", "d", "a"]);
+  it("an unrecognized sort value (e.g. the retired 'deal') falls back to newest", () => {
+    expect(ids(sortLeads(rows, "deal" as any))).toEqual(["a", "b", "c", "d"]);
   });
 
   it("never mutates or drops the caller's array", () => {
@@ -64,19 +70,13 @@ describe("sortLeads", () => {
       { id: "z", feeCents: 2000, off: 0 },
     ];
     expect(ids(sortLeads(tied, "fee"))).toEqual(["x", "y", "z"]);
-    expect(ids(sortLeads(tied, "deal"))).toEqual(["x", "y", "z"]);
   });
 
-  it("offers exactly the three buttons the board renders", () => {
-    expect(LEAD_SORT_OPTIONS.map((o) => o.value)).toEqual([
-      "new",
-      "fee",
-      "deal",
-    ]);
+  it("offers exactly the two buttons the board renders", () => {
+    expect(LEAD_SORT_OPTIONS.map((o) => o.value)).toEqual(["new", "fee"]);
     expect(LEAD_SORT_OPTIONS.map((o) => o.label)).toEqual([
       "Newest",
       "Cheapest fee",
-      "Biggest deal",
     ]);
   });
 });

@@ -65,7 +65,7 @@ export default function CloseJobButton({
       <select
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        className="select w-auto text-sm"
+        className="select w-auto"
       >
         <option value="">
           Reason (optional)
@@ -82,7 +82,7 @@ export default function CloseJobButton({
             value={other}
             onChange={(e) => setOther(e.target.value)}
             placeholder="Add a message (optional)"
-            className="input w-56 text-sm"
+            className="input w-56"
           />
           {/* Optional: fall back to "Other" when they leave it blank. */}
           <input type="hidden" name="reason" value={other.trim() || "Other"} />

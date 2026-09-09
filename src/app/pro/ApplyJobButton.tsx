@@ -352,6 +352,20 @@ export default function ApplyJobButton({
               Pro
             </span>
           )}
+          {/* B5: the struck-through base price with no stated reason is what
+              reads as a mystery discount. "intro" is the biggest cut of the
+              three (a $99 major lead at $49.99), so it gets said out loud
+              here too, not only on the board card. */}
+          {discountKind === "intro" && (
+            <span className="chip ml-1 border border-oaktend-200 bg-oaktend-50 font-semibold text-oaktend-700 dark:border-oaktend-500/30 dark:bg-oaktend-500/15 dark:text-oaktend-300">
+              Your first big-ticket lead
+            </span>
+          )}
+          {discountKind === "aging" && (
+            <span className="chip ml-1 border border-amber-200 bg-amber-100 font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
+              Unclaimed-job discount
+            </span>
+          )}
         </p>
       )}
       {memberQuoteStr && (

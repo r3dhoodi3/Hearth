@@ -4,6 +4,8 @@ import "./globals.css";
 import ToastProvider from "@/components/ToastProvider";
 import FlashToast from "@/components/FlashToast";
 import StaleDeployRecovery from "@/components/StaleDeployRecovery";
+import NativeBootstrap from "@/components/native/NativeBootstrap";
+import ZoomLock from "@/components/ZoomLock";
 import { LAUNCH_CITY_NAMES } from "@/lib/serviceArea";
 
 // KEEP THIS FILE FREE OF cookies() AND headers().
@@ -110,6 +112,18 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // NO maximumScale / userScalable HERE, deliberately. Locking pinch and
+  // double-tap zoom out of the app shell was tried in the 2026-09-07 App Store
+  // pass; this is the WEB app's viewport too, and blocking zoom on every
+  // browser visitor fails WCAG 2.1 SC 1.4.4 (Resize Text) and takes a real
+  // accessibility affordance away from low-vision homeowners for a cosmetic
+  // "feels native" gain. iOS Safari's focus auto-zoom is already handled the
+  // right way instead: every input/select/textarea uses the shared
+  // .input/.select/.textarea classes (text-base, 16px, below the sm
+  // breakpoint), which is what actually stops the zoom-on-focus jump. If the
+  // native shell specifically should not pinch-zoom, that belongs in the
+  // runtime ZoomLock (src/components/ZoomLock.tsx), which rewrites this
+  // tag only in app mode, not in the viewport every web visitor gets.
   viewportFit: "cover",
   // Tints the iOS status bar / Android toolbar to the header background so
   // the installed app and the browser tab read as one surface. Value matches
@@ -160,6 +174,13 @@ export default async function RootLayout({
           <FlashToast />
         </ToastProvider>
         <StaleDeployRecovery />
+        {/* No-op on web (every effect inside is gated on isNativeApp()) -
+            see src/components/native/NativeBootstrap.tsx. */}
+        <NativeBootstrap />
+        {/* Pinch/double-tap zoom lock, applied only in the installed PWA and
+            the native shell (see src/components/ZoomLock.tsx). Browser tabs
+            stay zoomable. */}
+        <ZoomLock />
       </body>
     </html>
   );

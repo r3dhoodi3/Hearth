@@ -4,7 +4,7 @@ import {
   getCurrentContractor,
   countPaidLeadApplications,
 } from "@/lib/contractor";
-import { getPasswordStatus, providerLabel } from "@/lib/auth";
+import { getPasswordStatus, providerLabel, getUser } from "@/lib/auth";
 import { hasProPlan, getProSubscription } from "@/lib/subscription";
 import { variantForUser } from "@/lib/paywallExperiment";
 import { isCheckrConfigured } from "@/lib/checkr";
@@ -75,9 +75,13 @@ export default async function ProProfilePage() {
     : null;
 
   // The auth email the pro signs in with, for the security tab's email card.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // perf-2 2026-09-08: was supabase.auth.getUser() (a real, uncached round
+  // trip to Supabase's auth server on every load of this page). Nothing here
+  // is a security decision - it is display only (the pro's own email/id) on
+  // a page middleware has already gated - so the cheap, request-cached
+  // src/lib/auth.ts getUser() (cookie-backed, no network call) is the right
+  // tool, same fix as forecast/page.tsx the same night.
+  const user = await getUser();
 
   // Whether they have a password at all. A pro who signed up with Google has
   // none, so the security tab offers the set-a-password flow instead of a form

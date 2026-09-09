@@ -675,12 +675,20 @@ describe("claimPropertyAction's parcel facts", () => {
     expect(claim).not.toContain("estimate: claimMarketValue");
   });
 
-  // system_facts is typed Record<string, string>, but a type annotation is not
-  // a runtime check: its values are built out of a third-party JSON body and
-  // land on home_systems.material_or_model for all seven starter rows.
-  it("coerces a system fact before it reaches the column", () => {
-    expect(claim).toContain(
-      'typeof material === "string" ? material.slice(0, 120) : null'
+  // system_facts is typed Record<string, string>, but a type annotation is
+  // not a runtime check: its values are built out of a third-party JSON body
+  // and land on home_systems.material_or_model for every starter row. The
+  // coercion itself moved to buildStarterSystems (src/lib/starterSystems.ts,
+  // materialText()) when the starter-seed logic was pulled out of this file -
+  // asserted behaviorally there (starterSystems.test.ts, "untrusted material
+  // values"), and asserted here only that claimPropertyAction still feeds it
+  // the server's own systemFacts map rather than something the post could
+  // shape.
+  it("passes the server's own systemFacts map into the starter-seed builder", () => {
+    expect(claim).toContain("materials: systemFacts,");
+    const starterSystems = src("./starterSystems.ts");
+    expect(starterSystems).toContain(
+      'typeof value === "string" && value.trim()'
     );
   });
 });

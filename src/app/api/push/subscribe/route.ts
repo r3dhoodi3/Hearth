@@ -83,6 +83,21 @@ function overRateLimit(userId: string, now = Date.now()): boolean {
   return current.count > RATE_LIMIT;
 }
 
+// A native device token is not a URL, so isAllowedEndpoint (the SSRF gate that
+// bounds what the Web Push branch will ever POST to) has nothing to check on
+// this side. This is the equivalent floor: an APNs token is 64 hex characters
+// and an FCM registration token is a long "<instance-id>:<key>" string, so both
+// live inside this charset. Without it, `token` was any string up to 2,000
+// characters, and every one of them takes a permanent row in
+// native_push_tokens (token is UNIQUE, so junk rows can never be reclaimed by
+// a later legitimate registration of the same value).
+const MAX_TOKEN_CHARS = 512;
+const DEVICE_TOKEN_RE = /^[A-Za-z0-9_:.\-]{32,512}$/;
+
+function isPlausibleDeviceToken(token: string): boolean {
+  return DEVICE_TOKEN_RE.test(token);
+}
+
 function str(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -119,11 +134,58 @@ export async function POST(req: NextRequest) {
     );
   }
   const body = parsed.data;
+  const side = body.side === "pro" ? "pro" : body.side === "homeowner" ? "homeowner" : null;
+
+  // NATIVE PUSH (2026-09-07, appstore-execute), extending this same endpoint
+  // rather than adding a second route: a body carrying `kind: "native"`
+  // registers an APNs/FCM device token (src/lib/native/push.ts, the
+  // PushNotifications plugin's 'registration' event) into
+  // public.native_push_tokens (migration 0160) instead of
+  // public.push_subscriptions - the two tables have incompatible shapes (see
+  // that migration's header comment). Every EXISTING caller (web
+  // PushRegistrar.tsx) never sends `kind`, so it falls through to the
+  // unchanged Web Push branch below exactly as before.
+  if (body.kind === "native") {
+    const token = str(body.token, MAX_TOKEN_CHARS);
+    const platform = body.platform === "ios" ? "ios" : body.platform === "android" ? "android" : null;
+    if (!token || !platform || !isPlausibleDeviceToken(token)) {
+      return NextResponse.json({ error: "Missing device token." }, { status: 400 });
+    }
+    // Cast: native_push_tokens (migration 0160) is not yet in the generated
+    // database.types.ts (regenerated separately against the live DB - see
+    // src/lib/database.types.ts's own generation step), same pattern used
+    // elsewhere in this repo for a table/column ahead of a type regen (e.g.
+    // src/app/pro/profile/actions.ts's "0033 columns" cast).
+    const { error } = await (createAdminClient() as any)
+      .from("native_push_tokens")
+      .upsert(
+        {
+          user_id: user.id,
+          side,
+          platform,
+          token,
+          last_used_at: new Date().toISOString(),
+        },
+        { onConflict: "token" }
+      );
+    if (error) {
+      if (isMissingSchemaError(error)) {
+        return NextResponse.json(
+          { error: "Native push is not set up on the server yet." },
+          { status: 503 }
+        );
+      }
+      console.error("push/subscribe: native upsert failed:", error.message ?? error);
+      return NextResponse.json({ error: "Could not save." }, { status: 500 });
+    }
+    await setPushOptOut(supabase, user.id, false);
+    return NextResponse.json({ ok: true });
+  }
+
   const keys = (body.keys ?? {}) as Record<string, unknown>;
   const endpoint = str(body.endpoint, MAX_ENDPOINT_CHARS);
   const p256dh = str(keys.p256dh, MAX_KEY_CHARS);
   const auth = str(keys.auth, MAX_KEY_CHARS);
-  const side = body.side === "pro" ? "pro" : body.side === "homeowner" ? "homeowner" : null;
 
   if (!endpoint || !p256dh || !auth) {
     return NextResponse.json({ error: "Missing subscription." }, { status: 400 });

@@ -618,7 +618,7 @@ export default async function ContractorsPage(
           </div>
           <div>
             <label className="label" htmlFor="homeowner-email">
-              Email (optional)
+              Email
             </label>
             <input
               name="homeowner_email"
@@ -631,7 +631,7 @@ export default async function ContractorsPage(
           </div>
           <div>
             <label className="label" htmlFor="homeowner-phone">
-              Phone (optional)
+              Phone
             </label>
             <PhoneInput
               name="homeowner_phone"
@@ -639,7 +639,7 @@ export default async function ContractorsPage(
               defaultValue={profile?.phone ?? ""}
             />
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              So pros can reach you faster (optional).
+              Add email or phone, whichever&apos;s easiest for pros to reach you.
             </p>
           </div>
         </div>

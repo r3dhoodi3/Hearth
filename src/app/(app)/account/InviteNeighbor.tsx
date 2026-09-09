@@ -167,7 +167,7 @@ export default function InviteNeighbor({
             readOnly
             value={inviteUrl()}
             onFocus={(e) => e.currentTarget.select()}
-            className="input flex-1 select-all text-sm"
+            className="input flex-1 select-all"
             aria-label="Your invite link"
           />
           <button
@@ -206,7 +206,7 @@ export default function InviteNeighbor({
           readOnly
           value={inviteUrl()}
           onFocus={(e) => e.currentTarget.select()}
-          className="input flex-1 select-all text-sm"
+          className="input flex-1 select-all"
           aria-label="Your invite link"
         />
         <button

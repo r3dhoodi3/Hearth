@@ -181,12 +181,10 @@ describe("pro home: paywall concepts (E9)", () => {
     expect(page).toContain("const showNudge = !member && established;");
   });
 
-  it("offers the feedback credit and retries the grant once they qualify", () => {
-    expect(page).toContain("readFeedbackState(");
-    expect(page).toContain(
-      "if (feedback.sent && !feedback.claimed && established) {"
-    );
-    expect(page).toContain("grantFeedbackCredit(contractor.id)");
+  it("reads whether feedback was ever sent, and never grants credit itself (C7)", () => {
+    expect(page).toContain("readFeedbackState(contractor.id)");
+    expect(page).not.toContain("grantFeedbackCredit");
+    expect(page).not.toContain("feedback.claimed");
   });
 
   it("never says 'rating' next to the credit", () => {

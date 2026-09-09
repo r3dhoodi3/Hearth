@@ -8,6 +8,8 @@ import AutoRenewalTerms from "@/components/AutoRenewalTerms";
 import AutoRenewalConsentCheckbox from "@/components/AutoRenewalConsentCheckbox";
 import BillingLegalLine from "@/components/BillingLegalLine";
 import InlineSpinner from "@/components/InlineSpinner";
+import { isNativeApp } from "@/lib/platform";
+import NativeProCheckout from "./NativeProCheckout";
 import {
   PRO_PLAN,
   PRO_DEPOSIT_BOOST_PTS,
@@ -182,21 +184,39 @@ export default function ProPlanToggle({
   trialEligible?: boolean;
 }) {
   const [plan, setPlan] = useState<Plan>("yearly");
-  const copy = PLAN_COPY[plan];
+  // See the identical pattern (and full reasoning) in
+  // src/app/(app)/plus/PlanToggle.tsx: starts false on every render, flips
+  // in an effect after mount, so a native app shell's first paint never
+  // disagrees with the server-rendered HTML.
+  const [isNative, setIsNative] = useState(false);
+  useEffect(() => {
+    setIsNative(isNativeApp());
+  }, []);
   // The required auto-renewal consent checkbox (Cal. Bus. & Prof. Code
   // 17602(a)(2)), one state per checkout FORM on this page: the top trial
   // shortcut and the main plan-picker form below are two separate submits, so
   // checking the box in one must never silently unlock the other.
   const [topConsent, setTopConsent] = useState(false);
   const [mainConsent, setMainConsent] = useState(false);
-  // Arrow-key order for the radio group below. Visual order differs by
-  // breakpoint (the yearly hero comes first on a phone), so the keyboard walks
-  // the plans in cadence order and stays predictable at every width.
-  const ORDER: Plan[] = ["yearly", "monthly"];
   const cardRefs = useRef<Record<Plan, HTMLButtonElement | null>>({
     yearly: null,
     monthly: null,
   });
+
+  // APPLE 3.1.1 / GOOGLE PLAY BILLING: see the identical guard and its
+  // comment in src/app/(app)/plus/PlanToggle.tsx. EVERY hook in this
+  // component is declared above this line, so this early return (and the
+  // ORDER/copy consts below it, which are plain values, not hooks) never
+  // changes which hooks run on a given render.
+  if (isNative) {
+    return <NativeProCheckout />;
+  }
+
+  const copy = PLAN_COPY[plan];
+  // Arrow-key order for the radio group below. Visual order differs by
+  // breakpoint (the yearly hero comes first on a phone), so the keyboard walks
+  // the plans in cadence order and stays predictable at every width.
+  const ORDER: Plan[] = ["yearly", "monthly"];
 
   // Roving tabindex: one tab stop for the whole group, arrows move the
   // selection the way a native radio group does. Space and Enter are already

@@ -11,7 +11,12 @@ function src(rel: string): string {
 }
 
 const applicantPage = src("./page.tsx");
-const browsePage = src("./browse/page.tsx");
+// C8 (2026-09-07): the browse card's markup (and the licenseVerifiedOnLine
+// import) moved out of page.tsx into a client component, BrowseProsBoard.tsx,
+// so filter taps could filter the already-fetched list in the browser
+// instead of round-tripping the server on every tap. Same card, same import,
+// different file.
+const browsePage = src("./browse/BrowseProsBoard.tsx");
 
 // 2026-08-30 research wave: a green "License verified" badge has to say what
 // was checked and when, the same wording the public profile page

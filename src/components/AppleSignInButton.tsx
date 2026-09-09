@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { APPLE_SIGN_IN_ENABLED } from "@/lib/constants";
+import { isNativeApp } from "@/lib/platform";
 
 // The standard Apple mark, inline so the button never depends on an external
 // asset host (and renders instantly, no network round trip). fill is
@@ -106,7 +107,82 @@ function AppleSignInButtonBody({ next, onError }: AppleSignInButtonProps) {
   const [busy, setBusy] = useState(false);
   const supabase = createClient();
 
+  // NATIVE PATH (2026-09-07, appstore-execute): inside the Capacitor app
+  // shell, Apple's own AuthenticationServices framework runs the sign-in
+  // natively (no WKWebView OAuth redirect dance, no oaktend://auth/callback
+  // round trip) via @capacitor-community/apple-sign-in, which returns a
+  // signed identityToken straight from Apple. That token is handed to
+  // Supabase's signInWithIdToken, which verifies it against Apple's public
+  // keys and creates/loads the session exactly like the web OAuth flow does
+  // - same auth.users row, same public.users backfill, same `next` handling.
+  // The WEB PATH below (signInWithOAuth) is completely untouched: this
+  // native branch is chosen BEFORE anything web-specific runs.
+  async function onClickNative() {
+    setBusy(true);
+    try {
+      const { SignInWithApple } = await import(
+        "@capacitor-community/apple-sign-in"
+      );
+      const clientId = process.env.NEXT_PUBLIC_APPLE_SERVICES_ID;
+      if (!clientId) {
+        setBusy(false);
+        onError(
+          "Sign in with Apple is not configured for this build yet (missing NEXT_PUBLIC_APPLE_SERVICES_ID)."
+        );
+        return;
+      }
+      // NONCE: Apple and Supabase want the two HALVES of one value, not the
+      // same string twice. Apple embeds whatever is handed to
+      // ASAuthorizationAppleIDRequest.nonce into the identity token VERBATIM
+      // (the plugin sets `request.nonce = call.getString("nonce")` with no
+      // hashing of its own - checked in its Plugin.swift), while Supabase's
+      // signInWithIdToken SHA-256-hashes the nonce it is given and compares
+      // that hash to the token's claim. So Apple must receive the HASH and
+      // Supabase the RAW value; sending the raw value to both fails every
+      // sign-in with a nonce mismatch.
+      const nonce = crypto.randomUUID();
+      const hashedNonce = Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest("SHA-256", new TextEncoder().encode(nonce))
+        )
+      )
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+      const result = await SignInWithApple.authorize({
+        clientId,
+        // Required by the plugin's Android path (a WebView-based OAuth
+        // fallback there, since Android has no native AuthenticationServices
+        // equivalent); ignored by iOS's native ASAuthorizationController
+        // flow. Points at the same callback the web flow already uses.
+        redirectURI: `${window.location.origin}/auth/callback`,
+        scopes: "email name",
+        nonce: hashedNonce,
+      });
+      const identityToken = result.response.identityToken;
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: "apple",
+        token: identityToken,
+        nonce,
+      });
+      if (error) {
+        setBusy(false);
+        onError(error.message);
+        return;
+      }
+      const safePath = safeNextPath(next);
+      window.location.href = safePath || "/dashboard";
+    } catch (err: any) {
+      setBusy(false);
+      // The plugin rejects with an error code (e.g. "1001") when the user
+      // cancels the native sheet - not a real failure, so nothing is shown.
+      if (err?.message && /cancel/i.test(String(err.message))) return;
+      onError("Couldn't sign in with Apple just now. Please try again.");
+    }
+  }
+
   async function onClick() {
+    if (isNativeApp()) return onClickNative();
+
     setBusy(true);
     const safePath = safeNextPath(next);
     const redirectTo = `${window.location.origin}/auth/callback${

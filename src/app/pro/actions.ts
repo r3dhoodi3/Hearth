@@ -2047,11 +2047,12 @@ export async function applyToJobAction(formData: FormData) {
   // protection still refunds an apply fee paid in that window), and this
   // never touches apply_to_lead's own SQL or any money logic.
   // payout_amount/created_at/category ride along for the stale-price guard
-  // below, so it costs no extra query.
+  // below, so it costs no extra query. property_id rides along too, for the
+  // SEC-1 self-apply guard right below.
   const admin = createAdminClient();
   const { data: leadClosedCheck, error: leadClosedError } = await admin
     .from("contractor_leads")
-    .select("owner_closed_at, payout_amount, created_at, category")
+    .select("owner_closed_at, payout_amount, created_at, category, property_id")
     .eq("id", leadId)
     .maybeSingle();
   if (leadClosedError && !isMissingSchemaError(leadClosedError)) {
@@ -2074,6 +2075,41 @@ export async function applyToJobAction(formData: FormData) {
   // Any error here (0092 not run yet, or an unrelated hiccup) falls through
   // and lets apply_to_lead run exactly as it did before this check existed:
   // this pre-check is advisory only and must never itself block a legit apply.
+
+  // SEC-1 belt-and-braces: a dual-side account (homeowner AND pro on the same
+  // auth user) must not be able to apply to, or pay to apply to, its own
+  // posted job. apply_to_lead (0153, patched by migration 0161) is the real
+  // enforcement; this is the friendly early refusal, same posture as every
+  // other advisory pre-check in this function - before the replay guard, the
+  // insurance gate, and every wallet read, so a refused apply moves no money
+  // and costs one extra narrow query. A read failure falls through (advisory
+  // only) and lets the SQL gate in apply_to_lead be the backstop.
+  const propertyId = !leadClosedError
+    ? ((leadClosedCheck as any)?.property_id as string | null) ?? null
+    : null;
+  if (propertyId) {
+    const { data: propertyOwnerRow, error: propertyOwnerError } = await admin
+      .from("properties")
+      .select("user_id")
+      .eq("id", propertyId)
+      .maybeSingle();
+    if (propertyOwnerError) {
+      console.error(
+        "applyToJobAction: self-apply owner pre-check failed:",
+        propertyOwnerError.message
+      );
+    } else if (
+      propertyOwnerRow?.user_id &&
+      propertyOwnerRow.user_id === (contractor as any).user_id
+    ) {
+      await setFlash("You cannot apply to your own job.", "error");
+      revalidatePath("/pro");
+  // Home and the Leads board both read this data now, so both have to be
+  // dropped or one of the two tabs shows a stale count.
+  revalidatePath(PRO_LEADS_HREF);
+      return;
+    }
+  }
 
   // Replay guard: apply_to_lead returns true idempotently when this pro
   // already applied, and the success branch below would then re-send the
@@ -2181,6 +2217,11 @@ export async function applyToJobAction(formData: FormData) {
         "You already have an active job with this homeowner in this category. Message them there instead.",
         "error"
       );
+    } else if (error.message.includes("You cannot apply to your own job")) {
+      // SEC-1 backstop inside apply_to_lead (migration 0161) fired (normally
+      // the pre-check above catches this first; this covers a failed
+      // pre-check read or a direct RPC call). Same friendly copy either way.
+      await setFlash("You cannot apply to your own job.", "error");
     } else if (isInsuranceGateSqlError(error.message)) {
       // The 0153 backstop inside apply_to_lead fired (normally the pre-check
       // above catches this first; this covers a failed pre-check read or a

@@ -324,6 +324,11 @@ export function isPublicPath(path: string): boolean {
     path.startsWith("/emergency-help/") ||
     // A pro's shareable public page: readable with no account by design.
     path.startsWith("/p/") ||
+    // Campaign click redirects (src/app/go/[code]/route.ts): a bio-link tap
+    // from TikTok or Instagram is anonymous by definition, and the route only
+    // logs an allowlisted code and 302s. /go itself is not a page; only
+    // children exist, hence the trailing-slash prefix.
+    path.startsWith("/go/") ||
     // Public pros landing page: /p/ pages link here ("Powered by OakTend"),
     // so logged-out visitors must not bounce to /signin. Exact match: the
     // signed-in pro app lives under /pro/ and must stay guarded.
@@ -485,6 +490,15 @@ export function isPublicPath(path: string): boolean {
     // via X-Checkr-Signature, not a user session, and a 307 here would read
     // as a failed delivery, so background check results would never land.
     path.startsWith("/api/checkr/webhook") ||
+    // RevenueCat in-app-purchase webhook (src/app/api/iap/webhook): same
+    // reasoning as Stripe/Checkr above. It authenticates with an
+    // Authorization bearer token (REVENUECAT_WEBHOOK_SECRET), never a user
+    // session, so without this line every delivery 307s to /signin: RevenueCat
+    // reads a non-2xx as a failed delivery, retries for hours, then gives up,
+    // and an App Store / Play purchase would be charged and never grant Plus
+    // or Pro. src/lib/apiCsrfCoverage.test.ts already lists it as a
+    // machine-called webhook for the same reason.
+    path.startsWith("/api/iap/webhook") ||
     // Twilio inbound SMS webhook: authenticates via Twilio's request
     // signature, not a user session, same reasoning as the Stripe/Checkr
     // webhooks above - a 307 here would read as a failed delivery and drop

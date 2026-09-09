@@ -1,3 +1,10 @@
+> **Superseded 2026-09-07.** See `docs/APP-STORE-SUBMISSION.md` for the current plan: the
+> Capacitor scaffold now exists (`capacitor.config.ts`, `ios/`, `android/`), and the decision on
+> item 3 below changed - OakTend Plus and OakTend Pro membership now sell through Apple/Google IAP
+> (RevenueCat), not "sell on web, app honors the entitlement" as this file recommended. The lead-fee
+> and wallet-deposit reasoning in item 3 (3.1.3(e), Stripe stays) is unchanged and still current.
+> This file is kept for its dated research; do not follow item 3's membership recommendation.
+
 # App Store approval checklist for a future OakTend iOS app
 
 Researched 2026-08-19 against Apple's live App Review Guidelines

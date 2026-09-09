@@ -189,12 +189,13 @@ describe("pro leads: heading row", () => {
     // replaceState, not a <Link>: the tap must not cost a server render.
     expect(board).toContain("window.history.replaceState(window.history.state");
     expect(board).not.toContain("?sort=${o.value}");
-    // All three options, in the same order, still rendered from one list -
-    // now the shared one the server reads too.
+    // Both options, in the same order, still rendered from one list - the
+    // shared one the server reads too. ("Biggest deal" was a third sort,
+    // retired by C5 2026-09-07: it competed with "Cheapest fee" as two
+    // different "this is the deal" pitches on the same board.)
     const sortLib = src("../../../lib/leadSort.ts");
     expect(sortLib).toContain('{ value: "new", label: "Newest" }');
     expect(sortLib).toContain('{ value: "fee", label: "Cheapest fee" }');
-    expect(sortLib).toContain('{ value: "deal", label: "Biggest deal" }');
     expect(board).toContain("{LEAD_SORT_OPTIONS.map((o) => (");
   });
 
@@ -400,5 +401,39 @@ describe.skipIf(!streamBase)("served /pro/leads has no deferred rows or nested h
     expect(res.status).toBe(200);
     expect(nestedStreamHoles(html)).toEqual([]);
     expect(deferredRowRefs(html)[PAGE_ROW] ?? 0).toBe(0);
+  });
+});
+
+// C4 (2026-09-07 tester wave): migration 0155 adds homeowner_display to
+// open_jobs_for_me(). Adding a column to a RETURNS TABLE changes the return
+// type, which Postgres refuses on CREATE OR REPLACE (42P13), so the migration
+// has to drop first, exactly as 0096, 0104 and 0116 did for the same reason.
+// A create-or-replace here would fail at paste time and the column would
+// silently never exist in production.
+describe("C4: migration 0155 can actually apply", () => {
+  const migration = src(
+    "../../../../supabase/migrations/0155_lead_apply_homeowner_display.sql"
+  );
+  const paste = src("../../../../supabase/PASTE-ME-ALL-PENDING-2026-09-07.sql");
+
+  it("drops the function before recreating it, in both files", () => {
+    for (const [name, sql] of [
+      ["0155", migration],
+      ["PASTE-ME", paste],
+    ] as const) {
+      expect(sql, name).toContain(
+        "drop function if exists public.open_jobs_for_me();\ncreate function public.open_jobs_for_me()"
+      );
+      expect(sql, name).not.toContain(
+        "create or replace function public.open_jobs_for_me()"
+      );
+    }
+  });
+
+  it("truncates the name in SQL, so the full name never leaves the database", () => {
+    expect(migration).toContain("homeowner_display");
+    // The only reference to the raw column is inside the truncating CASE.
+    expect(migration).not.toContain("cl.homeowner_name as");
+    expect(migration).toContain("left(parts[array_length(parts, 1)], 1)");
   });
 });

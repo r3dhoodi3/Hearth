@@ -71,3 +71,19 @@ lh.json
 
 .vercel
 .env*
+# ...but the TEMPLATES are documentation, not secrets, and have to be
+# committable. .env.local.example predates the broad .env* rule above and
+# survived only because it was already tracked; .env.native.example (added
+# 2026-09-07 for the Capacitor build) was silently ignored, so the file
+# docs/APP-STORE-SUBMISSION.md tells the owner to fill in would never have
+# reached the repo.
+!.env*.example
+
+# Overnight audit logs + native build output
+/audit-server.log
+/build-audit.log
+/build-final.log
+/final-server.log
+/android/app/build/
+/android/.gradle/
+/ios/App/Pods/

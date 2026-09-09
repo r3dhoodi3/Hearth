@@ -290,6 +290,7 @@ export default function ChatsView({
           </>
         }
         closedRows={closedChats.map(renderChatRow)}
+        mobileAskHref="/pro/ask"
       />
 
       {/* ---- Open thread (the only pane on phones once one is picked) ---- */}

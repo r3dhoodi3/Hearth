@@ -10,13 +10,7 @@ vi.mock("./actions", () => ({
 }));
 
 import FeedbackForm from "./FeedbackForm";
-import {
-  FEEDBACK_DEAL_NOTE,
-  FEEDBACK_REPEAT_NOTE,
-  FEEDBACK_LOCKED_NOTE,
-  FEEDBACK_CREDITED_NOTE,
-  FEEDBACK_THANKS_NOTE,
-} from "@/lib/proFeedback";
+import { FEEDBACK_PENDING_NOTE } from "@/lib/proFeedback";
 
 afterEach(() => cleanup());
 beforeEach(() => vi.clearAllMocks());
@@ -32,53 +26,32 @@ function fillAndSubmit() {
   fireEvent.click(screen.getByRole("button", { name: "Send it" }));
 }
 
-describe("pro FeedbackForm: the deal is stated before the tap", () => {
-  it("tells a first-timer the first report pays instantly and later ones do not", () => {
-    render(<FeedbackForm established claimed={false} />);
-    expect(screen.getByText(FEEDBACK_DEAL_NOTE)).toBeInTheDocument();
+describe("pro FeedbackForm: the deal is stated before the tap (C7, 2026-09-07)", () => {
+  it("states the one honest sentence before anyone types", () => {
+    render(<FeedbackForm />);
+    expect(screen.getByText(FEEDBACK_PENDING_NOTE)).toBeInTheDocument();
   });
 
-  it("tells an unqualified pro when the credit unlocks", () => {
-    render(<FeedbackForm established={false} claimed={false} />);
-    expect(screen.getByText(FEEDBACK_LOCKED_NOTE)).toBeInTheDocument();
-  });
-
-  it("never re-promises the credit once it is claimed", () => {
-    render(<FeedbackForm established claimed />);
-    expect(screen.getByText(FEEDBACK_REPEAT_NOTE)).toBeInTheDocument();
-    expect(screen.queryByText(FEEDBACK_DEAL_NOTE)).not.toBeInTheDocument();
+  it("never promises a dollar amount before review", () => {
+    render(<FeedbackForm />);
+    // No stray "$5" or "instantly" language anywhere on the fresh form.
+    expect(screen.queryByText(/\$5/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/instantly/i)).not.toBeInTheDocument();
   });
 });
 
-describe("pro FeedbackForm: the three success screens", () => {
-  it("says the credit landed when THIS submission earned it", async () => {
+describe("pro FeedbackForm: after submit", () => {
+  it("confirms with the same pending-review sentence, no wallet link", async () => {
     submitProFeedbackAction.mockResolvedValue({
       ok: true,
-      data: { outcome: "credited" },
+      data: { outcome: "pending" },
     });
-    render(<FeedbackForm established claimed={false} />);
+    render(<FeedbackForm />);
     fillAndSubmit();
     await waitFor(() =>
-      expect(screen.getByText(FEEDBACK_CREDITED_NOTE)).toBeInTheDocument()
+      expect(screen.getAllByText(FEEDBACK_PENDING_NOTE).length).toBeGreaterThan(0)
     );
-    expect(
-      screen.getByRole("link", { name: "See my wallet" })
-    ).toHaveAttribute("href", "/pro/billing");
-  });
-
-  it("thanks a later report with no credit language", async () => {
-    submitProFeedbackAction.mockResolvedValue({
-      ok: true,
-      data: { outcome: "thanks" },
-    });
-    render(<FeedbackForm established claimed />);
-    fillAndSubmit();
-    await waitFor(() =>
-      expect(screen.getByText(FEEDBACK_THANKS_NOTE)).toBeInTheDocument()
-    );
-    // No money promised and no wallet link: the deal said later reports do
-    // not pay on their own, and the confirmation must not contradict it.
-    expect(screen.queryByText(FEEDBACK_CREDITED_NOTE)).not.toBeInTheDocument();
+    // Nothing pays automatically, so there is no "see my wallet" link here.
     expect(
       screen.queryByRole("link", { name: "See my wallet" })
     ).not.toBeInTheDocument();
@@ -88,26 +61,12 @@ describe("pro FeedbackForm: the three success screens", () => {
     ).toBeInTheDocument();
   });
 
-  it("explains the waiting credit for an unqualified first report", async () => {
-    submitProFeedbackAction.mockResolvedValue({
-      ok: true,
-      data: { outcome: "locked" },
-    });
-    render(<FeedbackForm established={false} claimed={false} />);
-    fillAndSubmit();
-    await waitFor(() =>
-      // Both the pre-submit note and the confirmation carry the same line.
-      expect(screen.getAllByText(FEEDBACK_LOCKED_NOTE).length).toBeGreaterThan(0)
-    );
-    expect(screen.queryByText(FEEDBACK_CREDITED_NOTE)).not.toBeInTheDocument();
-  });
-
   it("keeps the typed note on screen when the server refuses", async () => {
     submitProFeedbackAction.mockResolvedValue({
       ok: false,
       error: "We could not save your report. Please try again in a moment.",
     });
-    render(<FeedbackForm established claimed={false} />);
+    render(<FeedbackForm />);
     fillAndSubmit();
     await waitFor(() =>
       expect(

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
+import { tap } from "@/lib/native/haptics";
 
 // A form submit button that disables itself and shows a pending label while the
 // server action is in flight, so a homeowner can't double-submit (e.g. log the
@@ -50,6 +51,10 @@ export default function SubmitButton({
     const form = e.currentTarget.form;
     if (form && !form.noValidate && !form.checkValidity()) return;
     submittedRef.current = true;
+    // Native app shell only (no-op on web): a light haptic tap on every
+    // real form submit through this shared button, so the app's primary
+    // actions feel native rather than web-tapped. See src/lib/native/haptics.ts.
+    tap();
   }
 
   return (

@@ -100,4 +100,19 @@ describe("ChatListTabs", () => {
       "sm:min-h-0"
     );
   });
+
+  // A9: the pinned Ask OakTend row reads as just another conversation, so a
+  // second, unmistakable button to the same place sits under the list, phone
+  // only. Omitted by default (no mobileAskHref) so a caller that never opts
+  // in renders nothing extra.
+  it("shows a phone-only Chat with AI link when mobileAskHref is given, not otherwise", () => {
+    renderTabs();
+    expect(screen.queryByRole("link", { name: /Chat with AI/ })).toBeNull();
+
+    renderTabs({ mobileAskHref: "/ask" });
+    const link = screen.getByRole("link", { name: /Chat with AI/ });
+    expect(link).toHaveAttribute("href", "/ask");
+    expect(link.className).toContain("md:hidden");
+    expect(link.className).toContain("min-h-11");
+  });
 });

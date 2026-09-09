@@ -34,6 +34,10 @@ import { trialDecision, RISK_BLOCK_MESSAGE } from "@/lib/risk/decision";
 import { recordRequestSignals } from "@/lib/risk/signals";
 import { trackServerEvent } from "@/lib/trackServer";
 import { variantForUser } from "@/lib/paywallExperiment";
+import {
+  isNativeClientRequest,
+  NATIVE_STRIPE_BLOCKED_MESSAGE,
+} from "@/lib/nativeClientHeader";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -114,6 +118,16 @@ export async function startProCheckoutAction(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
+
+  // APPLE 3.1.1 / GOOGLE PLAY BILLING: same gate as
+  // startPlusCheckoutAction's twin in src/app/(app)/plus/actions.ts - see
+  // that comment and src/lib/nativeClientHeader.ts for the full reasoning.
+  // OakTend Pro membership is a digital unlock, so it must sell through IAP
+  // on native, never Stripe.
+  if (await isNativeClientRequest()) {
+    await setFlash(NATIVE_STRIPE_BLOCKED_MESSAGE, "error");
+    redirect("/pro/plus");
+  }
 
   // REQUIRE THE AUTO-RENEWAL CONSENT CHECKBOX (Cal. Bus. & Prof. Code
   // 17602(a)(2), as amended by AB 2863, effective July 1, 2025). Mirrors
@@ -812,7 +826,19 @@ export async function resumeProMembershipAction() {
 // customer id when no Pro-side row exists yet (same Stripe customer).
 export async function manageProBillingAction() {
   const sub = (await getProSubscription()) ?? (await getSubscription());
-  if (!sub?.stripe_customer_id) redirect("/pro/plus");
+  // Pro-side twin of the same branch in src/app/(app)/plus/actions.ts's
+  // manageBillingAction: a membership bought through the App Store / Play
+  // Store has no Stripe customer, and a silent bounce back to /pro/plus reads
+  // as a dead button.
+  if (!sub?.stripe_customer_id) {
+    if (sub) {
+      await setFlash(
+        "This membership was bought in the app, so it is managed in your App Store or Play Store subscription settings.",
+        "info"
+      );
+    }
+    redirect("/pro/plus");
+  }
 
   const portal = await stripe.billingPortal.sessions.create({
     customer: sub.stripe_customer_id,

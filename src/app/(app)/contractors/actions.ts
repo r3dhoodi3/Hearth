@@ -40,6 +40,11 @@ import {
 } from "@/lib/serviceArea";
 import { isAllowedValue } from "@/lib/formFields";
 import { POST_JOB_ERRORS, type PostJobErrorCode } from "./postJobErrors";
+import { MAX_OTHER_SERVICE_LEN, withOtherService } from "./otherService";
+import {
+  normalizeContactEmail,
+  normalizeContactPhone,
+} from "@/lib/contactFields";
 import { isOwnedStoragePath } from "@/lib/ownedStoragePath";
 // trackServerEvent used to be a private copy of this exact function (same
 // table, same isMissingSchemaError fallback), duplicated because pro/actions.ts
@@ -95,6 +100,16 @@ export async function postJobAction(formData: FormData) {
   const issueIdRaw = (formData.get("issue_id") as string) || null;
   const timing = (formData.get("timing") as string) || null;
   const message = ((formData.get("message") as string) || "").trim() || null;
+  // Free-text label from CategoryFilter's inline "Other" field (B3): the
+  // category itself can only ever be the bare enum value "other" server-side
+  // (isAllowedValue below), so this is how a pro finds out what the owner
+  // actually meant. Folded into the description further down (withOtherService,
+  // AFTER the length gate, so the gate still reads the owner's own words),
+  // never stored as its own column.
+  const otherServiceName =
+    ((formData.get("other_service_name") as string) || "")
+      .trim()
+      .slice(0, MAX_OTHER_SERVICE_LEN) || null;
 
   // Which issue id gets echoed back on a failure round trip. Starts as the raw
   // form value, shape-checked only (it is about to be put in a URL and then
@@ -420,10 +435,28 @@ export async function postJobAction(formData: FormData) {
   // since a lead is a frozen packet: pros read only contractor_leads, never the
   // homeowner's account. The signed-in user's auth email is the fallback when
   // the form field is left blank.
-  const homeownerName = (formData.get("homeowner_name") as string) || null;
-  const homeownerEmail =
-    (formData.get("homeowner_email") as string) || user.email || null;
-  const homeownerPhone = (formData.get("homeowner_phone") as string) || null;
+  // Capped at 80, the same ceiling open_jobs_for_me()'s homeowner_display
+  // truncation assumes (migration 0155 takes left(first_name, 40) precisely
+  // because this column had no limit at the source). Unbounded, a 100KB
+  // "name" rode onto the frozen lead packet and into every pro alert.
+  const homeownerNameRaw = (formData.get("homeowner_name") as string) || "";
+  const homeownerName = homeownerNameRaw.trim().slice(0, 80) || null;
+  // B1 (verifier pass): SHAPE-CHECKED, not merely non-blank. A pro pays to
+  // apply, so "asdf" in the email box is the same dead lead as an empty one,
+  // and both columns are unbounded `text` in the database (0005). A blank
+  // field still falls back to the signed-in user's auth email exactly as
+  // before; a field the owner actually typed into has to be a real address
+  // or a full phone number, or the post is turned around with a reason
+  // (contact_format below) instead of silently storing junk.
+  const emailTyped = ((formData.get("homeowner_email") as string) || "").trim();
+  const phoneTyped = ((formData.get("homeowner_phone") as string) || "").trim();
+  const homeownerEmail = emailTyped
+    ? normalizeContactEmail(emailTyped)
+    : normalizeContactEmail(user.email);
+  const homeownerPhone = phoneTyped ? normalizeContactPhone(phoneTyped) : null;
+  const contactMalformed =
+    (emailTyped !== "" && homeownerEmail === null) ||
+    (phoneTyped !== "" && homeownerPhone === null);
 
   // The job description pros see: the homeowner's own words, falling back to the
   // linked issue's text.
@@ -438,7 +471,6 @@ export async function postJobAction(formData: FormData) {
     issueDescription = message ?? issue?.description ?? null;
     issueSeverity = issue?.severity ?? null;
   }
-
   // The redirect on every validation gate below goes through failPost() (top
   // of this action), which carries what the owner typed back as query params
   // (the page already prefills category/timing/desc/issue from searchParams)
@@ -472,12 +504,42 @@ export async function postJobAction(formData: FormData) {
   }
 
   // Pros pay to apply, so a posting has to give them something to go on:
-  // require a real description (at least 20 characters) before it goes live.
-  if ((issueDescription ?? "").trim().length < 20) {
+  // require a real description (at least 10 characters) before it goes live.
+  if ((issueDescription ?? "").trim().length < 10) {
     await cleanupOrphanPhotos();
     const code = photoUrls.length ? "description_photos" : "description";
     await setFlash(POST_JOB_ERRORS[code], "error");
     redirect(failPost(code));
+  }
+
+  // A lead with no way to reach the homeowner is dead weight for a pro who
+  // just paid to apply: at least one of email or phone must be there AND be
+  // a real address / a full phone number. Either field alone may still be
+  // left blank (a pro only needs one path in), but a field that was typed
+  // into has to parse, and the pair together can't both end up empty.
+  // Checked here, not earlier, so it runs on the values already normalized
+  // above (a blank email still falls back to the signed-in user's auth
+  // email, which is how most real posts satisfy this without seeing it).
+  if (contactMalformed) {
+    await cleanupOrphanPhotos();
+    const code = photoUrls.length ? "contact_format_photos" : "contact_format";
+    await setFlash(POST_JOB_ERRORS[code], "error");
+    redirect(failPost(code));
+  }
+  if (!homeownerEmail && !homeownerPhone) {
+    await cleanupOrphanPhotos();
+    const code = photoUrls.length ? "contact_photos" : "contact";
+    await setFlash(POST_JOB_ERRORS[code], "error");
+    redirect(failPost(code));
+  }
+
+  // B3, applied AFTER the description floor above so the owner's own words
+  // are what has to clear 10 characters (a long service name alone used to
+  // satisfy the gate with an empty description). withOtherService strips any
+  // previous copy of the prefix first, so this is idempotent - see
+  // ./otherService.ts.
+  if (category === "other") {
+    issueDescription = withOtherService(otherServiceName, issueDescription);
   }
 
   // Major-tier jobs (0114) need a real budget so pros can bid seriously - no
@@ -499,6 +561,18 @@ export async function postJobAction(formData: FormData) {
   // has to carry enough real content), but everything stored on the lead, fed
   // to the carrier issue, and pushed to pro alerts uses the redacted version.
   issueDescription = issueDescription ? redactContact(issueDescription) : issueDescription;
+  // LENGTH CEILING, after redaction so the redactor still sees the whole text.
+  // contractor_leads.issue_description is plain `text` with no limit (0005),
+  // and B1/B3 capped every other free-text field on this form (email 254,
+  // phone 25, other-service name 80) while this one stayed open to whatever
+  // fits in a server-action body. It is not just stored: it is replayed into
+  // pro alert emails and prefilled into the pro AI tools' prompts
+  // (src/app/pro/tools/page.tsx -> /api/pro-tools, which clamps at 4000
+  // anyway), so 4000 is the same ceiling the carrier issue row already uses a
+  // few lines below and nothing downstream sees more than this today.
+  if (issueDescription && issueDescription.length > 4000) {
+    issueDescription = issueDescription.slice(0, 4000);
+  }
 
   // formatAddressLine, not address_line1: this string is frozen onto the lead
   // as property_address and is the only address the pro who wins the job ever
@@ -742,6 +816,8 @@ export async function postJobAction(formData: FormData) {
     // the external channels are held back until the assessor-record match
     // says this poster is plausibly who they claim to be.
     externalChannels: ownershipStatus === "verified",
+    // SEC-1: a dual-side account must never be alerted about its own job.
+    posterUserId: user.id,
   });
 
   // Nudge matching pros that a fresh job just came in, so they see it while
@@ -759,7 +835,14 @@ export async function postJobAction(formData: FormData) {
     // insert per matched pro sequentially: up to 50 round-trips in series was
     // adding latency to the post and amplifying it per-post.
     const rows = (matches ?? []).flatMap((match) => {
-      if (!match.user_id || alertedPros.has(match.user_id)) return [];
+      // SEC-1: never nudge the poster about their own job (dual-side
+      // account, same reasoning as alertProsForNewLead's posterUserId).
+      if (
+        !match.user_id ||
+        match.user_id === user.id ||
+        alertedPros.has(match.user_id)
+      )
+        return [];
       return [
         {
           user_id: match.user_id,
@@ -809,13 +892,26 @@ export async function updateJobAction(
   const category = formData.get("category") as string;
   const timing = (formData.get("timing") as string) || null;
   const message = ((formData.get("message") as string) || "").trim() || null;
-  const homeownerName = (formData.get("homeowner_name") as string) || null;
-  // Mirror postJobAction: the signed-in user's auth email is the fallback when
-  // the form field is left blank, so an edit never strips the contact email
-  // off the frozen lead packet.
-  const homeownerEmail =
-    (formData.get("homeowner_email") as string) || user.email || null;
-  const homeownerPhone = (formData.get("homeowner_phone") as string) || null;
+  // Same 80-character ceiling as postJobAction (see the comment there):
+  // homeowner_name is unbounded `text` and rides onto the frozen lead packet.
+  const homeownerName =
+    ((formData.get("homeowner_name") as string) || "").trim().slice(0, 80) || null;
+  // Mirror postJobAction, shape checks included: the signed-in user's auth
+  // email is the fallback when the form field is left blank, so an edit never
+  // strips the contact email off the frozen lead packet, and a field the
+  // owner did type into has to parse as a real address / full phone number
+  // rather than quietly overwriting a good value with junk.
+  const emailTyped = ((formData.get("homeowner_email") as string) || "").trim();
+  const phoneTyped = ((formData.get("homeowner_phone") as string) || "").trim();
+  const homeownerEmail = emailTyped
+    ? normalizeContactEmail(emailTyped)
+    : normalizeContactEmail(user.email);
+  const homeownerPhone = phoneTyped ? normalizeContactPhone(phoneTyped) : null;
+  // Mirrors postJobAction's B3 field: CategoryFilter's inline "Other" text.
+  const otherServiceName =
+    ((formData.get("other_service_name") as string) || "")
+      .trim()
+      .slice(0, MAX_OTHER_SERVICE_LEN) || null;
 
   // Only a real category may set the payout tier: a forged value would fall
   // back to the cheapest "other" fee in leadFeeFor.
@@ -823,13 +919,28 @@ export async function updateJobAction(
     return err("Please pick a valid job category.");
   }
 
-  // Same 20-character description floor as postJobAction: pros pay to apply,
+  // Same 10-character description floor as postJobAction: pros pay to apply,
   // so an edit can't blank out what they're applying to. Not labeled
   // "optional" on the form: see the honest label + minLength hint there.
-  if ((message ?? "").length < 20) {
+  if ((message ?? "").length < 10) {
     return err(
-      "Please describe the job in at least 20 characters so pros know what they're applying to."
+      "Please describe the job in at least 10 characters so pros know what they're applying to."
     );
+  }
+
+  // Same email-or-phone floor as postJobAction (B1): an edit can't strip the
+  // last way a pro has to reach this homeowner, and can't replace it with
+  // something that isn't a contact at all.
+  if (
+    (emailTyped !== "" && homeownerEmail === null) ||
+    (phoneTyped !== "" && homeownerPhone === null)
+  ) {
+    return err(
+      "That email address or phone number doesn't look right. Please check it and try again."
+    );
+  }
+  if (!homeownerEmail && !homeownerPhone) {
+    return err("Please add an email or phone number so pros can reach you.");
   }
 
   // RLS scopes this read to a lead the caller owns, same as the update below.
@@ -861,9 +972,26 @@ export async function updateJobAction(
   // Scrub contact info out of the description before it's stored, mirroring
   // postJobAction: pros pay to apply through the marketplace, and a "call me
   // at ..." dropped into an edit would let a pro take the job off-platform
-  // before ever paying to apply. The 20-character floor above ran on the raw
+  // before ever paying to apply. The 10-character floor above ran on the raw
   // text; only the stored value is redacted.
-  const redactedMessage = message ? redactContact(message) : message;
+  //
+  // The "Other" service name (B3) is folded in BEFORE the redaction, not
+  // after: it is owner free text like the description is, and prefixing it
+  // afterwards left it as the one field on the whole form that could carry a
+  // phone number straight past redactContact. withOtherService also strips
+  // any previous copy of the prefix, so repeated edits stop stacking it
+  // ("Service needed: X. Service needed: X. ...").
+  const composedMessage =
+    category === "other" ? withOtherService(otherServiceName, message) : message;
+  const redactedMessageRaw = composedMessage
+    ? redactContact(composedMessage)
+    : composedMessage;
+  // Same 4000-character ceiling postJobAction applies after redaction: an
+  // edit must not be able to store a description a fresh post could not.
+  const redactedMessage =
+    redactedMessageRaw && redactedMessageRaw.length > 4000
+      ? redactedMessageRaw.slice(0, 4000)
+      : redactedMessageRaw;
 
   const { error } = await supabase
     .from("contractor_leads")
@@ -1689,6 +1817,8 @@ export async function postDirectPubliclyAction(formData: FormData) {
     property_state: property.state ?? null,
     property_zip: property.zip ?? null,
     externalChannels: property.ownership_status === "verified",
+    // SEC-1: a dual-side account must never be alerted about its own job.
+    posterUserId: user.id,
   });
 
   // Nudge matching pros a fresh job is open, skipping anyone already alerted
@@ -1703,7 +1833,14 @@ export async function postDirectPubliclyAction(formData: FormData) {
       .limit(50);
     const categoryLabel = labelFor(JOB_CATEGORIES, category);
     const rows = (matches ?? []).flatMap((match: { user_id: string | null }) => {
-      if (!match.user_id || alertedPros.has(match.user_id)) return [];
+      // SEC-1: never nudge the poster about their own job (dual-side
+      // account, same reasoning as alertProsForNewLead's posterUserId).
+      if (
+        !match.user_id ||
+        match.user_id === user.id ||
+        alertedPros.has(match.user_id)
+      )
+        return [];
       return [
         {
           user_id: match.user_id,

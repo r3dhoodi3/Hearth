@@ -1703,7 +1703,7 @@ export default function LeadChat({
                 rows={2}
                 maxLength={1000}
                 placeholder="Note to the homeowner (optional)"
-                className="input w-full text-sm"
+                className="input w-full"
               />
               {hasUnlabeledAmount && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -1987,7 +1987,7 @@ export default function LeadChat({
               onChange={(e) => setReportReason(e.target.value)}
               rows={2}
               placeholder="What's the problem? (optional)"
-              className="input w-full text-sm"
+              className="input w-full"
             />
             <div className="flex items-center gap-3">
               <button
@@ -2305,7 +2305,7 @@ function InvoiceCard({
                     Type your full name to sign
                   </label>
                   <input
-                    className="input w-full text-sm"
+                    className="input w-full"
                     value={typedName}
                     onChange={(e) => setTypedName(e.target.value)}
                     placeholder="Full name"

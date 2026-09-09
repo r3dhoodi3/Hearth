@@ -20,6 +20,21 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/database.types";
 
+// The amenity flags/specs the starter-seed expansion (src/lib/starterSystems.ts)
+// gates its EXTRA rows on - garage door, pool equipment, fireplace/chimney -
+// plus the exterior material the always-added siding row uses. A separate
+// shape from system_facts (below) because these aren't strings: pool/garage/
+// fireplace are true booleans from RentCast's `features` object, and
+// materialText-style coercion doesn't apply to a boolean the way it does to a
+// brand name.
+export interface HomeSeedFeatures {
+  exteriorType: string | null;
+  pool: boolean | null;
+  garage: boolean | null;
+  garageSpaces: number | null;
+  fireplace: boolean | null;
+}
+
 export interface ParcelFacts {
   parcel_id: string | null;
   address_line1: string;
@@ -49,6 +64,14 @@ export interface ParcelFacts {
   // record, so the starter-seeded rows aren't left blank when RentCast
   // actually knows the roof/foundation/HVAC.
   system_facts: Record<string, string> | null;
+  // Garage/pool/fireplace/exterior flags for the starter-seed expansion (see
+  // HomeSeedFeatures above). Server-only, same reasoning as owner_names below:
+  // PublicParcelFacts omits it, so it never ships to the browser. There is no
+  // legitimate client use for it today (claimPropertyAction reads it off its
+  // own server-side lookupParcel call, never off the post), and keeping it
+  // server-only means a future client field can't accidentally start trusting
+  // amenity flags a forged post could otherwise supply.
+  home_features: HomeSeedFeatures | null;
   // County assessor owner-of-record, for ownership verification (migration
   // 0093, src/lib/ownershipMatch.ts). Server-only, and enforced as such:
   // lookupParcelAction (onboarding/actions.ts) strips these three fields from
@@ -87,9 +110,12 @@ export interface ParcelFacts {
 // owner_occupied) can never ship to the browser: they are the answer key the
 // claim-time ownership check compares the typed name against. OnboardingForm
 // only ever reads the fields below, so nothing on the client loses anything.
+// home_features joins the omitted list for the same reason: it's read by
+// claimPropertyAction off its own server-side lookup, never off what the
+// client posts back (see the field's own comment on ParcelFacts above).
 export type PublicParcelFacts = Omit<
   ParcelFacts,
-  "owner_names" | "owner_type" | "owner_occupied"
+  "owner_names" | "owner_type" | "owner_occupied" | "home_features"
 >;
 
 // Shared by lookupParcel's request key and its canonical-key dual-write
@@ -275,6 +301,15 @@ type RentcastFeatures = {
   architectureType?: string;
   floorCount?: number;
   roomCount?: number;
+  // Documented on RentCast's property-record features object but not read
+  // until now. Widening the type costs nothing (every field here is already
+  // optional, and the request/URL is unchanged - this only reads more of the
+  // SAME response body), and garageSpaces feeds the starter-seed's garage
+  // door note (src/lib/starterSystems.ts). unitCount is read but not acted on
+  // yet - see the API proposal in reports/seed-expand.md for what it could
+  // unlock (multi-family unit-count-aware seeding).
+  garageSpaces?: number;
+  unitCount?: number;
 };
 
 type RentcastTaxAssessment = { year?: number; value?: number; land?: number; improvements?: number };
@@ -432,6 +467,28 @@ function deriveSystemFacts(
   if (features.coolingType) hvacParts.push(`${features.coolingType} A/C`);
   if (hvacParts.length > 0) facts.hvac = hvacParts.join(", ");
   return Object.keys(facts).length > 0 ? facts : null;
+}
+
+// Maps RentCast's `features` object to HomeSeedFeatures (above), for the
+// starter-seed expansion's flagged extra rows (garage door, pool, fireplace)
+// and its always-added siding material. Returns null only when there is no
+// features object at all - a features object with every flag false/absent
+// still returns real (all-null/false) facts, which is different information
+// than "we don't know": it says RentCast checked and this home has none of
+// them, not that the question was never asked.
+function deriveHomeFeatures(
+  features: RentcastFeatures | undefined
+): HomeSeedFeatures | null {
+  if (!features) return null;
+  return {
+    exteriorType: features.exteriorType ?? null,
+    pool: typeof features.pool === "boolean" ? features.pool : null,
+    garage: typeof features.garage === "boolean" ? features.garage : null,
+    garageSpaces:
+      typeof features.garageSpaces === "number" ? features.garageSpaces : null,
+    fireplace:
+      typeof features.fireplace === "boolean" ? features.fireplace : null,
+  };
 }
 
 // How long one attempt at reaching RentCast may take, and the hard ceiling on
@@ -622,6 +679,7 @@ async function fetchFromRentcast(
     const { assessed_value, assessed_year } = deriveAssessed(record.taxAssessments);
     const property_tax_history = derivePropertyTaxHistory(record.propertyTaxes);
     const system_facts = deriveSystemFacts(record.features);
+    const home_features = deriveHomeFeatures(record.features);
     return {
       parcel_id: record.assessorID ?? record.id ?? null,
       // Prefer the canonical county-record address over the typed one, but
@@ -651,6 +709,7 @@ async function fetchFromRentcast(
       market_value_low: null,
       market_value_high: null,
       system_facts,
+      home_features,
       owner_names:
         record.owner?.names && record.owner.names.length > 0
           ? record.owner.names
@@ -881,6 +940,7 @@ function blankFacts(street: string, zip: string): ParcelFacts {
     market_value_low: null,
     market_value_high: null,
     system_facts: null,
+    home_features: null,
     owner_names: null,
     owner_type: null,
     owner_occupied: null,

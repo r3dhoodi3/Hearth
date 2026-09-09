@@ -1,6 +1,7 @@
 "use client";
 
 import NoticeAtCollection from "@/components/NoticeAtCollection";
+import InlineSpinner from "@/components/InlineSpinner";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { lookupParcelAction, claimPropertyAction, joinMarketWaitlistAction } from "./actions";
 import type { PublicParcelFacts } from "@/lib/parcel";
@@ -1537,8 +1538,23 @@ export default function OnboardingForm({
                 </p>
               )}
 
-              <button className="btn-primary w-full" disabled={busy}>
-                {busy ? "One moment…" : "Claim my home"}
+              {/* Claiming a home now looks up the county record a second time,
+                  runs the ownership check, and seeds the starter inventory
+                  (buildStarterSystems, src/lib/starterSystems.ts) all before
+                  redirecting - about 5 seconds measured against the live
+                  RentCast path (reports/accounts-seed.md), not the instant a
+                  plain disabled button implies. A spinner plus copy that
+                  names what's actually happening (not a generic "One
+                  moment…") is the honest version of the same pending state
+                  this button already had via `busy`/disabled - nothing about
+                  double-submit protection changes, only what it says while
+                  it waits. */}
+              <button
+                className="btn-primary flex w-full items-center justify-center gap-2"
+                disabled={busy}
+              >
+                {busy && <InlineSpinner size={16} />}
+                {busy ? "Building your home profile…" : "Claim my home"}
               </button>
 
               {/* We keep this form filled in across a reload, so there has to be a

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import Link from "next/link";
 import InlineSpinner from "@/components/InlineSpinner";
 import { depositAction } from "./actions";
 
@@ -69,8 +70,8 @@ function bonusFor(cents: number, tiers: Tier[], boostPts: number) {
   return { pct, bonus: Math.floor((cents * pct) / 100) };
 }
 
-// Start low: /pros promises "deposits from $5", so the presets open at $50
-// with the custom field taking anything from $5 up.
+// Start low: /pros promises "deposits from $10", so the presets open at $50
+// with the custom field taking anything from $10 up.
 const PRESETS = [50, 100, 200, 400];
 
 export default function DepositForm({
@@ -98,7 +99,7 @@ export default function DepositForm({
   // custom amount above the largest preset).
   const initialAmount =
     need && need > 0
-      ? String(PRESETS.find((p) => p >= need) ?? Math.ceil(need))
+      ? String(PRESETS.find((p) => p >= need) ?? Math.max(10, Math.ceil(need)))
       : String(PRESETS[0]);
   const [amount, setAmount] = useState(initialAmount);
   // Preview while hovering a preset - reverts to the committed amount on leave.
@@ -180,12 +181,20 @@ export default function DepositForm({
           <input
             ref={inputRef}
             type="number"
-            min={5}
-            step={1}
+            min={10}
+            step={0.01}
             value={shown}
             placeholder="0"
-            // Digits only - no letters, symbols, or emojis.
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
+            // Digits and a single decimal point - no letters, symbols, or emojis.
+            onChange={(e) => {
+              const v = e.target.value.replace(/[^0-9.]/g, "");
+              const firstDot = v.indexOf(".");
+              setAmount(
+                firstDot === -1
+                  ? v
+                  : v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, "")
+              );
+            }}
             className="input max-w-[120px]"
           />
           {bonus > 0 && (
@@ -200,7 +209,7 @@ export default function DepositForm({
             the disclaimer above: it moves into the phone Details block so
             the buttons above it are the first thing a phone shows. */}
         <p className="mt-1 text-[11px] text-stone-500 max-sm:text-sm max-sm:hidden dark:text-stone-400">
-          Any amount from $5.{" "}
+          Minimum $10.{" "}
           {boostPts > 0
             ? `Every deposit earns +${boostPts}% as a Pro member, tiers stack on top`
             : "$200+ earns bonus credit"}
@@ -232,10 +241,20 @@ export default function DepositForm({
           onChange={(e) => setAgreed(e.target.checked)}
           className="accent-oaktend-600 max-sm:h-5 max-sm:w-5"
         />
-        I understand and agree.
+        <span>
+          I understand and agree to the{" "}
+          <Link
+            href="/pro-terms"
+            target="_blank"
+            className="underline hover:text-stone-900 dark:hover:text-stone-100"
+          >
+            Pro Terms
+          </Link>
+          .
+        </span>
       </label>
 
-      <DepositButton disabled={!agreed || num < 5} num={num} />
+      <DepositButton disabled={!agreed || num < 10} num={num} />
 
       {/* Phone only: replaces the three max-sm:hidden paragraphs above with
           one always-visible sentence plus the full text one tap away in
@@ -260,7 +279,7 @@ export default function DepositForm({
               days after it&apos;s added. Lead prices vary by service.
             </p>
             <p>
-              Any amount from $5.{" "}
+              Minimum $10.{" "}
               {boostPts > 0
                 ? `Every deposit earns +${boostPts}% as a Pro member, tiers stack on top`
                 : "$200+ earns bonus credit"}

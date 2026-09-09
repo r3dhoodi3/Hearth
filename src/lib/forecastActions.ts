@@ -27,7 +27,7 @@ import { ALWAYS_SCHEDULE, SYSTEM_SCHEDULE } from "@/lib/maintenancePlan";
 
 // When these rows were last reviewed. Rendered on the page so the advice is
 // never undated, and asserted on by the test so a stale table is visible.
-export const ACTIONS_AS_OF = "2026-08";
+export const ACTIONS_AS_OF = "2026-09";
 
 export interface ForecastAction {
   // The one step, phrased as the homeowner would say it out loud.
@@ -58,12 +58,13 @@ export interface ForecastAction {
 // entry: a system the forecast can list is a system this page owes an action
 // for, and the test fails if a new system type ever lands without one.
 //
-// Two notes on the owner's original list:
+// One note on the owner's original list:
 //   "exterior paint" lives under `siding` - OakTend has no separate paint
 //   system, and repainting/resealing IS the step that keeps siding alive.
-//   "water softener" has no system type at all, so there is nothing to key it
-//   to. If one is ever added to SYSTEM_TYPES, this table must grow a row or
-//   the test below will say so.
+// water_softener DOES have its own system type now (starter-seed expansion,
+// 2026-09-07) - it just has no row in the starter SEED itself, since
+// RentCast has no fact to gate it on. It still needs a push-it-out step here
+// because an owner can add one by hand from Home Profile.
 export const FORECAST_ACTIONS: Record<string, ForecastAction> = {
   water_heater: {
     step: "Flush the tank and have the anode rod checked",
@@ -224,6 +225,127 @@ export const FORECAST_ACTIONS: Record<string, ForecastAction> = {
     why: "A fence dies at the ground line where the post meets wet soil. Everything above it is usually still fine.",
     taskTitle: "Reset loose fence posts and reseal the wood",
     dueInDays: 80,
+  },
+  // Starter-seed expansion (src/lib/starterSystems.ts, 2026-09-07): the
+  // everyday household systems and flagged extras the onboarding seed grew
+  // beyond the original 7. Same sourcing standard as every row above -
+  // manufacturer/trade rules of thumb, ranges not single numbers.
+  pool: {
+    step: "Test and balance the water and service the pump and filter",
+    costLow: 100,
+    costHigh: 300,
+    yearsGainedLow: 2,
+    yearsGainedHigh: 4,
+    why: "Bad water chemistry corrodes the plaster and the equipment, and a clogged filter makes the pump work harder than it has to.",
+    taskTitle: "Test pool water and service the pump and filter",
+    dueInDays: 30,
+  },
+  fireplace: {
+    step: "Have the chimney swept and the flue inspected",
+    costLow: 150,
+    costHigh: 400,
+    yearsGainedLow: 3,
+    yearsGainedHigh: 5,
+    why: "Creosote buildup in the flue is what causes chimney fires, and a cracked liner lets heat reach framing it was never meant to touch.",
+    taskTitle: "Sweep the chimney and inspect the flue",
+    dueInDays: 90,
+  },
+  smoke_co_detector: {
+    step: "Test every detector and replace units older than 10 years",
+    costLow: 30,
+    costHigh: 150,
+    yearsGainedLow: 1,
+    yearsGainedHigh: 2,
+    why: "The sensor inside a smoke or CO detector degrades with age even if it still beeps when tested, which is why the whole unit gets replaced, not just the battery.",
+    taskTitle: "Test smoke and CO detectors",
+    dueInDays: 14,
+  },
+  dishwasher: {
+    step: "Clean the filter and run an empty cleaning cycle",
+    costLow: 10,
+    costHigh: 50,
+    yearsGainedLow: 1,
+    yearsGainedHigh: 3,
+    why: "A clogged filter and mineral buildup make the pump and heating element work harder, and that extra strain is what shortens the unit's life.",
+    taskTitle: "Clean the dishwasher filter",
+    dueInDays: 30,
+  },
+  range: {
+    step: "Clean the burners and vent hood and check the oven door seal",
+    costLow: 20,
+    costHigh: 100,
+    yearsGainedLow: 1,
+    yearsGainedHigh: 3,
+    why: "Grease buildup on the burners and vent blocks airflow, and a worn oven door seal makes the unit run longer and hotter than it should to hit temperature.",
+    taskTitle: "Clean range burners and vent hood",
+    dueInDays: 45,
+  },
+  refrigerator: {
+    step: "Vacuum the condenser coils and check the door seal",
+    costLow: 15,
+    costHigh: 75,
+    yearsGainedLow: 1,
+    yearsGainedHigh: 3,
+    why: "Dust on the coils and a loose door seal both make the compressor run longer than it should, and the compressor is the expensive part.",
+    taskTitle: "Vacuum the refrigerator coils",
+    dueInDays: 60,
+  },
+  washer_dryer: {
+    step: "Clean the lint trap and dryer vent and check the supply hoses for wear",
+    costLow: 50,
+    costHigh: 200,
+    yearsGainedLow: 2,
+    yearsGainedHigh: 4,
+    why: "A blocked dryer vent is both a fire risk and what makes the heating element run harder, and a cracked supply hose is the washer's most common failure point.",
+    taskTitle: "Clean the dryer vent and check washer hoses",
+    dueInDays: 40,
+  },
+  garbage_disposal: {
+    step: "Run cold water and ice cubes through it and check under the sink for leaks",
+    costLow: 15,
+    costHigh: 60,
+    yearsGainedLow: 1,
+    yearsGainedHigh: 2,
+    why: "Grease and fibrous scraps dull the blades and clog the drain line, and both shorten the motor's life the same way any jam does.",
+    taskTitle: "Run ice through the garbage disposal and check for leaks",
+    dueInDays: 45,
+  },
+  irrigation: {
+    step: "Check every zone for leaks and adjust the schedule with the seasons",
+    costLow: 75,
+    costHigh: 250,
+    yearsGainedLow: 2,
+    yearsGainedHigh: 4,
+    why: "A cracked head or a broken line keeps running long after it starts leaking, and overwatering is what rots valves and wastes water at the same time.",
+    taskTitle: "Check irrigation zones for leaks",
+    dueInDays: 60,
+  },
+  water_softener: {
+    step: "Check the salt level and clean the brine tank",
+    costLow: 30,
+    costHigh: 100,
+    yearsGainedLow: 1,
+    yearsGainedHigh: 3,
+    why: "A salt bridge or a dirty brine tank stops the resin bed from regenerating, and hard water then scales the water heater and every fixture behind it.",
+    taskTitle: "Check water softener salt and clean the brine tank",
+    dueInDays: 45,
+  },
+  // B7: "Other" (a system the type list doesn't already cover, named by the
+  // owner). No single step generalizes across whatever it might be, so this
+  // stays deliberately generic rather than inventing false specificity for a
+  // pool pump, a generator, a well pump, or anything else it could be. The
+  // range is intentionally modest: a real number for an unknown system would
+  // be a guess dressed up as data, which is exactly what this table exists to
+  // avoid everywhere else.
+  other: {
+    step: "Give it a routine look and a basic service check",
+    costLow: 75,
+    costHigh: 250,
+    yearsGainedLow: 1,
+    yearsGainedHigh: 2,
+    why: "Most equipment fails from small, unnoticed problems that get worse over time. A routine look catches those while they are still cheap to fix.",
+    taskTitle: "Check your other system",
+    dueInDays: 60,
   },
 };
 

@@ -112,7 +112,13 @@ export default function ComplianceCard({
         verification={verification}
       />
 
-      <div className="border-t border-stone-100 pt-5 dark:border-white/10">
+      {/* id="insurance": the "Add insurance" links on the leads board and
+          job cards (INSURANCE_UPLOAD_HREF, src/lib/insuranceGate.ts) deep-link
+          straight to this row. It sits inside the collapsed Account <details>
+          (AccountPanel.tsx); browsers auto-open an ancestor <details> and
+          scroll to the target when a fragment link points inside it, the
+          same behavior WonReferralNudge's #account link already relies on. */}
+      <div id="insurance" className="border-t border-stone-100 pt-5 dark:border-white/10">
         <ComplianceRow
           kind="insurance"
           label="Insurance"

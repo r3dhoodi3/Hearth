@@ -23,6 +23,33 @@ export async function completeReminderAction(id: string): Promise<ActionResult> 
     .update({ status: "done", completed_at: new Date().toISOString() })
     .eq("id", id);
   if (error) {
+    // Defense in depth for the same collision generateMaintenancePlanAction
+    // now avoids creating: migration 0063's
+    // maintenance_tasks_history_dedupe_idx forbids two 'done' rows on this
+    // property sharing the same title and completion day (Postgres 23505).
+    // If one still slips through (a second device, an older duplicate from
+    // before that fix), the honest state is "this is already done today
+    // under this title" - so drop the now-redundant open row instead of
+    // leaving the owner stuck on a checkbox that can never save.
+    if (
+      error.code === "23505" &&
+      error.message.includes("maintenance_tasks_history_dedupe_idx")
+    ) {
+      // status "open" in the delete filter is deliberate: the only row this
+      // branch may remove is the still-open duplicate whose update just
+      // failed. It can never touch a 'done' history row, which is where the
+      // owner-entered cost_cents / performed_by from the home report's "log
+      // something you had done" form lives (migration 0063). An open row
+      // carries no owner-entered data of its own - no notes column, and
+      // photos are only ever tagged to a system or an issue, never a task.
+      await supabase
+        .from("maintenance_tasks")
+        .delete()
+        .eq("id", id)
+        .eq("status", "open");
+      revalidatePath("/dashboard");
+      return ok();
+    }
     // The raw Postgres message names our tables, columns and constraints. It
     // isn't rendered today, but it still rides back over the wire where it's
     // readable in devtools, so log it server-side and return the same plain
@@ -213,20 +240,60 @@ export async function generateMaintenancePlanAction() {
     ...[...systemTypes].flatMap((t) => SYSTEM_SCHEDULE[t] ?? []),
   ];
 
-  // Task types already open, so re-running never piles on a duplicate.
-  const { data: existing } = await supabase
-    .from("maintenance_tasks")
-    .select("title")
-    .eq("property_id", property.id)
-    .eq("status", "open");
-  const openTitles = new Set((existing ?? []).map((t) => t.title));
+  // Task titles to leave out of this run: anything already open (no need for
+  // a second one) OR anything already marked done TODAY for this property.
+  //
+  // The "done today" half matters because of migration 0063's
+  // maintenance_tasks_history_dedupe_idx: one property can never have two
+  // 'done' rows sharing the same (lower(title), completion day). Before this
+  // fix, re-running the plan after finishing everything for the day recreated
+  // the exact same titles as fresh OPEN rows (openTitles only ever excluded
+  // 'open' ones), and checking one of those back off collided with the row
+  // completed minutes earlier - a Postgres 23505 the owner saw as "Couldn't
+  // update reminder. Please try again." with no way to recover. Skipping a
+  // title someone already finished today just means it comes back on the
+  // next run once its schedule is due again, which is the honest behavior
+  // anyway: it doesn't need doing twice in one day.
+  // TWO NARROW READS, not one unfiltered one. A single
+  // .eq("property_id", ...) with no status filter pulls every task this home
+  // has ever had, and PostgREST caps a response at its configured max-rows
+  // (1000 by default): a long-lived home would silently lose the tail of that
+  // list, and any open title that fell off the end would be recreated as a
+  // duplicate - the exact bug this block exists to prevent. Each read here is
+  // bounded by its own filter instead.
+  const todayUtc = new Date(Date.now()).toISOString().slice(0, 10);
+  const todayStartUtc = `${todayUtc}T00:00:00.000Z`;
+  const [{ data: openRows }, { data: doneTodayRows }] = await Promise.all([
+    supabase
+      .from("maintenance_tasks")
+      .select("title")
+      .eq("property_id", property.id)
+      .eq("status", "open"),
+    supabase
+      .from("maintenance_tasks")
+      .select("title")
+      .eq("property_id", property.id)
+      .eq("status", "done")
+      .gte("completed_at", todayStartUtc),
+  ]);
+  // Lowercased, because migration 0063's index key is lower(title): a title
+  // completed today under different casing (the home report's "log something
+  // you had done" form takes free text) collides in the database even though
+  // the raw strings differ, and skipping it here is what keeps the owner off
+  // the 23505 path below in the first place.
+  const skipTitles = new Set(
+    [...(openRows ?? []), ...(doneTodayRows ?? [])].map((t) =>
+      (t.title ?? "").trim().toLowerCase()
+    )
+  );
 
   const today = new Date(Date.now());
   const seen = new Set<string>();
   const rows = schedule
     .filter((s) => {
-      if (openTitles.has(s.title) || seen.has(s.title)) return false;
-      seen.add(s.title);
+      const key = s.title.trim().toLowerCase();
+      if (skipTitles.has(key) || seen.has(key)) return false;
+      seen.add(key);
       return true;
     })
     .slice(0, MAX_PLAN_TASKS)

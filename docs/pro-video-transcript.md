@@ -1,12 +1,12 @@
 # Pro Landing Page Demo Video: Transcript and Caption Sync
 
-Source of truth: `src/components/ProDemoPlayer.tsx` (current working tree, Aug 10 re-cut plus the Aug 14 founder notes: dead-air fix, wallet clause cut, new ending line).
+Source of truth: `src/components/ProDemoPlayer.tsx` (current working tree, Aug 10 re-cut plus the Aug 14 founder notes: dead-air fix, wallet clause cut, new ending line, plus the 2026-09-04 OakTend rename).
 Video length: 28.5 seconds (76 beats at 160 BPM, 375 ms per beat).
-VO files: `public/demo-vo/pro/*.mp3` (msedge-tts en-US-AvaNeural, rate -8%, 24 kHz 96 kbps CBR mono). `apply.mp3` and `won.mp3` were regenerated on 2026-08-14 with those same settings.
+VO files: `public/demo-vo/pro/*.mp3` (msedge-tts en-US-AvaNeural, rate -8%, 24 kHz 96 kbps CBR mono). `apply.mp3` and `won.mp3` were regenerated on 2026-08-14 with those same settings, and `hook.mp3` was re-recorded on 2026-09-04 with those same settings again for the OakTend rename. `hook` is the only pro clip whose line ever spoke the brand.
 
 ## Full transcript
 
-This is Hearth. Real jobs, from homeowners near you. New jobs post here, with the lead fee shown up front. Apply in one tap. Message the homeowner and line up the visit. Easy as that.
+This is OakTend. Real jobs, from homeowners near you. New jobs post here, with the lead fee shown up front. Apply in one tap. Message the homeowner and line up the visit. Easy as that.
 
 That is the entire spoken track. "Easy as that." is the last line of the video: the on-screen badge still reads "You got the job", but the voice closes on this line per the founder. The end card (beats 71-76) is a silent tag under the music's ring-out, and `end.mp3` is intentionally no longer scheduled.
 
@@ -16,7 +16,7 @@ Scene boundaries come from the SCENES beat budgets (hook 13, leads 16, apply 15,
 
 | Scene | Scene window | VO clip | VO start | VO end | Caption text shown |
 |---|---|---|---|---|---|
-| hook | 00:00.000 - 00:04.875 | hook.mp3 | 00:00.250 | 00:04.786 | This is Hearth. Real jobs, from homeowners near you. |
+| hook | 00:00.000 - 00:04.875 | hook.mp3 | 00:00.250 | 00:04.786 | This is OakTend. Real jobs, from homeowners near you. |
 | leads | 00:04.875 - 00:10.875 | leads.mp3 | 00:04.875 | 00:08.571 | New jobs post here, with the lead fee shown up front. |
 | leads (still) | " | apply.mp3 | 00:09.000 | 00:10.800 | Apply in one tap. |
 | apply | 00:10.875 - 00:16.500 | (none: its line already played) | - | - | - |
@@ -32,7 +32,15 @@ Schedule details behind the table:
 - chat: `atBeat(1, ... playVo("chat"))`, beat 45 = 16875 ms.
 - won: `atBeat(3.4, () => playVo("won"))`, beat 65.4 = 24525 ms. The badge and impact hit land on beat 65 (24375 ms, ~86% of runtime); the line starts 150 ms behind the impact.
 - Mid-roll CTA chip: beat 56 = 21000 ms.
-- Caption chunking (2 words per chunk, even time split of the clip): hook 5 chunks at 907 ms, leads 6 at 616 ms, apply 2 at 900 ms, chat 4 at 816 ms, won 2 at 888 ms ("Easy as" / "that.").
+- Caption chunking (2 words per chunk, even time split of the clip): hook 5 chunks at 907 ms ("This is" / "OakTend. Real" / "jobs, from" / "homeowners near" / "you."), leads 6 at 616 ms, apply 2 at 900 ms, chat 4 at 816 ms, won 2 at 888 ms ("Easy as" / "that.").
+
+## Sep 4 change (OakTend rename)
+
+The brand changed from Hearth to OakTend, so `hook.mp3` was re-recorded: "This is Hearth. Real jobs, from homeowners near you." is now "This is OakTend. Real jobs, from homeowners near you." Nothing else in the pro cut spoke the brand, so the other five mp3s are byte-identical to before, including the unscheduled `end.mp3` (its line is "Win work in your trade. Not chosen? Your fee comes back as credit.", which never named the brand).
+
+Settings, identical to the earlier generations: `msedge-tts` v2.0.7, voice `en-US-AvaNeural`, rate `-8%`, output `audio-24khz-96kbitrate-mono-mp3`. The pipeline was pinned first by re-generating the OLD Hearth line as a control, which came back at exactly 4536 ms and 54432 bytes, matching the file on disk.
+
+The hook window is the tight one on this cut: the clip starts at 250 ms and the leads VO at 4875 ms cuts it off, so the hard ceiling is 4625 ms. The new line re-measured at 4536 ms, the same length as the old one (verified across three independent generations, all 189 frames), so the 89 ms of headroom is unchanged. No rate change and no tail trim were needed, and `VO_EST_MS.hook` stays at 4540. Frame walk of the new file: MPEG-2 Layer III, 24 kHz, 96 kbps CBR, mono, no ID3, no junk bytes, matching the untouched clips.
 
 ## Aug 14 changes (founder notes)
 
@@ -50,12 +58,12 @@ Measured durations vs the component's hardcoded `VO_EST_MS` map:
 
 | Clip | Real duration | VO_EST_MS | Diff | Verdict |
 |---|---|---|---|---|
-| hook.mp3 | 4536 ms | 4540 | 4 ms | OK |
+| hook.mp3 (new) | 4536 ms | 4540 | 4 ms | OK (re-recorded 2026-09-04, identical length to the old line) |
 | leads.mp3 | 3696 ms | 3700 | 4 ms | OK |
 | apply.mp3 (new) | 1800 ms | 1800 | 0 ms | OK (map updated with the regen) |
 | chat.mp3 | 3264 ms | 3260 | 4 ms | OK |
 | won.mp3 (new) | 1776 ms | 1780 | 4 ms | OK (new line happens to match the old clip's duration) |
-| end.mp3 | 5424 ms | (not in map) | - | Expected: intentionally unscheduled |
+| end.mp3 | 5424 ms | (not in map) | - | Expected: intentionally unscheduled, and its line never said the brand, so it was left untouched |
 
 Every value is within 4 ms of the real file, far inside the 150 ms drift threshold. The estimates only matter for the muted fallback and pre-load seeks anyway; the unmuted path reads the audio element's true duration and drives chunks off `a.currentTime`, which cannot drift.
 
@@ -73,7 +81,7 @@ Re-cut math, checked specifically:
 
 - won is 9 beats = 3375 ms. The VO starts 1275 ms into the scene (beat 3.4) and runs 1776 ms, ending 324 ms before the end card cut. "Easy as that." fits the 9-beat scene exactly as the old line did.
 - The final caption chunk ("that.") clears when the audio ends at ~26.30 s, before the end card at 26.625 s. The muted fallback clears even in the worst case at 24525 + 90 + 1780 + 150 = 26545 ms, still before the cut.
-- Files on disk vs schedule: all five scheduled clips exist; `end.mp3` exists but is never scheduled, which is the intended Aug 10 re-cut behavior (it is not even preloaded, since `VO_TEXT` has no `end` key), not a bug.
+- Files on disk vs schedule: all five scheduled clips exist; `end.mp3` exists but is never scheduled and is not preloaded, which is the intended Aug 10 re-cut behavior (it is not even preloaded, since `VO_TEXT` has no `end` key), not a bug.
 
 ## Remaining inter-line VO gaps (report only, unchanged by design)
 

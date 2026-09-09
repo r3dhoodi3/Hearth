@@ -1502,6 +1502,9 @@ export default function ProDemoPlayer() {
     // bytes / 12000 = sec, same convention as the homeowner cut). captionVo
     // prefers each clip's true duration once loaded; these cover the muted
     // fallback schedule and pre-load seeks.
+    // hook.mp3 was re-recorded on 2026-09-04 for the OakTend rename (same
+    // voice and rate: en-US-AvaNeural, -8%). It re-measured at 4536 ms, the
+    // same length as the old line, so this map is unchanged.
     const VO_EST_MS: Record<VoKey, number> = {
       hook: 4540,
       leads: 3700,

@@ -39,7 +39,7 @@ import Link from "next/link";
 import { LEAD_TIER_FEES, MAJOR_INTRO_FEE, PRO_LEAD_DISCOUNT_PCT } from "@/lib/constants";
 import ProSupportForm from "./ProSupportForm";
 import ShowAppGuideButton from "@/components/ShowAppGuideButton";
-import { FEEDBACK_CARD_TITLE, FEEDBACK_REPEAT_NOTE } from "@/lib/proFeedback";
+import { FEEDBACK_CARD_TITLE, FEEDBACK_WHAT_COUNTS } from "@/lib/proFeedback";
 import { proCtaLabel, proTrialSubline } from "@/components/pro/ProUpgradeCta";
 import {
   GHOST_PROTECTION_GUARANTEE,
@@ -62,7 +62,6 @@ function memberPriceStr(baseDollars: number): string {
 export default function HelpView({
   member,
   trialEligible,
-  feedbackClaimed,
   name,
   email,
   phone,
@@ -70,7 +69,6 @@ export default function HelpView({
 }: {
   member: boolean;
   trialEligible: boolean;
-  feedbackClaimed: boolean;
   /** Company/owner name, already defaulted on the server. */
   name: string;
   /** Contact email, already fallen back to the auth email on the server. */
@@ -238,19 +236,16 @@ export default function HelpView({
         </div>
       </div>
 
-      {/* "Report a bug, get $5 in lead credit." A private bug-report and
-          product-feedback page, never a rating or a store review (see
-          src/lib/proFeedback.ts). The card stays after the credit is claimed,
-          because reports are welcome forever: only the headline changes, so a
-          pro who already collected the $5 is never promised it twice. */}
+      {/* "Report a bug." A private bug-report and product-feedback page,
+          never a rating or a store review (see src/lib/proFeedback.ts). C7
+          (2026-09-07): every report goes to review; nothing here promises
+          instant money any more. */}
       <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-stone-800">
         <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
-          {feedbackClaimed ? "Found a bug?" : FEEDBACK_CARD_TITLE}
+          {FEEDBACK_CARD_TITLE}
         </h2>
         <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-          {feedbackClaimed
-            ? FEEDBACK_REPEAT_NOTE
-            : "It takes about a minute: a score from 1 to 5 and a few words. We read every message."}
+          {FEEDBACK_WHAT_COUNTS}
         </p>
         <Link href="/pro/feedback" className="btn-secondary mt-3 inline-block">
           Report a bug

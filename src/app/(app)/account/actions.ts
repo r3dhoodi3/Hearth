@@ -15,6 +15,7 @@ import { cappedField, cappedFieldOrNull, FIELD_MAX } from "@/lib/formFields";
 import { sendNotification } from "@/lib/notify";
 import { smsOptinConfirmationAllowed } from "@/lib/smsOptinLimit";
 import { LEGAL } from "@/lib/legal";
+import { callAppleRevoke } from "@/lib/appleRevoke";
 
 // Password re-verification is a brute-force surface: updatePasswordAction,
 // updateEmailAction, and deleteAccountAction each take a current password and
@@ -523,6 +524,29 @@ export async function deleteAccountAction(formData: FormData) {
         "error"
       );
       redirect("/account");
+    }
+  }
+
+  // APPLE 5.1.1(v): revoke the Sign in with Apple authorization for anyone
+  // who used it, before the auth user (and their identities) are gone. See
+  // src/lib/appleRevoke.ts for the full reasoning, including the known gap
+  // (no persisted Apple refresh token to revoke with today) - best effort,
+  // logged, never blocks deletion. user.identities is read from the SAME
+  // getUser() call already verified above, not a form field.
+  if (user.identities?.some((i) => i.provider === "apple")) {
+    try {
+      const result = await callAppleRevoke(null);
+      if (!result.attempted) {
+        console.warn(
+          `deleteAccountAction: Apple token revoke skipped for ${user.id}: ${result.reason}`
+        );
+      } else if (!result.ok) {
+        console.error(
+          `deleteAccountAction: Apple token revoke failed for ${user.id}: ${result.reason}`
+        );
+      }
+    } catch (err) {
+      console.error("deleteAccountAction: Apple revoke threw for", user.id, err);
     }
   }
 
