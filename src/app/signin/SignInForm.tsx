@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/safeNext";
 import { friendlyAuthError } from "@/lib/friendlyAuthError";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import AppleSignInButton from "@/components/AppleSignInButton";
+import Turnstile, {
+  CAPTCHA_ENABLED,
+  useCaptchaGraceTimeout,
+  type TurnstileHandle,
+} from "@/components/Turnstile";
 
 // Read ?next= straight off the browser URL (used at submit time). Guarded by
 // the shared safeNextPath so a malicious absolute/protocol-relative value
@@ -56,20 +61,58 @@ export default function SignInForm({
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Set to the typed email when sign-in fails specifically because the account
+  // was created but its email was never confirmed. Turns what used to be a dead
+  // end (the "email not confirmed" error with nowhere to go) into a link out to
+  // /verify, where the reader can enter or resend their 6-digit code. Cleared
+  // on every fresh submit so a later wrong-password attempt doesn't keep it up.
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
+  // Turnstile CAPTCHA token, present only once the widget solves. No-op when
+  // NEXT_PUBLIC_TURNSTILE_SITE_KEY is unset: the widget renders nothing, the
+  // token stays null, and signInWithPassword sends captchaToken: undefined.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  // Give the widget 8s to produce a token before letting the visitor through
+  // anyway - see the comment on useCaptchaGraceTimeout in Turnstile.tsx for
+  // why this is safe. Stops counting once a token exists.
+  const captchaTimedOut = useCaptchaGraceTimeout(
+    CAPTCHA_ENABLED && !captchaToken
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus(null);
+    setUnconfirmedEmail(null);
     setBusy(true);
 
+    const trimmedEmail = email.trim();
     const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: trimmedEmail,
       password,
+      options: { captchaToken: captchaToken ?? undefined },
     });
+
+    // Turnstile tokens are single-use, so spend it now regardless of outcome; a
+    // second attempt must solve a fresh one. No-op when the widget isn't rendered.
+    turnstileRef.current?.reset();
 
     if (error) {
       setBusy(false);
       setStatus(friendlyAuthError(error));
+      // Supabase reports an unconfirmed account as message "Email not confirmed"
+      // (code "email_not_confirmed" on newer versions). Match either, case- and
+      // wording-tolerantly, and offer the way out. The friendly error above
+      // still shows; this only ADDS the CTA.
+      const code =
+        typeof (error as { code?: unknown }).code === "string"
+          ? (error as { code: string }).code
+          : "";
+      if (
+        /not confirmed/i.test(error.message) ||
+        code === "email_not_confirmed"
+      ) {
+        setUnconfirmedEmail(trimmedEmail);
+      }
       return;
     }
 
@@ -78,7 +121,7 @@ export default function SignInForm({
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
+    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6 py-10">
       <div className="card">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
@@ -152,7 +195,23 @@ export default function SignInForm({
               </Link>
             </p>
           </div>
-          <button className="btn-primary w-full" disabled={busy}>
+          {/* Renders nothing until NEXT_PUBLIC_TURNSTILE_SITE_KEY is set. When
+              it is, the submit stays disabled until the CAPTCHA is solved -
+              or until captchaTimedOut gives up after 8s, so a stuck widget
+              can never lock this button forever. */}
+          <Turnstile ref={turnstileRef} onToken={setCaptchaToken} />
+          {captchaTimedOut && (
+            <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+              Verification could not load. Refresh the page or try again in a
+              minute.
+            </p>
+          )}
+          <button
+            className="btn-primary w-full"
+            disabled={
+              busy || (CAPTCHA_ENABLED && !captchaToken && !captchaTimedOut)
+            }
+          >
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
@@ -164,6 +223,24 @@ export default function SignInForm({
           >
             {status}
           </p>
+        )}
+
+        {/* The way out of the old dead end: an account created but never
+            email-verified used to hit "Email not confirmed" with nowhere to go.
+            /verify carries the typed email so the code panel opens on it
+            directly and can enter or resend the 6-digit code. */}
+        {unconfirmedEmail && (
+          <div className="mt-4 rounded-lg border border-stone-200 bg-stone-50 p-3 text-center dark:border-white/10 dark:bg-white/5">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
+              This account still needs its email verified.
+            </p>
+            <Link
+              href={`/verify?email=${encodeURIComponent(unconfirmedEmail)}`}
+              className="btn-secondary mt-3 flex w-full"
+            >
+              Verify your email
+            </Link>
+          </div>
         )}
 
         <div className="my-6 flex items-center gap-3">
@@ -181,7 +258,7 @@ export default function SignInForm({
           <p className="text-sm text-stone-500 dark:text-stone-400">New to OakTend?</p>
           <Link
             href="/"
-            className="btn-secondary mt-2 inline-block w-full"
+            className="btn-secondary mt-2 flex w-full"
           >
             Get started
           </Link>

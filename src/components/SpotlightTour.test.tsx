@@ -108,6 +108,54 @@ describe("SpotlightTour - anchoring", () => {
     expect(card.style.top).toBe("200px");
   });
 
+  it("hugs a toolbar pill tighter than a page card (3px breathing room, not 8)", () => {
+    // The 4th homeowner step points at the Messages tab, a nav link. A pill is
+    // small and already padded, so its ring uses the tight 3px pad instead of
+    // the roomy 8px a big page card gets (asserted above for .card-hero).
+    renderTour();
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    }
+
+    // The nav rendition of the Messages tab appears after we land on the step.
+    const nav = document.createElement("nav");
+    const link = document.createElement("a");
+    link.setAttribute("href", "/chats");
+    link.getBoundingClientRect = () => fakeRect(100, 50, 60, 40);
+    nav.appendChild(link);
+    document.body.appendChild(nav);
+    planted.push(nav);
+
+    act(() => {
+      vi.advanceTimersByTime(TOUR_TARGET_TIMEOUT_MS - 1);
+    });
+
+    // 3px each side: left 100-3, top 50-3, width 60+6, height 40+6.
+    const ring = screen.getByTestId("tour-ring");
+    expect(ring.style.left).toBe("97px");
+    expect(ring.style.top).toBe("47px");
+    expect(ring.style.width).toBe("66px");
+    expect(ring.style.height).toBe("46px");
+  });
+
+  it("holds the tooltip at the toolbar's edge instead of letting it overlap the toolbar", () => {
+    // A sticky toolbar 56px tall, and the step's element scrolled up so its top
+    // is above the viewport (top -30) - the case where the element is sliding
+    // under the toolbar. The card would sit at the cutout's bottom (30px), which
+    // is under the toolbar, so it is held down at the toolbar's edge (56px).
+    const header = document.createElement("header");
+    header.className = "sticky top-0";
+    header.getBoundingClientRect = () => fakeRect(0, 0, 1000, 56);
+    document.body.appendChild(header);
+    planted.push(header);
+
+    plantTarget("card-hero", fakeRect(40, -30, 200, 40));
+    renderTour();
+
+    const card = screen.getByRole("dialog");
+    expect(card.style.top).toBe("56px");
+  });
+
   it("skips hidden renditions of a selector and rings the visible one", () => {
     // The same selector matches a display:none element (zero rect) first in
     // DOM order - the desktop nav strip on a phone - and a visible one after.
@@ -118,6 +166,36 @@ describe("SpotlightTour - anchoring", () => {
     const ring = screen.getByTestId("tour-ring");
     expect(ring.style.left).toBe("2px");
     expect(ring.style.top).toBe("492px");
+  });
+
+  it("sizes the scrim to the layout viewport, not window.innerWidth, so the hole is not squashed off its element", () => {
+    // On desktop window.innerWidth includes the vertical scrollbar but the
+    // fixed overlay (and the SVG filling it) does not, so they differ by the
+    // scrollbar's width. The SVG uses preserveAspectRatio="none", so if its
+    // viewBox carried innerWidth the cutout would be squashed to fit the
+    // narrower box and slide left of its element - the toolbar misalignment.
+    // The viewBox must carry the layout width (clientWidth) to map 1:1.
+    Object.defineProperty(document.documentElement, "clientWidth", {
+      value: 1000,
+      configurable: true,
+    });
+    Object.defineProperty(document.documentElement, "clientHeight", {
+      value: 700,
+      configurable: true,
+    });
+    try {
+      plantTarget("card-hero", fakeRect(40, 100, 200, 80));
+      renderTour();
+      const svg = screen.getByTestId("tour-cutout");
+      expect(svg.getAttribute("viewBox")).toBe("0 0 1000 700");
+    } finally {
+      // Revert to the prototype getter (0 in jsdom) so the other tests keep
+      // falling back to window.innerWidth.
+      delete (document.documentElement as unknown as { clientWidth?: number })
+        .clientWidth;
+      delete (document.documentElement as unknown as { clientHeight?: number })
+        .clientHeight;
+    }
   });
 
   it("falls back to a centered card, never a blank overlay, when the target never appears", () => {

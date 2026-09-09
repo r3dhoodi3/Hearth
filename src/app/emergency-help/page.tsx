@@ -86,7 +86,7 @@ export default function EmergencyHelpPage() {
           local pro on it, usually same day for an emergency. It&apos;s the fastest
           way to get someone out to your house.
         </p>
-        <Link href="/homeowner-signup" className="btn-primary block w-full text-center">
+        <Link href="/homeowner-signup" className="btn-primary flex w-full text-center">
           Get a pro on it
         </Link>
         <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">

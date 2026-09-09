@@ -19,7 +19,7 @@ export default function RefreshValue({ isPlus }: { isPlus: boolean }) {
 
   if (!isPlus) {
     return (
-      <Link href="/plus?reason=value" className="btn-secondary inline-block">
+      <Link href="/plus?reason=value" className="btn-secondary">
         Refresh estimate
         <span className="chip ml-1.5 bg-bark-100 text-bark-700 dark:bg-bark-700 dark:text-stone-300">
           Plus

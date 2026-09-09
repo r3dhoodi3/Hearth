@@ -451,7 +451,7 @@ export default async function ValuePage() {
                 </p>
                 <Link
                   href="/plus?reason=value"
-                  className="btn-primary mt-3 inline-block"
+                  className="btn-primary mt-3"
                 >
                   See what Plus shows
                 </Link>

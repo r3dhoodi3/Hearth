@@ -93,13 +93,13 @@ export default async function JoinHouseholdPage(
           */}
           <Link
             href={`/homeowner-signup${nextQuery}`}
-            className="btn-primary mt-6 block w-full"
+            className="btn-primary mt-6 flex w-full"
           >
             Create your account
           </Link>
           <Link
             href={`/signin${nextQuery}`}
-            className="btn-secondary mt-3 block w-full"
+            className="btn-secondary mt-3 flex w-full"
           >
             Already have an account? Sign in
           </Link>
@@ -130,7 +130,7 @@ export default async function JoinHouseholdPage(
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
           You&apos;re in. You now share this home.
         </p>
-        <Link href="/dashboard" className="btn-primary mt-6 block w-full">
+        <Link href="/dashboard" className="btn-primary mt-6 flex w-full">
           Go to your home
         </Link>
       </div>

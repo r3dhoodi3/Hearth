@@ -904,7 +904,7 @@ export default function ProToolsClient({
             </p>
             <Link
               href={PRO_TOOLS_PAYWALL.link}
-              className="btn-primary mt-3 inline-block text-sm"
+              className="btn-primary mt-3 text-sm"
             >
               See OakTend Pro
             </Link>

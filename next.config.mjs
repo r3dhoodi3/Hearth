@@ -22,7 +22,17 @@ const SUPABASE_HOST = (() => {
 //                 'unsafe-eval' is what Next's dev bundler needs, and only
 //                 that: LOW-36, it is now gated to non-production builds (see
 //                 SCRIPT_SRC below) rather than shipped in the production
-//                 policy this graduates to enforcing.
+//                 policy this graduates to enforcing. challenges.cloudflare.com
+//                 is the one real third-party script tag: src/components/
+//                 Turnstile.tsx injects the Turnstile widget loader on every
+//                 auth form (sign-in, both signups, reset-password, account
+//                 security, email-code resend) whenever
+//                 NEXT_PUBLIC_TURNSTILE_SITE_KEY is set. It is currently
+//                 report-only so this was invisible, but the day this policy
+//                 graduates to enforcing (see below) an enforcing CSP without
+//                 this entry blocks the script outright and every one of
+//                 those forms stops being able to solve the CAPTCHA the
+//                 submit button is waiting on.
 //   style-src   - Tailwind ships real stylesheets, but React inline styles and
 //                 the CSS modules' runtime need 'unsafe-inline'.
 //   img-src     - blob:/data: cover the local upload previews
@@ -35,8 +45,17 @@ const SUPABASE_HOST = (() => {
 //                 (auth + storage over https, realtime over wss). Every other
 //                 outbound host (Gemini, Open-Meteo, RentCast, CSLB, Checkr,
 //                 Resend, Twilio) is called from server code only.
+//                 challenges.cloudflare.com is added here too: Cloudflare's
+//                 own CSP guidance for Turnstile lists connect-src alongside
+//                 script-src and frame-src, since the widget's loader script
+//                 (not just its iframe) issues its own requests to that host.
 //   font-src    - next/font/google self-hosts Inter at build time, so fonts
 //                 come from our own origin.
+//   frame-src   - Turnstile's actual challenge (the checkbox, and any visible
+//                 interactive puzzle Cloudflare's risk engine decides to show)
+//                 renders inside a cross-origin <iframe> the widget script
+//                 creates, which needs frame-src explicitly: default-src
+//                 'self' does not cover iframes.
 // Report-only means violations are reported, never blocked. Graduate it to the
 // enforcing "Content-Security-Policy" key after a burn-in period with no
 // unexpected reports.
@@ -46,10 +65,11 @@ const SUPABASE_HOST = (() => {
 // wider allowance than the app it describes actually needs. Gated on
 // NODE_ENV so a production build never sends the token at all; local `next
 // dev` (and any verification build that leaves NODE_ENV unset) keeps it.
+const TURNSTILE_HOST = "https://challenges.cloudflare.com";
 const SCRIPT_SRC =
   process.env.NODE_ENV === "production"
-    ? "script-src 'self' 'unsafe-inline'"
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+    ? `script-src 'self' 'unsafe-inline' ${TURNSTILE_HOST}`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${TURNSTILE_HOST}`;
 
 const CSP_DIRECTIVES = [
   "default-src 'self'",
@@ -57,9 +77,10 @@ const CSP_DIRECTIVES = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: https://${SUPABASE_HOST}`,
   "media-src 'self'",
-  `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST}`,
+  `connect-src 'self' https://${SUPABASE_HOST} wss://${SUPABASE_HOST} ${TURNSTILE_HOST}`,
   "font-src 'self'",
   "object-src 'self' blob:",
+  `frame-src 'self' ${TURNSTILE_HOST}`,
 ];
 
 /** @type {import('next').NextConfig} */

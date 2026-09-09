@@ -213,7 +213,7 @@ export default function ElectricalPanelUpgradeCostGuide() {
           </p>
           <Link
             href="/homeowner-signup"
-            className="btn-primary mt-3 inline-block px-5 py-2"
+            className="btn-primary mt-3 px-5 py-2"
           >
             Get a home-specific estimate free
           </Link>

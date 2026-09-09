@@ -35,7 +35,7 @@ export function proTrialSubline(): string {
 // inside a sentence use proCtaLabel directly instead.
 export default function ProUpgradeCta({
   trialEligible,
-  className = "btn-primary inline-block",
+  className = "btn-primary",
   sublineClassName = "mt-2 text-xs text-stone-500 dark:text-stone-400",
 }: {
   trialEligible: boolean;

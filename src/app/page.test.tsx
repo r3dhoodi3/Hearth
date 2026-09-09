@@ -73,8 +73,10 @@ describe("landing page, phone split", () => {
     const phoneBlock = homeowner.closest("div.sm\\:hidden");
     expect(phoneBlock).not.toBeNull();
 
-    // ...and the contractor door and sign-in link are inside it. Scoped,
-    // because the long desktop footer has a "Sign in" link of its own.
+    // ...and the contractor door and the header "Sign in" button are inside
+    // it. Scoped, because the long desktop footer has a "Sign in" link of its
+    // own. (Sign in moved from a text link under the doors into a solid header
+    // button so a returning user has a one-tap door top-right.)
     expect(
       within(phoneBlock as HTMLElement).getByRole("link", {
         name: "I'm a contractor",
@@ -82,7 +84,7 @@ describe("landing page, phone split", () => {
     ).toHaveAttribute("href", "/contractor-signup");
     expect(
       within(phoneBlock as HTMLElement).getByRole("link", {
-        name: /already have an account\? sign in/i,
+        name: "Sign in",
       })
     ).toHaveAttribute("href", "/signin");
 

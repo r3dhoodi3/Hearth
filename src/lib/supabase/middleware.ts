@@ -13,8 +13,8 @@ import {
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 // Refreshes the auth session on every request and guards app routes.
-// Public routes: "/", "/signin", "/reset-password", the sign-up pages,
-// "/auth/*". Everything else requires a session.
+// Public routes: "/", "/signin", "/verify", "/reset-password", the sign-up
+// pages, "/auth/*". Everything else requires a session.
 //
 // INVARIANT: NO SERVER ACTION MAY RELY ON THE MIDDLEWARE FOR AUTH. What this
 // function does is redirect page navigations, and that is all it is allowed to
@@ -309,6 +309,11 @@ export function isPublicPath(path: string): boolean {
     // page under /open/ cannot inherit anonymity by accident.
     path === "/open" ||
     path.startsWith("/signin") ||
+    // Email-code recovery page (src/app/verify): an account created but not yet
+    // email-confirmed is SIGNED OUT, so bouncing it to /signin here would trap
+    // exactly the person this page exists to rescue. It reads no private data -
+    // verifyOtp is the gate - so it is safe with no session.
+    path.startsWith("/verify") ||
     // Password reset request page: a signed-out user is exactly who needs it,
     // so it must not bounce to /signin.
     path.startsWith("/reset-password") ||

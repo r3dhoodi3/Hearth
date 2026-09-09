@@ -55,12 +55,12 @@ export default function WalkthroughNudge({ count }: { count: number }) {
             a normal answer, and it used to be a thing you could only find by
             starting the walk anyway. */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Link href="/walkthrough" className="btn-primary inline-block text-sm">
+          <Link href="/walkthrough" className="btn-primary text-sm">
             Walk your home
           </Link>
           <Link
             href="/walkthrough?mode=manual"
-            className="btn-secondary inline-block text-sm"
+            className="btn-secondary text-sm"
           >
             Type it in instead
           </Link>

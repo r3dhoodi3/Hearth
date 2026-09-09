@@ -398,6 +398,16 @@ export default async function Home(props: {
                 <span className="sm:hidden">For Pros</span>
                 <span className="hidden sm:inline">OakTend for Pros</span>
               </Link>
+              {/* Sign in, rightmost. Solid bark (the brand brown, same tone as
+                  btn-primary) so the returning-user door reads as a real
+                  action next to the outlined pro door. Appending it here lets
+                  justify-between shift the rest of the group left to make room. */}
+              <Link
+                href="/signin"
+                className="whitespace-nowrap rounded-lg bg-bark-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-bark-700 dark:bg-bark-500 dark:hover:bg-bark-600"
+              >
+                Sign in
+              </Link>
             </div>
           </header>
 
@@ -442,11 +452,9 @@ export default async function Home(props: {
               <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
                 Outside the county? Join the waitlist and we&apos;ll tell you when we expand.
               </p>
-              <div className="mt-4 flex justify-center text-sm lg:justify-start">
-                <Link href="/signin" className="text-bark-700 hover:underline dark:text-stone-300">
-                  Already have an account? Sign in
-                </Link>
-              </div>
+              {/* No "Already have an account? Sign in" here anymore: the header
+                  "Sign in" button (top-right) is the single, more discoverable
+                  door for returning users, same as the mobile landing. */}
             </div>
             {/* Flat hero photo: no gradient, no glass, no text-over-image
                 scrim - just a licensed photo in a rounded frame. The cycler's
@@ -630,7 +638,7 @@ export default async function Home(props: {
         </h2>
         <Link
           href="/homeowner-signup"
-          className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-lift"
+          className="btn-primary mt-6 px-6 py-3 text-base shadow-lift"
         >
           Get started free
         </Link>

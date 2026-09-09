@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ClipboardList } from "lucide-react";
 import Logo from "@/components/Logo";
 import GlobalSearch from "@/components/GlobalSearch";
+import TourButton from "@/components/TourButton";
 import NavLinks from "@/components/NavLinks";
 import ProfileMenu from "@/components/ProfileMenu";
 import NotificationBell from "@/components/NotificationBell";
@@ -106,27 +106,39 @@ export default function ProNav({
             className="flex shrink-0 items-center gap-2 whitespace-nowrap text-lg font-semibold text-stone-900 dark:text-stone-100"
           >
             <Logo className="h-6 w-6 text-oaktend-700 dark:text-oaktend-400" />
-            <span>
-              OakTend{" "}
-              {/* Hidden until lg: at 768-900px (md), "Leads / Messages /
-                  Clients / My Business" plus the Business pill already fill
-                  the row, so "for Pros" was getting squeezed by its shrinkable
-                  flex parent and wrapping under "OakTend" (measured two lines,
-                  reading as overlapping letters). The strip itself is lg-only
-                  now, so the room is there below lg - but lg is also exactly
-                  where this suffix started fitting, so it stays put and both
-                  halves of the header switch on the same line. */}
-              <span className="hidden font-normal text-stone-500 lg:inline dark:text-stone-400">
-                for Pros
+            <span className="relative leading-tight">
+              <span>
+                OakTend{" "}
+                {/* Shown at every width so a pro (especially a pro-only account,
+                    which gets no side pill) can tell at a glance they're in the
+                    Pro app, not the homeowner one. This used to be hidden below
+                    lg because the top nav strip filled the row at md and squeezed
+                    the suffix into a wrap - but the strip is lg-only now (it lives
+                    in the bottom tab bar below lg), so the top row has the room,
+                    and the wordmark's whitespace-nowrap keeps "OakTend for Pros"
+                    on one line at phone widths. */}
+                <span className="font-normal text-stone-500 dark:text-stone-400">
+                  for Pros
+                </span>
               </span>
+              {/* Desktop side badge, tucked under the wordmark. The small size
+                  keeps it short enough to sit inside the toolbar under "OakTend"
+                  while absolute + top-full drops it out of flow, so the wordmark
+                  stays centered and lines up with the nav strip and the
+                  bell/avatar opposite it; the row's height is set by the h-11
+                  controls, so this does not grow the toolbar. Only for accounts
+                  with both sides (hasHome); shown from sm up - the max-sm twin
+                  below the header row still owns sub-sm. */}
+              {hasHome && (
+                <SidePill
+                  label="Business"
+                  accent="oaktend"
+                  size="sm"
+                  className="absolute left-0 top-full mt-0.5 hidden sm:block"
+                />
+              )}
             </span>
           </Link>
-          {/* Which side of the account you're on. Only for accounts that
-              hold both sides (hasHome) - a pro-only account sees no pill.
-              Desktop only here; the max-sm twin lives just below the header
-              row so it can't push this line into two rows next to the bell
-              and avatar. */}
-          {hasHome && <SidePill label="Business" accent="oaktend" className="hidden sm:inline-block" />}
         </div>
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {/* Primary destinations. Desktop (lg and up) keeps this exact top
@@ -137,25 +149,15 @@ export default function ProNav({
           <nav className="-mx-1 hidden items-center gap-1 overflow-x-auto px-1 lg:flex">
             <NavLinks links={LINKS} accent="oaktend" />
           </nav>
-          {/* AI back office, same row as the bell so it reads as a daily
-              control rather than something buried in the profile menu. Icon
-              only on the phone (44px hit area, matching the bell and
-              ProfileMenu triggers beside it); a visible label joins it from
-              sm up, where the header has the width to spare. The href is
-              precomputed in pro/layout.tsx - this link never decides where it
-              points, it just goes there. */}
-          <Link
-            href={backOfficeHref}
-            aria-label="AI back office"
-            className="group flex items-center gap-1.5 rounded-full px-2 text-stone-500 hover:bg-bark-50 hover:text-bark-700 active:scale-95 max-sm:min-h-11 max-sm:min-w-11 max-sm:justify-center max-sm:px-0 sm:h-9 sm:px-2.5 sm:text-sm sm:font-medium dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-300"
-          >
-            <ClipboardList className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <span className="hidden sm:inline">Back office</span>
-          </Link>
+          {/* Back office is NOT a header button anymore: it duplicated the
+              "Back office" entry already in the profile menu below, and its
+              label + icon were crowding the row (the nav pills were overlapping
+              at desktop widths). The menu entry now carries the same gated
+              backOfficeHref so the member/non-member routing is preserved. */}
           {/* Same smart search as the homeowner header, switched to the pro
               registry and FAQ half. Inline box from sm up, mirroring Nav.tsx. */}
           <div className="hidden sm:block">
-            <GlobalSearch side="pro" />
+            <GlobalSearch side="pro" expandable />
           </div>
           {/* Phone-only entry to /pro/search; the inline box above is hidden
               below sm and the page would have no other way in. Mirrors the
@@ -179,6 +181,9 @@ export default function ProNav({
               <path d="M21 21l-4.3-4.3" />
             </svg>
           </Link>
+          {/* Replays the first-run spotlight tour on demand; it otherwise only
+              auto-opens once per account. See TourButton.tsx. */}
+          <TourButton side="pro" />
           <NotificationBell />
           <ProfileMenu
             name={company}
@@ -193,7 +198,7 @@ export default function ProNav({
               // business" says what you DO here.
               { href: "/pro/profile", label: "Edit business profile" },
               { href: "/pro/playbook", label: "Playbook" },
-              { href: "/pro/tools", label: "Back office" },
+              { href: backOfficeHref, label: "Back office" },
               { href: "/pro/plus", label: "Membership" },
               { href: "/pro/billing", label: "Billing" },
               { href: "/pro/privacy", label: "Your privacy rights" },
@@ -217,12 +222,22 @@ export default function ProNav({
           />
         </div>
       </div>
-      {/* Phone twin of the desktop SidePill above. Mirrors Nav.tsx: its own
-          quiet line under the logo instead of risking a wrap on an already
-          tight phone header. */}
+      {/* Phone twin of the desktop side pill: its own quiet line under the
+          wordmark rather than risking a wrap on the tight phone header. pl-12
+          starts it under the "H" of "OakTend" (past the h-6 logo + gap). On the
+          phone it shows the COMPANY NAME (truncated) instead of the generic
+          "Business" - the phone has nowhere else the business name is visible,
+          not even the profile dropdown. Falls back to "Business" when unset. */}
       {hasHome && (
-        <div className="px-4 pb-1.5 sm:hidden">
-          <SidePill label="Business" accent="oaktend" />
+        // Negative top margin pulls the pill up under the wordmark: the header
+        // row's own bottom padding (py-2.5) plus the wordmark's line-height
+        // otherwise leave a visible gap between "OakTend for Pros" and this line.
+        <div className="-mt-5 pl-12 pb-1.5 sm:hidden">
+          <SidePill
+            label={company ?? "Business"}
+            accent="oaktend"
+            className="inline-block max-w-[75vw] truncate align-middle"
+          />
         </div>
       )}
     </header>

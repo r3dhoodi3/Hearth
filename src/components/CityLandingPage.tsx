@@ -136,7 +136,7 @@ export default function CityLandingPage({
           </p>
           <SessionCta
             signedOutHref="/homeowner-signup"
-            className="btn-primary mt-6 inline-block px-6 py-3 text-base shadow-md"
+            className="btn-primary mt-6 px-6 py-3 text-base shadow-md"
           />
         </div>
 

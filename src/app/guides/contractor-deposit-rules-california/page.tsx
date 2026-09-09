@@ -219,7 +219,7 @@ export default function ContractorDepositRulesGuide() {
           </p>
           <Link
             href="/homeowner-signup"
-            className="btn-primary mt-3 inline-block px-5 py-2"
+            className="btn-primary mt-3 px-5 py-2"
           >
             Keep your project record in one place
           </Link>

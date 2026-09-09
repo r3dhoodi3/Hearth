@@ -60,7 +60,7 @@ export default function GuideCta({
         </p>
         <Link
           href={signedInHref}
-          className="btn-primary mt-5 inline-block px-6 py-2.5"
+          className="btn-primary mt-5 px-6 py-2.5"
         >
           {signedInLabel}
         </Link>
@@ -80,7 +80,7 @@ export default function GuideCta({
       </p>
       <Link
         href="/homeowner-signup"
-        className="btn-primary mt-5 inline-block px-6 py-2.5"
+        className="btn-primary mt-5 px-6 py-2.5"
       >
         Get started free
       </Link>

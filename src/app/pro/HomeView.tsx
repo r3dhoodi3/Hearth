@@ -431,7 +431,7 @@ export default function HomeView({
               </p>
               <Link
                 href="/pro/feedback"
-                className="btn-secondary mt-1 inline-block text-sm"
+                className="btn-secondary mt-1 text-sm"
               >
                 Report a bug
               </Link>

@@ -676,7 +676,7 @@ export default async function HomePage(
               </ul>
               <Link
                 href="/walkthrough"
-                className="btn-primary mt-3 inline-block"
+                className="btn-primary mt-3"
               >
                 Walk your home to confirm them
               </Link>

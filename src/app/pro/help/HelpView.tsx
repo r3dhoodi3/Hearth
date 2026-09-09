@@ -247,7 +247,7 @@ export default function HelpView({
         <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
           {FEEDBACK_WHAT_COUNTS}
         </p>
-        <Link href="/pro/feedback" className="btn-secondary mt-3 inline-block">
+        <Link href="/pro/feedback" className="btn-secondary mt-3">
           Report a bug
         </Link>
       </div>

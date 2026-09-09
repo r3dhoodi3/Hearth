@@ -104,7 +104,7 @@ export default function PanicCard({
               </li>
             ))}
           </ol>
-          <Link href={ctaHref} className="btn-primary block w-full text-center">
+          <Link href={ctaHref} className="btn-primary flex w-full text-center">
             Get a pro on it
           </Link>
         </div>

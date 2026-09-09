@@ -29,7 +29,9 @@ interface SetPasswordLinkResult {
 // The link points at the existing /reset-password?step=update page, so the
 // strength meter and the 8-character minimum are the same ones every other
 // password change goes through.
-export async function sendSetPasswordLinkAction(): Promise<SetPasswordLinkResult> {
+export async function sendSetPasswordLinkAction(
+  captchaToken?: string
+): Promise<SetPasswordLinkResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -42,12 +44,18 @@ export async function sendSetPasswordLinkAction(): Promise<SetPasswordLinkResult
     };
   }
 
-  // The address on the account, never anything the browser sent us: this
-  // action takes no arguments on purpose, so there is no way to aim the link
-  // at a mailbox the signed-in user doesn't already own.
+  // The address on the account, never anything the browser sent us: the only
+  // argument this action takes is the CAPTCHA token, which cannot influence the
+  // target mailbox, so there is still no way to aim the link at a mailbox the
+  // signed-in user doesn't already own.
   const origin = await requestOriginFromHeaders();
   const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
     redirectTo: passwordRecoveryRedirectTo(origin),
+    // Supabase's Attack Protection CAPTCHA gates this endpoint. The token comes
+    // from the Turnstile widget on the Set-a-password card; undefined when no
+    // NEXT_PUBLIC_TURNSTILE_SITE_KEY is set, which Supabase ignores while its
+    // own CAPTCHA is off.
+    captchaToken: captchaToken || undefined,
   });
 
   // Supabase throttles these emails (one a minute per address by default).

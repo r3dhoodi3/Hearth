@@ -141,7 +141,7 @@ export default async function ProToolsPage(
           </p>
           <ProUpgradeCta
             trialEligible={trialEligible}
-            className="btn-primary mt-3 inline-block"
+            className="btn-primary mt-3"
             sublineClassName="mt-2 text-xs text-oaktend-700 dark:text-oaktend-300"
           />
         </div>
