@@ -34,14 +34,44 @@ export const SIGNUP_EMAIL_NEUTRAL =
   "If that email is new to OakTend, a confirmation link is on its way. If it already has an account, sign in or reset your password instead. Check spam if nothing arrives in a minute or two.";
 
 type AuthErrorLike =
-  | { message?: string | null; status?: number | null }
+  | { message?: string | null; status?: number | null; code?: string | null }
   | string
   | null
   | undefined;
 
+// What we say when Turnstile (or Supabase's own CAPTCHA check) rejects the
+// request. This is never the reader's password and never their fault, so the
+// copy names the real problem and the one thing that fixes it: a fresh widget
+// solve, which means reloading the page.
+export const CAPTCHA_FAILED_MESSAGE =
+  "We couldn't confirm you're human. Refresh the page and try again.";
+
+// True when a Supabase auth error came back from the CAPTCHA check rather than
+// from the credentials. Exported because the re-auth server actions need to
+// tell the two apart: a failed CAPTCHA is not a password guess, so it must not
+// spend one of the five attempts in the password-verification budget.
+export function isCaptchaError(error: AuthErrorLike): boolean {
+  if (error && typeof error === "object") {
+    const code = error.code;
+    if (typeof code === "string" && code.toLowerCase() === "captcha_failed") {
+      return true;
+    }
+  }
+  const raw = typeof error === "string" ? error : error?.message ?? "";
+  return /captcha/i.test(raw);
+}
+
 export function friendlyAuthError(error: AuthErrorLike): string {
   const raw = typeof error === "string" ? error : error?.message ?? "";
   const m = raw.toLowerCase();
+
+  // The CAPTCHA check rejected the request (a stale single-use token, a widget
+  // that never solved, a clock skew). Checked first because the raw text
+  // ("captcha protection: request disallowed ...") says nothing a reader can
+  // act on, and because it is never a credential problem.
+  if (isCaptchaError(error)) {
+    return CAPTCHA_FAILED_MESSAGE;
+  }
 
   // Wrong email/password on sign in. Points a brand-new visitor at sign-up.
   if (/invalid login credentials/.test(m)) {
@@ -101,7 +131,7 @@ export function friendlyAuthError(error: AuthErrorLike): string {
   // rate-limit check above so throttle copy still wins, and just before the
   // generic below.
   if (/token has expired|expired or is invalid|invalid.*(token|otp|code)|otp_expired/.test(m)) {
-    return "That code didn't work — it may have expired. Check the latest email or resend a new code.";
+    return "That code didn't work, it may have expired. Check the latest email or resend a new code.";
   }
 
   // Anything we don't recognize: a warm generic that never echoes raw text.

@@ -100,6 +100,7 @@ const config: Config = {
           500: "#a9743f",
           600: "#915d32",
           700: "#73482b",
+          800: "#5e3b23",
           900: "#4a2e1c",
         },
         // Oak brown: warmer, more golden than bark (whose darker shades read as

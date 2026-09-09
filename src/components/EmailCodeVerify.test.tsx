@@ -168,4 +168,25 @@ describe("EmailCodeVerify", () => {
     });
     expect(await screen.findByText("New code sent. Give it a minute or two.")).toBeInTheDocument();
   });
+
+  it("ignores a second resend click inside the cooldown", async () => {
+    resend.mockResolvedValue({ error: null });
+    renderVerify();
+
+    // The same DOM node, held across the re-render: after the first send its
+    // label becomes the countdown, so looking it up by "Resend code" again
+    // would fail for the wrong reason.
+    const button = screen.getByRole("button", { name: "Resend code" });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(resend).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent(/Resend in \d+s/);
+
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(resend).toHaveBeenCalledTimes(1);
+  });
 });

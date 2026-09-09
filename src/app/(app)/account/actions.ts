@@ -7,7 +7,11 @@ import { createClient as createJsClient } from "@supabase/supabase-js";
 import { passwordStatusFor } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { setFlash } from "@/lib/flash";
-import { friendlyAuthError } from "@/lib/friendlyAuthError";
+import {
+  CAPTCHA_FAILED_MESSAGE,
+  friendlyAuthError,
+  isCaptchaError,
+} from "@/lib/friendlyAuthError";
 import { stripe } from "@/lib/stripe";
 import { eraseUserData, type EraseSummary } from "@/lib/privacy";
 import { isMissingSchemaError } from "@/lib/dbErrors";
@@ -290,11 +294,6 @@ export async function updateEmailAction(formData: FormData) {
   // deleteAccountAction below.
   const { hasPassword } = await passwordStatusFor(user);
   if (hasPassword && user.email) {
-    if (await passwordAttemptsExhausted(user.id)) {
-      setFlash(PW_VERIFY_MESSAGE, "error");
-      redirect("/account/security");
-    }
-
     const current = (formData.get("current_password") as string) || "";
     // Verify the current password without disturbing the active session.
     const verifier = createJsClient(
@@ -309,6 +308,20 @@ export async function updateEmailAction(formData: FormData) {
         captchaToken: (formData.get("captcha_token") as string) || undefined,
       },
     });
+    // The CAPTCHA rejection is answered BEFORE the attempt is recorded, and it
+    // is the reason the sign-in call now runs before the budget check: a stale
+    // Turnstile token is not a password guess, and counting it burned the real
+    // owner's five attempts on a widget problem they could not see. Nothing is
+    // leaked by the new order, because an exhausted budget still stops the
+    // action below with the same message no matter how the sign-in went.
+    if (verifyError && isCaptchaError(verifyError)) {
+      setFlash(CAPTCHA_FAILED_MESSAGE, "error");
+      redirect("/account/security");
+    }
+    if (await passwordAttemptsExhausted(user.id)) {
+      setFlash(PW_VERIFY_MESSAGE, "error");
+      redirect("/account/security");
+    }
     if (verifyError) {
       setFlash("Current password is incorrect.", "error");
       redirect("/account/security");
@@ -353,11 +366,6 @@ export async function updatePasswordAction(formData: FormData) {
     redirect("/account/security");
   }
 
-  if (await passwordAttemptsExhausted(user.id)) {
-    setFlash(PW_VERIFY_MESSAGE, "error");
-    redirect("/account/security");
-  }
-
   // Verify the current password without disturbing the active session.
   const verifier = createJsClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -371,6 +379,17 @@ export async function updatePasswordAction(formData: FormData) {
       captchaToken: (formData.get("captcha_token") as string) || undefined,
     },
   });
+  // A CAPTCHA rejection is not a password guess, so it is answered before the
+  // attempt is recorded and costs nothing from the budget. See the same shape
+  // in updateEmailAction above.
+  if (verifyError && isCaptchaError(verifyError)) {
+    setFlash(CAPTCHA_FAILED_MESSAGE, "error");
+    redirect("/account/security");
+  }
+  if (await passwordAttemptsExhausted(user.id)) {
+    setFlash(PW_VERIFY_MESSAGE, "error");
+    redirect("/account/security");
+  }
   if (verifyError) {
     setFlash("Current password is incorrect.", "error");
     redirect("/account/security");
@@ -454,15 +473,19 @@ export async function deleteAccountAction(formData: FormData) {
   const { hasPassword } = await passwordStatusFor(user);
 
   // Both branches below, not just the password one: a wrong typed email is
-  // cheap to check, but nothing here should be retryable without limit.
-  if (await passwordAttemptsExhausted(user.id)) {
-    setFlash(PW_VERIFY_MESSAGE, "error");
-    redirect("/account/security");
-  }
-
+  // cheap to check, but nothing here should be retryable without limit. The
+  // attempt is recorded inside each branch rather than once up here, so a
+  // CAPTCHA rejection in the password branch can be answered without spending
+  // one; every other outcome still costs an attempt exactly as before.
   if (hasPassword) {
     const current = (formData.get("current_password") as string) || "";
     if (!current) {
+      // An empty box is still an attempt, so it is recorded: otherwise a loop
+      // of blank posts would sit entirely outside the budget.
+      if (await passwordAttemptsExhausted(user.id)) {
+        setFlash(PW_VERIFY_MESSAGE, "error");
+        redirect("/account/security");
+      }
       setFlash("Current password is incorrect.", "error");
       redirect("/account/security");
     }
@@ -480,6 +503,17 @@ export async function deleteAccountAction(formData: FormData) {
         captchaToken: (formData.get("captcha_token") as string) || undefined,
       },
     });
+    // A CAPTCHA rejection first, and before the attempt is recorded: it is not
+    // a password guess, and on the delete path especially, burning the budget
+    // on a widget failure blocks a right-to-delete for fifteen minutes.
+    if (verifyError && isCaptchaError(verifyError)) {
+      setFlash(CAPTCHA_FAILED_MESSAGE, "error");
+      redirect("/account/security");
+    }
+    if (await passwordAttemptsExhausted(user.id)) {
+      setFlash(PW_VERIFY_MESSAGE, "error");
+      redirect("/account/security");
+    }
     if (verifyError) {
       // Distinguish a genuinely wrong password from a throttle/network blip:
       // only "invalid login credentials" means the password was wrong. A
@@ -499,7 +533,12 @@ export async function deleteAccountAction(formData: FormData) {
     // that nobody destroys an account by clicking one button, and that whoever
     // types it has read which account they're about to delete. Compared here
     // as well as in the browser, because a server action accepts any FormData
-    // regardless of what the page rendered.
+    // regardless of what the page rendered. Limited too: no CAPTCHA is
+    // involved here, so the attempt is recorded up front as it always was.
+    if (await passwordAttemptsExhausted(user.id)) {
+      setFlash(PW_VERIFY_MESSAGE, "error");
+      redirect("/account/security");
+    }
     const typed = ((formData.get("confirm_email") as string) || "")
       .trim()
       .toLowerCase();

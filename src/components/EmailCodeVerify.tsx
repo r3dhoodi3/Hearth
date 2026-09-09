@@ -11,6 +11,12 @@ import Turnstile, {
   type TurnstileHandle,
 } from "@/components/Turnstile";
 
+// How long "Resend code" sits out after a send, and how many sends one page
+// load gets. 60s matches the Supabase per-address email cooldown, so the
+// button comes back exactly when a new send could actually succeed.
+const RESEND_COOLDOWN_SECONDS = 60;
+const RESEND_MAX = 5;
+
 // Cross-device email verification. Used two ways: inline on the two signup
 // pages (they pass the onboarding successHref with ?next/?ref preserved), AND
 // standalone on /verify - the recovery screen a reader reaches after closing or
@@ -65,6 +71,24 @@ export default function EmailCodeVerify({
   const captchaTimedOut = useCaptchaGraceTimeout(
     CAPTCHA_ENABLED && !captchaToken
   );
+  // Resend budget. Supabase only lets one confirmation email out per address
+  // per minute and counts the rest against an hourly cap, so an impatient
+  // reader who taps "Resend code" five times in ten seconds burns their own
+  // quota and gets nothing but throttle errors. The button sits out the minute
+  // instead of firing requests it knows will be rejected, and stops entirely
+  // after RESEND_MAX sends so a stuck inbox can't drain the hourly cap. Both
+  // are per page load: a reload is a fresh start, which is fine because the
+  // server-side caps are the real limit and these only stop the pointless
+  // clicks. Modelled on SetPasswordCard in AccountSecurityPanel.tsx.
+  const [cooldown, setCooldown] = useState(0);
+  const [resends, setResends] = useState(0);
+  const resendsUsedUp = resends >= RESEND_MAX;
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((n) => n - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   async function onVerify() {
     if (busy || code.length !== 6) return;
@@ -125,9 +149,21 @@ export default function EmailCodeVerify({
   }, [code, busy]);
 
   async function onResend() {
+    // The button is disabled in all three of these states; the guard is here
+    // too because a server action is not the only way to reach this function
+    // (a stray double-click can land before React re-renders the button).
+    if (busy || cooldown > 0 || resendsUsedUp) return;
+    // Wait for a CAPTCHA token when the widget is on, unless it timed out.
+    // Same rule the button's disabled prop uses, kept in step with it.
+    if (CAPTCHA_ENABLED && !captchaToken && !captchaTimedOut) return;
     setError(null);
     setNotice(null);
     setBusy(true);
+    // Spend from the budget now, not on success: the email left our hands
+    // either way, and a throttle error is exactly when we most want the reader
+    // to wait rather than tap again.
+    setResends((n) => n + 1);
+    setCooldown(RESEND_COOLDOWN_SECONDS);
 
     const { error } = await supabase.auth.resend({
       type: "signup",
@@ -219,11 +255,26 @@ export default function EmailCodeVerify({
           onClick={onResend}
           className="btn-secondary mt-4 w-full"
           disabled={
-            busy || (CAPTCHA_ENABLED && !captchaToken && !captchaTimedOut)
+            busy ||
+            cooldown > 0 ||
+            resendsUsedUp ||
+            (CAPTCHA_ENABLED && !captchaToken && !captchaTimedOut)
           }
         >
-          {busy ? "Resending…" : "Resend code"}
+          {busy
+            ? "Resending…"
+            : cooldown > 0
+              ? `Resend in ${cooldown}s`
+              : "Resend code"}
         </button>
+        {resendsUsedUp && (
+          <p
+            aria-live="polite"
+            className="mt-2 text-center text-xs text-stone-500 max-sm:text-sm dark:text-stone-400"
+          >
+            Too many resends. Wait a few minutes and try again.
+          </p>
+        )}
 
         {error && (
           <p

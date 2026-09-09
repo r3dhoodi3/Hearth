@@ -9,7 +9,11 @@ import { getCurrentContractor } from "@/lib/contractor";
 import { passwordStatusFor } from "@/lib/auth";
 import { hasProPlan } from "@/lib/subscription";
 import { setFlash } from "@/lib/flash";
-import { friendlyAuthError } from "@/lib/friendlyAuthError";
+import {
+  CAPTCHA_FAILED_MESSAGE,
+  friendlyAuthError,
+  isCaptchaError,
+} from "@/lib/friendlyAuthError";
 import { stripe } from "@/lib/stripe";
 import { eraseUserData, type EraseSummary } from "@/lib/privacy";
 import { cappedField, FIELD_MAX } from "@/lib/formFields";
@@ -73,11 +77,6 @@ export async function updatePasswordAction(formData: FormData) {
     redirect("/pro/profile");
   }
 
-  if (await passwordAttemptsExhausted(user.id)) {
-    setFlash(PW_VERIFY_MESSAGE, "error");
-    redirect("/pro/profile");
-  }
-
   // Verify the current password without disturbing the active session.
   const verifier = createJsClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -91,6 +90,21 @@ export async function updatePasswordAction(formData: FormData) {
       captchaToken: (formData.get("captcha_token") as string) || undefined,
     },
   });
+  // The CAPTCHA rejection is answered BEFORE the attempt is recorded, which is
+  // why the sign-in call runs ahead of the budget check: a stale Turnstile
+  // token is not a password guess, and counting it burned the real owner's
+  // five attempts on a widget problem they could not see. Nothing leaks from
+  // the new order, because an exhausted budget still stops the action below
+  // with the same message however the sign-in went. Twin of the homeowner
+  // version in src/app/(app)/account/actions.ts.
+  if (verifyError && isCaptchaError(verifyError)) {
+    setFlash(CAPTCHA_FAILED_MESSAGE, "error");
+    redirect("/pro/profile");
+  }
+  if (await passwordAttemptsExhausted(user.id)) {
+    setFlash(PW_VERIFY_MESSAGE, "error");
+    redirect("/pro/profile");
+  }
   if (verifyError) {
     setFlash("Current password is incorrect.", "error");
     redirect("/pro/profile");
@@ -162,11 +176,6 @@ export async function updateEmailAction(formData: FormData) {
   // deleteAccountAction below.
   const { hasPassword } = await passwordStatusFor(user);
   if (hasPassword && user.email) {
-    if (await passwordAttemptsExhausted(user.id)) {
-      setFlash(PW_VERIFY_MESSAGE, "error");
-      redirect("/pro/profile");
-    }
-
     const current = (formData.get("current_password") as string) || "";
     // Verify the current password without disturbing the active session.
     const verifier = createJsClient(
@@ -181,6 +190,17 @@ export async function updateEmailAction(formData: FormData) {
         captchaToken: (formData.get("captcha_token") as string) || undefined,
       },
     });
+    // A CAPTCHA rejection is not a password guess, so it is answered before
+    // the attempt is recorded and costs nothing from the budget. Same shape as
+    // updatePasswordAction above.
+    if (verifyError && isCaptchaError(verifyError)) {
+      setFlash(CAPTCHA_FAILED_MESSAGE, "error");
+      redirect("/pro/profile");
+    }
+    if (await passwordAttemptsExhausted(user.id)) {
+      setFlash(PW_VERIFY_MESSAGE, "error");
+      redirect("/pro/profile");
+    }
     if (verifyError) {
       setFlash("Current password is incorrect.", "error");
       redirect("/pro/profile");
@@ -422,15 +442,19 @@ export async function deleteAccountAction(formData: FormData) {
   const { hasPassword } = await passwordStatusFor(user);
 
   // Both branches below, not just the password one: a wrong typed email is
-  // cheap to check, but nothing here should be retryable without limit.
-  if (await passwordAttemptsExhausted(user.id)) {
-    setFlash(PW_VERIFY_MESSAGE, "error");
-    redirect("/pro/profile");
-  }
-
+  // cheap to check, but nothing here should be retryable without limit. The
+  // attempt is recorded inside each branch rather than once up here, so a
+  // CAPTCHA rejection in the password branch can be answered without spending
+  // one; every other outcome still costs an attempt exactly as before.
   if (hasPassword) {
     const current = (formData.get("current_password") as string) || "";
     if (!current) {
+      // An empty box is still an attempt, so it is recorded: otherwise a loop
+      // of blank posts would sit entirely outside the budget.
+      if (await passwordAttemptsExhausted(user.id)) {
+        setFlash(PW_VERIFY_MESSAGE, "error");
+        redirect("/pro/profile");
+      }
       setFlash("Current password is incorrect.", "error");
       redirect("/pro/profile");
     }
@@ -448,6 +472,17 @@ export async function deleteAccountAction(formData: FormData) {
         captchaToken: (formData.get("captcha_token") as string) || undefined,
       },
     });
+    // A CAPTCHA rejection first, and before the attempt is recorded: it is not
+    // a password guess, and on the delete path especially, burning the budget
+    // on a widget failure blocks a right-to-delete for fifteen minutes.
+    if (verifyError && isCaptchaError(verifyError)) {
+      setFlash(CAPTCHA_FAILED_MESSAGE, "error");
+      redirect("/pro/profile");
+    }
+    if (await passwordAttemptsExhausted(user.id)) {
+      setFlash(PW_VERIFY_MESSAGE, "error");
+      redirect("/pro/profile");
+    }
     if (verifyError) {
       setFlash("Current password is incorrect.", "error");
       redirect("/pro/profile");
@@ -456,7 +491,12 @@ export async function deleteAccountAction(formData: FormData) {
     // No password to check, so the confirmation is typing the account's own
     // email exactly: nobody should be able to destroy a business listing with
     // one click. Compared server-side too, because a server action accepts any
-    // FormData regardless of what the page rendered.
+    // FormData regardless of what the page rendered. Limited too: no CAPTCHA
+    // is involved here, so the attempt is recorded up front as it always was.
+    if (await passwordAttemptsExhausted(user.id)) {
+      setFlash(PW_VERIFY_MESSAGE, "error");
+      redirect("/pro/profile");
+    }
     const typed = ((formData.get("confirm_email") as string) || "")
       .trim()
       .toLowerCase();

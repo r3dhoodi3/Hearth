@@ -197,7 +197,7 @@ export async function GET(req: NextRequest) {
       headers: {
         // Photon asks callers to identify themselves so they can reach a
         // misbehaving client instead of blocking a whole IP range.
-        "User-Agent": "OakTend/1.0 (+https://hearth.build)",
+        "User-Agent": "OakTend/1.0 (+https://oaktend.com)",
         Accept: "application/json",
       },
       // Next would otherwise try to cache this in its own data cache, keyed on

@@ -312,8 +312,11 @@ export function isPublicPath(path: string): boolean {
     // Email-code recovery page (src/app/verify): an account created but not yet
     // email-confirmed is SIGNED OUT, so bouncing it to /signin here would trap
     // exactly the person this page exists to rescue. It reads no private data -
-    // verifyOtp is the gate - so it is safe with no session.
-    path.startsWith("/verify") ||
+    // verifyOtp is the gate - so it is safe with no session. Exact match, not
+    // a prefix (same rule as "/open" above): only this one page is public, so
+    // a future /verify/<something> cannot inherit anonymity by accident, and
+    // no path that merely starts with the word can either.
+    path === "/verify" ||
     // Password reset request page: a signed-out user is exactly who needs it,
     // so it must not bounce to /signin.
     path.startsWith("/reset-password") ||
