@@ -15,10 +15,10 @@ export const runtime = "nodejs";
 
 // First-party campaign-click redirect for the 2026-09 social launch. See
 // OakTend-marketing/growth/PRODUCTION-BRIEF.md item 1 and
-// oaktend-audit/reports/social-growth-verify.md section 6: OakTend's
-// analytics is first-party only (docs/ANALYTICS.md - src/app/privacy/page.tsx
-// promises "no third-party analytics service, no advertising SDK, no ad
-// pixel or retargeting tag" in writing), so a bio link or Story sticker
+// oaktend-audit/reports/social-growth-verify.md section 6: OakTend's campaign
+// attribution is first-party only (cookieless analytics only, see
+// docs/ANALYTICS.md - the privacy policy promises no advertising SDK, no ad
+// pixel or retargeting tag in writing), so a bio link or Story sticker
 // pointing straight at oaktend.com produces no per-post click data. This
 // route is the whole mechanism: /go/<code> logs one app_events row and
 // redirects, no pixel, no third-party tag, nothing leaves this server.

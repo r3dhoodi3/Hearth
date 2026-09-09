@@ -52,8 +52,12 @@ export const LEGAL = {
     phone: env("NEXT_PUBLIC_DMCA_AGENT_PHONE") ?? "[TODO(legal): DMCA agent phone]",
     email: env("NEXT_PUBLIC_DMCA_AGENT_EMAIL") ?? `dmca@${mailDomain}`,
   },
-  /** ISO date the current document set took effect. */
-  effectiveDate: env("NEXT_PUBLIC_LEGAL_EFFECTIVE_DATE") ?? "2026-09-02",
+  /**
+   * ISO date the current document set took effect. Bumped 2026-09-09 when
+   * cookieless Vercel Web Analytics was turned on and the privacy policy and
+   * cookie notice were reworded to disclose it.
+   */
+  effectiveDate: env("NEXT_PUBLIC_LEGAL_EFFECTIVE_DATE") ?? "2026-09-09",
   venueCounty: "Orange County, California",
   liabilityCap:
     "the greater of $100 or the amounts you paid to us in the 12 months before the claim",

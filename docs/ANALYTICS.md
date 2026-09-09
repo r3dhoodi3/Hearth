@@ -1,14 +1,20 @@
 # Analytics
 
-OakTend's analytics is first-party only: no PostHog, Plausible, Vercel
-Analytics, or any other third-party vendor. Every event is a row in
-`public.app_events` (migration 0093), written either by the client sink at
-`src/app/api/track/route.ts` (fed by `track()` in `src/lib/analytics.ts`) or
-directly by server code through `trackServerEvent()` in
-`src/lib/trackServer.ts`. This choice is not a preference, it is a
-requirement: `src/app/privacy/page.tsx` already promises "no third-party
-analytics service, no advertising SDK, no ad pixel or retargeting tag" in
-writing, and adding one would make that page false the moment it shipped.
+OakTend's analytics is two things. First, first-party product events: every
+one is a row in `public.app_events` (migration 0093), written either by the
+client sink at `src/app/api/track/route.ts` (fed by `track()` in
+`src/lib/analytics.ts`) or directly by server code through
+`trackServerEvent()` in `src/lib/trackServer.ts`. That pipeline is what the
+rest of this document describes. Second, Vercel Web Analytics, enabled
+2026-09-09: the `<Analytics />` component in `src/app/layout.tsx` counts page
+views without setting a cookie and without any identifier that lasts beyond a
+day. `src/content/legal/privacy.md` (the Analytics subsection in Section 3)
+and `src/content/legal/cookies.md` were reworded in the same change to
+disclose it, so nothing on the site claims we run zero analytics.
+
+The rule that stays: no Google Analytics, no ad pixel or retargeting tag, no
+session-replay or heatmap tool, and nothing that sets a cookie or identifies a
+person. Anything that would need one of those does not go in.
 
 `app_events` has row level security enabled with zero policies. No
 anon/authenticated client can read or write it, on purpose - only the
@@ -231,7 +237,9 @@ OakTend does not sell or share personal data with any third party, and
 nothing in this pipeline changes that. `app_events` rows live in OakTend's own
 database, are linked to an account only when one is signed in, and are never
 sold, licensed, or shared with any third-party ad or analytics company - the
-same commitment already stated in `src/app/privacy/page.tsx`. Under
+same commitment already stated in `src/content/legal/privacy.md`. The
+cookieless Vercel page-view counter never touches this table and receives no
+account id, no address, and no free text. Under
 CCPA/CPRA, "sale" and "share" are defined broadly enough to cover far more
 than a literal cash transaction, and OakTend's core data (home address,
 financial details) counts as sensitive personal information, so this is a

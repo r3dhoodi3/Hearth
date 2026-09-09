@@ -6,6 +6,7 @@ import FlashToast from "@/components/FlashToast";
 import StaleDeployRecovery from "@/components/StaleDeployRecovery";
 import NativeBootstrap from "@/components/native/NativeBootstrap";
 import ZoomLock from "@/components/ZoomLock";
+import { Analytics } from "@vercel/analytics/next";
 import { LAUNCH_CITY_NAMES } from "@/lib/serviceArea";
 
 // KEEP THIS FILE FREE OF cookies() AND headers().
@@ -181,6 +182,10 @@ export default async function RootLayout({
             the native shell (see src/components/ZoomLock.tsx). Browser tabs
             stay zoomable. */}
         <ZoomLock />
+        {/* Cookieless page-view counter from the host (Vercel Web Analytics).
+            It sets no cookies and does no cross-site tracking. Disclosed in the
+            Analytics section of the privacy policy and in the cookie notice. */}
+        <Analytics />
       </body>
     </html>
   );
