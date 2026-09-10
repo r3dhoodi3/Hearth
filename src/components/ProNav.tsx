@@ -11,10 +11,13 @@ import { setPreferredSideAction } from "@/lib/sideActions";
 
 export default function ProNav({
   company,
+  avatarUrl,
   hasHome,
   backOfficeHref,
 }: {
   company: string | null;
+  // The pro's free profile photo (contractors.logo_url, 0154).
+  avatarUrl?: string | null;
   // Does this account also have a homeowner side (a home of their own, or one
   // shared with them)? Decides whether the profile menu offers a switch or an
   // invitation to add one.
@@ -187,6 +190,7 @@ export default function ProNav({
           <NotificationBell />
           <ProfileMenu
             name={company}
+            avatarUrl={avatarUrl}
             themeToggle
             links={[
               // No "Ask Hearth" entry here on purpose: the copilot lives in

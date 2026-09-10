@@ -47,6 +47,59 @@ async function passwordAttemptsExhausted(userId: string): Promise<boolean> {
   return allowed === false;
 }
 
+// True only if `raw` is a URL whose origin exactly matches Supabase Storage AND
+// whose path is a public object under `pathPrefix`. Parsed with new URL()
+// rather than a substring check (which "https://evil.com/x?y=/avatars/<id>/"
+// would defeat). Mirrors isOwnedStoragePath in src/app/pro/profile/actions.ts:
+// stops an account pointing avatar_url at an arbitrary URL.
+function isOwnedStoragePath(raw: string, pathPrefix: string): boolean {
+  if (!raw) return false;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return false;
+  try {
+    const url = new URL(raw);
+    const storageOrigin = new URL(base).origin;
+    return url.origin === storageOrigin && url.pathname.startsWith(pathPrefix);
+  } catch {
+    return false;
+  }
+}
+
+// The account's free profile picture (0154). Called by AvatarUpload's own
+// auto-submitting form on /account, so it REVALIDATES rather than redirecting:
+// a redirect would discard whatever the homeowner had half-typed in the
+// neighbouring identity form. avatar_url is NOT a locked column (0139), so this
+// writes through the caller's own session client, scoped to their own id -
+// exactly like full_name / phone in saveAccountAction below.
+export async function saveAvatarAction(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const raw = String(formData.get("avatar_url") ?? "").trim();
+  const avatar_url = isOwnedStoragePath(
+    raw,
+    `/storage/v1/object/public/avatars/${user.id}/`
+  )
+    ? raw
+    : null;
+
+  // A blank or foreign value is a no-op, never a wipe: an errant submit must
+  // not clear a good stored photo.
+  if (avatar_url) {
+    // Cast: avatar_url (0154) isn't in the generated types yet.
+    const { error } = await (supabase.from("users") as any)
+      .update({ avatar_url })
+      .eq("id", user.id);
+    if (error) setFlash("Couldn't save your photo. Please try again.", "error");
+  }
+
+  // Revalidate the whole layout tree so the toolbar avatar updates everywhere.
+  revalidatePath("/", "layout");
+}
+
 // Update the current homeowner's identity details: name + phone live in the
 // public.users row. Email and password are security concerns and are handled
 // only by the /account/security actions below - this action ignores any

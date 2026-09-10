@@ -127,7 +127,12 @@ export default async function ProLayout({
 
   return (
     <div className="min-h-screen">
-      <ProNav company={contractor.name} hasHome={sides.hasHome} backOfficeHref={backOfficeHref} />
+      <ProNav
+        company={contractor.name}
+        avatarUrl={(contractor as { logo_url?: string | null }).logo_url ?? null}
+        hasHome={sides.hasHome}
+        backOfficeHref={backOfficeHref}
+      />
       {/* Extra bottom padding below lg keeps content clear of the fixed bottom
           tab bar. It was sm:pb-8; the bar now runs to lg (ProNav.tsx), so the
           padding follows it. Desktop at lg and up keeps today's pb-8. */}

@@ -28,12 +28,8 @@ export function buildSetupItems(input: {
   contractor: any;
   balanceCents: number;
   applicationCount: number;
-  // Can this account actually upload a logo? The logo is a Pro-member
-  // cosmetic, so for everyone else that step is a door that does not open and
-  // is marked optional instead of nagging forever.
-  canUploadLogo: boolean;
 }): SetupItem[] {
-  const { contractor, balanceCents, applicationCount, canUploadLogo } = input;
+  const { contractor, balanceCents, applicationCount } = input;
   const logoDone = Boolean(contractor.logo_url);
 
   // License state, as the checklist reads it: a number alone is not the finish
@@ -43,8 +39,7 @@ export function buildSetupItems(input: {
     Boolean(contractor.license_number) && licenseStatus === "failed";
   // A number on file that is neither confirmed nor refused is waiting on a
   // check this pro cannot hurry along, so it stays visible and unticked but
-  // does not hold the whole card open forever (same reasoning as `optional`
-  // on the members-only logo step).
+  // does not hold the whole card open forever (the `optional` escape hatch).
   const licenseAwaitingCheck =
     Boolean(contractor.license_number) &&
     licenseStatus !== "verified" &&
@@ -83,7 +78,7 @@ export function buildSetupItems(input: {
     },
     // Plain outbound links only (0110). Done as soon as either is on file; no
     // reason to require both. Pros with review links get more quotes accepted,
-    // so this comes right after license, ahead of the members-only logo step.
+    // so this comes right after license, ahead of the logo step.
     {
       label: "Add your Yelp or Google reviews link",
       hint: "Pros with review links get more quotes accepted.",
@@ -91,12 +86,15 @@ export function buildSetupItems(input: {
       href: "/pro/profile#reviews",
       linkLabel: "Add reviews link",
     },
+    // The profile photo is FREE for every pro as of 2026-09-08 (it used to be a
+    // Pro-member perk, which is why this step was once gated and optional). Now
+    // it is a plain step for everyone, uploaded by tapping the avatar on the
+    // /pro/profile Basic Info tab.
     {
-      label: canUploadLogo ? "Upload your logo" : "Upload your logo (Pro)",
+      label: "Add your logo",
       done: logoDone,
-      href: canUploadLogo ? "/pro/profile" : "/pro/plus?reason=logo",
-      linkLabel: canUploadLogo ? "Add logo" : "See Hearth Pro",
-      optional: !canUploadLogo,
+      href: "/pro/profile",
+      linkLabel: "Add logo",
     },
     {
       label: "Fund your wallet",

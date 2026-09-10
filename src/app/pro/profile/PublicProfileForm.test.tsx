@@ -21,8 +21,18 @@ vi.mock("../actions", () => ({
   verifyLicenseNowAction: (...args: unknown[]) => verifyLicenseNowAction(...args),
 }));
 const licenseDisputeAction = vi.fn();
+const saveLogoAction = vi.fn();
 vi.mock("./actions", () => ({
   licenseDisputeAction: (...args: unknown[]) => licenseDisputeAction(...args),
+  saveLogoAction: (...args: unknown[]) => saveLogoAction(...args),
+}));
+
+// AvatarUpload (the profile photo control) constructs the real browser Supabase
+// client at render time, which throws without live project env vars. Only the
+// constructor is reached here (no upload is triggered), so a bare stub is
+// enough - same treatment as PublicPageCard.test.tsx.
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({}),
 }));
 
 import PublicProfileForm from "./PublicProfileForm";
@@ -151,12 +161,12 @@ describe("PublicProfileForm phone validation", () => {
   });
 });
 
-// MED-20: "Change Cover" and the avatar "+" were both buttons with no
-// handler and nothing behind them - no cover feature anywhere in the app,
-// and the real logo upload already lives on the Pro-gated "Your Public
-// Page" tab (LogoUpload.tsx via PublicPageCard.tsx). Removed rather than
-// wired up; these tests pin that removal instead of the old dead controls.
-describe("PublicProfileForm has no dead cover/logo buttons", () => {
+// The profile photo is FREE for every pro as of 2026-09-08 and is uploaded by
+// tapping the avatar itself (AvatarUpload). The old dead "Change Cover" button
+// is still gone, and the placeholder that used to point at the Pro-gated "Your
+// Public Page" tab is now a real tappable upload instead of a pointer
+// elsewhere. These tests pin that.
+describe("PublicProfileForm photo control", () => {
   it("renders no 'Change Cover' control", () => {
     render(<PublicProfileForm contractor={CONTRACTOR} />);
     expect(
@@ -164,12 +174,18 @@ describe("PublicProfileForm has no dead cover/logo buttons", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders no clickable '+' avatar control, and points to the real place to add a logo", () => {
-    render(<PublicProfileForm contractor={CONTRACTOR} />);
+  it("offers a tappable photo upload and no longer points to the Your Public Page tab", () => {
+    const { container } = render(<PublicProfileForm contractor={CONTRACTOR} />);
     expect(screen.queryByText("+")).not.toBeInTheDocument();
     expect(
-      screen.getByText(/add a logo from the "your public page" tab/i)
-    ).toBeInTheDocument();
+      screen.queryByText(/add a logo from the "your public page" tab/i)
+    ).not.toBeInTheDocument();
+    // The whole avatar is the control: a hidden file input wired for images.
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+    expect(fileInput?.accept).toContain("image/");
   });
 });
 

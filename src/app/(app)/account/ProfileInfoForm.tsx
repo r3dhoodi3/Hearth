@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
-import { saveAccountAction } from "./actions";
+import { saveAccountAction, saveAvatarAction } from "./actions";
 import PhoneInput from "@/components/PhoneInput";
 import InlineSpinner from "@/components/InlineSpinner";
+import AvatarUpload from "@/components/AvatarUpload";
 import type { UserProfile } from "@/lib/database.types";
 
 function FieldIcon({ children }: { children: React.ReactNode }) {
@@ -45,15 +46,44 @@ export default function ProfileInfoForm({
 }) {
   const smsConsent = profile.sms_consent ?? false;
 
+  // avatar_url (migration 0154) isn't in the generated UserProfile type yet.
+  const avatarUrl = (profile as { avatar_url?: string | null }).avatar_url ?? null;
+
   return (
-    <form
-      action={saveAccountAction}
-      className="card p-6"
-    >
+    // A plain card (not a <form>): the tappable photo and the identity fields
+    // are two SEPARATE forms - a <form> cannot nest another - so the card is
+    // just their shared frame.
+    <div className="card p-6">
       <h2 className="mb-4 text-base font-semibold text-stone-900 dark:text-stone-100">
         Basic Information
       </h2>
 
+      {/* Free profile photo (0154). The whole avatar is the control - tap it to
+          upload, no separate button. AvatarUpload carries its own form +
+          saveAvatarAction, which is why it sits OUTSIDE the identity <form>
+          opened just below. */}
+      <div className="mb-6 flex items-center gap-4">
+        <AvatarUpload
+          action={saveAvatarAction}
+          bucket="avatars"
+          ownerId={profile.id}
+          inputName="avatar_url"
+          initialUrl={avatarUrl}
+          shape="round"
+          size={72}
+          placeholder="person"
+        />
+        <div>
+          <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+            Profile photo
+          </p>
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            Tap the circle to {avatarUrl ? "change" : "add"} your photo.
+          </p>
+        </div>
+      </div>
+
+      <form action={saveAccountAction}>
       <div className="max-w-md space-y-4">
         <div>
           <label className="label">Full Name</label>
@@ -116,6 +146,7 @@ export default function ProfileInfoForm({
         </Link>
         <SaveChangesButton />
       </div>
-    </form>
+      </form>
+    </div>
   );
 }

@@ -315,11 +315,56 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
   redirect("/pro/profile");
 }
 
-// Save the Pro-member cosmetics for the public page (/p/<id>): logo and about.
-// These dress the page up but are NOT a safety fact, so they stay gated behind
-// membership (0109 freed only the license/insurance trust badge, handled by
-// saveLicenseInsuranceAction above). Everything is validated here, membership
-// is re-checked server-side, and a failed write degrades to a soft flash.
+// The pro's profile photo. FREE for every pro as of 2026-09-08. It used to be a
+// Hearth Pro perk saved by savePublicPageAction below, but a profile picture is
+// table stakes, not a cosmetic upsell, so it moved out here with NO hasProPlan()
+// gate. Only the "about" blurb, the share card and the rating widget stay paid.
+//
+// Called by AvatarUpload's own auto-submitting form on the Basic Info tab, so it
+// revalidates instead of redirecting: a redirect would throw away whatever the
+// pro had half-typed in the neighbouring company form on that same tab.
+export async function saveLogoAction(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const contractor = await getCurrentContractor();
+  if (!contractor) redirect("/pro/onboarding");
+
+  // Same SSRF-proof check the old savePublicPageAction used: accept only a URL
+  // that points inside THIS contractor's folder of the public pro-logos bucket.
+  // The win-card / review-card routes fetch this value server-side, so an
+  // arbitrary URL here would be an SSRF, not just a broken image.
+  const logoRaw = String(formData.get("logo_url") ?? "").trim();
+  const logo_url = isOwnedStoragePath(
+    logoRaw,
+    `/storage/v1/object/public/pro-logos/${contractor.id}/`
+  )
+    ? logoRaw
+    : null;
+
+  // A blank or foreign value is a no-op, never a wipe: an errant submit must
+  // not clear a good stored photo.
+  if (logo_url) {
+    // Cast: the 0036 columns aren't in the generated types (database.types.ts
+    // is not regenerated here).
+    const { error } = await (supabase.from("contractors") as any)
+      .update({ logo_url })
+      .eq("id", contractor.id);
+    if (error) setFlash("Couldn't save your photo. Please try again.", "error");
+  }
+
+  revalidatePath("/pro/profile");
+}
+
+// Save the Pro-member cosmetics for the public page (/p/<id>): the "about"
+// blurb. This dresses the page up but is NOT a safety fact, so it stays gated
+// behind membership (0109 freed only the license/insurance trust badge, handled
+// by saveLicenseInsuranceAction above; the profile photo was freed 2026-09-08,
+// handled by saveLogoAction above). Everything is validated here, membership is
+// re-checked server-side, and a failed write degrades to a soft flash.
 export async function savePublicPageAction(formData: FormData) {
   const supabase = await createClient();
   const {
@@ -355,34 +400,19 @@ export async function savePublicPageAction(formData: FormData) {
   // is told.
   //
   // ONLY WHEN THE TEXT ACTUALLY CHANGED, for the same reason the business-name
-  // check is conditional (see src/app/pro/actions.ts): this action also saves
-  // the logo, so an unconditional check would let a stored `about` the filter
-  // dislikes block every future logo upload with a message about text the pro
-  // did not touch. The gate applies to what is being introduced.
+  // check is conditional (see src/app/pro/actions.ts): a stored `about` the
+  // filter now dislikes must not block a pro from re-saving the page's other
+  // fields with a message about text they did not touch. The gate applies to
+  // what is being introduced.
   const aboutChanged = about !== ((contractor as { about?: string | null }).about ?? "");
   if (aboutChanged && !isAcceptablePublicText(about)) {
     await setFlash(ABOUT_REJECTED, "error");
     redirect("/pro/profile");
   }
 
-  // Logo: only accept a URL that points inside THIS contractor's folder of the
-  // pro-logos bucket, so the column can't be pointed at an arbitrary image
-  // (and, since this value is later fetch()ed server-side by the win-card and
-  // review-card routes, can't be turned into an SSRF).
-  const logoRaw = str("logo_url");
-  const logo_url = isOwnedStoragePath(
-    logoRaw,
-    `/storage/v1/object/public/pro-logos/${contractor.id}/`
-  )
-    ? logoRaw
-    : null;
-
   const fields: Record<string, unknown> = {
     about: about || null,
   };
-  // Only overwrite the logo when a new upload came through, so saving the
-  // form without touching the logo never clears it.
-  if (logo_url) fields.logo_url = logo_url;
 
   // Cast: the 0033 columns aren't in the generated types (database.types.ts
   // is not regenerated here).
