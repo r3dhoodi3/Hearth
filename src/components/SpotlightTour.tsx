@@ -29,6 +29,13 @@ export type TourStep = {
   // Optional climb from the matched element to a named ancestor, for
   // spotlighting a whole card when only a child of it has a stable hook.
   targetClosest?: string;
+  // Optional SECOND selector whose first visible match is UNIONED into the
+  // cutout, so one step can span two sibling elements - e.g. a section title
+  // plus only its first row - instead of ringing the whole (often long)
+  // section. Best-effort: if it has not rendered yet the cutout is just the
+  // primary target, and it is folded in the moment it appears. Matched
+  // directly; no `closest` climb.
+  targetExtend?: string;
   title: string;
   // One or two plain sentences, no more.
   body: string;
@@ -65,8 +72,16 @@ export const HOMEOWNER_STEPS: TourStep[] = [
   },
   {
     route: "/dashboard",
-    // The systems inventory, <details id="systems"> on the dashboard.
-    target: "#systems",
+    // The systems inventory, <details id="systems"> on the dashboard. Ringing
+    // the WHOLE section spotlit a long wall of rows and read as cluttered, so
+    // the cutout is just the section TITLE (its <summary>) unioned with the
+    // FIRST row of the list - enough to say "this is your systems area, tap a
+    // row" without dimming everything around every row. Both are existing
+    // hooks: the summary, and the first child of the #systems-phone-list <ul>
+    // (SystemsPhoneList). With no systems yet that list is absent, so the step
+    // gracefully falls back to ringing the title alone.
+    target: "#systems > summary",
+    targetExtend: "#systems-phone-list > :first-child",
     title: "Your systems",
     body: "These came with your home. Tap one to tell us what you know about it, and your score, reminders, and forecasts all get sharper.",
   },
@@ -189,19 +204,22 @@ function readSafeTop(): number {
   return Math.max(0, header.getBoundingClientRect().bottom);
 }
 
-function findStepElement(step: TourStep): HTMLElement | null {
-  if (!step.target) return null;
+// The first VISIBLE element matching `selector` (non-empty bounding rect),
+// optionally climbed to a named ancestor. A selector typo degrades to null,
+// never a throw. Shared by the primary target and the optional targetExtend.
+function findVisible(
+  selector: string | null | undefined,
+  closest?: string
+): HTMLElement | null {
+  if (!selector) return null;
   let matches: HTMLElement[];
   try {
-    matches = Array.from(document.querySelectorAll<HTMLElement>(step.target));
+    matches = Array.from(document.querySelectorAll<HTMLElement>(selector));
   } catch {
-    // A selector typo must degrade to the centered card, never crash the app.
     return null;
   }
   for (const raw of matches) {
-    const el = step.targetClosest
-      ? raw.closest<HTMLElement>(step.targetClosest) ?? raw
-      : raw;
+    const el = closest ? raw.closest<HTMLElement>(closest) ?? raw : raw;
     const r = el.getBoundingClientRect();
     // Zero-size means hidden (a display:none desktop strip on a phone, or the
     // reverse), so keep looking for the rendition that is actually on screen.
@@ -210,9 +228,25 @@ function findStepElement(step: TourStep): HTMLElement | null {
   return null;
 }
 
+function findStepElement(step: TourStep): HTMLElement | null {
+  return findVisible(step.target, step.targetClosest);
+}
+
 function measure(el: HTMLElement): Rect {
   const r = el.getBoundingClientRect();
   return { top: r.top, left: r.left, width: r.width, height: r.height };
+}
+
+// The smallest rect covering both - used to fold a step's optional
+// targetExtend element into the primary target's cutout. A null second rect
+// (extend element absent) leaves the primary untouched.
+function rectUnion(a: Rect, b: Rect | null): Rect {
+  if (!b) return a;
+  const top = Math.min(a.top, b.top);
+  const left = Math.min(a.left, b.left);
+  const right = Math.max(a.left + a.width, b.left + b.width);
+  const bottom = Math.max(a.top + a.height, b.top + b.height);
+  return { top, left, width: right - left, height: bottom - top };
 }
 
 // The scrim with a hole in it: one evenodd path whose outer ring is the whole
@@ -278,12 +312,19 @@ export default function SpotlightTour({
   // window is always there to read.
   const [viewport, setViewport] = useState(readViewport);
   const elRef = useRef<HTMLElement | null>(null);
+  // The optional targetExtend element (see TourStep). Kept in a ref so the rAF
+  // tick can re-resolve it without re-running the seek.
+  const extendElRef = useRef<HTMLElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
 
   const step = steps[index];
   const last = steps.length - 1;
+  // Current step via a ref, so the rAF tick can read step.targetExtend without
+  // taking `step` as one of its effect deps.
+  const stepRef = useRef(step);
+  stepRef.current = step;
 
   // Bring the user to the step's page. Keyed on the step alone, on purpose:
   // this must fire exactly once per step, when it becomes current, and never
@@ -306,6 +347,7 @@ export default function SpotlightTour({
     setPhase("seeking");
     setRect(null);
     elRef.current = null;
+    extendElRef.current = null;
     if (!step.target) {
       setPhase("fallback");
       return;
@@ -329,6 +371,10 @@ export default function SpotlightTour({
       if (!el) return;
       stop();
       elRef.current = el;
+      // The optional second element is best-effort: if it has not rendered yet
+      // the cutout is just the primary, and the rAF tick folds it in the moment
+      // it appears.
+      extendElRef.current = findVisible(step.targetExtend);
       // Centered in the viewport before measuring, so the cutout is never
       // half off screen for a target far down the page. jsdom has no
       // scrollIntoView, hence the guard.
@@ -343,7 +389,12 @@ export default function SpotlightTour({
       setInToolbar(!!nav);
       setPad(nav ? CUTOUT_PAD_TIGHT : CUTOUT_PAD);
       setSafeTop(readSafeTop());
-      setRect(measure(el));
+      setRect(
+        rectUnion(
+          measure(el),
+          extendElRef.current ? measure(extendElRef.current) : null
+        )
+      );
       setPhase("anchored");
     }
 
@@ -381,7 +432,15 @@ export default function SpotlightTour({
         setSeekNonce((n) => n + 1);
         return;
       }
-      const r = measure(el);
+      // Re-resolve the optional extend element each frame: it can appear late
+      // (the phone list mounts its rows client-side) or vanish (the list
+      // collapses). Gone → the cutout falls back to the primary alone.
+      let ext = extendElRef.current;
+      if (!ext || !ext.isConnected) {
+        ext = findVisible(stepRef.current.targetExtend);
+        extendElRef.current = ext;
+      }
+      const r = rectUnion(measure(el), ext ? measure(ext) : null);
       const key = `${r.top},${r.left},${r.width},${r.height}`;
       if (key !== lastKey) {
         lastKey = key;
