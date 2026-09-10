@@ -380,6 +380,53 @@ export async function saveLogoAction(formData: FormData) {
   revalidatePath("/pro/profile");
 }
 
+// The company's cover banner - the strip behind the profile photo on the pro
+// card and the public /p/<id> page. FREE for every pro, same reasoning as the
+// logo above (2026-09-08): a cover image is presentation, not a paid perk, so
+// there is deliberately no hasProPlan() gate here. Reuses the SAME public
+// pro-logos bucket and its owner-scoped RLS (0036): the banner is just another
+// object under pro-logos/<contractor.id>/, tracked by its own banner_url
+// column (migration 0155), so no new bucket or storage policy is needed.
+//
+// Called by AvatarUpload's own auto-submitting form (variant="banner") on the
+// Basic Info tab, so it revalidates instead of redirecting: a redirect would
+// throw away whatever the pro had half-typed in the neighbouring company form.
+export async function saveBannerAction(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const contractor = await getCurrentContractor();
+  if (!contractor) redirect("/pro/onboarding");
+
+  // Same SSRF-proof check saveLogoAction uses: accept only a URL that points
+  // inside THIS contractor's folder of the public pro-logos bucket. A public
+  // page renders this value, so an arbitrary URL here would be more than a
+  // broken image.
+  const bannerRaw = String(formData.get("banner_url") ?? "").trim();
+  const banner_url = isOwnedStoragePath(
+    bannerRaw,
+    `/storage/v1/object/public/pro-logos/${contractor.id}/`
+  )
+    ? bannerRaw
+    : null;
+
+  // A blank or foreign value is a no-op, never a wipe.
+  if (banner_url) {
+    // Cast: banner_url (migration 0155) isn't in the generated types
+    // (database.types.ts is not regenerated here).
+    const { error } = await (supabase.from("contractors") as any)
+      .update({ banner_url })
+      .eq("id", contractor.id);
+    if (error)
+      setFlash("Couldn't save your banner. Please try again.", "error");
+  }
+
+  revalidatePath("/pro/profile");
+}
+
 // Save the Pro-member cosmetics for the public page (/p/<id>): the "about"
 // blurb. This dresses the page up but is NOT a safety fact, so it stays gated
 // behind membership (0109 freed only the license/insurance trust badge, handled

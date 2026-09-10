@@ -105,6 +105,10 @@ type PublicProfile = {
   owner_name?: string | null;
   member: boolean;
   logo_url: string | null;
+  // Optional: absent until migration 0155 runs, null until the pro uploads one.
+  // The company cover banner behind the logo. FREE for every pro, never gated
+  // on membership (same policy logo_url follows as of 0154).
+  banner_url?: string | null;
   about: string | null;
   has_license: boolean;
   has_insurance: boolean;
@@ -398,9 +402,20 @@ export default async function PublicProPage(
           their list. */}
       <BackLink />
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
-        {/* Flat warm banner strip, no gradient: oaktend-100 in light, a
-            translucent OakTend tint over the stone-800 card in dark. */}
-        <div className="h-20 bg-bark-100 dark:bg-bark-700/30" />
+        {/* The pro's own cover banner (migration 0155), free for every pro.
+            Falls back to the flat warm strip (oaktend-100 in light, a
+            translucent OakTend tint over the stone-800 card in dark) whenever
+            they haven't set one. */}
+        {profile.banner_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={profile.banner_url}
+            alt=""
+            className="h-24 w-full object-cover sm:h-32"
+          />
+        ) : (
+          <div className="h-20 bg-bark-100 dark:bg-bark-700/30" />
+        )}
         <div className="px-6 pb-6">
           {/* Logo (Pro members) or a neutral monogram */}
           <div className="-mt-8 mb-4">

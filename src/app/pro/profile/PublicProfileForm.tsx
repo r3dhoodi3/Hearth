@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
 import { saveCompanyAction, verifyLicenseNowAction } from "../actions";
-import { licenseDisputeAction, saveLogoAction } from "./actions";
+import { licenseDisputeAction, saveLogoAction, saveBannerAction } from "./actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
@@ -169,13 +169,22 @@ export default function PublicProfileForm({
     // are two SEPARATE forms below - a <form> cannot nest another - so the card
     // is just their shared frame.
     <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
-      {/* MED-20: this was a "Change Cover" button with no handler and no
-          feature behind it anywhere in the app - no cover_url column, no
-          upload flow, no bucket, nothing on the public /p/<id> page it could
-          have shown. Removed rather than wired up: building a real cover
-          upload is a new feature, not a fix for a dead button. The banner
-          itself stays as plain decoration behind the avatar below. */}
-      <div className="relative h-32 bg-stone-100 sm:h-40 dark:bg-stone-700" />
+      {/* Company cover banner. MED-20 removed the old dead "Change Cover"
+          button because nothing backed it; migration 0155 builds the real
+          thing. Tapping the strip uploads a wide cover image into the SAME
+          public pro-logos bucket the logo uses (saved FREE by saveBannerAction,
+          tracked in contractors.banner_url). AvatarUpload carries its own form
+          (variant="banner"), so - exactly like the avatar below - it sits
+          OUTSIDE the company <form> opened further down. The profile photo
+          still overlaps its bottom edge via the -mt-10 on the avatar. */}
+      <AvatarUpload
+        action={saveBannerAction}
+        bucket="pro-logos"
+        ownerId={contractor.id}
+        inputName="banner_url"
+        initialUrl={(contractor as any).banner_url ?? null}
+        variant="banner"
+      />
 
       <div className="px-6 pb-6">
         {/* The profile photo, overlapping the banner. FREE for every pro as of
