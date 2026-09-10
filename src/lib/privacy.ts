@@ -29,6 +29,9 @@ import { normalizeEmail } from "@/lib/risk/emailNorm";
 const HOME_PHOTOS = "home-photos";
 const PRO_LOGOS = "pro-logos";
 const PRO_DOCS = "pro-docs";
+// The free profile picture (migration 0154), at avatars/<user_id>/. Public
+// bucket, no FK and no trigger reaches it, so it is purged explicitly here.
+const AVATARS = "avatars";
 
 type Json = Record<string, unknown>;
 
@@ -685,6 +688,8 @@ export async function eraseUserData(userId: string): Promise<EraseSummary> {
   };
 
   // --- Storage: home photos, chat attachments, uploaded documents ----------
+  // The account's own free avatar (0154), keyed by the auth user id.
+  await purgeStorage(AVATARS, userId);
   for (const propertyId of propertyIds) {
     await purgeStorage(HOME_PHOTOS, propertyId);
   }

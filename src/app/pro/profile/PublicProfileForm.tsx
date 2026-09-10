@@ -5,11 +5,12 @@ import { useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
 import { saveCompanyAction, verifyLicenseNowAction } from "../actions";
-import { licenseDisputeAction } from "./actions";
+import { licenseDisputeAction, saveLogoAction, saveBannerAction } from "./actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
 import LaunchCityCheckboxes from "../onboarding/LaunchCityCheckboxes";
+import AvatarUpload from "@/components/AvatarUpload";
 import type { Contractor } from "@/lib/database.types";
 import { LEGAL } from "@/lib/legal";
 
@@ -164,40 +165,53 @@ export default function PublicProfileForm({
   const cslbEligible = serviceState === null || serviceState === "CA";
 
   return (
-    <form action={saveCompanyAction} className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
-      {/* MED-20: this was a "Change Cover" button with no handler and no
-          feature behind it anywhere in the app - no cover_url column, no
-          upload flow, no bucket, nothing on the public /p/<id> page it could
-          have shown. Removed rather than wired up: building a real cover
-          upload is a new feature, not a fix for a dead button. The banner
-          itself stays as plain decoration behind the avatar below. */}
-      <div className="relative h-32 bg-stone-100 sm:h-40 dark:bg-stone-700" />
+    // A plain card (not a <form>): the tappable photo and the company details
+    // are two SEPARATE forms below - a <form> cannot nest another - so the card
+    // is just their shared frame.
+    <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-white/10 dark:bg-stone-800">
+      {/* Company cover banner. MED-20 removed the old dead "Change Cover"
+          button because nothing backed it; migration 0155 builds the real
+          thing. Tapping the strip uploads a wide cover image into the SAME
+          public pro-logos bucket the logo uses (saved FREE by saveBannerAction,
+          tracked in contractors.banner_url). AvatarUpload carries its own form
+          (variant="banner"), so - exactly like the avatar below - it sits
+          OUTSIDE the company <form> opened further down. The profile photo
+          still overlaps its bottom edge via the -mt-10 on the avatar. */}
+      <AvatarUpload
+        action={saveBannerAction}
+        bucket="pro-logos"
+        ownerId={contractor.id}
+        inputName="banner_url"
+        initialUrl={(contractor as any).banner_url ?? null}
+        variant="banner"
+      />
 
       <div className="px-6 pb-6">
-        {/* Logo, overlapping the banner. This used to be a second, unwired
-            "+" upload button that duplicated (and did not show) the real logo
-            upload, which already exists as a Pro-member perk on the "Your
-            Public Page" tab (LogoUpload.tsx, via PublicPageCard.tsx).
-            Duplicating it here would mean re-deciding that membership gate on
-            a "Basic Information" tab that otherwise has nothing to do with
-            Pro perks, so this is now a plain, non-interactive placeholder
-            with a pointer to where the real control lives. */}
+        {/* The profile photo, overlapping the banner. FREE for every pro as of
+            2026-09-08: it used to be a Pro-member perk on the "Your Public
+            Page" tab, and this spot was a dead placeholder pointing there. The
+            whole avatar is now the control (tap it to upload); AvatarUpload
+            carries its own form + saveLogoAction, which is why it sits OUTSIDE
+            the company <form> opened just below. */}
         {/* relative z-10: the banner above is position:relative, so without a
             higher-stacked, positioned avatar here the banner (a positioned box)
             paints OVER this static one and clips its top border. Lifting the
             avatar onto its own stacking level puts it back on top of the banner
             it overlaps. */}
         <div className="relative z-10 -mt-10 mb-6">
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 text-stone-500 shadow-sm dark:border-stone-600 dark:bg-stone-800 dark:text-stone-400">
-            <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 21V5l8-2 8 2v16M9 9h.01M9 13h.01M15 9h.01M15 13h.01M10 21v-4h4v4" />
-            </svg>
-          </div>
-          <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400">
-            Add a logo from the &quot;Your Public Page&quot; tab.
-          </p>
+          <AvatarUpload
+            action={saveLogoAction}
+            bucket="pro-logos"
+            ownerId={contractor.id}
+            inputName="logo_url"
+            initialUrl={(contractor as any).logo_url ?? null}
+            shape="square"
+            size={80}
+            placeholder="building"
+          />
         </div>
 
+        <form action={saveCompanyAction}>
         <div className="grid gap-8 md:grid-cols-2">
           {/* Basic information */}
           <div>
@@ -594,7 +608,8 @@ export default function PublicProfileForm({
           </Link>
           <SaveChangesButton />
         </div>
+        </form>
       </div>
-    </form>
+    </div>
   );
 }

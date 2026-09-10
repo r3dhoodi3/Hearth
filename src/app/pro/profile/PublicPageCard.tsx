@@ -2,11 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Image as ImageIcon, PenLine, Contact, Star } from "lucide-react";
+import { PenLine, Contact, Star } from "lucide-react";
 import InlineSpinner from "@/components/InlineSpinner";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
 import { savePublicPageAction, saveLicenseInsuranceAction } from "./actions";
-import LogoUpload from "./LogoUpload";
 import QrCodeCard from "./QrCodeCard";
 import type { Contractor } from "@/lib/database.types";
 
@@ -326,14 +325,9 @@ export default function PublicPageCard({
               </span>
             </h2>
             <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-              Your logo and about section appear on your public page.
+              Your about section appears on your public page.
             </p>
           </div>
-
-          <LogoUpload
-            contractorId={contractor.id}
-            initialUrl={extra.logo_url ?? null}
-          />
 
           <div>
             <label className="label">About your business</label>
@@ -364,10 +358,6 @@ export default function PublicPageCard({
             included. Members can dress it up:
           </p>
           <ul className="space-y-1.5 text-sm text-stone-600 dark:text-stone-300">
-            <li className="flex items-start gap-2">
-              <ImageIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>Your logo at the top of the page</span>
-            </li>
             <li className="flex items-start gap-2">
               <PenLine className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>An about section in your own words</span>

@@ -17,12 +17,15 @@ export default function Nav({
   homes,
   activeId,
   name,
+  avatarUrl,
   hasPlus,
   hasPro,
 }: {
   homes: PropertyWithShared[];
   activeId: string;
   name: string | null;
+  // The homeowner's free profile picture (users.avatar_url, 0154).
+  avatarUrl?: string | null;
   hasPlus: boolean;
   // Does this account also have a pro side (a contractors row)? Decides
   // whether the profile menu offers a switch or an invitation to set one up.
@@ -188,6 +191,7 @@ export default function Nav({
               which used to be duplicated here too. */}
           <ProfileMenu
             name={name}
+            avatarUrl={avatarUrl}
             hasPlus={hasPlus}
             themeToggle
             // 7rem, not the shared 12rem default: this header row is capped at
