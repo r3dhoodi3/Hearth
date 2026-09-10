@@ -516,8 +516,11 @@ export default function AccountSecurityPanel({
                 type="button"
                 onClick={() => setConfirmingDelete(true)}
                 // Phone only: 36px before, on the most destructive control
-                // in the account.
-                className="whitespace-nowrap rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+                // in the account. max-sm:self-start stops the flex COLUMN
+                // (the parent is flex-col below sm) from stretching this button
+                // to full width - it now hugs its text, left-aligned, while
+                // min-h-11 keeps the 44px tap target.
+                className="whitespace-nowrap rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:self-start"
               >
                 Delete Account
               </button>
