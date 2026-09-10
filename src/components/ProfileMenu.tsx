@@ -358,8 +358,12 @@ export default function ProfileMenu({
             >
               <button
                 type="submit"
-                // Phone only: 36px before, same floor as the rows above.
-                className="block w-full px-4 py-2 text-left text-sm font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600 max-sm:min-h-11 max-sm:text-base dark:text-stone-400 dark:hover:bg-red-500/15 dark:hover:text-red-400"
+                // Same inset, rounded-pill highlight SHAPE as the link rows
+                // above (mx-1 + rounded-md + w-[calc(100%-0.5rem)] + text-left,
+                // the SwitchSideButton trick) so the hover no longer bleeds to
+                // the panel edges - but the red destructive colour is kept as
+                // logout's own cue. Phone only: 36px before, same 44px floor.
+                className="mx-1 flex w-[calc(100%-0.5rem)] items-center rounded-md px-3 py-2 text-left text-sm font-medium text-stone-500 transition-colors hover:bg-red-50 hover:text-red-600 max-sm:min-h-11 max-sm:text-base dark:text-stone-400 dark:hover:bg-red-500/15 dark:hover:text-red-400"
               >
                 Log out
               </button>
