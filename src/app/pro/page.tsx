@@ -176,12 +176,10 @@ export default async function ProHome() {
 
   // The setup checklist, identical to the one on the board (both call
   // buildSetupItems). It hides itself once every step is done.
-  const canUploadLogo = Boolean((contractor as any).logo_url) ? true : member;
   const setupItems = buildSetupItems({
     contractor,
     balanceCents,
     applicationCount: apps.length,
-    canUploadLogo,
   });
 
   // The win/loss trend the Business page already computes, in one compact card

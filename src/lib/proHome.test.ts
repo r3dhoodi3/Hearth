@@ -143,7 +143,6 @@ describe("buildSetupItems", () => {
       contractor: base,
       balanceCents: 0,
       applicationCount: 0,
-      canUploadLogo: true,
     });
     const apply = items.find((i) => i.label === "Apply to your first job");
     expect(apply?.href).toBe(`${PRO_LEADS_HREF}#open-jobs`);
@@ -158,7 +157,6 @@ describe("buildSetupItems", () => {
       },
       balanceCents: 0,
       applicationCount: 0,
-      canUploadLogo: true,
     })[1];
     expect(failed.done).toBe(false);
     expect(failed.label).toBe("License not confirmed");
@@ -171,7 +169,6 @@ describe("buildSetupItems", () => {
       },
       balanceCents: 0,
       applicationCount: 0,
-      canUploadLogo: true,
     })[1];
     expect(verified.done).toBe(true);
   });
@@ -185,22 +182,24 @@ describe("buildSetupItems", () => {
       },
       balanceCents: 0,
       applicationCount: 0,
-      canUploadLogo: true,
     })[1];
     expect(pending.optional).toBe(true);
   });
 
-  it("marks the logo optional for a non-member and points at the pitch", () => {
+  it("offers the logo step to every pro for free", () => {
     // Found by label, not index: the insurance step (0153) sits between the
     // license and this one now, and a positional pick broke once already.
+    // The photo was freed 2026-09-08, so this is a plain step for everyone -
+    // no longer optional, and it points at the profile editor, never the
+    // upgrade pitch.
     const logo = buildSetupItems({
       contractor: base,
       balanceCents: 0,
       applicationCount: 0,
-      canUploadLogo: false,
-    }).find((i) => i.label.startsWith("Upload your logo"));
-    expect(logo?.optional).toBe(true);
-    expect(logo?.href).toBe("/pro/plus?reason=logo");
+    }).find((i) => i.label.toLowerCase().includes("logo"));
+    expect(logo).toBeTruthy();
+    expect(logo?.optional).toBeFalsy();
+    expect(logo?.href).toBe("/pro/profile");
   });
 
   // Migration 0153: big-ticket jobs need current insurance on file, and the
@@ -212,7 +211,6 @@ describe("buildSetupItems", () => {
         contractor: { ...base, insurance_expires: expires },
         balanceCents: 0,
         applicationCount: 0,
-        canUploadLogo: true,
       }).find((i) => i.label === "Put proof of insurance on file");
 
     const none = insurance(null);
@@ -229,7 +227,6 @@ describe("buildSetupItems", () => {
       contractor: base,
       balanceCents: 1,
       applicationCount: 0,
-      canUploadLogo: true,
     });
     expect(items.find((i) => i.label === "Fund your wallet")?.done).toBe(true);
   });

@@ -75,6 +75,9 @@ export default async function AppLayout({
   // back to the profile row, then email.
   const metaName = (user?.user_metadata?.full_name as string | undefined)?.trim();
   const name = metaName || profile?.full_name || profile?.email || null;
+  // Free profile picture (0154); not in the generated UserProfile type yet.
+  const avatarUrl =
+    (profile as { avatar_url?: string | null } | null)?.avatar_url ?? null;
 
   return (
     <div className="min-h-screen">
@@ -86,6 +89,7 @@ export default async function AppLayout({
         homes={homesForSwitcher(homes)}
         activeId={active.id}
         name={name}
+        avatarUrl={avatarUrl}
         hasPlus={plus}
         hasPro={contractor !== null}
       />

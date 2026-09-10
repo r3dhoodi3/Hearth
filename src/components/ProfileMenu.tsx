@@ -90,6 +90,7 @@ function SwitchSideButton({
 // apart.
 export default function ProfileMenu({
   name,
+  avatarUrl,
   links,
   linksLabel,
   hasPlus,
@@ -97,6 +98,11 @@ export default function ProfileMenu({
   nameMaxWidthClass = "max-w-[12rem]",
 }: {
   name: string | null;
+  // The account's free profile picture (0154): the homeowner's users.avatar_url
+  // or the pro's contractors.logo_url. When set, it replaces the initials
+  // monogram / blank-head placeholder beside the name. Undefined/null on either
+  // nav falls back to the previous initials behaviour.
+  avatarUrl?: string | null;
   links: MenuLink[];
   // Optional section label rendered above `links`. Omitted on both navs today,
   // which render links plain; kept as a harmless generic hook.
@@ -184,7 +190,17 @@ export default function ProfileMenu({
         aria-label={name ? `Account menu for ${name}` : "Account menu"}
         className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-sm font-medium text-stone-700 hover:bg-bark-50 max-sm:min-h-11 dark:text-stone-200 dark:hover:bg-stone-800"
       >
-        {name ? (
+        {avatarUrl ? (
+          // The account's uploaded photo (0154), cropped to the same circle the
+          // monogram used.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={avatarUrl}
+            alt=""
+            aria-hidden="true"
+            className="h-8 w-8 rounded-full object-cover"
+          />
+        ) : name ? (
           // Initials monogram - the first letter of the name in brand colors.
           <span
             aria-hidden="true"
