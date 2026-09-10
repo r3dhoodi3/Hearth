@@ -275,7 +275,11 @@ export default function ProfileMenu({
               `hidden` (display: none, not a DOM removal) changes. */}
           <div
             aria-live="polite"
-            className={`items-center gap-2 border-b border-stone-100 px-4 py-2 text-sm font-medium text-bark-700 dark:border-white/10 dark:text-stone-300 ${
+            // No border-b: while switching, everything below this row is hidden
+            // (display:none), so a bottom border here is just a stray line under
+            // the "Switching to..." text with empty space below it. Dropping it
+            // leaves a clean box with only the spinner + label.
+            className={`items-center gap-2 px-4 py-2 text-sm font-medium text-bark-700 dark:text-stone-300 ${
               switching !== null ? "flex" : "hidden"
             }`}
           >
