@@ -14,6 +14,7 @@ export default function ProNav({
   avatarUrl,
   hasHome,
   backOfficeHref,
+  isMember,
 }: {
   company: string | null;
   // The pro's free profile photo (contractors.logo_url, 0154).
@@ -22,6 +23,12 @@ export default function ProNav({
   // shared with them)? Decides whether the profile menu offers a switch or an
   // invitation to add one.
   hasHome: boolean;
+  // Whether this pro has a live OakTend Pro plan (hasProPlan, computed in
+  // pro/layout.tsx). Drives the membership row pinned at the top of the profile
+  // menu: a highlighted "Upgrade to OakTend Pro" when false, a quiet
+  // "OakTend Pro ✓" confirmation when true - the pro twin of the homeowner
+  // Plus row.
+  isMember: boolean;
   // Where the header's "Back office" button sends a tap: /pro/tools when the
   // pro can actually use it (member, or an established non-member with free
   // drafts left), otherwise /pro/plus?reason=tools. Computed server-side in
@@ -191,6 +198,12 @@ export default function ProNav({
           <ProfileMenu
             name={company}
             avatarUrl={avatarUrl}
+            upgrade={{
+              href: "/pro/plus",
+              active: isMember,
+              tierName: "OakTend Pro",
+              accent: "oaktend",
+            }}
             themeToggle
             links={[
               // No "Ask OakTend" entry here on purpose: the copilot lives in
@@ -203,7 +216,10 @@ export default function ProNav({
               { href: "/pro/profile", label: "Edit business profile" },
               { href: "/pro/playbook", label: "Playbook" },
               { href: backOfficeHref, label: "Back office" },
-              { href: "/pro/plus", label: "Membership" },
+              // Membership is now the highlighted upsell row pinned at the top
+              // of this menu (the `upgrade` prop above), the pro twin of the
+              // homeowner Plus row - so no duplicate plain "Membership" link
+              // here pointing at the same /pro/plus.
               { href: "/pro/billing", label: "Billing" },
               { href: "/pro/privacy", label: "Your privacy rights" },
               { href: "/pro/help", label: "Help" },

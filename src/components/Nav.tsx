@@ -192,7 +192,12 @@ export default function Nav({
           <ProfileMenu
             name={name}
             avatarUrl={avatarUrl}
-            hasPlus={hasPlus}
+            upgrade={{
+              href: "/plus",
+              active: hasPlus,
+              tierName: "OakTend Plus",
+              accent: "bark",
+            }}
             themeToggle
             // 7rem, not the shared 12rem default: this header row is capped at
             // max-w-5xl, so it has the same 976px to spend at 1024px wide and

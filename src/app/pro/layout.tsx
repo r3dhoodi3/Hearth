@@ -132,6 +132,7 @@ export default async function ProLayout({
         avatarUrl={(contractor as { logo_url?: string | null }).logo_url ?? null}
         hasHome={sides.hasHome}
         backOfficeHref={backOfficeHref}
+        isMember={member}
       />
       {/* Extra bottom padding below lg keeps content clear of the fixed bottom
           tab bar. It was sm:pb-8; the bar now runs to lg (ProNav.tsx), so the
