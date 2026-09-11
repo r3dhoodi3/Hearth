@@ -42,12 +42,15 @@ function card(name: RegExp) {
 }
 
 describe("PlanToggle plan selection", () => {
-  it("offers four cards: Weekly, Monthly, Annual, Free", () => {
+  it("offers three cadence cards: Weekly, Monthly, Annual (no Free)", () => {
     render(<PlanToggle />);
-    expect(screen.getAllByRole("radio")).toHaveLength(4);
-    for (const name of [/^Weekly/, /^Monthly/, /^Annual/, /^Free/]) {
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    for (const name of [/^Weekly/, /^Monthly/, /^Annual/]) {
       expect(card(name)).toBeInTheDocument();
     }
+    // The Free card is gone: what Plus includes now shows as perk boxes above
+    // the picker (PlusPerks), so the picker is cadences only.
+    expect(screen.queryByRole("radio", { name: /^Free/ })).not.toBeInTheDocument();
     // Each paid card names its own real price, read from PLUS_PLAN.
     expect(card(/^Weekly/)).toHaveAccessibleName(
       `Weekly, ${formatUsd(PLUS_PLAN.weekly)} a week`
@@ -111,31 +114,13 @@ describe("PlanToggle plan selection", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows the free days on all three paid cards, not just weekly", () => {
+  it("shows the free days on all three cards", () => {
     render(<PlanToggle />);
     for (const name of [/^Weekly/, /^Monthly/, /^Annual/]) {
       expect(
         within(card(name)).getByText(`${PLUS_PLAN.trialDays} days free`)
       ).toBeInTheDocument();
     }
-    // Free is not a checkout, so it promises nothing.
-    expect(
-      within(card(/^Free/)).queryByText(`${PLUS_PLAN.trialDays} days free`)
-    ).not.toBeInTheDocument();
-  });
-
-  it("disables the button on Free and never posts a fourth plan value", () => {
-    render(<PlanToggle />);
-    fireEvent.click(card(/^Free/));
-
-    expect(card(/^Free/)).toHaveAttribute("aria-checked", "true");
-    const button = within(pickerForm()).getByRole("button", {
-      name: "Keep Free",
-    });
-    expect(button).toBeDisabled();
-    // The hidden field must stay a cadence startPlusCheckoutAction understands
-    // (checkoutCadence only resolves weekly, monthly, or yearly).
-    expect(["weekly", "monthly", "yearly"]).toContain(postedPlan());
   });
 
   it("walks the cards with the arrow keys and selects with the keyboard", () => {
@@ -144,17 +129,16 @@ describe("PlanToggle plan selection", () => {
     render(<PlanToggle trialEligible={false} />);
     const group = screen.getByRole("radiogroup", { name: "Choose your plan" });
 
-    // Monthly -> Annual -> Free -> Weekly, wrapping like a native radio group.
+    // Monthly -> Annual -> Weekly, wrapping like a native radio group across
+    // the three cadence cards.
     fireEvent.keyDown(group, { key: "ArrowRight" });
     expect(card(/^Annual/)).toHaveAttribute("aria-checked", "true");
-    fireEvent.keyDown(group, { key: "ArrowRight" });
-    expect(card(/^Free/)).toHaveAttribute("aria-checked", "true");
     fireEvent.keyDown(group, { key: "ArrowRight" });
     expect(card(/^Weekly/)).toHaveAttribute("aria-checked", "true");
     expect(postedPlan()).toBe("weekly");
 
     fireEvent.keyDown(group, { key: "ArrowLeft" });
-    expect(card(/^Free/)).toHaveAttribute("aria-checked", "true");
+    expect(card(/^Annual/)).toHaveAttribute("aria-checked", "true");
 
     // Roving tabindex: exactly one card is in the tab order at a time.
     const inTabOrder = screen
@@ -170,9 +154,8 @@ describe("PlanToggle plan selection", () => {
 
 describe("PlanToggle phone description panel", () => {
   // The panel itself is not hidden by any breakpoint class jsdom would
-  // respect (see the "offers four cards" comment above on why CSS-only
-  // hiding is invisible to these tests) - it queries by aria-live, which is
-  // present regardless of viewport, exactly like the panel itself.
+  // respect - it queries by aria-live, which is present regardless of
+  // viewport, exactly like the panel itself.
   function panel(): HTMLElement {
     return document.querySelector('[aria-live="polite"]') as HTMLElement;
   }
@@ -199,13 +182,6 @@ describe("PlanToggle phone description panel", () => {
     fireEvent.click(card(/^Annual/));
     expect(
       within(panel()).getByText(`Annual, ${formatUsd(PLUS_PLAN.yearly)} a year`)
-    ).toBeInTheDocument();
-  });
-
-  it("carries the same Plus bullets as the cards", () => {
-    render(<PlanToggle trialEligible={false} />);
-    expect(
-      within(panel()).getByText("Plan and forecast, in full")
     ).toBeInTheDocument();
   });
 });
@@ -389,9 +365,10 @@ describe("PlanToggle checkout disclosure", () => {
 });
 
 // CR3#4 and CR3#9: the phone-only sticky checkout bar, and the mobile price
-// blocks no longer reserving height for a bullet list that is hidden below
-// sm. jsdom applies no CSS, so these assert the classes rather than actual
-// layout - reading them is the verification, per the hard rules.
+// blocks no longer reserving height for a bullet list (the cards carry none
+// now - what Plus includes is the perk boxes above the picker). jsdom applies
+// no CSS, so these assert the classes rather than actual layout - reading them
+// is the verification, per the hard rules.
 describe("PlanToggle phone checkout bar", () => {
   it("wraps the submit button in a sticky bottom bar, phone only", () => {
     render(<PlanToggle trialEligible={false} />);
@@ -406,32 +383,16 @@ describe("PlanToggle phone checkout bar", () => {
     expect(wrapper.className).not.toMatch(/(?<!max-)sm:sticky/);
   });
 
-  it("keeps the sticky bar for the disabled Free-plan button too", () => {
-    render(<PlanToggle trialEligible={false} />);
-    fireEvent.click(card(/^Free/));
-    const button = screen.getByRole("button", { name: "Keep Free" });
-    expect(button).toBeDisabled();
-    const wrapper = button.parentElement as HTMLElement;
-    expect(wrapper.className).toContain("max-sm:sticky");
-  });
-
-  it("drops the phone min-h floor on the three paid price blocks", () => {
+  it("drops the phone min-h floor on the three cadence price blocks", () => {
     const { container } = render(<PlanToggle trialEligible={false} />);
     const priceBlocks = Array.from(
       container.querySelectorAll("span.mt-0\\.5.block")
     ).filter((el) => el.className.includes("sm:min-h-11"));
-    // Weekly, Monthly, Annual, Free: one such block per card.
-    expect(priceBlocks).toHaveLength(4);
-    // The Free card's own block (inside its max-sm:hidden button) keeps its
-    // min-h on purpose - it never renders on a phone at all, so there is no
-    // dead space to remove there. Identified by its "$0" price, since Free
-    // is the one card with no bulletList-matching min-h to drop.
-    const freeBlock = priceBlocks.find((el) => el.textContent?.includes("$0"));
-    const paidBlocks = priceBlocks.filter((el) => el !== freeBlock);
-    expect(freeBlock).toBeTruthy();
-    expect(paidBlocks).toHaveLength(3);
-    expect(freeBlock!.className).toContain("min-h-10");
-    for (const el of paidBlocks) {
+    // Weekly, Monthly, Annual: one such block per card, and none of them
+    // reserve the old phone min-h floor now that no card carries a bullet
+    // list below the price.
+    expect(priceBlocks).toHaveLength(3);
+    for (const el of priceBlocks) {
       expect(el.className).not.toContain("min-h-10");
     }
   });
