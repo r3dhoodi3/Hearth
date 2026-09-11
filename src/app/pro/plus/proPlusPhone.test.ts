@@ -36,10 +36,11 @@ describe("pro plus: the phone disclosure, matching the homeowner page", () => {
   });
 
   it("renders the disclosure twice per checkout form, so desktop is unchanged", () => {
-    // Three AutoRenewalTerms per form pair: the trial form's two, plus the
-    // picker form's two. Four in total across the file.
+    // The page has ONE checkout form (the plan picker) since the top one-tap
+    // trial shortcut was removed. It renders AutoRenewalTerms twice: once in
+    // the phone <details> and once in the max-sm:hidden desktop block.
     const count = (toggle.match(/<AutoRenewalTerms/g) ?? []).length;
-    expect(count).toBe(4);
+    expect(count).toBe(2);
   });
 
   it("keeps a one-line material summary visible on the phone, never folded", () => {

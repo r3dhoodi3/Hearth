@@ -35,13 +35,13 @@ afterEach(() => {
 
 describe("ProNav side pill", () => {
   it("shows a 'Business' pill when the account also has a homeowner side", () => {
-    render(<ProNav company="Jamie's Roofing" hasHome backOfficeHref="/pro/tools" />);
+    render(<ProNav company="Jamie's Roofing" hasHome backOfficeHref="/pro/tools" isMember={false} />);
     // Two copies render (desktop inline + phone twin); either counts.
     expect(screen.getAllByText("Business").length).toBeGreaterThan(0);
   });
 
   it("renders no pill for a pro-only account", () => {
-    render(<ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/tools" />);
+    render(<ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/tools" isMember={false} />);
     expect(screen.queryByText("Business")).toBeNull();
   });
 });
@@ -57,14 +57,14 @@ describe("ProNav back office entry", () => {
   }
 
   it("sends Back office to /pro/tools when the pro can use it", () => {
-    render(<ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/tools" />);
+    render(<ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/tools" isMember={false} />);
     expect(menuLinks()).toContainEqual(["/pro/tools", "Back office"]);
     expect(screen.queryByRole("link", { name: "AI back office" })).toBeNull();
   });
 
   it("sends Back office to the buy page when the pro cannot use it yet", () => {
     render(
-      <ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/plus?reason=tools" />
+      <ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/plus?reason=tools" isMember={false} />
     );
     expect(menuLinks()).toContainEqual(["/pro/plus?reason=tools", "Back office"]);
   });

@@ -93,7 +93,7 @@ export default function ProfileMenu({
   avatarUrl,
   links,
   linksLabel,
-  hasPlus,
+  upgrade,
   themeToggle,
   nameMaxWidthClass = "max-w-[12rem]",
 }: {
@@ -107,9 +107,17 @@ export default function ProfileMenu({
   // Optional section label rendered above `links`. Omitted on both navs today,
   // which render links plain; kept as a harmless generic hook.
   linksLabel?: string;
-  // Homeowner-only: whether the signed-in user has OakTend Plus. Undefined on
-  // the contractor side (ProNav), which has no Plus entry to show.
-  hasPlus?: boolean;
+  // The membership upsell/confirmation row pinned at the TOP of the panel.
+  // Homeowner: /plus + "OakTend Plus" (bark accent). Pro: /pro/plus +
+  // "OakTend Pro" (oaktend accent). Omitted on a nav with no tier to show.
+  // `active` = already on the paid tier, which shows a quiet confirmation
+  // instead of the highlighted upsell.
+  upgrade?: {
+    href: string;
+    active: boolean;
+    tierName: string;
+    accent: "bark" | "oaktend";
+  };
   // When true, a "Dark mode" row (with a visible on/off switch) renders above
   // Log out so signed-in users can always change theme from either nav.
   themeToggle?: boolean;
@@ -292,17 +300,21 @@ export default function ProfileMenu({
               instead of sitting open on the stale side, which is what
               invited a second tap before this fix. */}
           <div className={switching !== null ? "hidden" : ""}>
-            {hasPlus !== undefined && (
+            {upgrade && (
               <Link
-                href="/plus"
+                href={upgrade.href}
                 onClick={() => setOpen(false)}
                 className={
-                  hasPlus
+                  upgrade.active
                     ? "block border-b border-stone-100 px-4 py-2 text-sm text-stone-500 dark:border-white/10 dark:text-stone-400"
-                    : "block border-b border-stone-100 bg-bark-50 px-4 py-2 text-sm font-medium text-bark-700 hover:bg-bark-100 dark:border-white/10 dark:bg-bark-700/40 dark:text-stone-300 dark:hover:bg-bark-700/60"
+                    : upgrade.accent === "oaktend"
+                      ? "block border-b border-stone-100 bg-oaktend-50 px-4 py-2 text-sm font-medium text-oaktend-700 hover:bg-oaktend-100 dark:border-white/10 dark:bg-oaktend-700/40 dark:text-stone-300 dark:hover:bg-oaktend-700/60"
+                      : "block border-b border-stone-100 bg-bark-50 px-4 py-2 text-sm font-medium text-bark-700 hover:bg-bark-100 dark:border-white/10 dark:bg-bark-700/40 dark:text-stone-300 dark:hover:bg-bark-700/60"
                 }
               >
-                {hasPlus ? "OakTend Plus ✓" : "Upgrade to OakTend Plus"}
+                {upgrade.active
+                  ? `${upgrade.tierName} ✓`
+                  : `Upgrade to ${upgrade.tierName}`}
               </Link>
             )}
             <div>

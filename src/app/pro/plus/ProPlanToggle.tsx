@@ -143,8 +143,8 @@ const PLAN_COPY: Record<
 // button it belongs to below the fold.
 //
 // What is collapsed is the ITEMIZED version, never the material terms. The
-// one-line summary (PLAN_BILLING below, and the trial recap on the top form)
-// stays on screen unconditionally, directly beside the button, which is what
+// one-line summary (PLAN_BILLING below) stays on screen unconditionally,
+// directly beside the button, which is what
 // ROSCA 15 U.S.C. 8403(1) and Cal. Bus. & Prof. Code 17602(a)(1) are about:
 // material terms disclosed before billing information is collected, in visual
 // proximity to the request for consent. One tap opens the rest, and it is
@@ -193,10 +193,8 @@ export default function ProPlanToggle({
     setIsNative(isNativeApp());
   }, []);
   // The required auto-renewal consent checkbox (Cal. Bus. & Prof. Code
-  // 17602(a)(2)), one state per checkout FORM on this page: the top trial
-  // shortcut and the main plan-picker form below are two separate submits, so
-  // checking the box in one must never silently unlock the other.
-  const [topConsent, setTopConsent] = useState(false);
+  // 17602(a)(2)) for the one checkout form on this page (the plan-picker block
+  // below). The checkout button stays disabled until it is ticked.
   const [mainConsent, setMainConsent] = useState(false);
   const cardRefs = useRef<Record<Plan, HTMLButtonElement | null>>({
     yearly: null,
@@ -262,49 +260,12 @@ export default function ProPlanToggle({
 
   return (
     <div id="pricing" className="space-y-4">
-      {/* The trial, offered once, at the top, as its own one-tap checkout. It
-          posts plan=monthly: both Pro cadences trial, so the tap that only
-          wants "free days" gets the smaller commitment behind it, and the
-          cards below still let a pro pick yearly. The terms directly under the
-          button are the terms of the plan this button actually buys. Only
-          rendered when the trial is real, so a returning member never sees
-          free days they will not get. */}
-      {trialEligible && (
-        <form action={startProCheckoutAction} className="card-hero space-y-2">
-          <input type="hidden" name="plan" value="monthly" />
-          <CheckoutButton
-            label={`Start ${PRO_PLAN.trialDays} free days`}
-            disabled={!topConsent}
-          />
-          <p className="text-center text-sm text-stone-600 dark:text-stone-300">
-            {PRO_PLAN.trialDays} days free, then {PLAN_COPY.monthly.price}
-            /month. Cancel anytime before the trial ends.
-          </p>
-          {/* Hard-coded to pro_monthly because the hidden field above is.
-              Phone copy collapsed, desktop copy open, recap line above never
-              folds: see PHONE DISCLOSURE at the top of this file. */}
-          <details className="group sm:hidden">
-            <summary className="focus-ring flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-stone-700 [&::-webkit-details-marker]:hidden dark:text-stone-300">
-              <ChevronRight
-                className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
-                aria-hidden="true"
-              />
-              Billing terms
-            </summary>
-            <div className="mt-2">
-              <AutoRenewalTerms plan="pro_monthly" introEligible={trialEligible} />
-            </div>
-          </details>
-          <div className="max-sm:hidden">
-            <AutoRenewalTerms plan="pro_monthly" introEligible={trialEligible} />
-          </div>
-          <AutoRenewalConsentCheckbox
-            id="pro-plus-trial-consent"
-            checked={topConsent}
-            onChange={setTopConsent}
-          />
-        </form>
-      )}
+      {/* The single free-trial CTA now lives only in the checkout block at the
+          bottom, which follows the selected cadence and starts the same trial.
+          The one-tap trial shortcut that used to sit here (a second checkout
+          form hard-coded to monthly, "$29.99/month") was removed: two separate
+          "start the trial" buttons above the plan cards read as confusing, and
+          the main button below already does it. */}
 
       {/* One row, three columns from sm up. On a phone they stack with the
           yearly hero first (order-1), then Free, then Monthly. The two paid
@@ -451,9 +412,9 @@ export default function ProPlanToggle({
             instead of being plan-specific. The hidden field carries the selected
             cadence; startProCheckoutAction defaults to yearly, the same plan
             preselected above, so the two can never disagree. This is the ONE
-            checkout button on the page below the top trial shortcut - its label
-            and its AutoRenewalTerms both follow whichever cadence card is
-            selected, so they can never say two different things. */}
+            checkout button on the page - its label and its AutoRenewalTerms
+            both follow whichever cadence card is selected, so they can never
+            say two different things. */}
         <form action={startProCheckoutAction} className="space-y-3">
           <input type="hidden" name="plan" value={plan} />
           {/* The one-line material-terms summary, always visible on a phone:
