@@ -11,7 +11,6 @@ import { isNativeApp } from "@/lib/platform";
 import NativePlusCheckout from "./NativePlusCheckout";
 import {
   PLUS_PLAN,
-  PLUS_INCLUDED_HOMES,
   formatUsd,
   yearlySavings,
   yearlyAsMonthly,
@@ -19,14 +18,13 @@ import {
 
 // The three cadences Stripe can actually be sent. startPlusCheckoutAction reads
 // the "plan" field through checkoutCadence(), which only ever resolves to one
-// of these, so the hidden field below must never carry anything else.
+// of these, so the hidden field below must never carry anything else. The Free
+// card was removed - what Plus includes now shows as perk boxes above this
+// picker (PlusPerks.tsx), matching the pro pitch - so a card is always one of
+// these three real cadences and the button always starts a real checkout.
 type Plan = "weekly" | "monthly" | "yearly";
-// What a card can be. "free" is a selectable card because it is a real answer
-// to "which plan do you want", but it is not a checkout: selecting it disables
-// the button rather than posting a fourth value.
-type Choice = Plan | "free";
 
-const CHOICES: Choice[] = ["weekly", "monthly", "yearly", "free"];
+const CHOICES: Plan[] = ["weekly", "monthly", "yearly"];
 
 // Every figure below is computed from PLUS_PLAN, never typed in. The saving is
 // twelve charges at the real monthly price minus the yearly price - the only
@@ -41,52 +39,15 @@ const YEARLY_SAVING = formatUsd(yearlySavings(PLUS_PLAN)); // $19.89
 // says the other true fact about the same plan instead of repeating it.
 const YEARLY_AS_MONTHLY = formatUsd(yearlyAsMonthly(PLUS_PLAN)); // $3.33
 
-// What Plus adds, in four lines that fit a 110px-wide column at 390px. The
-// full row-by-row grid lives in the "See everything included" disclosure on
-// the page, so the card never grows past four.
+// What Plus includes no longer lives on the cards: it is shown as perk boxes
+// above this picker (PlusPerks.tsx), the twin of the pro pitch's PerksList
+// grid. The cards below are the price picker only - cadence, price, and the
+// free-trial line - so they carry no bullet list. The full row-by-row
+// free-vs-Plus grid still lives in the "See everything included" disclosure on
+// the page for anyone who wants it.
 //
-// The home count reads from src/lib/constants.ts rather than being typed: a
-// hand-typed "5 homes" is a promise that goes stale the first time the cap
-// moves, and nobody re-reads a bullet list when they change one.
-//
-// The Ask line deliberately carries NO number. Naming the daily ceiling made
-// the offer sound small (it reads as a cap, not as a lift), and the number
-// also differs between the trial and a paid plan, so one printed figure was
-// wrong on one of the cards no matter which one it named. "More every day" is
-// true on every plan and stays true when the limit moves. The enforced limits
-// are unchanged, in src/lib/aiUsage.ts, and /ai-disclosure still says plainly
-// that a daily cap exists.
-//
-// One list, used by all three paid cards and by the phone panel. There used to
-// be two, differing only in the Ask number the weekly (trial) card was allowed
-// to promise; with no number on that line there is nothing left to differ, and
-// the weekly card must not look like it includes less than the other two - it
-// does not.
-const PLUS_BULLETS = [
-  "Plan and forecast, in full",
-  "Quote analyzer, home report",
-  "Every alert, every channel",
-  `${PLUS_INCLUDED_HOMES} homes, more Ask OakTend questions every day`,
-];
-
-// What the free tier actually includes, so the third card reads as a plan
-// somebody runs on rather than as a wall of dashes.
-const FREE_BULLETS = [
-  "Track 1 home",
-  "Your first plan build",
-  "One free quote check",
-  "In-app alerts",
-];
-
-// Four cards in the DOM - Weekly, Monthly, Annual, Free - but the Free card is
-// `max-sm:hidden`: a reader on the pricing screen is already on Free, so
-// showing it as a fourth choice next to three plans they would be paying for
-// only repeats what they know. It stays in the markup (and in CHOICES, for
-// the keyboard-roving group) because sm and up still shows all four in one
-// row. On a phone the three paid cards alone sit in one row via
-// `grid-cols-3`, about 110px each at 390px - tight enough that the bullet
-// list moves out of the card (`max-sm:hidden` on bulletList) and into the
-// description panel below the row instead. THE CARD IS THE SELECTOR - tapping
+// Three cards - Weekly, Monthly, Annual - in one row at every width via
+// `grid-cols-3`, about 110px each at 390px. THE CARD IS THE SELECTOR - tapping
 // one moves the accent outline to it and re-labels the single button
 // underneath (and, on a phone, rewrites the panel below), so there is exactly
 // one primary action on the page instead of a button per column.
@@ -147,7 +108,7 @@ export default function PlanToggle({
 }: {
   trialEligible?: boolean;
 }) {
-  const [choice, setChoice] = useState<Choice>("monthly");
+  const [choice, setChoice] = useState<Plan>("monthly");
   // The required auto-renewal consent checkbox (Cal. Bus. & Prof. Code
   // 17602(a)(2)): unchecked by default, gating the checkout button below
   // until it is checked. One state for the whole form, since the plan cards
@@ -168,10 +129,9 @@ export default function PlanToggle({
   useEffect(() => {
     setIsNative(isNativeApp());
   }, []);
-  // The cadence the form posts. Free is not a cadence, so it falls back to the
-  // anchor plan; the button is disabled in that state, so nothing can actually
-  // be submitted while it is showing.
-  const plan: Plan = choice === "free" ? "monthly" : choice;
+  // The cadence the form posts. Every card is a real cadence now, so this is
+  // the selection directly.
+  const plan: Plan = choice;
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   // APPLE 3.1.1 / GOOGLE PLAY BILLING: inside the native app shell, OakTend
@@ -202,7 +162,7 @@ export default function PlanToggle({
 
   // Shared card shell. Selection changes colors only, never sizes, so a tap
   // cannot reflow the page under the reader's thumb.
-  const card = (key: Choice) =>
+  const card = (key: Plan) =>
     // The focus ring is spelled out rather than borrowed from .focus-ring,
     // which carries its own `rounded` and would fight rounded-xl here. Only
     // the selected card is in the tab order, so this is the marker that shows
@@ -215,7 +175,7 @@ export default function PlanToggle({
 
   // Props every card shares, so the radio semantics are written once and
   // cannot drift between the three.
-  const cardProps = (key: Choice, index: number, label: string) => ({
+  const cardProps = (key: Plan, index: number, label: string) => ({
     type: "button" as const,
     role: "radio",
     "aria-checked": choice === key,
@@ -241,32 +201,6 @@ export default function PlanToggle({
     </span>
   ) : null;
 
-  // Spans, not a <ul>: these sit inside a <button>, whose content model is
-  // phrasing content only, so a real list here would be invalid markup. The
-  // card carries an aria-label with the plan and price, and the bullets are
-  // decoration on top of it. `wrapClassName` is the one thing that differs
-  // between the two places this renders: inside a card it is `max-sm:hidden`
-  // (the phone panel below carries the same list instead), inside the phone
-  // panel it is always visible.
-  const bulletList = (items: string[], wrapClassName: string) => (
-    <span className={wrapClassName}>
-      {items.map((f) => (
-        <span
-          key={f}
-          // text-sm at every width now. It used to be 11px below sm, which
-          // is under the readable floor on a phone; sm:text-sm was already
-          // 14px, so the desktop rendering is unchanged.
-          className="flex items-start gap-1 text-sm leading-snug text-stone-700 dark:text-stone-300"
-        >
-          <span className="font-bold text-bark-600 dark:text-bark-500" aria-hidden>
-            ✓
-          </span>
-          <span className="min-w-0">{f}</span>
-        </span>
-      ))}
-    </span>
-  );
-
   // ONE label for the one button, and it turns on the trial rather than on the
   // cadence: every card starts the same free days now, so "Start 3 free days"
   // is true whichever one is selected, and the line of terms directly above the
@@ -275,19 +209,13 @@ export default function PlanToggle({
   // name the cadence ("Get Annual", "Start weekly"), which repeated the card
   // the reader had just tapped and left the free days unmentioned on two of the
   // three.
-  const buttonLabel =
-    choice === "free"
-      ? "Keep Free"
-      : trialEligible
-        ? `Start ${PLUS_PLAN.trialDays} free days`
-        : "Start OakTend Plus";
+  const buttonLabel = trialEligible
+    ? `Start ${PLUS_PLAN.trialDays} free days`
+    : "Start OakTend Plus";
 
-  // The phone-only description panel below the row of cards. It reads `plan`,
-  // not `choice`: `plan` is already the safe fallback to a real cadence (see
-  // its definition above), so if the group's state is ever "free" on a phone
-  // - which the hidden Free card should make impossible, see the layout
-  // comment above CHOICES - the panel still shows a real plan instead of
-  // rendering nothing or crashing.
+  // The phone-only description panel below the row of cards. `plan` mirrors
+  // `choice` directly now that every card is a real cadence, so the panel
+  // always has a real plan to show.
   const PLAN_LABEL: Record<Plan, string> = {
     weekly: "Weekly",
     monthly: "Monthly",
@@ -328,15 +256,14 @@ export default function PlanToggle({
             falls back to monthly, the same plan preselected below. */}
         <input type="hidden" name="plan" value={plan} />
 
-        {/* The three paid cards in one row on a phone (Free is
-            `max-sm:hidden` on its own button below); all four in one row from
-            sm up. `grid-cols-3` on the phone width, not a fixed count that
-            would leave a gap where Free used to sit. */}
+        {/* The three cadence cards in one row at every width: Weekly, Monthly,
+            Annual. `grid-cols-3` at both breakpoints now that the Free card is
+            gone. */}
         <div
           role="radiogroup"
           aria-label="Choose your plan"
           onKeyDown={onGroupKeyDown}
-          className="grid grid-cols-3 items-stretch gap-1.5 sm:grid-cols-4 sm:gap-3"
+          className="grid grid-cols-3 items-stretch gap-1.5 sm:gap-3"
         >
           {/* --- Weekly: the smallest commitment --- */}
           <button {...cardProps("weekly", 0, `Weekly, ${WEEKLY_PRICE} a week`)}>
@@ -348,11 +275,9 @@ export default function PlanToggle({
             <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
               Weekly
             </span>
-            {/* No max-sm:min-h floor here (CR3#9): the old min-h-10 reserved
-                room to match the bullet list below, which is hidden on the
-                phone (bulletList's className is sm:block, sm and up only).
-                A phone card no longer carries dead space for content it
-                never shows - the whole picker fits with less scroll. */}
+            {/* No max-sm:min-h floor here (CR3#9): a phone card carries no dead
+                space, so the whole picker fits with less scroll. The sm:min-h-11
+                keeps the three price blocks the same height from sm up. */}
             <span className="mt-0.5 block sm:mt-1 sm:min-h-11">
               {/* text-sm on the phone, not text-base: at grid-cols-3 a card is
                   about 110px wide at 390px, and text-base pushed "$1.99/wk"
@@ -377,10 +302,6 @@ export default function PlanToggle({
               </span>
               {trialLine}
             </span>
-            {bulletList(
-              PLUS_BULLETS,
-              "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
-            )}
           </button>
 
           {/* --- Monthly: the anchor, preselected --- */}
@@ -415,10 +336,6 @@ export default function PlanToggle({
               </span>
               {trialLine}
             </span>
-            {bulletList(
-              PLUS_BULLETS,
-              "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
-            )}
           </button>
 
           {/* --- Annual: the cheapest per month --- */}
@@ -455,53 +372,17 @@ export default function PlanToggle({
               </span>
               {trialLine}
             </span>
-            {bulletList(
-              PLUS_BULLETS,
-              "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1"
-            )}
           </button>
 
-          {/* --- Free: the plan they are on today. Hidden on a phone
-              (`max-sm:hidden`) - a reader on this screen is already on Free,
-              so it does not need to compete with the three plans they would
-              be paying for in a one-row phone layout. Still present and
-              selectable from sm up, and still in CHOICES for the keyboard
-              group below, which only matters on a desktop-width pointer/
-              keyboard combination anyway. The initial `choice` state is
-              always "monthly" (see useState above), never "free", so a phone
-              reader can never load this screen with Free already
-              selected. --- */}
-          <button
-            {...cardProps("free", 3, "Free, the plan you have now")}
-            className={`${card("free")} max-sm:hidden`}
-          >
-            {/* Spacer matching the labelled cards' badge line, so all four
-                plan names sit on the same line. */}
-            <span className="block min-h-4" aria-hidden />
-            <span className="block text-sm font-semibold text-stone-900 sm:text-base dark:text-stone-100">
-              Free
-            </span>
-            <span className="mt-0.5 block min-h-10 sm:mt-1 sm:min-h-11">
-              <span className="block text-base font-semibold text-stone-900 sm:text-2xl dark:text-stone-100">
-                $0
-              </span>
-              <span className="block text-sm leading-snug text-stone-500 dark:text-stone-400">
-                No card, ever
-              </span>
-            </span>
-            {bulletList(FREE_BULLETS, "mt-1.5 hidden space-y-0.5 sm:mt-2 sm:block sm:space-y-1")}
-          </button>
         </div>
 
-        {/* Phone-only panel for "what you get" on the plan currently
-            selected in the row above. sm and up already shows this in every
-            card (the bullet list `bulletList` hides only below sm), so the
-            panel would just repeat it there; on a phone it is the only place
-            the bullets and the plain-English billing line for the selected
-            plan live, and it has room neither card in a 110px column does.
-            `aria-live="polite"` so a screen reader hears the update when a
-            different card is tapped, without interrupting anything already
-            being read. */}
+        {/* Phone-only recap of the plan currently selected in the row above:
+            its cadence, price line, and the plain-English billing sentence,
+            which the ~110px phone cards have no room for. What Plus includes is
+            the perk boxes above the picker (PlusPerks.tsx), so the panel no
+            longer repeats a bullet list. `aria-live="polite"` so a screen
+            reader hears the update when a different card is tapped, without
+            interrupting anything already being read. */}
         <div
           className="rounded-xl border border-stone-200 bg-white p-3 sm:hidden dark:border-white/10 dark:bg-stone-800"
           aria-live="polite"
@@ -515,7 +396,6 @@ export default function PlanToggle({
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
             {panelBilling[plan]}
           </p>
-          {bulletList(PLUS_BULLETS, "mt-2 block space-y-1")}
         </div>
 
         {/* The recurring terms sit INSIDE the checkout form, immediately ABOVE
@@ -532,46 +412,34 @@ export default function PlanToggle({
             record stashed in Stripe metadata and the acknowledgment sent
             afterwards - so the sentences here are word for word what gets
             stored and emailed, including the free days and the price they
-            step up to on whichever cadence is selected.
-
-            Free is the one card with no terms block, because selecting it
-            charges nothing and the button below is disabled. */}
-        {choice === "free" ? (
-          <p className="text-center text-sm text-stone-500 dark:text-stone-400">
-            Free is the plan you are on now.
-          </p>
-        ) : (
-          <>
-            {/* The one-line material-terms summary, always visible on a phone:
-                what is charged, when, and how to stop it, for the selected
-                plan. It is the same sentence billingTerms() puts in the
-                consent record, so nothing behind the disclosure below is a
-                fact the reader was not shown. sm and up already reads it as
-                the first line of the block itself, so this copy is
-                phone-only. */}
-            <p className="text-center text-sm text-stone-600 sm:hidden dark:text-stone-300">
-              {panelBilling[plan]}
-            </p>
-            {/* Collapsed on a phone, open on desktop. See PHONE DISCLOSURE
-                at the top of this file. */}
-            <details className="group sm:hidden">
-              <summary className="focus-ring mx-auto flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-stone-700 [&::-webkit-details-marker]:hidden dark:text-stone-300">
-                <ChevronRight
-                  className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
-                  aria-hidden="true"
-                />
-                Billing terms
-              </summary>
-              <div className="mt-2">
-                <AutoRenewalTerms plan={plan} introEligible={trialEligible} />
-              </div>
-            </details>
-            <div className="max-sm:hidden">
-              <AutoRenewalTerms plan={plan} introEligible={trialEligible} />
-            </div>
-            <AutoRenewalConsentCheckbox id="plus-consent" checked={consent} onChange={setConsent} />
-          </>
-        )}
+            step up to on whichever cadence is selected. */}
+        {/* The one-line material-terms summary, always visible on a phone:
+            what is charged, when, and how to stop it, for the selected plan.
+            It is the same sentence billingTerms() puts in the consent record,
+            so nothing behind the disclosure below is a fact the reader was not
+            shown. sm and up already reads it as the first line of the block
+            itself, so this copy is phone-only. */}
+        <p className="text-center text-sm text-stone-600 sm:hidden dark:text-stone-300">
+          {panelBilling[plan]}
+        </p>
+        {/* Collapsed on a phone, open on desktop. See PHONE DISCLOSURE
+            at the top of this file. */}
+        <details className="group sm:hidden">
+          <summary className="focus-ring mx-auto flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-stone-700 [&::-webkit-details-marker]:hidden dark:text-stone-300">
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-150 group-open:rotate-90 dark:text-stone-500"
+              aria-hidden="true"
+            />
+            Billing terms
+          </summary>
+          <div className="mt-2">
+            <AutoRenewalTerms plan={plan} introEligible={trialEligible} />
+          </div>
+        </details>
+        <div className="max-sm:hidden">
+          <AutoRenewalTerms plan={plan} introEligible={trialEligible} />
+        </div>
+        <AutoRenewalConsentCheckbox id="plus-consent" checked={consent} onChange={setConsent} />
 
         {/* CR3#4: on a phone, the one thing every card selection is building
             toward stays a thumb's reach away instead of sliding further down
@@ -584,19 +452,13 @@ export default function PlanToggle({
             padding it already reserves. Desktop (sm and up) is unaffected:
             every max-sm: class here is a no-op there. */}
         <div className="max-sm:sticky max-sm:bottom-[calc(3rem+env(safe-area-inset-bottom))] max-sm:z-10 max-sm:rounded-xl max-sm:border max-sm:border-stone-200 max-sm:bg-white max-sm:p-3 max-sm:shadow-menu dark:max-sm:border-white/10 dark:max-sm:bg-stone-900">
-          {choice === "free" ? (
-            <button type="button" disabled className="btn-secondary w-full py-3">
-              {buttonLabel}
-            </button>
-          ) : (
-            <SubmitButton
-              className="btn-primary w-full py-3"
-              pendingLabel="Starting…"
-              disabled={!consent}
-            >
-              {buttonLabel}
-            </SubmitButton>
-          )}
+          <SubmitButton
+            className="btn-primary w-full py-3"
+            pendingLabel="Starting…"
+            disabled={!consent}
+          >
+            {buttonLabel}
+          </SubmitButton>
         </div>
       </form>
       {/* Cal. Bus. & Prof. Code 17538: legal name, address, and a route to the

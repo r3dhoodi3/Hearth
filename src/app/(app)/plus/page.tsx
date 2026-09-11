@@ -21,6 +21,7 @@ import {
   resumeMembershipAction,
 } from "./actions";
 import PlanToggle from "./PlanToggle";
+import PlusPerks from "./PlusPerks";
 import ExtraHomes from "./ExtraHomes";
 import PlusWelcome from "./PlusWelcome";
 import PaywallReasonBanner from "@/components/PaywallReasonBanner";
@@ -675,6 +676,13 @@ export default async function PlusPage(
             : "Line up local pros, on your terms. Post more jobs at once, get matched first, and keep every proactive alert working for you."}
         </p>
       </div>
+
+      {/* What Plus adds, shown as perk boxes like the pro pitch (PerksList
+          grid), directly under the heading and above the price picker. This
+          replaces the per-card bullet checklists PlanToggle used to carry; the
+          folded comparison table below is still the row-by-row free-vs-Plus
+          reference for anyone who wants it. */}
+      <PlusPerks />
 
       <PlanToggle trialEligible={trialEligible} />
 
