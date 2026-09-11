@@ -30,14 +30,6 @@ export default function Loading() {
         ))}
       </div>
 
-      {/* ProPlanToggle's trial block: button, the one line under it, then the
-          auto-renewal disclosure. */}
-      <div className="space-y-2 rounded-2xl border border-stone-200 p-4 dark:border-white/10">
-        <Skeleton className="h-11 w-full rounded-lg" />
-        <Skeleton className="mx-auto h-4 w-64" />
-        <Skeleton className="h-24 w-full rounded-xl" />
-      </div>
-
       {/* ProPlanToggle: Free / Yearly / Monthly columns. The two paid columns
           are the selector, so no column carries a button of its own. */}
       <div className="grid gap-3 sm:grid-cols-3">
