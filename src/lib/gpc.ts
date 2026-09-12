@@ -1,4 +1,5 @@
 import { trackServerEvent } from "@/lib/trackServer";
+import { legacyKey } from "@/lib/legacyStorage";
 
 // Global Privacy Control (Cal. Civ. Code 1798.135(b)(1); the CPRA treats a
 // GPC signal as a valid opt-out-of-sale/share request with no further action
@@ -26,7 +27,25 @@ export function hasGlobalPrivacyControl(headers: Headers): boolean {
 // (it never decodes the session past updateSession()'s own check), so that
 // call passes null; a route handler or server action can call this directly
 // with a real user id and cookies()/headers() from next/headers instead.
-export const GPC_SEEN_COOKIE = "hearth_gpc_seen";
+export const GPC_SEEN_COOKIE = "oaktend_gpc_seen";
+
+// Brand rename cleanup, remove after 2026-12-31. The pre-rename name of the
+// marker cookie. Nothing writes it any more: a value found under it is
+// promoted onto GPC_SEEN_COOKIE and the old name deleted, so the new name is
+// never an empty slot while the reader below prefers it.
+const LEGACY_GPC_SEEN_COOKIE = legacyKey(GPC_SEEN_COOKIE);
+
+// The options every write of the marker uses, so a promoted cookie is
+// byte-for-byte the same kind of cookie as a freshly set one. No maxAge: it is
+// a session cookie, which is the whole point of "once per browser session".
+function gpcSeenCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  };
+}
 
 // Minimal shape both NextRequest.cookies/NextResponse.cookies and the
 // next/headers cookies() jar satisfy, so this has no hard dependency on
@@ -34,6 +53,10 @@ export const GPC_SEEN_COOKIE = "hearth_gpc_seen";
 export type GpcCookieJar = {
   get(name: string): { value: string } | undefined;
   set(name: string, value: string, options?: Record<string, unknown>): void;
+  // Optional: NextResponse.cookies and the next/headers cookies() jar both
+  // have it, a plain test double may not, and the promotion below is
+  // best-effort either way.
+  delete?(name: string | { name: string; path?: string }): void;
 };
 
 // Logs the first-party app_event "gpc_signal_seen" (src/lib/trackServer.ts ->
@@ -52,18 +75,24 @@ export type GpcCookieJar = {
 export async function logGpcSignalOncePerSession(
   headers: Headers,
   requestCookies: Pick<GpcCookieJar, "get">,
-  responseCookies: Pick<GpcCookieJar, "set">,
+  responseCookies: Pick<GpcCookieJar, "set" | "delete">,
   userId: string | null
 ): Promise<void> {
   if (!hasGlobalPrivacyControl(headers)) return;
-  if (requestCookies.get(GPC_SEEN_COOKIE)) return;
 
-  responseCookies.set(GPC_SEEN_COOKIE, "1", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-  });
+  if (requestCookies.get(GPC_SEEN_COOKIE)?.value) return;
+
+  // Brand rename cleanup, remove after 2026-12-31. Only the pre-rename marker:
+  // promote its value onto the new name with the same options a fresh marker
+  // gets, delete the old name, and treat the session as already logged.
+  const legacySeen = requestCookies.get(LEGACY_GPC_SEEN_COOKIE)?.value;
+  if (legacySeen) {
+    responseCookies.set(GPC_SEEN_COOKIE, legacySeen, gpcSeenCookieOptions());
+    responseCookies.delete?.({ name: LEGACY_GPC_SEEN_COOKIE, path: "/" });
+    return;
+  }
+
+  responseCookies.set(GPC_SEEN_COOKIE, "1", gpcSeenCookieOptions());
 
   // Only write the event for a signed-in user. Middleware passes null for
   // every request, and an anonymous client can drop the session cookie and

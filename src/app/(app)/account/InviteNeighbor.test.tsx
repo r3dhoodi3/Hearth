@@ -5,7 +5,7 @@ import "@testing-library/jest-dom/vitest";
 
 import InviteNeighbor from "./InviteNeighbor";
 
-const MOMENT_SEEN_KEY = "hearth_invite_neighbor_moment_seen";
+const MOMENT_SEEN_KEY = "oaktend_invite_neighbor_moment_seen";
 
 beforeEach(() => {
   window.localStorage.clear();

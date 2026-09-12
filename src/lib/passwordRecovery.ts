@@ -21,7 +21,7 @@
 // session. src/app/reset-password/actions.ts clears it as soon as the password
 // is actually changed, so one emailed link is one password change.
 
-export const PW_RECOVERY_COOKIE = "hearth_pwrecovery";
+export const PW_RECOVERY_COOKIE = "oaktend_pwrecovery";
 
 // The redirectTo every resetPasswordForEmail() call in the app hands Supabase.
 // One function so the two callers (the forgot-password form and the "set a

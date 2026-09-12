@@ -17,10 +17,10 @@ const sessionUser = { id: "user-1", email: "owner@example.com" };
 // (src/lib/csrf.ts). These tests are about the building-record gate, so they
 // hand it an ordinary same-origin POST, exactly like the app's own fetch.
 function sameOriginRequest(): any {
-  return new Request("https://gethearth.vercel.app/api/tax-appeal", {
+  return new Request("https://oaktend.com/api/tax-appeal", {
     method: "POST",
     headers: {
-      host: "gethearth.vercel.app",
+      host: "oaktend.com",
       "sec-fetch-site": "same-origin",
     },
   });
@@ -184,10 +184,10 @@ describe("the building-record gate on /api/tax-appeal", () => {
     const { POST } = await import("./route");
 
     const res = await POST(
-      new Request("https://gethearth.vercel.app/api/tax-appeal", {
+      new Request("https://oaktend.com/api/tax-appeal", {
         method: "POST",
         headers: {
-          host: "gethearth.vercel.app",
+          host: "oaktend.com",
           origin: "https://evil.example",
           "sec-fetch-site": "cross-site",
         },

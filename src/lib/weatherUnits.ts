@@ -15,7 +15,7 @@ export type TempUnit = "F" | "C";
 
 // Per device, not per account: a unit choice is a property of the phone you
 // are holding, and there is no server round trip to justify for it.
-export const TEMP_UNIT_STORAGE_KEY = "hearth.weatherUnit";
+export const TEMP_UNIT_STORAGE_KEY = "oaktend.weatherUnit";
 
 // OakTend launches in US cities, so Fahrenheit is the honest default rather
 // than something derived from the browser locale.

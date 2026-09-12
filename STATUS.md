@@ -1,7 +1,12 @@
 # OakTend status (2026-08-28 morning, written by Claude overnight)
 
 Quick-read handoff. The blow-by-blow is in `HANDOFF.md` (older) and the session notes below.
-Live site: https://gethearth.vercel.app. Code: all on `main`, pushed through the commits listed under "Pushed".
+Live site: https://oaktend.com. Code: all on `main`, pushed through the commits listed under "Pushed".
+
+> Legacy literals: a few exact strings below still carry the dead brand name because they are
+> real values that exist outside this repo, not prose. Seeded test-account emails, the local
+> checkout path `C:\Users\lande\hearth`, and the Vercel team slug `hearth-test` are quoted as-is
+> so the commands still work. Everything else reads "OakTend".
 
 ## Goals (unchanged)
 
@@ -19,18 +24,8 @@ Live site: https://gethearth.vercel.app. Code: all on `main`, pushed through the
 
 ## YOUR morning list (in order; nothing below works until 1 and 2 are done)
 
-1. DONE 2026-08-29: all of the below was applied live in one paste via `supabase/PASTE-ME-ALL-PENDING-2026-08-29.sql` (PRECHECK guard + 0129-0140). Live DB is through 0140. Original per-file sources, kept for reference:
-   `supabase/PRECHECK-2026-08-26.sql` (all queries must return 0 rows) ->
-   `supabase/COMBINED-2026-08-26-migrations-0129-0132.sql` ->
-   `supabase/PASTE-ME-live-2026-08-27-app-feedback.sql` (0133) ->
-   `supabase/PASTE-ME-live-2026-08-28-free-ai-tastes.sql` (0135) ->
-   `supabase/PASTE-ME-live-2026-08-28-perf-indexes.sql` (0136) ->
-   `supabase/PASTE-ME-live-2026-08-28-app-guide.sql` (0137) ->
-   `supabase/PASTE-ME-live-2026-08-28-user-blocks.sql` (0138) ->
-   `supabase/PASTE-ME-live-2026-08-28-users-column-lock.sql` (0139) ->
-   `supabase/PASTE-ME-live-2026-08-28-blocks-direct-requests.sql` (0140, after 0139).
-   Until 0129 is applied, NO new contractor can finish onboarding on live except with Huntington Beach and/or Fountain Valley (the old constraint). Every pro tester hit this.
-2. DONE 2026-08-29: `ANTHROPIC_API_KEY`, `RISK_HASH_SALT`, `STRIPE_SECRET_KEY` (test mode) set as team SHARED env vars linked to hearth, old project-level Stripe key deleted, redeployed. (`npx vercel env ls` does not list shared vars; check the dashboard Shared tab.) Original instructions: Vercel > hearth > Settings > Environment Variables (Production + Preview), values from `C:\Users\lande\hearth\.env.local`: `STRIPE_SECRET_KEY` (edit), `ANTHROPIC_API_KEY` (add; it is NOT set on Vercel at all, which is why Ask OakTend is down on live), `RISK_HASH_SALT` (add; last line of .env.local, never rotate). Then Redeploy.
+1. DONE 2026-08-29: migrations 0129 through 0140 were applied live in one paste. Those one-time paste files were deleted from the repo on 2026-09-12 (all applied; git history has them). The migrations themselves live in `supabase/migrations/`.
+2. DONE 2026-08-29: `ANTHROPIC_API_KEY`, `RISK_HASH_SALT`, `STRIPE_SECRET_KEY` (test mode) set as team SHARED env vars linked to oaktend, old project-level Stripe key deleted, redeployed. (`npx vercel env ls` does not list shared vars; check the dashboard Shared tab.) Original instructions: Vercel > oaktend > Settings > Environment Variables (Production + Preview), values from `C:\Users\lande\hearth\.env.local`: `STRIPE_SECRET_KEY` (edit), `ANTHROPIC_API_KEY` (add; it is NOT set on Vercel at all, which is why Ask OakTend is down on live), `RISK_HASH_SALT` (add; last line of .env.local, never rotate). Then Redeploy.
 3. Supabase > Authentication > Sign In / Providers > Email: turn "Confirm email" back ON (I asked you to turn it off for the testers).
 4. Stripe dashboard: set the public business name to "OakTend" (checkout showed "Landen Chu"); enable the webhook events `invoice.payment_failed` and `customer.subscription.trial_will_end` on the endpoint.
 5. Delete the test accounts when done (SQL, service role):
@@ -75,4 +70,4 @@ What is in code (needs the SQL bundle below to be fully active on live):
 - Security: 30-day idle sign-out (this device only), password reset link fixed + expired-link notice, log redactor, same-origin guard on mutating routes + coverage test, cron secret pattern test, server-only on secret readers, robots covers all private routes, upload guard (magic bytes, PDF active content, EXIF strip) on the server upload path + bucket caps paste, env guard (staging DB fatal; test Stripe warns until REQUIRE_LIVE_STRIPE=1), realtime subscriptions filtered + replica identity default (0146), RLS audit paste, backups/restore + environments docs.
 - Launch polish: share images for 12 guides + pricing + pros, breadcrumbs on 30 pages (+JSON-LD on guides), first-party analytics events both sides (docs/ANALYTICS.md).
 
-Owner to do: paste supabase/PASTE-ME-ALL-PENDING-2026-08-30.sql (0141-0146 + storage caps, one paste, after the 0129-0140 bundle); Vercel env NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT then redeploy; Supabase Auth settings (sessions, URL config, reset template, secure password change, confirm email ON); run supabase/AUDIT-rls-2026-08-29.sql and send results; confirm the Supabase plan / backups; Vercel firewall rule for /api/health; environments split per docs/ENVIRONMENTS.md; Apple key rotation before Apple sign-in.
+Owner to do (historical list; the 0141-0146 paste has since been applied and its file deleted): Vercel env NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT then redeploy; Supabase Auth settings (sessions, URL config, reset template, secure password change, confirm email ON); run supabase/AUDIT-rls-2026-08-29.sql and send results; confirm the Supabase plan / backups; Vercel firewall rule for /api/health; environments split per docs/ENVIRONMENTS.md; Apple key rotation before Apple sign-in.

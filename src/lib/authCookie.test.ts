@@ -14,12 +14,12 @@ describe("hasAuthCookie", () => {
   });
 
   it("is false for a browser carrying only non-auth cookies", () => {
-    // hearth_did is planted by attachDeviceCookie the first time a visitor
+    // oaktend_did is planted by attachDeviceCookie the first time a visitor
     // loads a signup or payment page, so an anonymous visitor browsing on from
     // there has cookies but no session.
     // Getting this wrong would put the auth call back on the landing page for
     // essentially every real anonymous visitor.
-    expect(hasAuthCookie(c("hearth_did", "hearth_fp", "theme"))).toBe(false);
+    expect(hasAuthCookie(c("oaktend_did", "oaktend_fp", "theme"))).toBe(false);
   });
 
   it("is true for the standard Supabase session cookie", () => {
@@ -38,7 +38,7 @@ describe("hasAuthCookie", () => {
 
   it("finds the auth cookie among unrelated ones", () => {
     expect(
-      hasAuthCookie(c("hearth_did", "sb-abc-auth-token", "theme"))
+      hasAuthCookie(c("oaktend_did", "sb-abc-auth-token", "theme"))
     ).toBe(true);
   });
 

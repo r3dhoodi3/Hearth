@@ -26,7 +26,7 @@ import { useToast } from "@/components/ToastProvider";
 // The cookie name is duplicated here as a literal rather than imported from
 // src/lib/flash.ts on purpose: that module imports next/headers, which must
 // never be pulled into the browser bundle. Keep the two in lockstep.
-const FLASH_COOKIE = "hearth_flash";
+const FLASH_COOKIE = "oaktend_flash";
 
 // Same ceiling as FLASH_MAX_DURATION_MS in src/lib/flash.ts, duplicated for the
 // same reason the cookie name is: that module imports next/headers and must

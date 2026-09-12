@@ -90,7 +90,7 @@ afterEach(() => {
 describe("PrintQrButton (CR4#3)", () => {
   it("composes and downloads a PNG with the profile link and business name", async () => {
     stubCanvasContext();
-    render(<PrintQrButton url="https://hearth.com/p/ace-plumbing" businessName="Ace Plumbing" />);
+    render(<PrintQrButton url="https://oaktend.com/p/ace-plumbing" businessName="Ace Plumbing" />);
     fireEvent.click(screen.getByRole("button", { name: "Print your QR code" }));
 
     await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
@@ -102,7 +102,7 @@ describe("PrintQrButton (CR4#3)", () => {
 
   it("shows an inline error instead of throwing when canvas is unavailable", async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
-    render(<PrintQrButton url="https://hearth.com/p/ace-plumbing" businessName="Ace Plumbing" />);
+    render(<PrintQrButton url="https://oaktend.com/p/ace-plumbing" businessName="Ace Plumbing" />);
     fireEvent.click(screen.getByRole("button", { name: "Print your QR code" }));
 
     await waitFor(() =>

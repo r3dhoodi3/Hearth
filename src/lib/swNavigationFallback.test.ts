@@ -16,10 +16,10 @@ const warmingSource = readFileSync(
 );
 
 describe("public/sw.js navigation fallback", () => {
-  it("bumped VERSION past hearth-sw-1, or the new worker never ships", () => {
+  it("bumped VERSION past oaktend-sw-1, or the new worker never ships", () => {
     const match = swSource.match(/const VERSION = "([^"]+)"/);
     expect(match).not.toBeNull();
-    expect(match?.[1]).not.toBe("hearth-sw-1");
+    expect(match?.[1]).not.toBe("oaktend-sw-1");
   });
 
   it("guards the fetch handler to GET navigations only", () => {
@@ -99,7 +99,7 @@ describe("public/warming.html", () => {
     expect(warmingSource).toContain("[2500, 5000, 10000]");
     expect(warmingSource).toContain("15000");
     expect(warmingSource).toContain("sessionStorage");
-    expect(warmingSource).toContain("hearth.warming.attempts");
+    expect(warmingSource).toContain("oaktend.warming.attempts");
   });
 
   it("names the VERSION coupling, so an edit here ships to installed devices", () => {

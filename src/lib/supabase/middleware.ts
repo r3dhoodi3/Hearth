@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 import { hasAuthCookie } from "@/lib/authCookie";
 import { requestOrigin } from "@/lib/requestOrigin";
+import { legacyKey } from "@/lib/legacyStorage";
 import {
   ACTIVITY_COOKIE,
   activityCookieOptions,
@@ -161,7 +162,19 @@ export async function updateSession(request: NextRequest) {
   // guarded request ends the session. The check lives here because this is the
   // one place every signed-in request already passes through.
   const now = Date.now();
-  const stamp = request.cookies.get(ACTIVITY_COOKIE)?.value;
+  // Brand rename cleanup, remove after 2026-12-31. The new name wins outright;
+  // the pre-rename name is only consulted when the new one is absent, and when
+  // it is, the value is PROMOTED onto the new name and the old name deleted
+  // below - the same promote-and-delete attachDeviceCookie does for the device
+  // cookie, and for the same reason: leaving the new name empty while readers
+  // prefer it is what turns a rename into a writable slot.
+  const legacyActivityCookie = legacyKey(ACTIVITY_COOKIE);
+  const currentStamp = request.cookies.get(ACTIVITY_COOKIE)?.value;
+  const legacyStamp =
+    currentStamp === undefined
+      ? request.cookies.get(legacyActivityCookie)?.value
+      : undefined;
+  const stamp = currentStamp ?? legacyStamp;
   if (isIdleExpired(stamp, now)) {
     // Cookie names collected BEFORE signOut, because signOut writes through the
     // adapter above and rewrites request.cookies as it goes.
@@ -185,11 +198,27 @@ export async function updateSession(request: NextRequest) {
     const bounced = NextResponse.redirect(url);
     for (const name of authCookieNames) bounced.cookies.delete(name);
     bounced.cookies.delete(ACTIVITY_COOKIE);
+    // Brand rename cleanup, remove after 2026-12-31: also drop the
+    // pre-rename cookie name if this browser still carries one.
+    bounced.cookies.delete(legacyActivityCookie);
     return bounced;
   }
   if (shouldStampActivity(stamp, now)) {
     // Once an hour at most, so this is not a Set-Cookie on every navigation.
+    // This also completes the promotion when the stamp came from the legacy
+    // name: the value written is fresher than the one being promoted, under
+    // the new name and the new options.
     response.cookies.set(ACTIVITY_COOKIE, String(now), activityCookieOptions());
+  } else if (legacyStamp !== undefined) {
+    // Not yet time to re-stamp, but this browser is still carrying only the
+    // pre-rename name. Re-issue the same value under the new name so the
+    // idle timer keeps its history instead of restarting.
+    response.cookies.set(ACTIVITY_COOKIE, legacyStamp, activityCookieOptions());
+  }
+  if (legacyStamp !== undefined) {
+    // Brand rename cleanup, remove after 2026-12-31: the value now lives under
+    // the new name, so the old one has no reason to stay in the jar.
+    response.cookies.delete({ name: legacyActivityCookie, path: "/" });
   }
 
   return response;

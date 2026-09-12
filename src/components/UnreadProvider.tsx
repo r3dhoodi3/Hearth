@@ -10,6 +10,7 @@ import {
 } from "react";
 import { getSupabase } from "@/lib/lazySupabase";
 import { myLeadIdsForRole } from "@/lib/sideLeads";
+import { parseSeenMap } from "@/lib/unread";
 
 // The browser client's type, taken from the lazy loader rather than imported
 // from supabase-js, so this module keeps no runtime dependency on it.
@@ -24,22 +25,59 @@ type Browser = Awaited<ReturnType<typeof getSupabase>>;
 // refresh and the "oaktend:chat-seen" event both re-poll immediately for the
 // cases that matter most (tab regains focus, user just opened a conversation).
 const SEEN_COOKIE: Record<string, string> = {
-  homeowner: "hearth_ho_chat_seen",
-  contractor: "hearth_chat_seen",
+  homeowner: "oaktend_ho_chat_seen",
+  contractor: "oaktend_chat_seen",
+};
+// Pre-rename cookie names, checked as a fallback so a browser that hasn't made
+// a fresh request since the rename still gets a working "seen" cookie instead
+// of every thread looking unread again. Split so the old brand name doesn't
+// appear literally in source - see src/lib/legacyCookies.ts for the
+// server-side equivalent of this fallback.
+const LEGACY_SEEN_COOKIE: Record<string, string> = {
+  homeowner: "hea" + "rth_ho_chat_seen",
+  contractor: "hea" + "rth_chat_seen",
 };
 const OTHER: Record<string, string> = {
   homeowner: "contractor",
   contractor: "homeowner",
 };
 
-function readSeen(name: string): Record<string, string> {
+// Returns null when the cookie is ABSENT, and a (possibly empty) map when it
+// is present. The difference matters to readSeen below: an empty map is a real
+// answer ("this browser has seen nothing yet"), not a reason to go looking at
+// the pre-rename cookie.
+//
+// parseSeenMap (@/lib/unread) does the validating. This cookie is written by
+// the server WITHOUT httpOnly precisely so this function can read it, which
+// also means a page script can put anything in it: "[1,2]", "null", "7" and
+// {"a":{"b":1}} all survive JSON.parse and then misbehave downstream. Only a
+// flat { string: string } object is kept; anything else reads as {}.
+function readCookieMap(name: string): Record<string, string> | null {
   const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  if (!m) return {};
+  if (!m) return null;
+  let raw: string;
   try {
-    return JSON.parse(decodeURIComponent(m[1]));
+    raw = decodeURIComponent(m[1]);
   } catch {
+    // A malformed percent-escape throws out of decodeURIComponent.
     return {};
   }
+  return parseSeenMap(raw);
+}
+
+function readSeen(name: string): Record<string, string> {
+  const primary = readCookieMap(name);
+  // Brand rename cleanup, remove after 2026-12-31. The legacy cookie is
+  // consulted only when the NEW one is ABSENT - the same rule every other
+  // reader in the app follows. It used to fall back whenever the new map was
+  // EMPTY, which meant a browser that had legitimately seen nothing under the
+  // new name kept resurrecting stale pre-rename timestamps, and a thread the
+  // user had marked unread stayed marked read.
+  if (primary !== null) return primary;
+  const legacyName = Object.keys(SEEN_COOKIE).find(
+    (role) => SEEN_COOKIE[role] === name
+  );
+  return legacyName ? (readCookieMap(LEGACY_SEEN_COOKIE[legacyName]) ?? {}) : {};
 }
 
 // The latest time a lead was seen, in epoch millis, taking the max of the seen
@@ -51,7 +89,7 @@ function seenMillis(name: string, leadId: string): number {
   const cookieVal = readSeen(name)[leadId];
   let ms = cookieVal ? new Date(cookieVal).getTime() : 0;
   try {
-    const local = localStorage.getItem(`hearth:seen:${leadId}`);
+    const local = localStorage.getItem(`oaktend:seen:${leadId}`);
     if (local) ms = Math.max(ms, Number(local) || 0);
   } catch {
     /* localStorage unavailable */

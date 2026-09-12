@@ -131,14 +131,14 @@ describe("pro CRM stays one client component with plain-data props", () => {
 // and a signed-in pro cookie, so it is opt-in. Point it at a pro with tracked
 // clients and at least one job to suggest:
 //
-//   HEARTH_CRM_STREAM_URL=http://localhost:3105 \
-//   HEARTH_CRM_STREAM_COOKIE='sb-...' npx vitest run src/app/pro/crm/page.test.ts
-const streamBase = process.env.HEARTH_CRM_STREAM_URL;
+//   OAKTEND_CRM_STREAM_URL=http://localhost:3105 \
+//   OAKTEND_CRM_STREAM_COOKIE='sb-...' npx vitest run src/app/pro/crm/page.test.ts
+const streamBase = process.env.OAKTEND_CRM_STREAM_URL;
 
 describe.skipIf(!streamBase)("served /pro/crm has no deferred rows or nested holes", () => {
   async function get(path: string) {
     const res = await fetch(streamBase + path, {
-      headers: { cookie: process.env.HEARTH_CRM_STREAM_COOKIE ?? "" },
+      headers: { cookie: process.env.OAKTEND_CRM_STREAM_COOKIE ?? "" },
     });
     const html = await res.text();
     return { res, html };

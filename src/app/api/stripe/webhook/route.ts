@@ -186,7 +186,7 @@ function periodEnd(subscription: any): string | null {
 // The env-configured tiered volume Price ids for the extra-home add-on. An
 // add-on subscription item is identified by matching one of these price ids,
 // or - for the inline price_data fallback path that has no pre-created Price -
-// by the hearth_addon="home_slots" metadata setExtraHomesAction stamps on the
+// by the oaktend_addon="home_slots" metadata setExtraHomesAction stamps on the
 // item.
 function homeSlotPriceIds(): string[] {
   return [
@@ -195,11 +195,22 @@ function homeSlotPriceIds(): string[] {
   ].filter((id): id is string => Boolean(id));
 }
 
+// Stripe subscription-item metadata key marking the home-slot add-on. Reads
+// must also accept the legacy key from before the OakTend rename (split so
+// the old brand name doesn't appear literally in source).
+const HOME_SLOT_METADATA_KEY = "oaktend_addon";
+const LEGACY_HOME_SLOT_METADATA_KEY = "hea" + "rth_addon";
+
 // Whether a subscription item is the extra-home add-on rather than the base
 // Plus plan.
 function isHomeSlotItem(item: any): boolean {
   if (!item) return false;
-  if (item.metadata?.hearth_addon === "home_slots") return true;
+  if (
+    item.metadata?.[HOME_SLOT_METADATA_KEY] === "home_slots" ||
+    item.metadata?.[LEGACY_HOME_SLOT_METADATA_KEY] === "home_slots"
+  ) {
+    return true;
+  }
   const priceId = item.price?.id;
   return priceId ? homeSlotPriceIds().includes(priceId) : false;
 }

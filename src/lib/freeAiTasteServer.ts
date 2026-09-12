@@ -93,7 +93,7 @@ function warnMissingMigrationOnce(feature: FreeAiFeature, err: unknown): void {
   warnedMissingMigration = true;
   console.warn(
     `free AI tastes are NOT being metered: claim_free_ai_taste is missing, so migration 0135 is not applied to this database. ` +
-      `Failing OPEN for ${feature} until it is. Paste supabase/PASTE-ME-live-2026-08-28-free-ai-tastes.sql to close the gate.`,
+      `Failing OPEN for ${feature} until it is. Apply supabase/migrations/0135_free_ai_tastes.sql to close the gate.`,
     err
   );
 }
@@ -182,7 +182,7 @@ function warnMissingProMigrationOnce(err: unknown): void {
   warnedMissingProMigration = true;
   console.warn(
     "free pro back-office drafts are NOT being metered: claim_pro_free_taste is missing, so migration 0145 is not applied to this database. " +
-      "Failing OPEN until it is. Paste supabase/PASTE-ME-live-2026-08-29-pro-free-drafts.sql to close the gate.",
+      "Failing OPEN until it is. Apply supabase/migrations/0145_pro_free_tool_drafts.sql to close the gate.",
     err
   );
 }

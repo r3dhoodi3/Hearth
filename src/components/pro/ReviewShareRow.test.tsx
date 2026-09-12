@@ -9,7 +9,7 @@ const props = {
   reviewId: "review-1",
   rating: 5,
   comment: "Great work, fast and tidy.",
-  profileUrl: "https://hearth.example/p/ace-plumbing",
+  profileUrl: "https://oaktend.example/p/ace-plumbing",
 };
 
 beforeEach(() => {
@@ -40,7 +40,7 @@ describe("ReviewShareRow", () => {
 
     await waitFor(() => expect(screen.getByText("Copied!")).toBeInTheDocument());
     expect(writeText).toHaveBeenCalledWith(
-      "Thanks for the kind words! Find me on OakTend: https://hearth.example/p/ace-plumbing"
+      "Thanks for the kind words! Find me on OakTend: https://oaktend.example/p/ace-plumbing"
     );
   });
 

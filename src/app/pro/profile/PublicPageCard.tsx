@@ -120,7 +120,7 @@ export default function PublicPageCard({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* On a phone the field is narrower than the URL, and truncating
-              from the left spent every visible character on "https://hearth…"
+              from the left spent every visible character on "https://oaktend…"
               - the part that is the same for every pro. Below sm it shows the
               path instead, which is the half that identifies the page. The
               Copy button still copies the full URL, and sm and up still show

@@ -337,7 +337,7 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
 }
 
 // The pro's profile photo. FREE for every pro as of 2026-09-08. It used to be a
-// Hearth Pro perk saved by savePublicPageAction below, but a profile picture is
+// OakTend Pro perk saved by savePublicPageAction below, but a profile picture is
 // table stakes, not a cosmetic upsell, so it moved out here with NO hasProPlan()
 // gate. Only the "about" blurb, the share card and the rating widget stay paid.
 //

@@ -23,7 +23,7 @@ describe("web app manifest", () => {
     expect(startUrl).toBeDefined();
     // isPublicPath takes a path, so strip the ?source=pwa attribution marker
     // the same way the middleware sees it (nextUrl.pathname has no query).
-    const path = new URL(startUrl as string, "https://hearth.invalid").pathname;
+    const path = new URL(startUrl as string, "https://oaktend.invalid").pathname;
     expect(isPublicPath(path)).toBe(true);
   });
 });

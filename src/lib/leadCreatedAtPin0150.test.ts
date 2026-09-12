@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 // Red team H1 (2026-08-30) proved on live that the homeowner who posted a lead
@@ -57,14 +57,7 @@ describe("0150 pins contractor_leads.created_at", () => {
     }
   });
 
-  it("ships a paste twin with the same body", () => {
-    const paste = path.join(
-      root,
-      "supabase/PASTE-ME-live-2026-08-30-pin-lead-created-at.sql"
-    );
-    expect(existsSync(paste)).toBe(true);
-    const text = readFileSync(paste, "utf8");
-    expect(text).toContain("new.created_at  := old.created_at;");
-    expect(text).toContain("PRECHECK");
-  });
+  // The "ships a paste twin" case that used to sit here read
+  // supabase/PASTE-ME-live-2026-08-30-pin-lead-created-at.sql. That one-time
+  // paste has been applied to the live database and removed from the repo.
 });

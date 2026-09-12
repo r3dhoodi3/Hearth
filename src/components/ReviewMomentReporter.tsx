@@ -21,7 +21,7 @@ import { reportReviewMoment, type ReviewMoment } from "@/lib/nativeReview";
 // pulse. sessionStorage and not React state, because a fresh mount after a
 // navigation is exactly the repeat being guarded against. ReviewPrompt.tsx
 // still decides when, and whether, to actually ask.
-const REPORTED_PREFIX = "hearth_review_moment_reported:";
+const REPORTED_PREFIX = "oaktend_review_moment_reported:";
 
 export default function ReviewMomentReporter({
   moment,

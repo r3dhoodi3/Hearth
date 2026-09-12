@@ -107,8 +107,8 @@ export default async function ProAskPage(props: {
             initialQuestion={q}
             replaceUrlAfterInitial="/pro/ask"
             endpoint="/api/pro-ask"
-            storageKeyBase="hearth_pro_ask_chat"
-            retentionKeyBase="hearth_pro_ask_retention"
+            storageKeyBase="oaktend_pro_ask_chat"
+            retentionKeyBase="oaktend_pro_ask_retention"
             headingTitle="Ask OakTend for Pros"
             headingSubtitle="Your business copilot"
           />

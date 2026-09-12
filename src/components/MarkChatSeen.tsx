@@ -15,7 +15,7 @@ export default function MarkChatSeen({
     // Record the seen time locally first so the badge can clear instantly and
     // without depending on the server cookie write propagating to document.cookie.
     try {
-      localStorage.setItem(`hearth:seen:${leadId}`, String(Date.now()));
+      localStorage.setItem(`oaktend:seen:${leadId}`, String(Date.now()));
     } catch {
       /* localStorage unavailable */
     }

@@ -205,8 +205,8 @@ export default function ChatsView({
             <AskOakTendRow
               href="/pro/ask"
               subtitle="Your business copilot"
-              storageKeyBase="hearth_pro_ask_chat"
-              retentionKeyBase="hearth_pro_ask_retention"
+              storageKeyBase="oaktend_pro_ask_chat"
+              retentionKeyBase="oaktend_pro_ask_retention"
               userId={askUserId}
               accent="oaktend"
             />

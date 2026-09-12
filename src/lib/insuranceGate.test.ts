@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { fillLegalTokens } from "@/lib/legal";
@@ -106,9 +106,6 @@ describe("the copy itself", () => {
 
 describe("migration 0153: the SQL backstop", () => {
   const MIGRATION = "supabase/migrations/0153_major_job_insurance_gate.sql";
-  // The insurance gate ships to the live DB inside the combined pending paste
-  // (0152 feedback + 0153 insurance concatenated), not a standalone file.
-  const PASTE_ME = "supabase/PASTE-ME-ALL-PENDING-2026-08-31.sql";
   const sql = read(MIGRATION);
 
   // The body of one function, from its CREATE to its closing $$;.
@@ -170,16 +167,9 @@ describe("migration 0153: the SQL backstop", () => {
     );
   });
 
-  it("has a live-DB paste twin carrying both re-created functions", () => {
-    expect(existsSync(repoFile(PASTE_ME))).toBe(true);
-    const paste = read(PASTE_ME);
-    for (const name of ["apply_to_lead", "unlock_direct_request"]) {
-      expect(paste, name).toContain(
-        `create or replace function public.${name}(`
-      );
-    }
-    expect(paste).toContain(INSURANCE_GATE_SQL_ERROR);
-  });
+  // The "live-DB paste twin" case that used to close this suite read
+  // supabase/PASTE-ME-ALL-PENDING-2026-08-31.sql. That one-time paste has been
+  // applied to the live database and removed from the repo.
 });
 
 describe("the actions carry the same gate (source pin)", () => {

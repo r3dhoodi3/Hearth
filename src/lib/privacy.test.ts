@@ -144,7 +144,7 @@ describe("findProClientIdsToScrub", () => {
         }
         return { data: [] };
       }),
-      "Jane+hearth@Gmail.com"
+      "Jane+promo@Gmail.com"
     );
 
     const ids = await findProClientIdsToScrub(admin, "user-1", ["lead-1"]);

@@ -19,21 +19,21 @@ import { isIosSafari, isStandalone } from "@/lib/installState";
 // Legacy forever-dismissed flag. No longer written (dismissing snoozes for a
 // week instead - see SNOOZE_KEY), but still READ, so anyone who dismissed this
 // under the old behavior is never nudged again.
-const DISMISSED_KEY = "hearth_a2hs_dismissed";
+const DISMISSED_KEY = "oaktend_a2hs_dismissed";
 // When the nudge is allowed back, as an epoch-ms timestamp. Written on
 // dismiss: a week of quiet rather than one tap deciding forever, which also
 // covers a mis-tap on a card that appeared under someone's thumb.
-const SNOOZE_KEY = "hearth_a2hs_snoozed_until";
+const SNOOZE_KEY = "oaktend_a2hs_snoozed_until";
 const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
 // Running count of page views, so the nudge waits until someone has actually
 // looked around instead of firing on the very first paint.
-const VIEWS_KEY = "hearth_a2hs_views";
+const VIEWS_KEY = "oaktend_a2hs_views";
 const REQUIRED_VIEWS = 2;
 // Visits to the dashboard specifically. The FIRST one already has the app
 // guide and the alerts competing for the same attention, so an install pitch
 // on top of that is the third thing shouting at someone who just signed up.
 // From the second visit on, the screen is calm enough to ask.
-const HOME_VIEWS_KEY = "hearth_a2hs_home_views";
+const HOME_VIEWS_KEY = "oaktend_a2hs_home_views";
 const REQUIRED_HOME_VIEWS = 2;
 const HOME_PATH = "/dashboard";
 const DELAY_MS = 5000;

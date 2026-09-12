@@ -274,6 +274,13 @@ export default function ToastProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  // The legacy-storage migration used to run here in a useEffect. It does not
+  // any more: React runs CHILD effects before parent effects, so by the time
+  // this one fired every component below had already read the new (still
+  // empty) keys. It is an inline <head> script now, in src/app/layout.tsx, so
+  // it finishes before anything on the page can read a key at all. See
+  // LEGACY_STORAGE_INIT_SCRIPT in src/lib/legacyStorage.ts.
+
   // Clear every pending timer if the provider unmounts.
   useEffect(() => {
     const running = timers.current;

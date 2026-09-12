@@ -188,16 +188,16 @@ describe("pro Messages stays one client component with plain-data props", () => 
 // a couple of conversations, and give it one lead id so the thread branch is
 // covered too:
 //
-//   HEARTH_CHATS_STREAM_URL=http://localhost:3104 \
-//   HEARTH_CHATS_STREAM_LEAD=<lead uuid> \
-//   HEARTH_CHATS_STREAM_COOKIE='sb-...' npx vitest run src/app/pro/chats/page.test.ts
-const streamBase = process.env.HEARTH_CHATS_STREAM_URL;
-const streamLead = process.env.HEARTH_CHATS_STREAM_LEAD;
+//   OAKTEND_CHATS_STREAM_URL=http://localhost:3104 \
+//   OAKTEND_CHATS_STREAM_LEAD=<lead uuid> \
+//   OAKTEND_CHATS_STREAM_COOKIE='sb-...' npx vitest run src/app/pro/chats/page.test.ts
+const streamBase = process.env.OAKTEND_CHATS_STREAM_URL;
+const streamLead = process.env.OAKTEND_CHATS_STREAM_LEAD;
 
 describe.skipIf(!streamBase)("served /pro/chats has no deferred rows or nested holes", () => {
   async function get(path: string) {
     const res = await fetch(streamBase + path, {
-      headers: { cookie: process.env.HEARTH_CHATS_STREAM_COOKIE ?? "" },
+      headers: { cookie: process.env.OAKTEND_CHATS_STREAM_COOKIE ?? "" },
     });
     const html = await res.text();
     return { res, html };

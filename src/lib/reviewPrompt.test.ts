@@ -303,7 +303,7 @@ describe("isFirstSession", () => {
   it("is true the first time, and marks the browser as seen", () => {
     const storage = fakeStorage();
     expect(isFirstSession(storage)).toBe(true);
-    expect(storage.getItem("hearth_first_seen_at")).not.toBeNull();
+    expect(storage.getItem("oaktend_first_seen_at")).not.toBeNull();
   });
 
   it("is false on every call after the first", () => {
@@ -314,7 +314,7 @@ describe("isFirstSession", () => {
   });
 
   it("is false immediately when the browser was already seen before", () => {
-    const storage = fakeStorage({ hearth_first_seen_at: "1700000000000" });
+    const storage = fakeStorage({ oaktend_first_seen_at: "1700000000000" });
     expect(isFirstSession(storage)).toBe(false);
   });
 
@@ -615,7 +615,7 @@ describe("native review: at most three attempts per device per year", () => {
     for (let i = 0; i < NATIVE_REVIEW_MAX_CALLS; i++) {
       recordNativeReviewCall(NOW + i, storage);
     }
-    expect(storage.getItem("hearth_native_review_calls")).not.toBeNull();
+    expect(storage.getItem("oaktend_native_review_calls")).not.toBeNull();
     expect(storage.length).toBe(1);
   });
 
@@ -631,12 +631,12 @@ describe("native review: at most three attempts per device per year", () => {
     expect(canRequestNativeReview(NOW, angry)).toBe(false);
     expect(() => recordNativeReviewCall(NOW, angry)).not.toThrow();
 
-    const junk = fakeStorage({ hearth_native_review_calls: "not json" });
+    const junk = fakeStorage({ oaktend_native_review_calls: "not json" });
     expect(canRequestNativeReview(NOW, junk)).toBe(false);
 
     // A wrong-shaped value is treated as no history rather than as a number.
     const wrongShape = fakeStorage({
-      hearth_native_review_calls: '["yesterday", null]',
+      oaktend_native_review_calls: '["yesterday", null]',
     });
     expect(canRequestNativeReview(NOW, wrongShape)).toBe(true);
   });
@@ -693,7 +693,6 @@ describe("no incentives, and nothing that could grow into one", () => {
 
 describe("migration 0133: app_feedback RLS", () => {
   const MIGRATION = "supabase/migrations/0133_app_feedback.sql";
-  const PASTE_ME = "supabase/PASTE-ME-live-2026-08-27-app-feedback.sql";
   const sql = read(MIGRATION);
 
   it("enables row level security", () => {
@@ -729,13 +728,11 @@ describe("migration 0133: app_feedback RLS", () => {
     // recordReviewPromptEvent is a server action: any signed-in account can
     // call it directly, in a loop. "At most one row per kind" has to be a
     // database constraint, not an app-level read-then-write.
-    for (const source of [sql, read(PASTE_ME)]) {
-      expect(source).toContain(
-        "create unique index if not exists app_feedback_one_event_per_kind_idx"
-      );
-      expect(source).toContain("on public.app_feedback (user_id, kind)");
-      expect(source).toContain("where message is null");
-    }
+    expect(sql).toContain(
+      "create unique index if not exists app_feedback_one_event_per_kind_idx"
+    );
+    expect(sql).toContain("on public.app_feedback (user_id, kind)");
+    expect(sql).toContain("where message is null");
   });
 
   it("leaves the feedback form's own rows unconstrained", () => {
@@ -746,18 +743,14 @@ describe("migration 0133: app_feedback RLS", () => {
     );
   });
 
-  it("has a matching PASTE-ME bundle carrying the same table and policy", () => {
-    const paste = read(PASTE_ME);
-    expect(paste).toContain("create table if not exists public.app_feedback");
-    expect(paste).toContain('create policy "app_feedback self insert" on public.app_feedback');
-    expect(paste).toContain("for insert to authenticated");
-  });
+  // The "matching PASTE-ME bundle" case that used to close this suite read
+  // supabase/PASTE-ME-live-2026-08-27-app-feedback.sql. That one-time paste has
+  // been applied to the live database and removed from the repo.
 });
 
 describe("migration 0142: the three return-from-the-store kinds", () => {
   const MIGRATION = "supabase/migrations/0142_review_prompt_events.sql";
-  const PASTE_ME = "supabase/PASTE-ME-live-2026-08-29-review-prompt.sql";
-  const sources = [read(MIGRATION), read(PASTE_ME)];
+  const sources = [read(MIGRATION)];
 
   it("widens the kind constraint to all six events", () => {
     for (const sql of sources) {
@@ -797,13 +790,9 @@ describe("migration 0142: the three return-from-the-store kinds", () => {
     }
   });
 
-  it("the paste bundle ends with verify queries an owner can actually run", () => {
-    const paste = read(PASTE_ME);
-    expect(paste).toContain("VERIFY");
-    expect(paste).toContain("pg_get_constraintdef(oid)");
-    expect(paste).toContain("from pg_indexes");
-    expect(paste).toContain("relrowsecurity");
-  });
+  // The paste-bundle verify-query case that used to close this suite read
+  // supabase/PASTE-ME-live-2026-08-29-review-prompt.sql, a one-time paste that
+  // has been applied to the live database and removed from the repo.
 });
 
 // The two writes into app_feedback are both reachable as server actions with

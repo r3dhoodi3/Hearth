@@ -27,7 +27,7 @@ support.
 
 The app now carries its own half of this fix: `/reset-password?step=update`
 renders the "set a new password" form only when a short-lived, httpOnly
-`hearth_pwrecovery` cookie is present, and that cookie is only ever set by
+`oaktend_pwrecovery` cookie is present, and that cookie is only ever set by
 `/auth/callback` or `/auth/confirm` after a successful recovery exchange (see
 `src/lib/passwordRecovery.ts`). That closes the walk-up through our own page.
 It does not close the API: `supabase.auth.updateUser` is callable directly from
@@ -85,7 +85,7 @@ credential sitting in a mailbox.
 Two other expiries stack on top of it and are already fixed in code, so nothing
 to click:
 
-- The `hearth_pwrecovery` cookie is 15 minutes (`src/lib/passwordRecovery.ts`),
+- The `oaktend_pwrecovery` cookie is 15 minutes (`src/lib/passwordRecovery.ts`),
   so the "set a new password" form is only reachable for 15 minutes after the
   click, and `src/app/reset-password/actions.ts` clears it the moment the
   password actually changes. One emailed link, one password change.
@@ -168,7 +168,7 @@ single signed-in request: the middleware calls `signOut()` (which revokes the
 refresh token at Supabase, not just locally), clears the auth cookies, and lands
 the person on `/signin?expired=1` with a plain "you were signed out because this
 device had not used OakTend in a while". The stamp lives in one httpOnly cookie
-(`hearth_seen`), written at most once an hour, and `/auth/signout` clears it
+(`oaktend_seen`), written at most once an hour, and `/auth/signout` clears it
 along with the session.
 
 **Also on that screen, worth knowing**: "Sign out other devices" in the app

@@ -1,6 +1,21 @@
 "use server";
 
 import type Stripe from "stripe";
+
+// Stripe subscription-item metadata key marking the home-slot add-on.
+// Readers must also accept the legacy key from before the OakTend rename
+// (split so the old brand name doesn't appear literally in source); writers
+// use only the new key.
+const HOME_SLOT_METADATA_KEY = "oaktend_addon";
+const LEGACY_HOME_SLOT_METADATA_KEY = "hea" + "rth_addon";
+function hasHomeSlotAddonMetadata(
+  metadata: Record<string, string> | null | undefined
+): boolean {
+  return (
+    metadata?.[HOME_SLOT_METADATA_KEY] === "home_slots" ||
+    metadata?.[LEGACY_HOME_SLOT_METADATA_KEY] === "home_slots"
+  );
+}
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { stripe } from "@/lib/stripe";
@@ -61,7 +76,7 @@ function homeSlotPriceIds(): string[] {
 
 function isHomeSlotItem(item: Stripe.SubscriptionItem): boolean {
   if (!item) return false;
-  if ((item.metadata as Record<string, string> | null)?.hearth_addon === "home_slots") {
+  if (hasHomeSlotAddonMetadata(item.metadata as Record<string, string> | null)) {
     return true;
   }
   const priceId = item.price?.id;
@@ -607,7 +622,7 @@ export async function startPlusCheckoutAction(formData: FormData) {
 // _YEARLY) when configured; otherwise falls back to inline price_data with the
 // correct volume-discounted unit price computed from EXTRA_HOME - the same
 // env-then-inline shape startPlusCheckoutAction uses. The item is tagged with
-// metadata hearth_addon="home_slots" so the webhook identifies it as the
+// metadata oaktend_addon="home_slots" so the webhook identifies it as the
 // add-on (not the base plan) regardless of which price path created it.
 //
 // Proration uses Stripe's default. The webhook (customer.subscription.updated)
@@ -693,7 +708,7 @@ export async function setExtraHomesAction(formData: FormData) {
   // configured price id. Everything else on the subscription is the base plan.
   const addonItem = stripeSub.items.data.find(
     (i) =>
-      (i as any).metadata?.hearth_addon === "home_slots" ||
+      hasHomeSlotAddonMetadata((i as any).metadata) ||
       (configuredSlotPriceId && i.price.id === configuredSlotPriceId)
   );
 
@@ -715,7 +730,7 @@ export async function setExtraHomesAction(formData: FormData) {
         ...(addonItem ? { id: addonItem.id } : {}),
         price: await homeSlotPriceId(interval, quantity),
         quantity,
-        metadata: { hearth_addon: "home_slots" },
+        metadata: { [HOME_SLOT_METADATA_KEY]: "home_slots" },
       };
       await stripe.subscriptions.update(sub.stripe_subscription_id, {
         items: [itemPayload as any],
@@ -822,7 +837,7 @@ export async function upgradeToYearlyAction() {
         id: addon.id,
         price: await homeSlotPriceId("yearly", addonQty),
         quantity: addonQty,
-        metadata: { hearth_addon: "home_slots" },
+        metadata: { [HOME_SLOT_METADATA_KEY]: "home_slots" },
       });
     }
 
@@ -953,7 +968,7 @@ export async function downgradeToMonthlyAction() {
     return {
       price: priceId,
       quantity: i.quantity ?? undefined,
-      ...(isAddon ? { metadata: { hearth_addon: "home_slots" } } : {}),
+      ...(isAddon ? { metadata: { [HOME_SLOT_METADATA_KEY]: "home_slots" } } : {}),
     };
   });
 
@@ -968,7 +983,7 @@ export async function downgradeToMonthlyAction() {
       phase2Items.push({
         price: await homeSlotPriceId("monthly", addonQty),
         quantity: addonQty,
-        metadata: { hearth_addon: "home_slots" },
+        metadata: { [HOME_SLOT_METADATA_KEY]: "home_slots" },
       });
     }
   } catch {

@@ -2,9 +2,14 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { readLegacyCookie } from "@/lib/legacyCookies";
 import { getCurrentContractor } from "@/lib/contractor";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
-import { isUnreadSince } from "@/lib/unread";
+import {
+  chatSeenCookieOptions,
+  isUnreadSince,
+  parseSeenMap,
+} from "@/lib/unread";
 import { isTerminalLeadStatus } from "../leadStatusLabel";
 import { plainPreview } from "@/lib/previewText";
 import MarkChatSeen from "@/components/MarkChatSeen";
@@ -26,29 +31,29 @@ import {
 } from "./actions";
 
 // Seen-state cookie shared with the layout's unread badge.
-const SEEN_COOKIE = "hearth_chat_seen"; // { [leadId]: ISO timestamp last viewed }
+const SEEN_COOKIE = "oaktend_chat_seen"; // { [leadId]: ISO timestamp last viewed }
 
 // async since Next 15, where cookies() returns a Promise.
+//
+// parseSeenMap (@/lib/unread), never a bare JSON.parse: this cookie is not
+// httpOnly, so a page script can put anything in it, and a JSON.parse of
+// "[1,2]" or "null" here used to 500 the whole inbox for that browser until
+// the cookie was cleared by hand. Anything that is not a flat
+// { string: string } object now reads as "nothing seen".
 async function readSeenMap(): Promise<Record<string, string>> {
-  try {
-    return JSON.parse((await cookies()).get(SEEN_COOKIE)?.value || "{}");
-  } catch {
-    return {};
-  }
+  return parseSeenMap(readLegacyCookie(await cookies(), SEEN_COOKIE));
 }
 
 // Mark a conversation as read (called from the open thread).
 async function markChatSeenAction(leadId: string) {
   "use server";
   const jar = await cookies();
-  let map: Record<string, string> = {};
-  try {
-    map = JSON.parse(jar.get(SEEN_COOKIE)?.value || "{}");
-  } catch {
-    map = {};
-  }
+  const map = parseSeenMap(readLegacyCookie(jar, SEEN_COOKIE));
   map[leadId] = new Date().toISOString();
-  jar.set(SEEN_COOKIE, JSON.stringify(map), { path: "/" });
+  // Explicit options (see chatSeenCookieOptions): this used to be written with
+  // `{ path: "/" }` alone, i.e. a session cookie with no Secure flag, so every
+  // thread went back to unread the moment the browser was closed.
+  jar.set(SEEN_COOKIE, JSON.stringify(map), chatSeenCookieOptions());
   revalidatePath("/pro/chats");
 }
 

@@ -130,9 +130,10 @@ Where things stand as of tonight, so the list below reads against reality:
   error instead of an alert. Do not "fix" the test key before Landen says.
 - **Incident, resolved: an Apple sign-up got no `public.users` row**, which
   broke claiming a home and the terms record for that account (FK errors).
-  Hotfix `supabase/PASTE-ME-fix-missing-user-row-2026-09-01.sql` backfilled
-  the row and re-asserted `handle_new_user()` as security definer; Landen ran
-  it live at 21:07. Root cause is not fully proven, so: **after any fresh
+  A one-time hotfix paste backfilled the row and re-asserted
+  `handle_new_user()` as security definer; Landen ran it live at 21:07. (That
+  paste file has since been deleted from the repo along with the rest of the
+  applied one-time pastes.) Root cause is not fully proven, so: **after any fresh
   Apple sign-up, check the account can claim a home**. If it recurs, the next
   step is an ensure-row fallback in `/auth/callback` (code change, small).
 - **Shipped be74eda: stale-deploy auto-recovery.** Pages left open across a
@@ -172,56 +173,83 @@ House rules Landen holds every session to; they apply to yours too:
    byte-identical), and every homeowner-side phone change gets mirrored on
    the pro side in the same wave.
 
-## Follow-ups from 2026-09-08 (oaktend.com is live, read before the items below)
+## Domain and infrastructure state (updated 2026-09-12)
 
-Done today by Fable with Landen: Cloudflare DNS for oaktend.com (two DNS-only
-CNAMEs, root -> e40696a40108d92a.vercel-dns-017.com, www -> cname.vercel-dns.com),
-oaktend.com added to the Vercel project as the production domain with a
-certificate, www.oaktend.com as a 307 redirect to the root, and the Vercel
-project renamed from `hearth` to `oaktend` (team slug `hearth-test` unchanged).
-`gethearth.vercel.app` still answers, so nothing that points at it broke yet.
-Also merged your 13 commits into `wave/2026-09-07-overnight` (local, not pushed):
-`hearth-*` Tailwind tokens and the visible "Hearth" wordmark in your nav work
-were renamed to `oaktend`, and a review of the signup wave added a resend
-cooldown, a plain CAPTCHA error message, and a re-auth budget fix.
+`https://oaktend.com` is the production domain and the only hostname that serves
+the app. Cloudflare DNS points at Vercel with two DNS-only records (root and
+`www`), `www.oaktend.com` redirects to the root, and the certificate is valid.
+
+**The old `*.vercel.app` hostnames are gone.** Both of the project's former
+preview domains were detached from the Vercel project on 2026-09-12, so nothing
+answers on them any more. `oaktend.vercel.app` was added in their place purely
+as a `308` redirect to `https://oaktend.com`. Anything that still pointed at an
+old hostname (Supabase redirect entries, Turnstile hostnames, printed QR codes)
+has to point at `oaktend.com` instead; there is no fallback left.
+
+Also done: Supabase Auth Site URL is `https://oaktend.com` with the
+`https://oaktend.com/**` redirect entries in place, and the Stripe webhook
+endpoint is `https://oaktend.com/api/stripe/webhook` with its signing secret in
+`STRIPE_WEBHOOK_SECRET`. The Vercel project itself was renamed from the old
+brand to `oaktend`.
+
+Cosmetic renames still owed by the owner, neither of which affects a URL, a key,
+or a connection string:
+
+- The Vercel **team slug** is still `hearth-test`. Renaming it changes dashboard
+  URLs only.
+- The local checkout folder is still `C:\Users\lande\hearth`. Nothing in the
+  repo depends on the folder name.
 
 What is still owed, in order. Items marked (Landen) need his logins or a secret.
 
-1. (Landen) Supabase -> Authentication -> URL Configuration: Site URL
-   `https://oaktend.com`, add `https://oaktend.com/**` to the redirect list.
-   Keep the `gethearth.vercel.app` entries until every link below is moved.
-2. (Landen) Vercel env: only 15 variables exist on the project. Missing and
+1. (Landen) Vercel env: only 15 variables exist on the project. Missing and
    read by the code: `ANTHROPIC_API_KEY` (every AI feature is dead without it),
    `STRIPE_SECRET_KEY` plus the `STRIPE_PRICE_*` / `STRIPE_PRO_*` ids (checkout
    and wallet deposits), `RISK_HASH_SALT`, `CRON_SECRET`, `RESEND_API_KEY` +
    `RESEND_FROM`, the three `TWILIO_*` vars, `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.
-   After item 1: `NEXT_PUBLIC_SITE_URL` = `https://oaktend.com`, then redeploy.
-3. (Landen) Stripe -> Webhooks: endpoint to `https://oaktend.com/api/stripe/webhook`
-   and paste the new signing secret into `STRIPE_WEBHOOK_SECRET`.
-4. Turnstile: there is NO widget in Landen's Cloudflare account, so the
+   Confirm `NEXT_PUBLIC_SITE_URL` = `https://oaktend.com`, then redeploy.
+2. Turnstile: there is NO widget in Landen's Cloudflare account, so the
    `captchaToken` plumbing you built runs with no key and is a no-op. Create
-   one (Turnstile -> Add widget, hostnames oaktend.com, www.oaktend.com,
-   gethearth.vercel.app, localhost), site key to Vercel as above, secret into
-   Supabase Attack Protection. Test password sign-in on a phone first; the
-   overnight audit saw error 600010 on the live sign-in page.
-5. Supabase email OTP expiry stays at 3600 seconds (Landen's call, 09-08).
+   one (Turnstile -> Add widget, hostnames `oaktend.com`, `www.oaktend.com`,
+   `localhost`), site key to Vercel as above, secret into Supabase Attack
+   Protection. Test password sign-in on a phone first; the overnight audit saw
+   error 600010 on the live sign-in page.
+3. Supabase email OTP expiry stays at 3600 seconds (Landen's call, 09-08).
    The verify screen now has a 60 second resend cooldown and a 5 per page cap
    instead.
-6. Cloudflare Email Routing for oaktend.com (hello, support, legal, privacy,
+4. Cloudflare Email Routing for oaktend.com (hello, support, legal, privacy,
    security) is still not set up. Do it before Resend goes live so replies to
    the sending domain land somewhere.
-7. Once 1 to 3 are done and verified on oaktend.com, remove
-   `gethearth.vercel.app` from the Supabase redirect list and from Turnstile.
-   Do not delete the domain from Vercel; QR codes and printed cards use it.
 
 ## Before launch
 
-1. **RLS audit, live DB.** Run queries 1a and 1b from
-   `supabase/PASTE-ME-live-audit-rls.sql` in the Supabase SQL editor and confirm
-   both return zero rows. On 08-20 the live `properties` table had drifted to
-   wide open from a dashboard click; other tables were spot-checked, not audited.
-   Never use the dashboard policy templates; every policy lives in
-   `supabase/migrations`.
+1. **RLS audit, live DB.** Run both of these in the Supabase SQL editor and
+   confirm each returns zero rows. (They used to live in a one-time paste file;
+   that file has been deleted along with the rest of the applied pastes, so the
+   queries are inlined here.)
+
+   ```sql
+   -- 1a. Tables in public with RLS off
+   select c.relname as table_without_rls
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity
+    order by 1;
+
+   -- 1b. Policies that are wide open (qual true) or granted to anon/public
+   select tablename, policyname, roles, cmd, qual, with_check
+     from pg_policies
+    where schemaname = 'public'
+      and (
+        qual = 'true' or with_check = 'true'
+        or roles::text like '%anon%' or roles::text = '{public}'
+      )
+    order by tablename, policyname;
+   ```
+
+   On 08-20 the live `properties` table had drifted to wide open from a
+   dashboard click; other tables were spot-checked, not audited. Never use the
+   dashboard policy templates; every policy lives in `supabase/migrations`.
 2. **Email: Resend SMTP in Supabase.** Supabase Auth's built-in mailer only
    delivers to project team members (about 2 an hour). Authentication ->
    SMTP settings -> Resend host, port 465, user `resend`, password = Resend API
@@ -234,7 +262,7 @@ What is still owed, in order. Items marked (Landen) need his logins or a secret.
    Vercel as `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (the signup forms read it; if
    the forms do not yet render the widget, tell Landen and it is a small code
    change).
-4. **Per-IP rate limit on the AI routes.** Vercel -> project `hearth` ->
+4. **Per-IP rate limit on the AI routes.** Vercel -> project `oaktend` ->
    Firewall -> Rules -> add: path starts with `/api/ask` OR `/api/pro-ask`,
    rate limit 30 requests per minute per IP, action: deny. Second rule:
    `/api/` overall, 120 per minute per IP. Code already limits per account

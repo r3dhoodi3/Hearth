@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { legacyKey } from "@/lib/legacyStorage";
 import { PW_RECOVERY_COOKIE } from "@/lib/passwordRecovery";
 
 // Clear the recovery cookie once the password has actually been changed, so
@@ -16,4 +17,8 @@ import { PW_RECOVERY_COOKIE } from "@/lib/passwordRecovery";
 export async function clearPasswordRecoveryAction(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(PW_RECOVERY_COOKIE);
+  // Also clear the pre-rename name. The page reads it with the legacy
+  // fallback, so leaving it behind would keep the form reachable for the rest
+  // of the 15 minutes - exactly what this action exists to prevent.
+  cookieStore.delete(legacyKey(PW_RECOVERY_COOKIE));
 }

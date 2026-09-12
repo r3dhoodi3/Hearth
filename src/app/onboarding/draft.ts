@@ -21,7 +21,7 @@ import type { PublicParcelFacts } from "@/lib/parcel";
 // facts the lookup returned - the same public-record values already on screen
 // in the form fields. It stays on the device that typed it, it is cleared the
 // moment the claim is submitted, and it expires on its own after a week.
-export const HOME_ONBOARDING_DRAFT_KEY = "hearth.home-onboarding.v1";
+export const HOME_ONBOARDING_DRAFT_KEY = "oaktend.home-onboarding.v1";
 
 // Older than this and the draft is thrown away rather than restored. Someone
 // coming back a week later is starting over, not resuming, and silently

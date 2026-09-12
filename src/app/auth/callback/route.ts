@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   // nothing about who chose it.
   //
   // This decides ONE thing: whether to hand back the short-lived
-  // hearth_pwrecovery cookie that /reset-password requires before it will
+  // oaktend_pwrecovery cookie that /reset-password requires before it will
   // render the "set a new password" form. It grants nothing else, and a forged
   // ?type=recovery on a link with no valid code never reaches the set, because
   // everything below is inside `if (code)` and the exchange has to succeed.

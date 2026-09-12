@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Footprints, X } from "lucide-react";
 
-const DISMISS_KEY = "hearth_walkthrough_nudge_dismissed_at";
+const DISMISS_KEY = "oaktend_walkthrough_nudge_dismissed_at";
 
 // Prominent, dismissible nudge toward /walkthrough for confirming
 // onboarding-estimated system details. Dismiss is PERMANENT (per browser):

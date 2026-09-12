@@ -16,7 +16,7 @@ import InlineSpinner from "@/components/InlineSpinner";
 // not a second feature. Unlike InviteNeighbor's moment mode, there is no
 // dismiss button here, so "shown once, ever" is marked the moment it
 // actually becomes visible rather than on a later action.
-const SEEN_KEY = "hearth_postjob_referral_seen";
+const SEEN_KEY = "oaktend_postjob_referral_seen";
 
 function alreadySeen(): boolean {
   try {

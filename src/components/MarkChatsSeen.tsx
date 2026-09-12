@@ -19,7 +19,7 @@ export default function MarkChatsSeen({
     if (!leadIds.length) return;
     const now = String(Date.now());
     try {
-      for (const id of leadIds) localStorage.setItem(`hearth:seen:${id}`, now);
+      for (const id of leadIds) localStorage.setItem(`oaktend:seen:${id}`, now);
     } catch {
       /* localStorage unavailable */
     }

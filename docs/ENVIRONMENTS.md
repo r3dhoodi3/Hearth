@@ -9,7 +9,7 @@ the mistakes this document is about.
 Today Vercel Preview and Vercel Production run on the **same credentials**.
 `STATUS.md` records that `ANTHROPIC_API_KEY`, `RISK_HASH_SALT` and
 `STRIPE_SECRET_KEY` were set as team **shared** environment variables linked to
-the Hearth project, and `docs/GO-LIVE-WIRING.md` tells you to set the Supabase
+the OakTend project, and `docs/GO-LIVE-WIRING.md` tells you to set the Supabase
 variables on "Production, Preview and Development". So every preview deploy -
 every branch, every pull request, including one from a contributor you have
 never met - holds:
@@ -34,7 +34,7 @@ What follows fixes it. Roughly two hours of clicking, once.
 
 1. supabase.com/dashboard -> **New project**.
    - Organisation: the same one as the live project.
-   - Name: **`hearth-staging`**.
+   - Name: **`oaktend-staging`**.
    - Database password: generate, save to your password manager.
    - Region: same as live.
    - Plan: Free is fine. Staging has no customers, and a project that pauses
@@ -79,7 +79,7 @@ do not reuse the production one.
 | --- | --- |
 | `RISK_HASH_SALT` | A fresh random string. Run `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Note: staging hashes will not match production hashes, which is the point. |
 | `VAPID_PRIVATE_KEY` / `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | `npx web-push generate-vapid-keys` gives a fresh pair. Push subscriptions are per key pair, so staging cannot push to a real user's phone. |
-| `ANTHROPIC_API_KEY` | console.anthropic.com -> Settings -> API keys -> Create key, named `hearth-preview`, with its own low spend limit. A runaway loop on a branch then costs $5, not the month's budget. |
+| `ANTHROPIC_API_KEY` | console.anthropic.com -> Settings -> API keys -> Create key, named `oaktend-preview`, with its own low spend limit. A runaway loop on a branch then costs $5, not the month's budget. |
 | `SUPABASE_SERVICE_ROLE_KEY` | The staging project's service_role key from step 1. |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The staging project's, from step 1. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / the price ids | The test-mode values from step 2. |
@@ -93,13 +93,13 @@ do not reuse the production one.
 This is the step that actually separates the two, and the one that is easy to
 get half-right.
 
-1. vercel.com -> the `hearth` project -> **Settings** -> **Environment
+1. vercel.com -> the `oaktend` project -> **Settings** -> **Environment
    Variables**.
 2. **First, deal with the shared ones.** Variables set at the team level show up
    on the **Shared** tab, not in the project list, and `npx vercel env ls` does
    not show them at all (`STATUS.md` notes this). `ANTHROPIC_API_KEY`,
    `RISK_HASH_SALT` and `STRIPE_SECRET_KEY` are currently shared. For each:
-   unlink it from the `hearth` project, then add it back as a **project**
+   unlink it from the `oaktend` project, then add it back as a **project**
    variable so it can be scoped per environment. A shared variable cannot be
    different per environment, which is the whole problem.
 3. For every variable in the list, click **Edit** and set the environment

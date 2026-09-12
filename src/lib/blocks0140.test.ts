@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -21,7 +21,6 @@ const repoFile = (rel: string) =>
 const read = (rel: string) => readFileSync(repoFile(rel), "utf8");
 
 const MIGRATION = "supabase/migrations/0140_blocks_direct_requests.sql";
-const PASTE_ME = "supabase/PASTE-ME-live-2026-08-28-blocks-direct-requests.sql";
 
 const sql = read(MIGRATION);
 
@@ -116,41 +115,6 @@ describe("migration 0140: the pair-uniqueness constraint is named", () => {
   });
 });
 
-describe("the live-DB bundle", () => {
-  it("exists and carries the whole migration", () => {
-    expect(existsSync(repoFile(PASTE_ME))).toBe(true);
-    const paste = read(PASTE_ME);
-    expect(paste).toContain(
-      "create or replace function public.unlock_direct_request(p_lead uuid)"
-    );
-    expect(paste).toContain("add constraint user_blocks_reason_len");
-    expect(paste).toContain("add constraint user_blocks_pair_uniq");
-  });
-
-  it("matches the migration statement for statement, modulo comments", () => {
-    // Strip full-line SQL comments (-- ...) and blank lines from both, then
-    // compare: every real statement in the PASTE-ME must be identical to the
-    // migration's. Wrapper prose (headers, footers, VERIFY queries, which are
-    // themselves commented out) disappears in this comparison, which is the
-    // point.
-    const strip = (text: string) =>
-      text
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !line.startsWith("--"))
-        .join("\n");
-
-    const migrationBody = strip(sql);
-    const pasteBody = strip(read(PASTE_ME));
-
-    expect(migrationBody.length).toBeGreaterThan(0);
-    expect(pasteBody).toContain(migrationBody);
-  });
-
-  it("says how to verify the run", () => {
-    const paste = read(PASTE_ME);
-    expect(paste).toContain("VERIFY");
-    expect(paste).toContain("user_blocks_reason_len");
-    expect(paste).toContain("user_blocks_pair_uniq");
-  });
-});
+// The "live-DB bundle" suite that used to close this file read
+// supabase/PASTE-ME-live-2026-08-28-blocks-direct-requests.sql. That one-time
+// paste has been applied to the live database and removed from the repo.

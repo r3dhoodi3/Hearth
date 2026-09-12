@@ -2,14 +2,17 @@ import { type NextFetchEvent, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { attachDeviceCookie } from "@/lib/risk/cookies";
 import { logGpcSignalOncePerSession } from "@/lib/gpc";
+import { envCompat } from "@/lib/legacyStorage";
 
-// Opt-in stopwatch for the middleware itself, off unless HEARTH_MW_TIMING=1 is
-// set on the server. It exists because the middleware runs before Next starts
-// rendering, so its cost is invisible in every page-level measurement: the only
-// honest way to answer "how long does the auth path take per request" is to
-// time it here. Off by default so production never pays for the header, and it
-// never carries anything but a duration.
-const TIMING = process.env.HEARTH_MW_TIMING === "1";
+// Opt-in stopwatch for the middleware itself, off unless OAKTEND_MW_TIMING=1
+// is set on the server (envCompat, src/lib/legacyStorage.ts, also honors the
+// equivalent pre-rename env var name for a deploy that has not renamed it in
+// the hosting provider yet). It exists because the middleware runs before
+// Next starts rendering, so its cost is invisible in every page-level
+// measurement: the only honest way to answer "how long does the auth path
+// take per request" is to time it here. Off by default so production never
+// pays for the header, and it never carries anything but a duration.
+const TIMING = envCompat("MW_TIMING") === "1";
 
 export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const startedAt = TIMING ? performance.now() : 0;

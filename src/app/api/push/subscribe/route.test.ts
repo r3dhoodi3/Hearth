@@ -81,7 +81,7 @@ import { DELETE, POST } from "./route";
 const APPLE_ENDPOINT = "https://web.push.apple.com/abcdef";
 
 function post(body: unknown, headers: Record<string, string> = {}): NextRequest {
-  return new Request("https://hearth.test/api/push/subscribe", {
+  return new Request("https://oaktend.test/api/push/subscribe", {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
@@ -89,7 +89,7 @@ function post(body: unknown, headers: Record<string, string> = {}): NextRequest 
 }
 
 function del(body: unknown): NextRequest {
-  return new Request("https://hearth.test/api/push/subscribe", {
+  return new Request("https://oaktend.test/api/push/subscribe", {
     method: "DELETE",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),

@@ -66,7 +66,7 @@ function restore(name: string, value: string | undefined) {
 // A monitor's GET. The route reads one header off it (x-forwarded-for, for the
 // per-IP limiter) and nothing else.
 function request(ip?: string) {
-  return new Request("https://gethearth.app/api/health", {
+  return new Request("https://oaktend.com/api/health", {
     headers: ip ? { "x-forwarded-for": ip } : {},
   });
 }
@@ -169,7 +169,7 @@ describe("the per-IP limit on a public, service-role endpoint", () => {
 
   it("prefers Vercel's own header over a spoofable x-forwarded-for", async () => {
     const { GET } = await import("./route");
-    const req = new Request("https://hearth.app/api/health", {
+    const req = new Request("https://oaktend.com/api/health", {
       headers: {
         "x-vercel-forwarded-for": "198.51.100.5",
         "x-forwarded-for": "9.9.9.9, 198.51.100.5",

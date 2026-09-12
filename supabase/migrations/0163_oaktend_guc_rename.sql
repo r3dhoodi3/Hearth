@@ -1,65 +1,69 @@
--- ============================================================================
--- HEARTH LIVE-DB PASTE: migration 0150 (2026-08-30)
--- Paste this WHOLE file into the Supabase SQL editor and run it ONCE, after
--- the 0147-0149 bundle. Safe to re-run.
--- PRECHECK: refuses to run if the lock trigger function is missing.
--- ============================================================================
+-- =============================================================================
+-- OakTend - rename the privileged-write GUC flags (0163)
+-- RUN THIS AGAINST THE LIVE DATABASE (Supabase SQL editor). Apply after 0162.
+--
+-- WHY THIS EXISTS
+--
+-- The brand rename (Hearth -> OakTend) moves the two transaction-local GUC
+-- flags the app checks from `hearth.lead_write` / `hearth.ownership_write`
+-- to `oaktend.lead_write` / `oaktend.ownership_write`. New application code
+-- (and any new SECURITY DEFINER RPC written from now on) sets only the new
+-- names via set_config. This migration re-creates the two functions that
+-- READ the flag so each one checks the new name first and falls back to the
+-- old one, so the many already-deployed SECURITY DEFINER RPCs (apply_to_lead,
+-- choose_applicant, charge_lead, rehire_pro, record_ownership_check, and
+-- every other migration that calls
+-- `perform set_config('hearth.lead_write', 'on', true)` or the ownership
+-- equivalent) keep working exactly as before without themselves being
+-- touched - those calls live inside migrations under supabase/migrations/,
+-- which this rename never edits.
+--
+-- FUNCTIONS FOUND (grepped every migration for
+-- "current_setting('hearth.lead_write'" / "...ownership_write'"; each one
+-- re-created below from its LATEST live definition, confirmed by grepping
+-- every migration for "create or replace function public.<name>"):
+--   * public.enforce_contractor_leads_locked() - latest body: 0150
+--     (pin_lead_created_at). Re-issued byte-for-byte from 0150 with only the
+--     v_privileged line changed.
+--   * public.enforce_properties_ownership_locked() - latest (only) body: 0095
+--     (ownership_verification). Re-issued byte-for-byte from 0095 with only
+--     the v_privileged line changed.
+--
+-- Neither function's signature or RETURNS type changes, so CREATE OR REPLACE
+-- preserves the existing trigger bindings (contractor_leads_locked,
+-- properties_ownership_locked) untouched - no DROP/CREATE TRIGGER needed.
+--
+-- CHECK EXPRESSION: coalesce(nullif(current_setting('oaktend.lead_write',
+-- true), ''), current_setting('hearth.lead_write', true), '') = 'on'. Reads
+-- the new GUC first; if it is unset or empty, falls back to the legacy GUC;
+-- if both are unset, current_setting(..., true) returns null and the
+-- trailing '' keeps the coalesce (and therefore v_privileged) from ever
+-- evaluating to null, matching the original coalesce(current_setting(...),
+-- '') = 'on' style exactly. Same shape for ownership_write.
+--
+-- Safe to re-run.
+-- =============================================================================
+
+-- ---- PRECHECK: refuse to run against a database that isn't caught up -------
 do $$
 begin
   if not exists (
-    select 1 from pg_proc
-    where proname = 'enforce_contractor_leads_locked' and pronamespace = 'public'::regnamespace
+    select 1 from pg_indexes
+    where schemaname = 'public' and indexname = 'properties_address_unique'
   ) then
-    raise exception 'PRECHECK: public.enforce_contractor_leads_locked() is missing. Apply migrations through 0131 first. Nothing was changed.';
+    raise exception 'PRECHECK: index public.properties_address_unique is missing. Apply migration 0162 before this file. Nothing was changed.';
   end if;
 end
 $$;
 
--- =============================================================================
--- Hearth - pin contractor_leads.created_at (0150)
--- RUN THIS AGAINST THE LIVE DATABASE (Supabase SQL editor); editing repo SQL
--- alone does NOT change the already-deployed database. Apply after 0149.
---
--- WHY THIS EXISTS (red team H1, 2026-08-30, proven on live)
---
--- The homeowner who posted a lead holds full UPDATE on their own row through
--- RLS policy "contractor_leads owner all" (0002), and the lock trigger
--- enforce_contractor_leads_locked() pins property_id, issue_id, direct_to,
--- payout_amount, paid, status and the homeowner fields, but never created_at.
--- Meanwhile apply_to_lead prices the lead fee from that column: 15% off after
--- 3 days, 30% off after 7 (lead_aging_pct, 0149; lead_fee_cents before it).
--- So a homeowner, or a dual-side account, or a pro who talks a homeowner into
--- it, could run one plain update that sets created_at nine days into the past
--- and buy the lead at the maximum markdown on the day it was posted. Hearth
--- loses up to 30% of the fee on every such apply, and because the aging
--- markdown always beats the 10% member discount, membership no longer matters
--- for pricing that lead.
---
--- WHAT THIS CHANGES
---
--- One function, re-issued byte-for-byte from 0131 with two added lines:
---   INSERT (unprivileged): created_at := now(), so a back-dated insert is
---     impossible too (the column defaults to now(); this closes the explicit
---     override).
---   UPDATE (unprivileged, depth <= 1): created_at := old.created_at, in the
---     same block that already pins property_id and issue_id.
--- The privileged path (hearth.lead_write = on, set only inside the SECURITY
--- DEFINER RPCs) is untouched, and no RPC writes created_at anyway. No app code
--- writes created_at on contractor_leads (checked: nothing in src does), so
--- nothing legitimate changes.
---
--- No RLS change, no grant change, no new column. Idempotent: create or
--- replace. The trigger binding from 0121/0131 stays as it is; only the
--- function body changes.
--- =============================================================================
-
+-- ---- public.enforce_contractor_leads_locked() (latest body: 0150) ----------
 create or replace function public.enforce_contractor_leads_locked()
 returns trigger
 language plpgsql
 set search_path = public
 as $$
 declare
-  v_privileged boolean := coalesce(current_setting('hearth.lead_write', true), '') = 'on';
+  v_privileged boolean := coalesce(nullif(current_setting('oaktend.lead_write', true), ''), current_setting('hearth.lead_write', true), '') = 'on';
   v_is_party   boolean;
   v_has_live_apps boolean;
 begin
@@ -307,17 +311,60 @@ begin
 end;
 $$;
 
--- =============================================================================
--- VERIFY (run after applying)
--- =============================================================================
--- 1. The function body carries both pins.
---   select position('new.created_at  := old.created_at' in pg_get_functiondef('public.enforce_contractor_leads_locked'::regproc)) > 0 as update_pinned,
---          position('new.created_at := now()' in pg_get_functiondef('public.enforce_contractor_leads_locked'::regproc)) > 0 as insert_pinned;
---   -> true | true
--- 2. As a homeowner (RLS client), inside a transaction you roll back:
---   begin;
---     update public.contractor_leads set created_at = now() - interval '9 days'
---      where id = '<a lead you own>';
---     select created_at from public.contractor_leads where id = '<same id>';
---     -- expect: the ORIGINAL timestamp, unchanged
---   rollback;
+-- ---- public.enforce_properties_ownership_locked() (latest body: 0095) -----
+create or replace function public.enforce_properties_ownership_locked()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_privileged boolean := coalesce(nullif(current_setting('oaktend.ownership_write', true), ''), current_setting('hearth.ownership_write', true), '') = 'on';
+begin
+  if tg_op = 'INSERT' then
+    if not v_privileged then
+      -- A forged insert (claimPropertyAction's extendedRow/baseRow are built
+      -- from client-submitted form fields - see the comment in
+      -- src/app/onboarding/actions.ts) never gets to claim verified
+      -- ownership up front: every new property starts unverified/unchecked
+      -- regardless of what the insert statement asked for.
+      new.ownership_status := 'unverified';
+      new.ownership_owner_names := null;
+      new.ownership_owner_type := null;
+      new.ownership_owner_occupied := null;
+      new.ownership_checked_at := null;
+      new.ownership_verified := false;
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if not v_privileged then
+      if new.ownership_status is distinct from old.ownership_status then
+        new.ownership_status := old.ownership_status;
+      end if;
+      if new.ownership_owner_names is distinct from old.ownership_owner_names then
+        new.ownership_owner_names := old.ownership_owner_names;
+      end if;
+      if new.ownership_owner_type is distinct from old.ownership_owner_type then
+        new.ownership_owner_type := old.ownership_owner_type;
+      end if;
+      if new.ownership_owner_occupied is distinct from old.ownership_owner_occupied then
+        new.ownership_owner_occupied := old.ownership_owner_occupied;
+      end if;
+      if new.ownership_checked_at is distinct from old.ownership_checked_at then
+        new.ownership_checked_at := old.ownership_checked_at;
+      end if;
+      if new.ownership_verified is distinct from old.ownership_verified then
+        new.ownership_verified := old.ownership_verified;
+      end if;
+    end if;
+    return new;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- No trigger changes needed: contractor_leads_locked and
+-- properties_ownership_locked already point at these two function names
+-- (bound in 0079/0095) and neither function's signature changed here.

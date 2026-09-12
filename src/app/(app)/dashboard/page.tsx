@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { readLegacyCookie } from "@/lib/legacyCookies";
 import { getActiveProperty } from "@/lib/property";
 import { getUser } from "@/lib/auth";
 import { getUserProfileResult } from "@/lib/user";
@@ -147,7 +148,9 @@ export default async function HomePage(
   // matching tile, leaves REASON_TILE_HREF's lookup undefined and
   // reorderToolTiles below is a no-op.
   const leadToolHref =
-    REASON_TILE_HREF[(await cookies()).get("hearth_last_reason")?.value ?? ""];
+    REASON_TILE_HREF[
+      readLegacyCookie(await cookies(), "oaktend_last_reason") ?? ""
+    ];
   // First visit after claiming a home (?welcome=1): drives the welcome banner
   // at the bottom of the page. It used to also force "This month" open, which
   // is no longer needed: that section defaults open on every visit now (see

@@ -77,7 +77,17 @@ describe("logGpcSignalOncePerSession", () => {
     const cookies = jar();
     const headers = new Headers({ "Sec-GPC": "1" });
     await logGpcSignalOncePerSession(headers, cookies, cookies, null);
-    expect(cookies.get("hearth_gpc_seen")?.value).toBe("1");
+    expect(cookies.get(GPC_SEEN_COOKIE)?.value).toBe("1");
+    expect(trackServerEvent).not.toHaveBeenCalled();
+  });
+
+  it("also recognizes the pre-rename cookie name, so an existing browser is not logged twice", async () => {
+    // Brand rename compat (src/lib/legacyCookies.ts): a browser that saw the
+    // signal before the rename still carries the old-prefixed cookie name and
+    // must not be treated as seeing it for the first time.
+    const cookies = jar({ ["hea" + "rth_gpc_seen"]: "1" });
+    const headers = new Headers({ "Sec-GPC": "1" });
+    await logGpcSignalOncePerSession(headers, cookies, cookies, "user-1");
     expect(trackServerEvent).not.toHaveBeenCalled();
   });
 

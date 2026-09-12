@@ -12,7 +12,7 @@ import { PW_RECOVERY_COOKIE } from "@/lib/passwordRecovery";
 //                                  set a new password.
 //
 // The update step needs BOTH signals: ?step=update AND the httpOnly
-// hearth_pwrecovery cookie one of those two auth routes sets when it has just
+// oaktend_pwrecovery cookie one of those two auth routes sets when it has just
 // completed a recovery exchange. The query string alone used to be enough,
 // which meant anyone sitting at an already-signed-in browser could type the
 // URL and change the password without knowing the old one - see the note in
@@ -36,6 +36,12 @@ export default async function ResetPasswordPage(
 ) {
   const searchParams = await props.searchParams;
   const cookieStore = await cookies();
+  // The NEW name only, with no pre-rename fallback. This cookie lives 15
+  // minutes, so no legacy value can still be valid by the time a deploy is
+  // live, and accepting the old name would mean this gate - the one thing
+  // standing between "typed the URL" and "change the password" - could be
+  // satisfied by a name nothing writes any more. src/app/reset-password/
+  // actions.ts still DELETES both names, which is the half that has to stay.
   const hasRecovery = cookieStore.get(PW_RECOVERY_COOKIE)?.value === "1";
   return (
     <ResetPasswordForm

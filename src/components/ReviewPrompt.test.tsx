@@ -133,7 +133,7 @@ describe("ReviewPrompt: the 15 to 20 minute active-time rule", () => {
     // back: only a real answer does that.
     expect(mockRecordEvent).toHaveBeenCalledWith("prompt_shown");
     expect(
-      window.localStorage.getItem("hearth_review_prompt_settled")
+      window.localStorage.getItem("oaktend_review_prompt_settled")
     ).toBeNull();
   });
 
@@ -223,7 +223,7 @@ describe("ReviewPrompt: nothing renders where it must not", () => {
     const { unmount } = await mountAndSettle();
     await spendTimeInApp(20 * MINUTE);
     expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
-    expect(window.localStorage.getItem("hearth_review_prompt_settled")).toBe("1");
+    expect(window.localStorage.getItem("oaktend_review_prompt_settled")).toBe("1");
     unmount();
 
     // A fresh mount must not call the server again: the localStorage flag
@@ -249,7 +249,7 @@ describe("ReviewPrompt: nothing renders where it must not", () => {
     await spendTimeInApp(20 * MINUTE);
     expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
     expect(
-      window.localStorage.getItem("hearth_review_prompt_settled")
+      window.localStorage.getItem("oaktend_review_prompt_settled")
     ).toBeNull();
   });
 });
@@ -283,11 +283,11 @@ describe("ReviewPrompt: love it -> rate -> the honest follow-up", () => {
   });
 
   it("tapping the store link records an intent, NEVER a rating", async () => {
-    process.env.NEXT_PUBLIC_APP_STORE_URL = "https://apps.apple.com/app/hearth";
+    process.env.NEXT_PUBLIC_APP_STORE_URL = "https://apps.apple.com/app/oaktend";
     await showCard();
     fireEvent.click(screen.getByRole("button", { name: "Love it" }));
     const link = screen.getByRole("link", { name: "Rate on the App Store" });
-    expect(link).toHaveAttribute("href", "https://apps.apple.com/app/hearth");
+    expect(link).toHaveAttribute("href", "https://apps.apple.com/app/oaktend");
 
     fireEvent.click(link);
     expect(mockRequestNativeReview).toHaveBeenCalledTimes(1);
@@ -296,12 +296,12 @@ describe("ReviewPrompt: love it -> rate -> the honest follow-up", () => {
     // rating was left, so nothing here may claim one.
     expect(mockRecordEvent).not.toHaveBeenCalledWith("rated");
     expect(
-      window.localStorage.getItem("hearth_review_prompt_settled")
+      window.localStorage.getItem("oaktend_review_prompt_settled")
     ).toBeNull();
   });
 
   it("asks when they come back, and 'Yes, done' is the only thing that settles it", async () => {
-    process.env.NEXT_PUBLIC_APP_STORE_URL = "https://apps.apple.com/app/hearth";
+    process.env.NEXT_PUBLIC_APP_STORE_URL = "https://apps.apple.com/app/oaktend";
     await showCard();
     fireEvent.click(screen.getByRole("button", { name: "Love it" }));
     fireEvent.click(screen.getByRole("link", { name: "Rate on the App Store" }));
@@ -322,14 +322,14 @@ describe("ReviewPrompt: love it -> rate -> the honest follow-up", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Yes, done" }));
     expect(mockRecordEvent).toHaveBeenCalledWith("rated");
-    expect(window.localStorage.getItem("hearth_review_prompt_settled")).toBe("1");
+    expect(window.localStorage.getItem("oaktend_review_prompt_settled")).toBe("1");
     expect(
       screen.queryByText("Did you get a chance to rate OakTend?")
     ).not.toBeInTheDocument();
   });
 
   it("'Not yet' defers instead of settling, and does not ask again this session", async () => {
-    process.env.NEXT_PUBLIC_APP_STORE_URL = "https://apps.apple.com/app/hearth";
+    process.env.NEXT_PUBLIC_APP_STORE_URL = "https://apps.apple.com/app/oaktend";
     await showCard();
     fireEvent.click(screen.getByRole("button", { name: "Love it" }));
     fireEvent.click(screen.getByRole("link", { name: "Rate on the App Store" }));
@@ -343,7 +343,7 @@ describe("ReviewPrompt: love it -> rate -> the honest follow-up", () => {
     expect(mockRecordEvent).toHaveBeenCalledWith("rate_deferred");
     expect(mockRecordEvent).not.toHaveBeenCalledWith("rated");
     expect(
-      window.localStorage.getItem("hearth_review_prompt_settled")
+      window.localStorage.getItem("oaktend_review_prompt_settled")
     ).toBeNull();
 
     // Back to the store screen and back again: no second ask in the same app
@@ -415,13 +415,13 @@ describe("ReviewPrompt: on native, no card, just the system sheet", () => {
   it("asks the OS once a positive moment and the active-time bar are both met", async () => {
     await mountAndSettle();
     // A pro was hired earlier in the session (HireAgainButton reports this).
-    window.sessionStorage.setItem("hearth_review_moment", "job_hired");
+    window.sessionStorage.setItem("oaktend_review_moment", "job_hired");
     await spendTimeInApp(10 * MINUTE);
     expect(mockRequestNativeReview).not.toHaveBeenCalled();
     await spendTimeInApp(6 * MINUTE);
     expect(mockRequestNativeReview).toHaveBeenCalledTimes(1);
     // The moment is spent, and no second ask in the same app open.
-    expect(window.sessionStorage.getItem("hearth_review_moment")).toBeNull();
+    expect(window.sessionStorage.getItem("oaktend_review_moment")).toBeNull();
     await spendTimeInApp(20 * MINUTE);
     expect(mockRequestNativeReview).toHaveBeenCalledTimes(1);
   });
@@ -435,7 +435,7 @@ describe("ReviewPrompt: on native, no card, just the system sheet", () => {
   it("never asks on an excluded page", async () => {
     mockPathname = "/plus";
     await mountAndSettle();
-    window.sessionStorage.setItem("hearth_review_moment", "plan_built");
+    window.sessionStorage.setItem("oaktend_review_moment", "plan_built");
     await spendTimeInApp(20 * MINUTE);
     expect(mockRequestNativeReview).not.toHaveBeenCalled();
   });
@@ -449,7 +449,7 @@ describe("ReviewPrompt: not really", () => {
 
     expect(mockRecordEvent).toHaveBeenCalledWith("not_really");
     expect(mockPush).toHaveBeenCalledWith("/feedback");
-    expect(window.localStorage.getItem("hearth_review_prompt_settled")).toBe("1");
+    expect(window.localStorage.getItem("oaktend_review_prompt_settled")).toBe("1");
     expect(screen.queryByText("Enjoying OakTend?")).not.toBeInTheDocument();
     expect(screen.queryByText("Rate OakTend")).not.toBeInTheDocument();
   });
@@ -468,7 +468,7 @@ describe("ReviewPrompt: dismiss is a snooze, not an answer", () => {
     expect(mockPush).not.toHaveBeenCalled();
     // A mis-tap on an X must not end the conversation forever.
     expect(
-      window.localStorage.getItem("hearth_review_prompt_settled")
+      window.localStorage.getItem("oaktend_review_prompt_settled")
     ).toBeNull();
 
     // Not again in this app open, however long they keep using it.
@@ -488,7 +488,7 @@ describe("ReviewPrompt: dismiss is a snooze, not an answer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(mockRecordEvent).toHaveBeenCalledWith("rate_deferred");
     expect(
-      window.localStorage.getItem("hearth_review_prompt_settled")
+      window.localStorage.getItem("oaktend_review_prompt_settled")
     ).toBeNull();
   });
 });

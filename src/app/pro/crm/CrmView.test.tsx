@@ -101,7 +101,7 @@ describe("CrmView: add-a-client note autosave (CR5#4)", () => {
   it("restores the note once the form is opened from behind the button", () => {
     vi.useFakeTimers();
     localStorage.setItem(
-      "hearth.pro-draft.v1.crm_note.add-client",
+      "oaktend.pro-draft.v1.crm_note.add-client",
       "Half-typed note"
     );
     render(<CrmView {...baseProps({ suggestions: [SUGGESTION] })} />);
@@ -115,7 +115,7 @@ describe("CrmView: add-a-client note autosave (CR5#4)", () => {
   it("clears the draft once a client is actually added (addedClientCount rises)", () => {
     vi.useFakeTimers();
     localStorage.setItem(
-      "hearth.pro-draft.v1.crm_note.add-client",
+      "oaktend.pro-draft.v1.crm_note.add-client",
       "Old draft"
     );
     const { rerender } = render(<CrmView {...baseProps({ addedClientCount: 0 })} />);

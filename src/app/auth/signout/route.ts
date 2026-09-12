@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requestOrigin } from "@/lib/requestOrigin";
 import { sameOriginGuard } from "@/lib/csrf";
+import { legacyKey } from "@/lib/legacyStorage";
 import { ACTIVITY_COOKIE } from "@/lib/sessionActivity";
 
 export async function POST(request: NextRequest) {
@@ -27,5 +28,8 @@ export async function POST(request: NextRequest) {
   // reading a stamp that belonged to the previous session. See
   // src/lib/sessionActivity.ts.
   response.cookies.delete(ACTIVITY_COOKIE);
+  // The pre-rename name too: the idle check reads it as a fallback, so a stamp
+  // left under the old name would cause exactly the bounce described above.
+  response.cookies.delete(legacyKey(ACTIVITY_COOKIE));
   return response;
 }

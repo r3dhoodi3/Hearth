@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 // iOS home-screen icon. Safari will not use an SVG here, so this renders the
-// same hearth/house mark as src/app/icon.svg into a 180x180 PNG at request
+// same OakTend house mark as src/app/icon.svg into a 180x180 PNG at request
 // time. Solid warm background: iOS squares the corners itself and shows any
 // transparency as black.
 export const size = { width: 180, height: 180 };

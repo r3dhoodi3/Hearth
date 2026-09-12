@@ -59,7 +59,7 @@ export const REVIEW_MOMENT_EVENT = "oaktend:review-moment";
 // the success state is often followed by a redirect (the rehire flow lands
 // straight in a chat thread), and the ask deliberately waits for a calm
 // moment later in the session rather than firing on the spot.
-const REVIEW_MOMENT_KEY = "hearth_review_moment";
+const REVIEW_MOMENT_KEY = "oaktend_review_moment";
 
 function sessionStore(): Storage | null {
   try {

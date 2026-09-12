@@ -48,7 +48,7 @@ In the Apple Developer portal: Certificates, Identifiers & Profiles > Identifier
 
 1. Choose "App IDs", then "App".
 2. Description: `OakTend`. Bundle ID: explicit, reverse-DNS, something like
-   `com.yourdomain.hearth`. Write this down - the Services ID in step 2 must be different from
+   `com.yourdomain.oaktend`. Write this down - the Services ID in step 2 must be different from
    it, and a future iOS app must use exactly this one.
 3. In the Capabilities list, tick "Sign in with Apple". Leave it on the default "Enable as a
    primary App ID".
@@ -59,13 +59,13 @@ In the Apple Developer portal: Certificates, Identifiers & Profiles > Identifier
 Same Identifiers screen, "+" again.
 
 1. Choose "Services IDs".
-2. Description: `OakTend Web`. Identifier: something like `com.yourdomain.hearth.web`. It must NOT
+2. Description: `OakTend Web`. Identifier: something like `com.yourdomain.oaktend.web`. It must NOT
    equal the App ID from step 1.
 3. Register, then click back into the new Services ID to configure it.
 4. Tick "Sign in with Apple", then click "Configure".
 5. Primary App ID: the App ID from step 1.
 6. Domains and Subdomains: your production domain, no scheme and no trailing slash, e.g.
-   `hearth.example.com`.
+   `oaktend.example.com`.
 7. Return URLs: the Supabase callback, exactly:
 
    ```
@@ -103,7 +103,7 @@ At this point you should have four things written down:
 
 | Thing | Looks like | Where it came from |
 | --- | --- | --- |
-| Services ID | `com.yourdomain.hearth.web` | Step 2 |
+| Services ID | `com.yourdomain.oaktend.web` | Step 2 |
 | Team ID | `A1B2C3D4E5` | Portal header / Membership page |
 | Key ID | `F6G7H8I9J0` | Step 3 |
 | Private key | `-----BEGIN PRIVATE KEY-----...` | Contents of the .p8 file |

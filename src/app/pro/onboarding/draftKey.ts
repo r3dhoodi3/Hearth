@@ -11,7 +11,7 @@
 // lands on a public profile a minute later), but a stranger's license number
 // sitting prefilled in someone else's application is exactly the kind of thing
 // that gets submitted without being read.
-const PREFIX = "hearth.pro-onboarding.v1";
+const PREFIX = "oaktend.pro-onboarding.v1";
 
 // NO UNSCOPED FALLBACK. This used to return the bare PREFIX when it had no
 // account id, so a render that could not read a user wrote its draft to a key

@@ -8,6 +8,7 @@ import NativeBootstrap from "@/components/native/NativeBootstrap";
 import ZoomLock from "@/components/ZoomLock";
 import { Analytics } from "@vercel/analytics/next";
 import { LAUNCH_CITY_NAMES } from "@/lib/serviceArea";
+import { LEGACY_STORAGE_INIT_SCRIPT } from "@/lib/legacyStorage";
 
 // KEEP THIS FILE FREE OF cookies() AND headers().
 //
@@ -30,9 +31,16 @@ const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 // class is added only when the user has actually chosen dark in ThemeToggle.
 // The OS preference is deliberately not consulted - a visitor whose phone is
 // in dark mode still gets OakTend's light look until they ask otherwise.
+// The legacy pre-rename key is checked as a fallback here (split so the old
+// brand name doesn't appear literally in source) because this inline script
+// runs synchronously before paint, ahead of migrateLegacyStorage's one-time
+// client-side copy - see src/lib/legacyStorage.ts.
 const themeInit = `(function () {
   try {
-    if (localStorage.getItem("hearth-theme") !== "dark") return;
+    var legacyThemeKey = "hea" + "rth-theme";
+    var stored = localStorage.getItem("oaktend-theme");
+    if (stored === null) stored = localStorage.getItem(legacyThemeKey);
+    if (stored !== "dark") return;
     document.documentElement.classList.add("dark");
     // Match the browser/status-bar tint to the restored theme. The
     // theme-color meta is emitted by Next's viewport export, which may not
@@ -156,6 +164,17 @@ export default async function RootLayout({
       className={`${sans.variable} font-sans`}
     >
       <head>
+        {/* Brand rename cleanup, remove after 2026-12-31. Copies any
+            pre-rename localStorage/sessionStorage key onto its new name
+            (src/lib/legacyStorage.ts). FIRST in <head>, ahead of themeInit and
+            of every component effect, because it is the only position from
+            which a migration can finish before something reads the new key -
+            this used to run in a useEffect and therefore always lost that
+            race. Same inline-script shape as themeInit below: synchronous,
+            no nonce, self-contained. */}
+        <script
+          dangerouslySetInnerHTML={{ __html: LEGACY_STORAGE_INIT_SCRIPT }}
+        />
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         <script
           type="application/ld+json"

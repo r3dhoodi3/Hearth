@@ -24,5 +24,5 @@ export type AhaEvent = typeof AHA_HOME_SCORE | typeof AHA_FIRST_LEAD;
 // gap the plan calls out, but /api/track's insert has no such dedupe today -
 // see the route - so this wave ships the localStorage half only.)
 export function ahaReportedKey(event: AhaEvent): string {
-  return `hearth_aha_reported:${event}`;
+  return `oaktend_aha_reported:${event}`;
 }

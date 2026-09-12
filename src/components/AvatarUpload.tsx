@@ -15,7 +15,7 @@ import InlineSpinner from "@/components/InlineSpinner";
 // the pro-logos bucket) and the homeowner avatar (users.avatar_url in the
 // avatars bucket). The SVG rejection + size + MIME allow-list are kept verbatim:
 // these buckets are PUBLIC and served on unauthenticated pages, so an
-// image/svg+xml slipping through would be stored XSS on Hearth's own storage
+// image/svg+xml slipping through would be stored XSS on OakTend's own storage
 // origin (the original security audit finding #7 behind LogoUpload).
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB is plenty for an avatar/logo

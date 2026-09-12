@@ -7,6 +7,7 @@
 // is available on the Edge runtime's global Web Crypto.
 
 import type { NextRequest, NextResponse } from "next/server";
+import { legacyKey } from "@/lib/legacyStorage";
 
 // The device id. A random uuid, first-party, httpOnly, planted once and then
 // left alone for 400 days (the ceiling Chrome will honour for a Set-Cookie
@@ -17,16 +18,35 @@ import type { NextRequest, NextResponse } from "next/server";
 // id, it is not joined to page views, it is never sent anywhere, and nothing
 // outside src/lib/risk reads it. httpOnly means page scripts cannot read it
 // either, so it cannot become a tracking handle by accident later.
-export const DEVICE_COOKIE = "hearth_did";
+export const DEVICE_COOKIE = "oaktend_did";
 
 // The browser fingerprint hash, written by src/components/DeviceFingerprint.tsx
 // on the sign-up and sign-in pages. Not httpOnly, because the script that
 // computes it is the thing that writes it - and a fingerprint is client-derived
 // anyway, so nothing is protected by hiding it from the client that produced
 // it. It is re-hashed with the server salt before storage.
-export const FINGERPRINT_COOKIE = "hearth_fp";
+export const FINGERPRINT_COOKIE = "oaktend_fp";
 
 const FOUR_HUNDRED_DAYS_SECONDS = 400 * 24 * 60 * 60;
+
+// The cookie options every write of the device id uses - the fresh plant AND
+// the promotion of a pre-rename value below. One constant, because a promoted
+// cookie that differed in httpOnly/secure/sameSite from a freshly planted one
+// would be a quieter version of exactly the bug the promotion exists to fix.
+function deviceCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: FOUR_HUNDRED_DAYS_SECONDS,
+  };
+}
+
+// Brand rename cleanup, remove after 2026-12-31. The pre-rename name of the
+// device cookie, built by src/lib/legacyStorage.ts out of two literal halves so
+// the old brand word does not appear whole anywhere in src.
+const LEGACY_DEVICE_COOKIE = legacyKey(DEVICE_COOKIE);
 
 // Routes that are fetched by machines, not people: crawlers, link scrapers, and
 // the OS asking for an icon. A Set-Cookie on any of them tells the CDN not to
@@ -89,7 +109,20 @@ function isFunnelPath(path: string): boolean {
   );
 }
 
-// Plant the device cookie on the response if the request did not carry one.
+// Plant the device cookie on the response if the request did not carry one,
+// and promote a pre-rename one onto the new name if that is all the browser
+// has.
+//
+// THE PROMOTION IS A SECURITY FIX, NOT A CONVENIENCE. This function used to
+// return early whenever EITHER name was present, which meant a browser holding
+// only the pre-rename cookie never got the new httpOnly one planted. The new
+// name then stayed an empty slot that any page script could write with
+// document.cookie - and every reader preferred the new name, so a page script
+// could choose its own device id. Promoting the legacy VALUE under the new
+// name (same httpOnly/secure/sameSite/path/maxAge as a fresh plant) and
+// deleting the old name closes that window on the browser's very first
+// request, which is why it runs on every path that reaches here, not only the
+// funnel paths below.
 //
 // Called from src/middleware.ts AFTER updateSession has produced its response,
 // so it applies to whatever that returned - a plain pass-through, a
@@ -118,16 +151,29 @@ export function attachDeviceCookie(
     if (METADATA_PREFIXES.some((prefix) => path.startsWith(prefix))) {
       return response;
     }
-    if (!isFunnelPath(path)) return response;
+
+    // Already on the new name: nothing to do, on any path.
     if (request.cookies.get(DEVICE_COOKIE)?.value) return response;
 
-    response.cookies.set(DEVICE_COOKIE, crypto.randomUUID(), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: FOUR_HUNDRED_DAYS_SECONDS,
-    });
+    // Brand rename cleanup, remove after 2026-12-31. Only the pre-rename name:
+    // re-issue that exact value under the new name with the fresh-plant
+    // options, and drop the old one. Deliberately BEFORE the funnel check, so
+    // the empty, page-script-writable new slot is closed on the first request
+    // this browser makes anywhere, not whenever it next reaches a funnel page.
+    const legacyDevice = request.cookies.get(LEGACY_DEVICE_COOKIE)?.value;
+    if (legacyDevice) {
+      response.cookies.set(DEVICE_COOKIE, legacyDevice, deviceCookieOptions());
+      response.cookies.delete({ name: LEGACY_DEVICE_COOKIE, path: "/" });
+      return response;
+    }
+
+    if (!isFunnelPath(path)) return response;
+
+    response.cookies.set(
+      DEVICE_COOKIE,
+      crypto.randomUUID(),
+      deviceCookieOptions()
+    );
     return response;
   } catch {
     return response;

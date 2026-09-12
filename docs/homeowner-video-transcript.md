@@ -2,7 +2,7 @@
 
 Source component: `src/components/HeroDemoPlayer.tsx` (used on the homeowner landing page, `src/app/page.tsx`).
 Voiceover files: `public/demo-vo/*.mp3` (7 clips, msedge-tts `en-US-AvaNeural` at rate -8%, output `audio-24khz-96kbitrate-mono-mp3`: MPEG-2 Layer III, 24 kHz, 96 kbps CBR, mono, no ID3).
-Brand rename: `hook.mp3`, `dash.mp3` and `end.mp3` were re-recorded on 2026-09-04 with those exact settings so the voice says "OakTend", not "Hearth". The other four clips (`address`, `postjob`, `chat`, `booked`) never spoke the brand and are byte-identical to the August files.
+Brand rename: `hook.mp3`, `dash.mp3` and `end.mp3` were re-recorded on 2026-09-04 with those exact settings so the voice says "OakTend", not the old brand name. The other four clips (`address`, `postjob`, `chat`, `booked`) never spoke the brand and are byte-identical to the August files.
 Timing basis: 160 BPM, 375 ms per beat, 80 beats total, 30.000 s runtime at 1x speed.
 All times below are at 1x playback rate. Verified against the real MP3 files on disk on 2026-09-04.
 
@@ -88,15 +88,15 @@ Worst case is 4 ms, far under the 150 ms drift threshold. The three re-recorded 
 
 ## 2026-09-04 OakTend re-record
 
-The brand in the app changed from Hearth to OakTend, so every clip whose line spoke the brand was re-recorded. Only three of the seven did: `hook`, `dash` and `end`.
+The brand in the app changed to OakTend, so every clip whose line spoke the old brand name was re-recorded. Only three of the seven did: `hook`, `dash` and `end`.
 
-Settings, identical to the August generation: npm package `msedge-tts` v2.0.7 (no API key), voice `en-US-AvaNeural`, prosody rate `-8%`, output format `audio-24khz-96kbitrate-mono-mp3`. The pipeline was proved out first by re-generating the three OLD Hearth lines as a control: each control file came back with the same byte length, frame count and millisecond duration as the file already on disk, which is what pins the voice and rate.
+Settings, identical to the August generation: npm package `msedge-tts` v2.0.7 (no API key), voice `en-US-AvaNeural`, prosody rate `-8%`, output format `audio-24khz-96kbitrate-mono-mp3`. The pipeline was proved out first by re-generating the three OLD pre-rename lines as a control: each control file came back with the same byte length, frame count and millisecond duration as the file already on disk, which is what pins the voice and rate.
 
-| Clip | Old line | New line | Old duration | New duration | Delta |
+| Clip | Old line (pre-rename) | New line | Old duration | New duration | Delta |
 |---|---|---|---|---|---|
-| hook.mp3 | This is Hearth. Your home, looked after. | This is OakTend. Your home, looked after. | 3360 ms | 3384 ms | +24 ms |
-| dash.mp3 | Hearth gives your home a health score, ... | OakTend gives your home a health score, ... | 5160 ms | 5112 ms | -48 ms |
-| end.mp3 | Hearth. Free for homeowners. | OakTend. Free for homeowners. | 2976 ms | 3096 ms | +120 ms |
+| hook.mp3 | This is [old brand]. Your home, looked after. | This is OakTend. Your home, looked after. | 3360 ms | 3384 ms | +24 ms |
+| dash.mp3 | [Old brand] gives your home a health score, ... | OakTend gives your home a health score, ... | 5160 ms | 5112 ms | -48 ms |
+| end.mp3 | [Old brand]. Free for homeowners. | OakTend. Free for homeowners. | 2976 ms | 3096 ms | +120 ms |
 
 Codec profile of the three new files, from the same frame walk: MPEG-2 Layer III, 24 kHz, 96 kbps CBR, mono, no ID3, no junk bytes, one bitrate throughout. That matches the four untouched clips exactly, and the `bytes / 12000 = sec` convention the component's comment relies on still holds.
 

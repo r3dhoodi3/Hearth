@@ -30,7 +30,7 @@
 
 import { isNativePlatform, requestPlatformReview } from "./nativeReview";
 
-const FIRST_SEEN_KEY = "hearth_first_seen_at";
+const FIRST_SEEN_KEY = "oaktend_first_seen_at";
 
 // A page the prompt must never appear on, even though ReviewPrompt is mounted
 // globally in the signed-in shell: onboarding and sign-in are never actually
@@ -232,25 +232,25 @@ export function isAskSession(opts: {
 // ValueAutoFetch and the pro onboarding draft key theirs: one shared prefix
 // plus the id, so two accounts on the same phone never read each other's
 // count.
-const SESSION_COUNT_PREFIX = "hearth_review_sessions:";
+const SESSION_COUNT_PREFIX = "oaktend_review_sessions:";
 // Which user this tab's session bookkeeping belongs to. Its presence is also
 // what makes "have I already counted this app open" a single read.
-const SESSION_USER_KEY = "hearth_review_session_user";
-const SESSION_ASK_KEY = "hearth_review_ask_session";
-const SESSION_THRESHOLD_KEY = "hearth_review_threshold_ms";
+const SESSION_USER_KEY = "oaktend_review_session_user";
+const SESSION_ASK_KEY = "oaktend_review_ask_session";
+const SESSION_THRESHOLD_KEY = "oaktend_review_threshold_ms";
 // Active milliseconds, mirrored to sessionStorage every tick so navigating
 // between pages (which remounts the component) does not restart the clock.
-const SESSION_ACTIVE_MS_KEY = "hearth_review_active_ms";
+const SESSION_ACTIVE_MS_KEY = "oaktend_review_active_ms";
 // The card was already put on screen in this app open, answered or not.
-const SESSION_ASKED_KEY = "hearth_review_asked";
+const SESSION_ASKED_KEY = "oaktend_review_asked";
 // The "did you get a chance to rate OakTend?" follow-up was already asked in
 // this app open. Once per session, however they answered it.
-const SESSION_FOLLOW_UP_KEY = "hearth_review_followup_asked";
+const SESSION_FOLLOW_UP_KEY = "oaktend_review_followup_asked";
 // They tapped through to the store and have not come back yet. This is the
 // whole fix for "it says it's complete when I come back": the tap records an
 // intent, not a rating, and this flag is what turns the return into a
 // question instead of a celebration.
-const SESSION_STORE_RETURN_KEY = "hearth_review_awaiting_store_return";
+const SESSION_STORE_RETURN_KEY = "oaktend_review_awaiting_store_return";
 
 export function reviewSessionCountKey(userId: string): string {
   return `${SESSION_COUNT_PREFIX}${userId}`;
@@ -505,7 +505,7 @@ export function isEligibleForRateFollowUp(opts: {
 // Per DEVICE, not per account: Apple and Google both cap their sheet per app
 // per device, so a per-account key would let two accounts on one phone burn
 // six attempts against a three-attempt allowance.
-const NATIVE_REVIEW_LOG_KEY = "hearth_native_review_calls";
+const NATIVE_REVIEW_LOG_KEY = "oaktend_native_review_calls";
 export const NATIVE_REVIEW_MAX_CALLS = 3;
 export const NATIVE_REVIEW_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -640,7 +640,7 @@ export function isProTrialExcludedPath(pathname: string): boolean {
 // offers with different content, and conflating them would mean whichever one
 // happened to fire first this session silently suppressed the other forever,
 // rather than the two of them taking turns claiming the session slot below.
-const SESSION_TRIAL_ASKED_KEY = "hearth_pro_trial_asked";
+const SESSION_TRIAL_ASKED_KEY = "oaktend_pro_trial_asked";
 
 export function wasTrialPromptAskedThisSession(storage?: Storage): boolean {
   return readFlag(SESSION_TRIAL_ASKED_KEY, storage);

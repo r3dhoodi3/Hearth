@@ -37,7 +37,7 @@ const fixtures = vi.hoisted(() => ({
   // maintenance-plan CTA tests fill it with a real plan-schedule title so
   // hasOpenPlan flips true.
   tasks: [] as Record<string, unknown>[],
-  // hearth_last_reason cookie value, read by the tool-tile reorder (PLAN
+  // oaktend_last_reason cookie value, read by the tool-tile reorder (PLAN
   // A1#2). null is "no cookie sent", matching a first-ever visit.
   lastReasonCookie: null as string | null,
 }));
@@ -169,7 +169,7 @@ vi.mock("@/lib/referralCode", () => ({
 vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({
     get: (name: string) =>
-      name === "hearth_last_reason" && fixtures.lastReasonCookie
+      name === "oaktend_last_reason" && fixtures.lastReasonCookie
         ? { name, value: fixtures.lastReasonCookie }
         : undefined,
   })),
@@ -254,7 +254,7 @@ describe("OakTend's briefing rows", () => {
 });
 
 // The tile matching the most recent /plus?reason= paywall someone hit leads
-// the row, read from the hearth_last_reason cookie PaywallReasonBanner sets
+// the row, read from the oaktend_last_reason cookie PaywallReasonBanner sets
 // (PLAN A1#2 / R1#5).
 describe("Tool tile order", () => {
   afterEach(() => {

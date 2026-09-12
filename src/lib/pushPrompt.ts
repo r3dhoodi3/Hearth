@@ -15,7 +15,7 @@
 // Set by markPushMoment() when something worth being notified about just
 // happened. Not per user: the moment is a property of this browser tab right
 // now, and the per-user keys below are what decide whether to act on it.
-const MOMENT_KEY = "hearth_push_moment";
+const MOMENT_KEY = "oaktend_push_moment";
 
 // How long a moment stays "fresh". Long enough to survive the redirect after
 // posting a job, short enough that reopening the app tomorrow does not surface
@@ -32,13 +32,13 @@ export const SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
 export const PUSH_MOMENT_EVENT = "oaktend:push-moment";
 
 function snoozeKey(userId: string): string {
-  return `hearth_push_snoozed_until:${userId}`;
+  return `oaktend_push_snoozed_until:${userId}`;
 }
 
 // Written once permission is granted. The prompt is finished for good at that
 // point: there is nothing left to ask for.
 function doneKey(userId: string): string {
-  return `hearth_push_done:${userId}`;
+  return `oaktend_push_done:${userId}`;
 }
 
 function readNumber(key: string): number {

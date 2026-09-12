@@ -15,7 +15,7 @@ import { useLayoutEffect, useRef, type ReactNode } from "react";
 // The remembered flag lives in localStorage under a key namespaced by user id,
 // same shape as SeasonalChecklist's per-period keys: it is a per-device UI
 // preference, not data worth a round trip.
-const PREFIX = "hearth_details_closed_";
+const PREFIX = "oaktend_details_closed_";
 
 export default function RememberedDetails({
   storageKey,

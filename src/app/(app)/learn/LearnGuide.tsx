@@ -28,7 +28,7 @@ export default function LearnGuide({
   age?: number | null;
   tips: string[];
 }) {
-  const key = `hearth_guide_${systemType}`;
+  const key = `oaktend_guide_${systemType}`;
   const panelId = useId();
   const [open, setOpen] = useState(false);
   const [checked, setChecked] = useState<Record<number, boolean>>({});

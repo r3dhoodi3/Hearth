@@ -262,13 +262,13 @@ describe("nestedStreamHoles (copy of the SetupChecklist.test.tsx helper)", () =>
 // SetupChecklist version: it needs a running server and a signed-in pro
 // cookie, so it stays skipped in the normal offline-green run.
 //
-//   HEARTH_STREAM_CHECK_URL=http://localhost:3103/pro/plus \
-//   HEARTH_STREAM_CHECK_COOKIE='sb-...' npx vitest run src/app/pro/plus/proPlusPhone.test.ts
-const plusStreamUrl = process.env.HEARTH_STREAM_CHECK_URL;
+//   OAKTEND_STREAM_CHECK_URL=http://localhost:3103/pro/plus \
+//   OAKTEND_STREAM_CHECK_COOKIE='sb-...' npx vitest run src/app/pro/plus/proPlusPhone.test.ts
+const plusStreamUrl = process.env.OAKTEND_STREAM_CHECK_URL;
 describe.skipIf(!plusStreamUrl)("served /pro/plus HTML has no nested stream holes", () => {
   it("keeps every <template id=\"P:\"> a direct child of a hidden segment", async () => {
     const res = await fetch(plusStreamUrl as string, {
-      headers: { cookie: process.env.HEARTH_STREAM_CHECK_COOKIE ?? "" },
+      headers: { cookie: process.env.OAKTEND_STREAM_CHECK_COOKIE ?? "" },
     });
     const html = await res.text();
     expect(res.status).toBe(200);

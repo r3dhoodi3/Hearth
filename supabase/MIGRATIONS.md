@@ -94,10 +94,13 @@ around the `0066` enrichment columns.
 
 ## Gotchas
 
-- **The old bundles are not re-runnable.** `apply_wallet.sql` and
-  `apply_contractor_side.sql` in this directory are historical hand-apply
-  bundles. Tables use `if not exists`, but the `create policy` statements will
-  error on a second run. They are kept for reference only. Do not re-run them.
+- **The one-time paste bundles are gone.** This directory used to hold a pile of
+  hand-apply bundles (`apply_*.sql`, `PASTE-ME-*.sql`, `PRECHECK-*.sql`,
+  `COMBINED-*.sql`, `FIX-*.sql`). Every one of them had been applied to the live
+  database, none were re-runnable, and they were deleted on 2026-09-12. Git
+  history still has them if a body is ever needed. `supabase/migrations/` is the
+  only source of truth for schema. The single exception is
+  `supabase/PASTE-ME-ALL-PENDING-2026-09-12.sql`, which is still pending.
 - **Write new migrations to be idempotent** (`create policy if not exists`, or
   `drop policy if exists` first) so a partial failure can be retried.
 - The anon and service-role keys cannot run DDL. They talk to PostgREST only.

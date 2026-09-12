@@ -105,16 +105,16 @@ describe("appGuideSeenKey", () => {
   it("keeps the two sides apart", () => {
     // One account can hold both sides; finishing one guide must not eat the
     // other.
-    expect(appGuideSeenKey("homeowner")).toBe("hearth_app_guide_seen");
-    expect(appGuideSeenKey("pro")).toBe("hearth_pro_guide_seen");
+    expect(appGuideSeenKey("homeowner")).toBe("oaktend_app_guide_seen");
+    expect(appGuideSeenKey("pro")).toBe("oaktend_pro_guide_seen");
     expect(appGuideSeenKey("homeowner")).not.toBe(appGuideSeenKey("pro"));
   });
 });
 
 describe("appGuideSnoozeKey", () => {
   it("keeps the two sides apart, and never collides with the seen key", () => {
-    expect(appGuideSnoozeKey("homeowner")).toBe("hearth_app_guide_snoozed");
-    expect(appGuideSnoozeKey("pro")).toBe("hearth_pro_guide_snoozed");
+    expect(appGuideSnoozeKey("homeowner")).toBe("oaktend_app_guide_snoozed");
+    expect(appGuideSnoozeKey("pro")).toBe("oaktend_pro_guide_snoozed");
     expect(appGuideSnoozeKey("homeowner")).not.toBe(appGuideSnoozeKey("pro"));
     // A snooze lives in sessionStorage and a seen stamp in localStorage, but
     // the names must not be confusable either: one is temporary, one is not.

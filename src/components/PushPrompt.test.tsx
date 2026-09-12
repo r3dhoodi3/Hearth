@@ -149,7 +149,7 @@ describe("PushPrompt", () => {
     expect(screen.queryByTestId("push-prompt")).toBeNull();
 
     const until = Number(
-      window.localStorage.getItem(`hearth_push_snoozed_until:${USER_ID}`)
+      window.localStorage.getItem(`oaktend_push_snoozed_until:${USER_ID}`)
     );
     expect(until).toBeGreaterThan(Date.now() + SNOOZE_MS - 5_000);
     expect(until).toBeLessThanOrEqual(Date.now() + SNOOZE_MS);
@@ -166,7 +166,7 @@ describe("PushPrompt", () => {
     cleanup();
 
     window.localStorage.setItem(
-      `hearth_push_snoozed_until:${USER_ID}`,
+      `oaktend_push_snoozed_until:${USER_ID}`,
       String(Date.now() - 1)
     );
     await mountAfterAMoment();
@@ -178,7 +178,7 @@ describe("PushPrompt", () => {
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByTestId("push-prompt")).toBeNull();
     expect(
-      Number(window.localStorage.getItem(`hearth_push_snoozed_until:${USER_ID}`))
+      Number(window.localStorage.getItem(`oaktend_push_snoozed_until:${USER_ID}`))
     ).toBeGreaterThan(Date.now());
   });
 
@@ -202,7 +202,7 @@ describe("PushPrompt", () => {
       fireEvent.click(screen.getByRole("button", { name: "Turn on notifications" }));
     });
     expect(screen.queryByTestId("push-prompt")).toBeNull();
-    expect(window.localStorage.getItem(`hearth_push_done:${USER_ID}`)).toBe("1");
+    expect(window.localStorage.getItem(`oaktend_push_done:${USER_ID}`)).toBe("1");
   });
 
   // The iPhone branch. Safari gives a page no notification permission at all

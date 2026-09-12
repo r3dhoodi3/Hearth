@@ -1,5 +1,6 @@
 import { stripe } from "@/lib/stripe";
 import { PLUS_PLAN, extraHomeUnitPrice } from "@/lib/constants";
+import { legacyKey } from "@/lib/legacyStorage";
 
 // Resolve the Stripe Price to bill an existing subscription with, for the Plus
 // base plan and for the extra-home add-on.
@@ -37,8 +38,12 @@ import { PLUS_PLAN, extraHomeUnitPrice } from "@/lib/constants";
 export type PlusCadence = "weekly" | "monthly" | "yearly";
 
 // The metadata tag that makes a product ours. Looked up by, so it must never
-// change without a migration of the products already carrying it.
-const PLAN_META_KEY = "hearth_plan";
+// change without a migration of the products already carrying it. Brand
+// rename compat, remove after 2026-12-31: a product created before the rename
+// carries the pre-rename tag instead, so the matcher below checks both, but
+// every new product is written with PLAN_META_KEY only (src/lib/legacyStorage.ts).
+const PLAN_META_KEY = "oaktend_plan";
+const LEGACY_PLAN_META_KEY = legacyKey(PLAN_META_KEY);
 const PLUS_META_VALUE = "plus";
 const HOME_SLOT_META_VALUE = "home_slots";
 
@@ -93,7 +98,10 @@ async function activeProductId(
       ...(startingAfter ? { starting_after: startingAfter } : {}),
     });
     const match = list.data.find(
-      (p) => p.active && p.metadata?.[PLAN_META_KEY] === metaValue
+      (p) =>
+        p.active &&
+        (p.metadata?.[PLAN_META_KEY] ?? p.metadata?.[LEGACY_PLAN_META_KEY]) ===
+          metaValue
     );
     if (match) {
       productCache.set(metaValue, match.id);
@@ -173,7 +181,7 @@ export async function plusPriceId(cadence: PlusCadence): Promise<string> {
     productId,
     unitAmount: plusAmountCents(cadence),
     interval: PLUS_INTERVAL[cadence],
-    metadata: { [PLAN_META_KEY]: PLUS_META_VALUE, hearth_cadence: cadence },
+    metadata: { [PLAN_META_KEY]: PLUS_META_VALUE, oaktend_cadence: cadence },
   });
 }
 
@@ -202,7 +210,7 @@ export async function homeSlotPriceId(
     interval: interval === "yearly" ? "year" : "month",
     metadata: {
       [PLAN_META_KEY]: HOME_SLOT_META_VALUE,
-      hearth_cadence: interval,
+      oaktend_cadence: interval,
     },
   });
 }

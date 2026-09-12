@@ -1,4 +1,4 @@
-// Brand mark: a warm hearth/house SVG that replaces the 🏡 emoji wordmark.
+// Brand mark: a warm OakTend house SVG that replaces the 🏡 emoji wordmark.
 // Emoji render differently on every OS; this keeps the logo identical
 // everywhere and lets it take brand color via currentColor.
 export default function Logo({ className = "h-6 w-6" }: { className?: string }) {

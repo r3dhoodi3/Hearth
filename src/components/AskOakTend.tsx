@@ -408,12 +408,12 @@ function WaitingPill() {
 // One shared conversation kept in localStorage: it survives reloads, and
 // messages age out per the retention setting below (default: 24 hours), pruned
 // by each message's own timestamp on load. Keys are namespaced per user id
-// (e.g. "hearth_ask_chat:<uuid>") so chats can't leak between accounts on a
+// (e.g. "oaktend_ask_chat:<uuid>") so chats can't leak between accounts on a
 // shared device; the bare legacy keys are only used while the id loads. The
 // key BASES are props so a separate mount (e.g. the pro copilot) stores its
 // own conversation without colliding with the homeowner chat.
-const DEFAULT_STORAGE_KEY = "hearth_ask_chat";
-const DEFAULT_RETENTION_KEY = "hearth_ask_retention";
+const DEFAULT_STORAGE_KEY = "oaktend_ask_chat";
+const DEFAULT_RETENTION_KEY = "oaktend_ask_retention";
 const SYNC_EVENT = "oaktend:ask-updated";
 // Remembered answer to "which plan is this viewer on?", written from the
 // server's own verdict on every reply (see the meter fields below: freeLimit,
@@ -425,7 +425,7 @@ const SYNC_EVENT = "oaktend:ask-updated";
 // actual question: the server is the only authority on the allowance and the
 // photo lock, and this is only ever allowed to HIDE a hint or head off a tap
 // that would be refused anyway, never to grant or refuse one itself.
-const DEFAULT_PLAN_KEY = "hearth_ask_plan";
+const DEFAULT_PLAN_KEY = "oaktend_ask_plan";
 
 type Retention = "24h" | "2w" | "1m" | "never";
 const RETENTION_MS: Record<Retention, number> = {

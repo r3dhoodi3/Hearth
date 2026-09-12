@@ -5,7 +5,7 @@ import "@testing-library/jest-dom/vitest";
 
 import PostJobDoneReferralAsk from "./PostJobDoneReferralAsk";
 
-const SEEN_KEY = "hearth_postjob_referral_seen";
+const SEEN_KEY = "oaktend_postjob_referral_seen";
 
 beforeEach(() => {
   window.localStorage.clear();

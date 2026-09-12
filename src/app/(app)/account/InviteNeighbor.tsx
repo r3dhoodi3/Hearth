@@ -26,7 +26,7 @@ import InlineSpinner from "@/components/InlineSpinner";
 // (shares OR dismisses), the same "answer once, remember forever" shape
 // ReviewPrompt.tsx's SETTLED_KEY uses, not marked on a bare render so a page
 // that unmounts before anyone notices doesn't burn the one shot.
-const MOMENT_SEEN_KEY = "hearth_invite_neighbor_moment_seen";
+const MOMENT_SEEN_KEY = "oaktend_invite_neighbor_moment_seen";
 
 function momentAlreadySeen(): boolean {
   try {

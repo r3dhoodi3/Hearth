@@ -371,14 +371,14 @@ describe("pro leads stays one client component with plain-data props", () => {
 // and a signed-in pro cookie, so it is opt-in. Point it at a pro whose board
 // has open jobs, assigned jobs and ideally a direct request:
 //
-//   HEARTH_LEADS_STREAM_URL=http://localhost:3105 \
-//   HEARTH_LEADS_STREAM_COOKIE='sb-...' npx vitest run src/app/pro/leads/page.test.tsx
-const streamBase = process.env.HEARTH_LEADS_STREAM_URL;
+//   OAKTEND_LEADS_STREAM_URL=http://localhost:3105 \
+//   OAKTEND_LEADS_STREAM_COOKIE='sb-...' npx vitest run src/app/pro/leads/page.test.tsx
+const streamBase = process.env.OAKTEND_LEADS_STREAM_URL;
 
 describe.skipIf(!streamBase)("served /pro/leads has no deferred rows or nested holes", () => {
   async function get(path: string) {
     const res = await fetch(streamBase + path, {
-      headers: { cookie: process.env.HEARTH_LEADS_STREAM_COOKIE ?? "" },
+      headers: { cookie: process.env.OAKTEND_LEADS_STREAM_COOKIE ?? "" },
     });
     const html = await res.text();
     return { res, html };
@@ -414,20 +414,16 @@ describe("C4: migration 0155 can actually apply", () => {
   const migration = src(
     "../../../../supabase/migrations/0155_lead_apply_homeowner_display.sql"
   );
-  const paste = src("../../../../supabase/PASTE-ME-ALL-PENDING-2026-09-07.sql");
-
-  it("drops the function before recreating it, in both files", () => {
-    for (const [name, sql] of [
-      ["0155", migration],
-      ["PASTE-ME", paste],
-    ] as const) {
-      expect(sql, name).toContain(
-        "drop function if exists public.open_jobs_for_me();\ncreate function public.open_jobs_for_me()"
-      );
-      expect(sql, name).not.toContain(
-        "create or replace function public.open_jobs_for_me()"
-      );
-    }
+  // This used to assert the same shape in supabase/PASTE-ME-ALL-PENDING-2026-09-07.sql
+  // as well. That one-time paste has been applied to the live database and
+  // removed from the repo, so only the migration is checked now.
+  it("drops the function before recreating it", () => {
+    expect(migration).toContain(
+      "drop function if exists public.open_jobs_for_me();\ncreate function public.open_jobs_for_me()"
+    );
+    expect(migration).not.toContain(
+      "create or replace function public.open_jobs_for_me()"
+    );
   });
 
   it("truncates the name in SQL, so the full name never leaves the database", () => {

@@ -44,8 +44,8 @@ import AskOakTend from "./AskOakTend";
 // the very first render, the namespaced one is where it settles once the
 // mocked getUser resolves.
 function seedLock(limit: number, now = Date.now()) {
-  writeAskLock(askLockKey("hearth_ask_chat", "user-1"), limit, now);
-  writeAskLock(askLockKey("hearth_ask_chat", null), limit, now);
+  writeAskLock(askLockKey("oaktend_ask_chat", "user-1"), limit, now);
+  writeAskLock(askLockKey("oaktend_ask_chat", null), limit, now);
 }
 
 // Let the user-resolving effect (and the storage re-read it triggers) run.
@@ -143,8 +143,8 @@ describe("a spent daily allowance", () => {
       <AskOakTend
         fill
         endpoint="/api/pro-ask"
-        storageKeyBase="hearth_pro_ask_chat"
-        retentionKeyBase="hearth_pro_ask_retention"
+        storageKeyBase="oaktend_pro_ask_chat"
+        retentionKeyBase="oaktend_pro_ask_retention"
       />
     );
     await settle();

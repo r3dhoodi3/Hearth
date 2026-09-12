@@ -2,6 +2,25 @@
 
 > The dated sections below are the running history, newest additions at the top.
 > Start with **LATEST** for the current state and what is still owed.
+>
+> **Legacy literals (note added 2026-09-12).** The brand is OakTend everywhere in prose. A
+> handful of exact strings in the older entries below still spell the dead brand because they
+> are real values that live outside this repo, or were the real values on the day the entry was
+> written: seeded test-account emails (`*-test-*@example.com`, `test1@*.app`, the persona and
+> red-team accounts), the local checkout path `C:\Users\lande\hearth`, the Apple JWT subject
+> `com.landenchu.hearth.web`, the Vercel team slug `hearth-test`, the filenames of Claude's own
+> memory notes (`[[hearth-...]]` links), and the old service-worker and cookie names as they
+> were at the time. Those are quoted as-is so the commands and the record
+> still make sense. Do not "fix" them by editing this log; the live names are whatever the code
+> says today.
+>
+> One more thing the old entries get wrong: the two `*.vercel.app` hostnames named below were
+> detached from the Vercel project on 2026-09-12 and no longer resolve. `https://oaktend.com` is
+> the only live origin. Also, the one-time `supabase/PASTE-ME-*` / `apply_*` / `PRECHECK-*` /
+> `COMBINED-*` / `FIX-*` files these entries tell you to paste were all applied and then deleted
+> from the repo on 2026-09-12; git history still has them, and `supabase/migrations/` is the
+> source of truth. The only paste still pending is
+> `supabase/PASTE-ME-ALL-PENDING-2026-09-12.sql`.
 
 ---
 
@@ -167,14 +186,15 @@ and Stripe env DONE per Landen; migration 0151 CONFIRMED LIVE (duplicate homes
 cleaned via FIX-DUPLICATE-HOMES, FINAL paste ran, 7-row VERIFY all true, live
 DB now through 0151); Apple sign-in RESTORED end to end (key rotated to
 86W6M42H37, JWT sub com.landenchu.hearth.web, expires 2027-02-27, flags set,
-button live on all three pages, prod also aliases gethearth.vercel.app);
+button live on all three pages; the extra `*.vercel.app` alias mentioned here
+was removed from the project on 2026-09-12);
 VAPID keys added to Vercel Production+Preview via CLI and redeployed, public
 key verified in the shipped client bundle. Push notifications are fully armed.
 Remaining owner items: TWILIO_* (SMS), rotate the Supabase service-role key,
 real-device Apple sign-in tap test, mid-Feb-2027 Apple JWT reminder.
 
 ### Files touched
-public/sw.js (VERSION hearth-sw-2), NEW public/warming.html, src/middleware.ts
+public/sw.js (VERSION, since renamed to oaktend-sw-2), NEW public/warming.html, src/middleware.ts
 (matcher), src/middleware.test.ts, src/lib/pushClient.ts,
 src/components/PushRegistrar.tsx (+test), NEW src/lib/swNavigationFallback.test.ts.
 
@@ -215,7 +235,8 @@ src/components/PushRegistrar.tsx (+test), NEW src/lib/swNavigationFallback.test.
 
 ### Next steps
 1. DONE: committed and pushed on the in-the-moment go-ahead. After deploy,
-   fully close and reopen the installed app twice so hearth-sw-2 installs.
+   fully close and reopen the installed app twice so the new service worker
+   installs (that version is now called oaktend-sw-2).
 2. Owner list: 0151 SQL paste status under check; VAPID env still open;
    RISK_ENFORCE + Stripe reported done by Landen this evening.
 
@@ -520,8 +541,9 @@ middleware. AI: Haiku routing for cheap tasks, abuse ceilings. Security (red tea
 ## OakTend handoff (2026-08-24)
 
 Snapshot after the overnight build + the 08-23/24 morning items shipped and the
-live test site was wired up. Everything below is on `main` and deployed to
-https://hearth-seven-pink.vercel.app unless marked otherwise.
+live test site was wired up. Everything below is on `main` and deployed to the
+project's preview hostname at the time, unless marked otherwise. (That hostname
+was removed on 2026-09-12; the live origin is https://oaktend.com.)
 
 ## RESUME HERE: the live 5-agent test (not yet run)
 
@@ -736,7 +758,7 @@ OWNER / OPS ITEMS (not code):
 
 ## MORNING ITEMS for Landen (found overnight 2026-08-26/27; both are yours, I could not do them)
 
-1. STRIPE_SECRET_KEY in Vercel is a placeholder ("yoursk_t...ive"), which is why every checkout says "couldn't start checkout" (Vercel log: "Invalid API Key provided"). Fix: open C:\Users\lande\hearth\.env.local, copy the value after STRIPE_SECRET_KEY= (starts sk_test_51SQD6dDxdfZ..., 107 chars, the sandbox where the webhook was created), paste it into Vercel > hearth > Settings > Environment Variables > STRIPE_SECRET_KEY (Edit, Production + Preview), then Deployments > Redeploy. The four STRIPE_PRICE_* / STRIPE_PRO_*_PRICE_ID vars were deleted on purpose (they pointed at prices that do not exist in the sandbox; the app uses its built-in prices when they are absent).
+1. STRIPE_SECRET_KEY in Vercel is a placeholder ("yoursk_t...ive"), which is why every checkout says "couldn't start checkout" (Vercel log: "Invalid API Key provided"). Fix: open C:\Users\lande\hearth\.env.local, copy the value after STRIPE_SECRET_KEY= (starts sk_test_51SQD6dDxdfZ..., 107 chars, the sandbox where the webhook was created), paste it into Vercel > oaktend > Settings > Environment Variables > STRIPE_SECRET_KEY (Edit, Production + Preview), then Deployments > Redeploy. The four STRIPE_PRICE_* / STRIPE_PRO_*_PRICE_ID vars were deleted on purpose (they pointed at prices that do not exist in the sandbox; the app uses its built-in prices when they are absent).
 2. Live DB is MISSING migrations 0130, 0131, 0132 (REST returns 404 for account_signals, account_risk, risk_overrides, has_open_chargeback; the Vercel log shows "Could not find the table public.account_signals"). 0129 may or may not be applied. The "SQL success" earlier was not the combined file. Re-run in the Supabase SQL editor: supabase/PRECHECK-2026-08-26.sql first (all six queries must return 0 rows), then supabase/COMBINED-2026-08-26-migrations-0129-0132.sql. Verify after: select public.launch_city_for_zip('92694'); select count(*) from account_signals; select proname from pg_proc where proname = 'has_open_chargeback';
 
 ## Overnight 2026-08-26/27 outcome (written 08:20)
@@ -757,7 +779,7 @@ Process note: 963593b was pushed with one red test because a piped grep hid vite
 STILL YOURS: STRIPE_SECRET_KEY placeholder in Vercel; live DB missing 0130-0133 (PRECHECK, COMBINED, then app-feedback paste); decide RISK_ENFORCE / trial AI caps for the weekly plan; delete hearth-test accounts (their jobs, CRM clients and profile edits are all titled TEST (ignore)).
 
 ## Live post-deploy smoke (2026-08-27 ~09:55) + latency finding
-Public pages all 200 (/, /pricing, /privacy, /ai-disclosure, /signin, both signups, /pros, /fountain-valley); no em dashes. Password sign-in works (Supabase returns the token, cookies set: hearth_did httpOnly, hearth_fp, sb-...-auth-token).
+Public pages all 200 (/, /pricing, /privacy, /ai-disclosure, /signin, both signups, /pros, /fountain-valley); no em dashes. Password sign-in works (Supabase returns the token, cookies set: the device-id cookie httpOnly, the fingerprint cookie, sb-...-auth-token; both were renamed to the oaktend_ prefix on 2026-09-12).
 FINDING (not a push blocker, investigate): signed-in server pages are slow on cold start. Dashboard measured 67s cold -> 34s -> 13s warming, /value ~6s, /forecast ~7s. All return 200, no 5xx, no fatal logs. Cause is hobby-tier serverless cold starts PLUS heavy sequential Supabase queries per page, several of which hit the not-yet-created risk/feedback tables (account_signals, account_risk, risk_overrides, linked_accounts, app_feedback all 404 and log an error each). Running the DB pastes removes those errored round trips and should cut dashboard latency. If it is still slow after the migrations: parallelize the dashboard's Supabase queries (they look sequential), cache trialDecision, and consider the Vercel Pro plan for warm functions. Do NOT chase this before the migrations are applied; it is confounded by them.
 
 ## Overnight 2026-08-28/29 (Claude, with Landen's one-night push permission)

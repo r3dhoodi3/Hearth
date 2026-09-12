@@ -3,34 +3,34 @@ import { reviewAskMessage } from "./reviewAskMessage";
 
 describe("reviewAskMessage (CR4#4, Won-stage review template)", () => {
   it("greets by first name only, even for a multi-word client name", () => {
-    const msg = reviewAskMessage("Maria Gonzalez", "lead-1", "https://hearth.com");
+    const msg = reviewAskMessage("Maria Gonzalez", "lead-1", "https://oaktend.com");
     expect(msg.startsWith("Hi Maria,")).toBe(true);
     expect(msg).not.toContain("Gonzalez");
   });
 
   it("falls back to the whole name when there is nothing to split", () => {
-    const msg = reviewAskMessage("Maria", "lead-1", "https://hearth.com");
+    const msg = reviewAskMessage("Maria", "lead-1", "https://oaktend.com");
     expect(msg.startsWith("Hi Maria,")).toBe(true);
   });
 
   it("carries the exact /contractors?review=<leadId> link the automated request uses", () => {
-    const msg = reviewAskMessage("Maria", "lead-abc-123", "https://hearth.com");
-    expect(msg).toContain("https://hearth.com/contractors?review=lead-abc-123");
+    const msg = reviewAskMessage("Maria", "lead-abc-123", "https://oaktend.com");
+    expect(msg).toContain("https://oaktend.com/contractors?review=lead-abc-123");
   });
 
   it("mentions OakTend by name", () => {
-    const msg = reviewAskMessage("Maria", "lead-1", "https://hearth.com");
+    const msg = reviewAskMessage("Maria", "lead-1", "https://oaktend.com");
     expect(msg).toContain("OakTend");
   });
 
   it("stays SMS length (well under the 160-char single-segment guideline for a short name)", () => {
-    const msg = reviewAskMessage("Maria", "lead-1", "https://hearth.com");
+    const msg = reviewAskMessage("Maria", "lead-1", "https://oaktend.com");
     expect(msg.length).toBeLessThan(200);
   });
 
   it("uses whatever origin is passed in, with no hardcoded host", () => {
     const msg = reviewAskMessage("Maria", "lead-1", "");
     expect(msg).toContain("/contractors?review=lead-1");
-    expect(msg).not.toContain("hearth.com");
+    expect(msg).not.toContain("oaktend.com");
   });
 });

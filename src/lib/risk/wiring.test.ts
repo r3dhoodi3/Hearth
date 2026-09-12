@@ -296,23 +296,7 @@ describe("migration 0130 locks the three risk tables down", () => {
   });
 });
 
-describe("the live-DB paste file matches the migration", () => {
-  const paste = src(
-    "../../../supabase/PASTE-ME-live-2026-08-26-account-risk.sql"
-  );
-
-  it("contains the whole migration body", () => {
-    for (const table of RISK_TABLES) {
-      expect(paste).toContain(`create table if not exists public.${table}`);
-      expect(paste).toContain(
-        `alter table public.${table} enable row level security`
-      );
-    }
-    expect(paste).toContain("create or replace function public.linked_accounts");
-  });
-
-  it("carries verify queries for the RLS posture", () => {
-    expect(paste).toContain("pg_policies");
-    expect(paste).toContain("role_table_grants");
-  });
-});
+// The "live-DB paste file matches the migration" suite that used to close this
+// file read supabase/PASTE-ME-live-2026-08-26-account-risk.sql. That one-time
+// paste has been applied to the live database and removed from the repo; the
+// migration itself is still covered above.

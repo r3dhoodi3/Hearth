@@ -11,7 +11,7 @@
 // Storage is a convenience only: private mode, a full quota, or blocked site
 // data all just mean autosave doesn't happen, never a broken compose box.
 
-const PREFIX = "hearth.pro-draft.v1";
+const PREFIX = "oaktend.pro-draft.v1";
 
 function draftKey(kind: string, id: string): string {
   return `${PREFIX}.${kind}.${id}`;

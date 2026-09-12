@@ -70,13 +70,13 @@ describe("reportReviewMoment", () => {
     // chat thread, so anything held in a component is gone by the time the ask
     // would be considered.
     reportReviewMoment("job_hired");
-    expect(window.sessionStorage.getItem("hearth_review_moment")).toBe(
+    expect(window.sessionStorage.getItem("oaktend_review_moment")).toBe(
       "job_hired"
     );
   });
 
   it("reads back nothing for junk, and clears cleanly", () => {
-    window.sessionStorage.setItem("hearth_review_moment", "something_else");
+    window.sessionStorage.setItem("oaktend_review_moment", "something_else");
     expect(readReviewMoment()).toBeNull();
 
     reportReviewMoment("plan_built");

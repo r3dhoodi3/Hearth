@@ -20,7 +20,7 @@ const cookieValue = { current: undefined as string | undefined };
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) =>
-      name === "hearth_pwrecovery" && cookieValue.current !== undefined
+      name === "oaktend_pwrecovery" && cookieValue.current !== undefined
         ? { name, value: cookieValue.current }
         : undefined,
   }),
@@ -112,7 +112,7 @@ describe("the recovery cookie itself", () => {
   });
 
   it("has the name both auth routes and the page agree on", () => {
-    expect(PW_RECOVERY_COOKIE).toBe("hearth_pwrecovery");
+    expect(PW_RECOVERY_COOKIE).toBe("oaktend_pwrecovery");
   });
 });
 
@@ -120,16 +120,16 @@ describe("the recovery cookie itself", () => {
 // lands back on step one ("enter your email") and the owner's report is "the
 // forgot-password link doesn't work".
 describe("the reset link we hand Supabase", () => {
-  const link = passwordRecoveryRedirectTo("https://gethearth.vercel.app");
+  const link = passwordRecoveryRedirectTo("https://oaktend.com");
   const url = new URL(link);
 
   it("lands on the callback route that performs the code exchange", () => {
-    expect(url.origin).toBe("https://gethearth.vercel.app");
+    expect(url.origin).toBe("https://oaktend.com");
     expect(url.pathname).toBe("/auth/callback");
   });
 
   it("carries type=recovery, the only signal that unlocks the update step", () => {
-    // /auth/callback sets the hearth_pwrecovery cookie on this parameter and
+    // /auth/callback sets the oaktend_pwrecovery cookie on this parameter and
     // nothing else. Without it the exchange still succeeds and the user is
     // still signed in, but /reset-password?step=update quietly renders step
     // one instead of the password form.

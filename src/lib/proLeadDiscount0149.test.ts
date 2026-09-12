@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -19,7 +19,6 @@ const repoFile = (rel: string) =>
 const read = (rel: string) => readFileSync(repoFile(rel), "utf8");
 
 const MIGRATION = "supabase/migrations/0149_pro_lead_discount.sql";
-const PASTE_ME = "supabase/PASTE-ME-live-2026-08-30-pro-lead-discount.sql";
 
 const sql = read(MIGRATION);
 
@@ -134,17 +133,6 @@ describe("migration 0149: precheck guard", () => {
   });
 });
 
-// The live-DB paste twin exists and carries the same helpers.
-describe("supabase/PASTE-ME-live-2026-08-30-pro-lead-discount.sql", () => {
-  it("exists", () => {
-    expect(existsSync(repoFile(PASTE_ME))).toBe(true);
-  });
-
-  it("carries the same three pricing helpers and the re-created apply_to_lead", () => {
-    const paste = read(PASTE_ME);
-    for (const name of ["is_pro_member", "lead_aging_pct", "pro_lead_fee_cents", "apply_to_lead"]) {
-      expect(paste, name).toContain(`create or replace function public.${name}(`);
-    }
-    expect(paste).toContain("add column if not exists discount_kind text");
-  });
-});
+// The live-DB paste twin suite that used to close this file read
+// supabase/PASTE-ME-live-2026-08-30-pro-lead-discount.sql. That one-time paste
+// has been applied to the live database and removed from the repo.

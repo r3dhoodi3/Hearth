@@ -6,7 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 import { recordRequestSignals, recordEmailSignals } from "@/lib/risk/signals";
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { trackServerEvent } from "@/lib/trackServer";
-import { CAMPAIGN_COOKIE, lookupCampaign } from "@/lib/campaigns";
+import {
+  CAMPAIGN_COOKIE,
+  campaignCookieOptions,
+  LEGACY_CAMPAIGN_COOKIE,
+  lookupCampaign,
+} from "@/lib/campaigns";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -222,7 +227,22 @@ export async function recordTermsAcceptance(
   if (doc === "terms" || doc === "pro_terms") {
     try {
       const jar = await cookies();
-      const code = jar.get(CAMPAIGN_COOKIE)?.value ?? null;
+      // Brand rename cleanup, remove after 2026-12-31. There is no middleware
+      // hook for this cookie (it is minted by /go/<code> and read here, both
+      // outside the middleware), so the promotion happens in the reader: when
+      // only the pre-rename name is present, re-issue that value under the new
+      // name with the same options the /go/ route writes, delete the old name,
+      // and only then use it. Without the promote-and-delete the new name
+      // stays an empty slot that this reader already prefers.
+      let code = jar.get(CAMPAIGN_COOKIE)?.value ?? null;
+      if (code === null) {
+        const legacyCode = jar.get(LEGACY_CAMPAIGN_COOKIE)?.value ?? null;
+        if (legacyCode !== null) {
+          jar.set(CAMPAIGN_COOKIE, legacyCode, campaignCookieOptions());
+          jar.delete({ name: LEGACY_CAMPAIGN_COOKIE, path: "/" });
+          code = legacyCode;
+        }
+      }
       if (code && lookupCampaign(code)) {
         await trackServerEvent(verifiedUserId, "campaign_signup", { code });
       }

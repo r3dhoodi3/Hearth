@@ -182,7 +182,7 @@ blocked waiting on Landen)
 
 ## e. Demo account requirement (Guideline 2.1)
 
-Needs a STANDING account on the live database (not a `hearth-test-*` throwaway - those are a
+Needs a STANDING account on the live database (not an `oaktend-test-*` throwaway - those are a
 different lifecycle for tonight's other testing streams and may be deleted), one homeowner and
 one contractor, each pre-seeded with representative, non-empty data:
 

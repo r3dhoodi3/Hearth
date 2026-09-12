@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -19,7 +19,6 @@ const repoFile = (rel: string) =>
 const read = (rel: string) => readFileSync(repoFile(rel), "utf8");
 
 const MIGRATION = "supabase/migrations/0138_user_blocks.sql";
-const PASTE_ME = "supabase/PASTE-ME-live-2026-08-28-user-blocks.sql";
 
 const sql = read(MIGRATION);
 
@@ -134,18 +133,16 @@ describe("migration 0138: enforcement points", () => {
     // therefore let a blocked party POST
     // {"sender_role":"system","body":"anything"} at PostgREST and have it land
     // in the thread. Neither enforcement point may carry the unqualified form.
-    for (const text of [sql, read(PASTE_ME)]) {
-      expect(text).not.toContain("new.sender_role <> 'system' and");
-      expect(text).not.toContain(
-        "sender_role = 'system' or not public.lead_has_block(lead_id)"
-      );
-      // Every exemption is paired with a body test naming the exact markers.
-      expect(triggerOf(text)).toContain("new.body in (");
-      expect(messagesPolicyOf(text)).toContain("and body in (");
-      for (const marker of MARKERS) {
-        expect(triggerOf(text), marker).toContain(marker);
-        expect(messagesPolicyOf(text), marker).toContain(marker);
-      }
+    expect(sql).not.toContain("new.sender_role <> 'system' and");
+    expect(sql).not.toContain(
+      "sender_role = 'system' or not public.lead_has_block(lead_id)"
+    );
+    // Every exemption is paired with a body test naming the exact markers.
+    expect(triggerOf(sql)).toContain("new.body in (");
+    expect(messagesPolicyOf(sql)).toContain("and body in (");
+    for (const marker of MARKERS) {
+      expect(triggerOf(sql), marker).toContain(marker);
+      expect(messagesPolicyOf(sql), marker).toContain(marker);
     }
   });
 
@@ -284,21 +281,6 @@ describe("migration 0138: review ids", () => {
   });
 });
 
-describe("the live-DB bundle", () => {
-  it("exists and carries the whole migration", () => {
-    expect(existsSync(repoFile(PASTE_ME))).toBe(true);
-    const paste = read(PASTE_ME);
-    expect(paste).toContain("create table if not exists public.user_blocks");
-    expect(paste).toContain("create or replace function public.open_jobs_for_me()");
-    expect(paste).toContain(
-      "create or replace function public.apply_to_lead(p_lead uuid, p_message text)"
-    );
-  });
-
-  it("says what happens if it is not run, and how to verify it was", () => {
-    const paste = read(PASTE_ME);
-    expect(paste).toContain("NOTHING BREAKS IF YOU DELAY THIS");
-    expect(paste).toContain("VERIFY");
-    expect(paste).toContain("pg_policies");
-  });
-});
+// The "live-DB bundle" suite that used to close this file read
+// supabase/PASTE-ME-live-2026-08-28-user-blocks.sql. That one-time paste has
+// been applied to the live database and removed from the repo.

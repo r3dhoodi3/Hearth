@@ -22,7 +22,7 @@ const DAY_MS = 86_400_000;
 
 // One prefix for every lock key so a post-checkout sweep can find them all
 // without knowing which chats this browser has ever opened.
-const ASK_LOCK_PREFIX = "hearth_ask_limit";
+const ASK_LOCK_PREFIX = "oaktend_ask_limit";
 
 export type AskLock = {
   // The allowance that was spent, so the locked bar can name the number

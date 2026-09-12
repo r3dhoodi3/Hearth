@@ -564,7 +564,7 @@ describe("destinationForSignIn", () => {
 // the parser strips C0 controls anywhere in the string. innerNext therefore has
 // to re-run BOTH rules against the decoded value.
 describe("destinationForSignIn: the inner ?next= cannot leave the origin", () => {
-  const ORIGIN = "https://gethearth.vercel.app";
+  const ORIGIN = "https://oaktend.com";
   // What the auth routes really do with the returned value.
   const resolvesTo = (path: string) => new URL(path, ORIGIN).href;
 

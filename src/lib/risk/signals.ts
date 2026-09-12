@@ -5,6 +5,7 @@ import { riskHash, SALT_VERSION, type SignalKind } from "./hash";
 import { normalizeEmail } from "./emailNorm";
 import { DEVICE_COOKIE, FINGERPRINT_COOKIE } from "./cookies";
 import { clientIpFromHeaders } from "@/lib/clientIp";
+import { readLegacyCookie } from "@/lib/legacyCookies";
 
 // Writing signals into public.account_signals (migration 0130).
 //
@@ -144,20 +145,32 @@ export async function recordRequestSignals(
     // this signal (send your own X-Forwarded-For and every request gets a
     // fresh IP hash, so network-based multi-account linking never fired).
     const ip = clientIpFromHeaders(h);
+    // The NEW name only, with no pre-rename fallback. attachDeviceCookie
+    // (src/lib/risk/cookies.ts) promotes a legacy device cookie onto
+    // DEVICE_COOKIE and deletes the old name on the first request a browser
+    // makes, so by the time any request reaches here the new name is the only
+    // one that can be authoritative. Reading the legacy name as a fallback
+    // would re-open the window that promotion exists to close: the old name is
+    // not httpOnly-protected once it has been deleted, and preferring anything
+    // a page script can write would let the browser choose its own device id.
     const device = c.get(DEVICE_COOKIE)?.value ?? null;
-    const fingerprint = c.get(FINGERPRINT_COOKIE)?.value ?? null;
+    // The fingerprint keeps its fallback: it is client-written and not
+    // httpOnly either way, so there is nothing to protect by refusing the old
+    // name, and dropping it would silently lose a signal for every browser
+    // that has not re-run DeviceFingerprint since the rename.
+    const fingerprint = readLegacyCookie(c, FINGERPRINT_COOKIE) ?? null;
 
     // The fingerprint is BOUND TO THE DEVICE COOKIE before it is hashed, and is
     // skipped entirely when there is no device cookie to bind it to.
     //
-    // hearth_fp is written by page script with document.cookie, so the browser
+    // oaktend_fp is written by page script with document.cookie, so the browser
     // owns it and can put anything it likes there. Stored on its own, that is
     // not merely weak, it is a weapon: an attacker whose own site can read a
-    // visitor's five fingerprint attributes could set hearth_fp to a VICTIM's
+    // visitor's five fingerprint attributes could set oaktend_fp to a VICTIM's
     // value, burn a few accounts under it, and leave the victim permanently
     // linked to flagged accounts for the price of one link click.
     //
-    // hearth_did is httpOnly, so page script cannot read or forge it. Hashing
+    // oaktend_did is httpOnly, so page script cannot read or forge it. Hashing
     // (did || fp) means a forged fp can only ever collide with a value under the
     // SAME device cookie - that is, with the forger's own browser. The victim is
     // unreachable.

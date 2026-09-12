@@ -12,7 +12,7 @@ import HeroDemoPlayer from "./HeroDemoPlayer";
 // caught every click inside it with no exemption for the decorative content.
 // A viewer naturally tries clicking things that look clickable inside the
 // demo; each one silently killed playback. Confirmed live on
-// gethearth.vercel.app with a Playwright click probe (see
+// oaktend.com with a Playwright click probe (see
 // scratchpad/video-probe.js): clicking the fake nav logo or the fake Send
 // chip paused playback; clicking the surrounding real page (header, heading,
 // background, scroll) never did.

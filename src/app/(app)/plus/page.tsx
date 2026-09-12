@@ -519,7 +519,7 @@ export default async function PlusPage(
     // to shoulder there either way.
     <div className="mx-auto max-w-md space-y-4 sm:max-w-2xl sm:space-y-6">
       {/* Wrapped in the client PaywallReasonBanner so it can (1) remember this
-          reason in the hearth_last_reason cookie the dashboard reads to lead
+          reason in the oaktend_last_reason cookie the dashboard reads to lead
           with the matching tool tile, and (2) count distinct reasons seen
           this session and stand down from the 4th one on - the paywall
           itself (job posting blocked, tool locked) still holds either way,

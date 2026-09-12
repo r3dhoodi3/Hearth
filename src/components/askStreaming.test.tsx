@@ -284,7 +284,7 @@ describe("a streamed answer", () => {
     // Persisted once, marked partial, so a reload shows this answer instead
     // of an orphaned question with "That took too long. Try asking again."
     const stored = JSON.parse(
-      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+      window.localStorage.getItem("oaktend_ask_chat:user-1") ?? "[]"
     );
     const last = stored[stored.length - 1];
     expect(last.role).toBe("assistant");
@@ -346,7 +346,7 @@ describe("a streamed answer", () => {
     // persisted message, so a reload still treats this as unanswered
     // (Retry / Delete) instead of showing a saved apology as a real answer.
     const stored = JSON.parse(
-      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+      window.localStorage.getItem("oaktend_ask_chat:user-1") ?? "[]"
     );
     expect(stored[stored.length - 1]).toMatchObject({
       role: "user",
@@ -379,7 +379,7 @@ describe("a second question in the same conversation", () => {
     expect(screen.getByText("Sediment in the tank.")).toBeInTheDocument();
 
     const storedAfterFirst = JSON.parse(
-      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+      window.localStorage.getItem("oaktend_ask_chat:user-1") ?? "[]"
     );
     expect(storedAfterFirst.map((m: any) => m.content)).toEqual([
       GREETING,
@@ -402,7 +402,7 @@ describe("a second question in the same conversation", () => {
 
     // (b) localStorage holds Q1 question, Q1 answer, Q2 question
     const midFlight = JSON.parse(
-      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+      window.localStorage.getItem("oaktend_ask_chat:user-1") ?? "[]"
     );
     expect(midFlight.map((m: any) => m.content)).toEqual([
       GREETING,
@@ -422,7 +422,7 @@ describe("a second question in the same conversation", () => {
     ).toBeInTheDocument();
 
     const stored = JSON.parse(
-      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+      window.localStorage.getItem("oaktend_ask_chat:user-1") ?? "[]"
     );
     expect(stored.map((m: any) => [m.role, m.content])).toEqual([
       ["assistant", GREETING],
@@ -457,7 +457,7 @@ describe("a second question in the same conversation", () => {
     first.push(done({ answer: "Sediment in the tank." }));
     await settle();
 
-    const key = "hearth_ask_chat:user-1";
+    const key = "oaktend_ask_chat:user-1";
     const saved = window.localStorage.getItem(key) ?? "[]";
     const withoutAnswer = JSON.parse(saved).filter(
       (m: any) => m.content !== "Sediment in the tank."
@@ -517,7 +517,7 @@ describe("an answer still being written", () => {
 
     // Mid-answer, with no terminal line yet: what is on screen is on disk.
     const midStream = JSON.parse(
-      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+      window.localStorage.getItem("oaktend_ask_chat:user-1") ?? "[]"
     );
     expect(midStream[midStream.length - 1]).toMatchObject({
       role: "assistant",
@@ -572,7 +572,7 @@ describe("a full localStorage", () => {
     await settle();
 
     const stored = JSON.parse(
-      window.localStorage.getItem("hearth_ask_chat:user-1") ?? "[]"
+      window.localStorage.getItem("oaktend_ask_chat:user-1") ?? "[]"
     );
     // The oldest messages were shed to make room; the newest turn - the
     // question AND its answer - is what survives.
@@ -628,7 +628,7 @@ describe("a non-streamed reply still works", () => {
 // is now locked while an answer streams, so the way in is a SECOND TAB, which
 // reaches this tab as a storage event and nothing else.
 describe("clearing while an answer is streaming", () => {
-  const CHAT_KEY = "hearth_ask_chat:user-1";
+  const CHAT_KEY = "oaktend_ask_chat:user-1";
 
   // What another tab's clear looks like from here: removeItem fires a storage
   // event with a null newValue. jsdom does not dispatch these on its own.
@@ -695,7 +695,7 @@ describe("clearing while an answer is streaming", () => {
     // A different user's chat on the same device (or the pro copilot's key):
     // nothing about this conversation changed.
     await act(async () => {
-      otherTabCleared("hearth_ask_chat:user-2");
+      otherTabCleared("oaktend_ask_chat:user-2");
     });
     stream.push(
       done({

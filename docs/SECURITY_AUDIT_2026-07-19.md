@@ -86,7 +86,7 @@ Severity legend: CRITICAL / HIGH = fix before launch. MED = fix soon. LOW = hard
 ### 5. Migration 0077 trigger breaks account deletion (CCPA erase) — BROKEN-LEGIT
 - **CONFIRMED.** `contractor_leads.contractor_id` FK is `ON DELETE SET NULL`, implemented as
   an UPDATE, which fires `enforce_contractor_leads_locked()` (0077). With no
-  `hearth.lead_write` flag set (admin client is service_role, not exempt), the trigger reverts
+  `oaktend.lead_write` flag set (admin client is service_role, not exempt), the trigger reverts
   the null, the FK still points at the row being deleted, and the delete fails → deletion
   aborts permanently for any pro who ever had an assigned lead.
 - **Fix:** skip the revert when `pg_trigger_depth() > 1` (RI-initiated), or route the

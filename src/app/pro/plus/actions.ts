@@ -66,10 +66,11 @@ async function proIntroCouponId(): Promise<string | null> {
   const envId = process.env.STRIPE_PRO_INTRO_COUPON_ID;
   if (envId) return envId;
 
-  // Stripe coupon ids live in the Stripe account, not the brand: the coupon was
-  // created as "hearth-pro-intro" and renaming the string here would silently
-  // stop the intro discount. Set STRIPE_PRO_INTRO_COUPON_ID to override.
-  const fallbackId = "hearth-pro-intro";
+  // Stripe coupon ids live in the Stripe account, not the brand. Renamed for
+  // the OakTend rebrand from the old brand's equivalent id; retrieve() below
+  // auto-creates this id the first time it's missing, so the rename is safe.
+  // Set STRIPE_PRO_INTRO_COUPON_ID to override.
+  const fallbackId = "oaktend-pro-intro";
   try {
     await stripe.coupons.retrieve(fallbackId);
     return fallbackId;

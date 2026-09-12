@@ -47,7 +47,7 @@ export default function ValueAutoFetch({
     if (!needsFetch || firedRef.current) return;
     firedRef.current = true;
 
-    const flagKey = `hearth_avm_tried_${propertyId}`;
+    const flagKey = `oaktend_avm_tried_${propertyId}`;
     try {
       // Already attempted once for this property: never run again, hit or miss.
       if (localStorage.getItem(flagKey)) return;

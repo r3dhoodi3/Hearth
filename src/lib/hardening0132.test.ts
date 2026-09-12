@@ -17,7 +17,6 @@ const repoFile = (rel: string) =>
 const read = (rel: string) => readFileSync(repoFile(rel), "utf8");
 
 const MIGRATION = "supabase/migrations/0132_public_column_constraints.sql";
-const PASTE_ME = "supabase/PASTE-ME-live-2026-08-26-hardening.sql";
 
 describe("migration 0132: CHECK constraints on the pro-writable columns", () => {
   const sql = read(MIGRATION);
@@ -196,18 +195,10 @@ describe("cleared_at is honoured by the app, not just stored", () => {
 });
 
 describe("migration 0130: abuse_flags.cleared_at", () => {
-  it("exists in the migration and in its PASTE-ME, identically", () => {
-    const migration = read("supabase/migrations/0130_account_risk.sql");
-    const paste = read("supabase/PASTE-ME-live-2026-08-26-account-risk.sql");
-    for (const [label, sql] of [
-      ["migration", migration],
-      ["paste-me", paste],
-    ] as const) {
-      expect(sql, label).toContain("cleared_at timestamptz");
-      expect(sql, label).toContain(
-        "add column if not exists cleared_at timestamptz"
-      );
-    }
+  it("exists in the migration", () => {
+    const sql = read("supabase/migrations/0130_account_risk.sql");
+    expect(sql).toContain("cleared_at timestamptz");
+    expect(sql).toContain("add column if not exists cleared_at timestamptz");
   });
 });
 
@@ -315,64 +306,10 @@ describe("migration 0132: public_pro_profile", () => {
   });
 });
 
-describe("the PASTE-ME bundle for 0132", () => {
-  const paste = read(PASTE_ME);
-  const migration = read(MIGRATION);
-
-  it("carries the migration body verbatim", () => {
-    expect(paste).toContain(migration.trim());
-  });
-
-  it("carries a pre-check query for every constraint that can fail to validate", () => {
-    // The VALIDATE is designed to fail loudly on a bad row. The operator
-    // should be able to see which rows those are before running anything.
-    for (const column of [
-      "logo_url",
-      "contact_phone",
-      "yelp_url",
-      "google_reviews_url",
-    ]) {
-      expect(paste, column).toContain(`where ${column} is not null`);
-    }
-    expect(paste).toContain("where char_length(name) > 200");
-    expect(paste).toContain("char_length(about) > 1000");
-  });
-
-  it("puts the pre-checks in a PART A that is RUNNABLE, not commented out", () => {
-    // The file used to say "paste this whole file and run it once" while the
-    // pre-checks sat behind `--`. That is the worst of both: the checks never
-    // run, and a VALIDATE failure takes the whole paste down with it.
-    const partA = paste.slice(
-      paste.indexOf("-- PART A"),
-      paste.indexOf("-- END OF PART A")
-    );
-    expect(partA.length).toBeGreaterThan(500);
-    // Six live SELECTs, none of them commented.
-    const liveSelects = partA
-      .split("\n")
-      .filter((line) => line.startsWith("select "));
-    expect(liveSelects.length).toBe(6);
-    expect(paste).toContain("DO NOT paste the whole file at once");
-    // And Part B is a separate, labelled run.
-    expect(paste.indexOf("-- PART B")).toBeGreaterThan(-1);
-    expect(paste.indexOf("-- END OF PART A")).toBeLessThan(
-      paste.lastIndexOf("-- PART B")
-    );
-  });
-
-  it("warns that the project ref literal must match production", () => {
-    expect(paste).toContain("CHECK THE PROJECT REF BEFORE YOU RUN PART B");
-    // And that the example env file's trailing slash is not part of it.
-    expect(paste).toContain("TRAILING");
-    expect(paste).toContain(".env.local.example");
-  });
-
-  it("carries verify queries and the ordering warning", () => {
-    expect(paste).toContain("VERIFY");
-    expect(paste).toContain("convalidated");
-    expect(paste).toContain("0130");
-  });
-});
+// The "PASTE-ME bundle for 0132" suite that used to live here read
+// supabase/PASTE-ME-live-2026-08-26-hardening.sql. That one-time paste was
+// applied to the live database and the file has been removed from the repo,
+// so the suite went with it. The migration itself is still covered above.
 
 describe("SSRF: the two card routes that fetch a pro-supplied logo", () => {
   const routes = [

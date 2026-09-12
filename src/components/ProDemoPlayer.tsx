@@ -2461,7 +2461,7 @@ export default function ProDemoPlayer() {
             <span className={styles.dot}></span>
             <span className={styles.dot}></span>
             <span className={styles.dot}></span>
-            <span className={styles.addr}>hearth.app/pro</span>
+            <span className={styles.addr}>oaktend.com/pro</span>
           </div>
           <div className={styles.deviceScreen} data-x="screen">
             <div className={styles.camera} data-x="camera">

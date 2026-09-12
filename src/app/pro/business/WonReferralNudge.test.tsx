@@ -5,7 +5,7 @@ import "@testing-library/jest-dom/vitest";
 
 import WonReferralNudge from "./WonReferralNudge";
 
-const SEEN_KEY = "hearth_won_referral_nudge_seen";
+const SEEN_KEY = "oaktend_won_referral_nudge_seen";
 
 beforeEach(() => {
   window.localStorage.clear();

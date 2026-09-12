@@ -12,7 +12,7 @@ describe("normalizeEmail: gmail", () => {
   });
 
   it("strips a plus tag", () => {
-    expect(normalizeEmail("sam+hearth@gmail.com")?.normalized).toBe("sam@gmail.com");
+    expect(normalizeEmail("sam+promo@gmail.com")?.normalized).toBe("sam@gmail.com");
   });
 
   it("strips both, in either order", () => {
@@ -34,7 +34,7 @@ describe("normalizeEmail: gmail", () => {
       "sam@gmail.com",
       "s.am@gmail.com",
       "sam+1@gmail.com",
-      "S.A.M+hearth@googlemail.com",
+      "S.A.M+promo@googlemail.com",
     ].map((e) => normalizeEmail(e)?.normalized);
     expect(new Set(variants).size).toBe(1);
   });
@@ -42,7 +42,7 @@ describe("normalizeEmail: gmail", () => {
 
 describe("normalizeEmail: every other domain", () => {
   it("strips the plus tag", () => {
-    expect(normalizeEmail("sam+hearth@outlook.com")?.normalized).toBe(
+    expect(normalizeEmail("sam+promo@outlook.com")?.normalized).toBe(
       "sam@outlook.com"
     );
   });

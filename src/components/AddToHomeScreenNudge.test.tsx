@@ -14,8 +14,8 @@ vi.mock("next/navigation", () => ({
 import AddToHomeScreenNudge from "./AddToHomeScreenNudge";
 
 const HEADING = "Add OakTend to your Home Screen";
-const DISMISSED_KEY = "hearth_a2hs_dismissed";
-const SNOOZE_KEY = "hearth_a2hs_snoozed_until";
+const DISMISSED_KEY = "oaktend_a2hs_dismissed";
+const SNOOZE_KEY = "oaktend_a2hs_snoozed_until";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const IOS_SAFARI_UA =

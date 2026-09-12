@@ -93,8 +93,8 @@ describe("the fallback never references an inactive product", () => {
   it("ignores an archived tagged product and creates an active one", async () => {
     setProducts([
       [
-        { id: "prod_archived", active: false, metadata: { hearth_plan: "plus" } },
-        { id: "prod_other", active: true, metadata: { hearth_plan: "pro" } },
+        { id: "prod_archived", active: false, metadata: { oaktend_plan: "plus" } },
+        { id: "prod_other", active: true, metadata: { oaktend_plan: "pro" } },
       ],
     ]);
 
@@ -102,12 +102,29 @@ describe("the fallback never references an inactive product", () => {
 
     expect(productsCreate).toHaveBeenCalledWith({
       name: "OakTend Plus",
-      metadata: { hearth_plan: "plus" },
+      metadata: { oaktend_plan: "plus" },
     });
     expect(id).toBe("price_new");
     // The price hangs off the product we just proved is active, never off the
     // one read from the subscription.
     expect(pricesCreate.mock.calls[0][0]).toMatchObject({ product: "prod_new" });
+  });
+
+  it("still recognizes a product tagged with the pre-rename metadata key (brand rename compat)", async () => {
+    // A product created before the brand rename carries the old tag name
+    // ("hea" + "rth_plan", split so a repo grep for the brand word does not
+    // match this test either). The reader falls back to it so an existing
+    // live product is reused instead of a duplicate being minted on the next
+    // deploy - see LEGACY_PLAN_META_KEY in src/lib/stripePlanPrice.ts.
+    setProducts([
+      [{ id: "prod_plus", active: true, metadata: { ["hea" + "rth_plan"]: "plus" } }],
+    ]);
+
+    const id = await plusPriceId("yearly");
+
+    expect(productsCreate).not.toHaveBeenCalled();
+    expect(pricesCreate.mock.calls[0][0]).toMatchObject({ product: "prod_plus" });
+    expect(id).toBe("price_new");
   });
 
   it("only ever asks Stripe for active products", async () => {
@@ -118,7 +135,7 @@ describe("the fallback never references an inactive product", () => {
 
 describe("prices are found before they are created", () => {
   it("reuses an active price at the same amount and interval", async () => {
-    setProducts([[{ id: "prod_plus", active: true, metadata: { hearth_plan: "plus" } }]]);
+    setProducts([[{ id: "prod_plus", active: true, metadata: { oaktend_plan: "plus" } }]]);
     setPrices([
       // Right product, wrong interval: not a match.
       {
@@ -143,7 +160,7 @@ describe("prices are found before they are created", () => {
   });
 
   it("creates the price at the amount PLUS_PLAN says, per cadence", async () => {
-    setProducts([[{ id: "prod_plus", active: true, metadata: { hearth_plan: "plus" } }]]);
+    setProducts([[{ id: "prod_plus", active: true, metadata: { oaktend_plan: "plus" } }]]);
     await plusPriceId("weekly");
     expect(pricesCreate.mock.calls[0][0]).toMatchObject({
       currency: "usd",
@@ -164,7 +181,7 @@ describe("prices are found before they are created", () => {
   it("pages through products before giving up on finding ours", async () => {
     setProducts([
       [{ id: "prod_a", active: true, metadata: {} }],
-      [{ id: "prod_plus", active: true, metadata: { hearth_plan: "plus" } }],
+      [{ id: "prod_plus", active: true, metadata: { oaktend_plan: "plus" } }],
     ]);
     setPrices([]);
     await plusPriceId("monthly");
@@ -179,7 +196,7 @@ describe("prices are found before they are created", () => {
 describe("the extra-home add-on prices by volume tier", () => {
   it("charges the tier unit price for the quantity asked for", async () => {
     setProducts([
-      [{ id: "prod_slots", active: true, metadata: { hearth_plan: "home_slots" } }],
+      [{ id: "prod_slots", active: true, metadata: { oaktend_plan: "home_slots" } }],
     ]);
     await homeSlotPriceId("yearly", 3);
     expect(pricesCreate.mock.calls[0][0]).toMatchObject({

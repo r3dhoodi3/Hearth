@@ -14,7 +14,7 @@ import Link from "next/link";
 // Shown at most once per account, ever - same "mark seen the moment it's
 // shown" shape as PostJobDoneReferralAsk.tsx (the homeowner-side half of
 // this same item): there's no dismiss button here either.
-const SEEN_KEY = "hearth_won_referral_nudge_seen";
+const SEEN_KEY = "oaktend_won_referral_nudge_seen";
 
 function alreadySeen(): boolean {
   try {

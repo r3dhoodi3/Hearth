@@ -105,7 +105,7 @@ function toPaidPlan(plan: string | null | undefined): PaidPlan | null {
 // unique-enough key for this one cycle.
 function invoiceKeyFromUrl(url: string): string {
   try {
-    const parsed = new URL(url, "https://hearth.invalid");
+    const parsed = new URL(url, "https://oaktend.invalid");
     const invoice = parsed.searchParams.get("invoice");
     if (invoice) return invoice;
   } catch {

@@ -36,9 +36,9 @@ Schedule details behind the table:
 
 ## Sep 4 change (OakTend rename)
 
-The brand changed from Hearth to OakTend, so `hook.mp3` was re-recorded: "This is Hearth. Real jobs, from homeowners near you." is now "This is OakTend. Real jobs, from homeowners near you." Nothing else in the pro cut spoke the brand, so the other five mp3s are byte-identical to before, including the unscheduled `end.mp3` (its line is "Win work in your trade. Not chosen? Your fee comes back as credit.", which never named the brand).
+The brand changed to OakTend, so `hook.mp3` was re-recorded: "This is [old brand]. Real jobs, from homeowners near you." is now "This is OakTend. Real jobs, from homeowners near you." Nothing else in the pro cut spoke the brand, so the other five mp3s are byte-identical to before, including the unscheduled `end.mp3` (its line is "Win work in your trade. Not chosen? Your fee comes back as credit.", which never named the brand).
 
-Settings, identical to the earlier generations: `msedge-tts` v2.0.7, voice `en-US-AvaNeural`, rate `-8%`, output `audio-24khz-96kbitrate-mono-mp3`. The pipeline was pinned first by re-generating the OLD Hearth line as a control, which came back at exactly 4536 ms and 54432 bytes, matching the file on disk.
+Settings, identical to the earlier generations: `msedge-tts` v2.0.7, voice `en-US-AvaNeural`, rate `-8%`, output `audio-24khz-96kbitrate-mono-mp3`. The pipeline was pinned first by re-generating the OLD pre-rename line as a control, which came back at exactly 4536 ms and 54432 bytes, matching the file on disk.
 
 The hook window is the tight one on this cut: the clip starts at 250 ms and the leads VO at 4875 ms cuts it off, so the hard ceiling is 4625 ms. The new line re-measured at 4536 ms, the same length as the old one (verified across three independent generations, all 189 frames), so the 89 ms of headroom is unchanged. No rate change and no tail trim were needed, and `VO_EST_MS.hook` stays at 4540. Frame walk of the new file: MPEG-2 Layer III, 24 kHz, 96 kbps CBR, mono, no ID3, no junk bytes, matching the untouched clips.
 

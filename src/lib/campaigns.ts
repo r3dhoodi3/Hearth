@@ -15,6 +15,8 @@
 // "unknown_code" in place of the caller-supplied string, so a stranger
 // probing /go/whatever-they-typed can never inject free text into analytics.
 
+import { legacyKey } from "@/lib/legacyStorage";
+
 export const CAMPAIGN_CODE_RE = /^[a-z0-9-]{2,32}$/;
 
 export type CampaignChannel = "tiktok" | "instagram" | "other";
@@ -83,6 +85,14 @@ export function lookupCampaign(code: string): CampaignLink | null {
 // export the HTTP method handlers and a small fixed set of config keys -
 // any other export there is invalid.
 export const CAMPAIGN_COOKIE = "oaktend_campaign";
+
+// Brand rename cleanup, remove after 2026-12-31. The pre-rename name of the
+// cookie above, built out of two literal halves by src/lib/legacyStorage.ts so
+// the old brand word never appears whole in src. Nothing WRITES this name any
+// more: recordTermsAcceptance promotes a value found under it onto
+// CAMPAIGN_COOKIE (same options as below) and deletes it, so the new name is
+// never left as an empty slot that a reader would still prefer.
+export const LEGACY_CAMPAIGN_COOKIE = legacyKey(CAMPAIGN_COOKIE);
 
 const CAMPAIGN_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days
 

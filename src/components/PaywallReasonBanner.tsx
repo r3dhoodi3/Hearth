@@ -10,13 +10,13 @@ import {
 // paywall the person hit most recently (PLAN A1#2 / R1#5). One value, the
 // reason id only - never free text - and it expires on its own after a week
 // so a stale visit from a while ago cannot keep steering the dashboard.
-const LAST_REASON_COOKIE = "hearth_last_reason";
+const LAST_REASON_COOKIE = "oaktend_last_reason";
 const LAST_REASON_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 // Distinct reasons seen this session, for the cap in
 // src/lib/paywallBannerSession.ts. sessionStorage, not localStorage: the cap
 // is per-visit, not forever.
-const SESSION_KEY = "hearth_paywall_reasons_seen";
+const SESSION_KEY = "oaktend_paywall_reasons_seen";
 
 function readSeen(): string[] {
   try {

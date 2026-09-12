@@ -7,7 +7,7 @@ import {
 //
 // The cheapest way to farm a free trial without leaving your inbox is the plus
 // tag and the gmail dot: sam@gmail.com, s.am@gmail.com, sam+1@gmail.com and
-// sam+hearth@gmail.com are four OakTend accounts and one human being. Every mail
+// sam+promo@gmail.com are four OakTend accounts and one human being. Every mail
 // server involved delivers all four to the same person, so treating them as
 // four separate first-time customers is a choice, not a fact.
 //
@@ -21,7 +21,7 @@ import {
 // test.
 
 export type NormalizedEmail = {
-  // The whole address, reduced: "s.am+hearth@GMail.com" -> "sam@gmail.com".
+  // The whole address, reduced: "s.am+promo@GMail.com" -> "sam@gmail.com".
   normalized: string;
   // Just the domain, lowercased, after the googlemail alias is folded in.
   domain: string;

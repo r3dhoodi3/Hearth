@@ -13,7 +13,7 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
-const KEY = "hearth_details_closed_this-month-user-1";
+const KEY = "oaktend_details_closed_this-month-user-1";
 
 function renderIt(props: { forceOpen?: boolean } = {}) {
   return render(
@@ -77,7 +77,7 @@ describe("RememberedDetails", () => {
   });
 
   it("keys the flag by the storageKey, so one user's close is not another's", () => {
-    window.localStorage.setItem("hearth_details_closed_this-month-user-2", "1");
+    window.localStorage.setItem("oaktend_details_closed_this-month-user-2", "1");
     renderIt();
     expect(details().open).toBe(true);
   });

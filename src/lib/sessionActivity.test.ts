@@ -88,7 +88,7 @@ describe("shouldStampActivity", () => {
 
 describe("the activity cookie itself", () => {
   it("has the name the middleware and the sign-out route agree on", () => {
-    expect(ACTIVITY_COOKIE).toBe("hearth_seen");
+    expect(ACTIVITY_COOKIE).toBe("oaktend_seen");
   });
 
   it("cannot be read or rewritten by page script", () => {

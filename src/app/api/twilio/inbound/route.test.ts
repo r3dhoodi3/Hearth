@@ -42,7 +42,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 import { POST } from "./route";
 
 const AUTH_TOKEN = "test-auth-token";
-const WEBHOOK_URL = "https://hearth.test/api/twilio/inbound";
+const WEBHOOK_URL = "https://oaktend.test/api/twilio/inbound";
 
 beforeEach(() => {
   process.env.TWILIO_AUTH_TOKEN = AUTH_TOKEN;

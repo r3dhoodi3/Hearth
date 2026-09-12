@@ -28,7 +28,7 @@
 // First-party, httpOnly, and holds one thing: the millisecond timestamp of the
 // last guarded request this browser made. It is not an analytics id and is
 // never joined to anything.
-export const ACTIVITY_COOKIE = "hearth_seen";
+export const ACTIVITY_COOKIE = "oaktend_seen";
 
 // 30 days for both sides, homeowner and pro. Long enough that a homeowner who
 // only opens OakTend when something breaks is not logged out between problems,

@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { readLegacyCookie } from "@/lib/legacyCookies";
 
 // Lightweight "flash" toast that survives a server action + revalidate/redirect.
 // setFlash() drops a short-lived, non-httpOnly cookie.
@@ -19,7 +20,7 @@ import { cookies } from "next/headers";
 // readFlash() stays exported for any server consumer that wants to read a
 // pending flash during a render; nothing in the tree does today, and anything
 // that starts to should be aware it makes its own route dynamic.
-export const FLASH_COOKIE = "hearth_flash";
+export const FLASH_COOKIE = "oaktend_flash";
 
 export type FlashType = "success" | "error" | "info" | "warning";
 export interface Flash {
@@ -63,7 +64,7 @@ export async function setFlash(
 }
 
 export async function readFlash(): Promise<Flash | null> {
-  const raw = (await cookies()).get(FLASH_COOKIE)?.value;
+  const raw = readLegacyCookie(await cookies(), FLASH_COOKIE);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as Flash;

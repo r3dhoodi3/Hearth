@@ -93,7 +93,7 @@ describe("ProToolsClient: autosave", () => {
   it("a saved draft wins over a stale lead prefill on restore", () => {
     vi.useFakeTimers();
     localStorage.setItem(
-      "hearth.pro-draft.v1.tool.estimate",
+      "oaktend.pro-draft.v1.tool.estimate",
       "Edited after the prefill loaded"
     );
     render(

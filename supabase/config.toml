@@ -1,6 +1,6 @@
 # Minimal Supabase local config. Run `supabase init` to regenerate a full one
 # if your CLI version expects more fields — it will not touch ./migrations.
-project_id = "hearth"
+project_id = "oaktend"
 
 [api]
 enabled = true

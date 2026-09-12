@@ -31,13 +31,13 @@ describe("PaywallReasonBanner", () => {
     expect(screen.getByText("Forecast pitch")).toBeInTheDocument();
   });
 
-  it("sets the hearth_last_reason cookie to this reason", () => {
+  it("sets the oaktend_last_reason cookie to this reason", () => {
     render(
       <PaywallReasonBanner reason="quote">
         <p>Quote pitch</p>
       </PaywallReasonBanner>
     );
-    expect(document.cookie).toContain("hearth_last_reason=quote");
+    expect(document.cookie).toContain("oaktend_last_reason=quote");
   });
 
   it("keeps showing the first three distinct reasons in a session", () => {
@@ -78,7 +78,7 @@ describe("PaywallReasonBanner", () => {
     expect(screen.queryByText("4th pitch")).not.toBeInTheDocument();
     // The cookie is still written even when the banner itself stands down -
     // the dashboard tile order and the session cap are two different rules.
-    expect(document.cookie).toContain("hearth_last_reason=ask");
+    expect(document.cookie).toContain("oaktend_last_reason=ask");
   });
 
   it("still shows a reason already seen this session, even past the cap", () => {

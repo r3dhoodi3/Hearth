@@ -275,11 +275,11 @@ describe("FIXED: a common phone model is no longer a device farm", () => {
 // ===========================================================================
 // BYPASS 1 - the fingerprint cookie is attacker-controlled.
 // ===========================================================================
-// hearth_fp is written by page script with document.cookie and no HttpOnly, so
+// oaktend_fp is written by page script with document.cookie and no HttpOnly, so
 // the browser owns it.
 //
 // WAS: an attacker who can compute a VICTIM's fingerprint (five attributes their
-// own site can read from any visitor) could set hearth_fp to that value, farm
+// own site can read from any visitor) could set oaktend_fp to that value, farm
 // and burn a few accounts under it, and leave the victim sharing a "device" with
 // a flagged account - a permanent 85-point mark for the price of one link click.
 //
@@ -287,7 +287,7 @@ describe("FIXED: a common phone model is no longer a device farm", () => {
 // (hash(did || fp)), so a forged value can only ever collide with something
 // under the forger's own device cookie. The victim is unreachable. It is also
 // skipped entirely when there is no device cookie to bind it to.
-describe("FIXED: hearth_fp can no longer be pointed at a stranger", () => {
+describe("FIXED: oaktend_fp can no longer be pointed at a stranger", () => {
   it("is still set from page script with no HttpOnly flag", () => {
     // Unchanged, and fine: the script that computes it is the thing that writes
     // it, so hiding it from that script would protect nothing.
@@ -296,7 +296,7 @@ describe("FIXED: hearth_fp can no longer be pointed at a stranger", () => {
   });
 
   it("is bound to the httpOnly device cookie before it is hashed", () => {
-    expect(signalsSrc).toContain("c.get(FINGERPRINT_COOKIE)?.value");
+    expect(signalsSrc).toContain("readLegacyCookie(c, FINGERPRINT_COOKIE)");
     expect(signalsSrc).toContain("const boundFingerprint =");
     expect(signalsSrc).toContain("device && fingerprint");
     expect(signalsSrc).toContain(
@@ -309,9 +309,9 @@ describe("FIXED: hearth_fp can no longer be pointed at a stranger", () => {
   });
 
   it("keeps the two cookies' trust properties separate in the scoring", () => {
-    expect(cookiesSrc).toContain("httpOnly: true"); // hearth_did
-    expect(FINGERPRINT_COOKIE).toBe("hearth_fp");
-    expect(DEVICE_COOKIE).toBe("hearth_did");
+    expect(cookiesSrc).toContain("httpOnly: true"); // oaktend_did
+    expect(FINGERPRINT_COOKIE).toBe("oaktend_fp");
+    expect(DEVICE_COOKIE).toBe("oaktend_did");
     // The device count is the httpOnly cookie alone; the fingerprint has its own
     // much smaller, IP-corroborated weight.
     expect(factsSrc).toContain("const fingerprintLinked = linkedOf(\"fingerprint\")");

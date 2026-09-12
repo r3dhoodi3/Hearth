@@ -25,7 +25,7 @@ Two documents in this repo disagree about the plan:
 They cannot both be right, and the difference is the difference between having
 backups and having none. **Check it first**, before anything else in this file:
 
-1. supabase.com/dashboard, pick the Hearth project (ref `tubkvvfkwggaddcmcjqv`).
+1. supabase.com/dashboard, pick the OakTend project (ref `tubkvvfkwggaddcmcjqv`).
 2. Left sidebar, bottom: **Project Settings** -> **Billing**.
 3. Read the plan name at the top of the page.
 
@@ -66,7 +66,7 @@ survivable with a thousand.
 
 ## 2. Confirm backups are actually running (2 minutes, do this weekly)
 
-1. supabase.com/dashboard -> the Hearth project.
+1. supabase.com/dashboard -> the OakTend project.
 2. Left sidebar: **Database** -> **Backups**.
 3. You should see a list of daily snapshots, most recent at the top.
 
@@ -103,7 +103,7 @@ there for when you want to be thorough without spending anything.
 Takes about 45 minutes, most of it waiting. Costs a few dollars of prorated Pro
 time on a project you delete the same day.
 
-1. **Note the target.** Supabase -> Hearth project -> Database -> Backups. Pick
+1. **Note the target.** Supabase -> OakTend project -> Database -> Backups. Pick
    the newest snapshot. Write its date and time in the log.
 
 2. **Record the numbers you are going to check.** Still in the LIVE project:
@@ -124,7 +124,7 @@ time on a project you delete the same day.
 
 3. **Create the scratch project.** supabase.com/dashboard -> New project.
    - Organisation: the same one.
-   - Name: `hearth-restore-drill` (NOT `hearth-staging`, which is a permanent
+   - Name: `oaktend-restore-drill` (NOT `oaktend-staging`, which is a permanent
      project from `docs/ENVIRONMENTS.md`; you are going to delete this one).
    - Database password: generate one, paste it into your password manager.
    - Region: the same region as the live project.
@@ -136,10 +136,10 @@ time on a project you delete the same day.
    go to the LIVE project -> Database -> Backups -> the three-dot menu on the
    snapshot -> **Download**, then upload/restore that dump into the scratch
    project (Option B step 4 has the command). If the dashboard does offer
-   "restore into another project", use it and pick `hearth-restore-drill`.
+   "restore into another project", use it and pick `oaktend-restore-drill`.
 
    **Read every confirmation dialog and confirm the project name it shows is
-   `hearth-restore-drill`.** This is the one step where a misclick is
+   `oaktend-restore-drill`.** This is the one step where a misclick is
    destructive.
 
 5. **Wait.** Ten to thirty minutes is normal. The project is unusable while it
@@ -172,7 +172,7 @@ Same proof, no money, more typing. Needs Docker Desktop running.
 
 1. Live project -> Database -> Backups -> three-dot menu on the newest snapshot
    -> **Download**. You get a `.backup` or `.sql.gz` file. Put it somewhere
-   outside the repo, e.g. `C:\Users\lande\hearth-backups\`.
+   outside the repo, e.g. `C:\Users\lande\oaktend-backups\`.
 
    **That file is a complete copy of every customer's data.** Do not put it in
    the repo, do not put it in Dropbox, delete it when the drill is done.
@@ -180,7 +180,7 @@ Same proof, no money, more typing. Needs Docker Desktop running.
 2. Start a throwaway Postgres:
 
    ```
-   docker run --name hearth-restore-drill -e POSTGRES_PASSWORD=drill -p 55432:5432 -d postgres:15
+   docker run --name oaktend-restore-drill -e POSTGRES_PASSWORD=drill -p 55432:5432 -d postgres:15
    ```
 
 3. Wait about ten seconds for it to come up.
@@ -188,13 +188,13 @@ Same proof, no money, more typing. Needs Docker Desktop running.
 4. Restore into it:
 
    ```
-   docker exec -i hearth-restore-drill psql -U postgres -d postgres < C:\Users\lande\hearth-backups\<the-file>.sql
+   docker exec -i oaktend-restore-drill psql -U postgres -d postgres < C:\Users\lande\oaktend-backups\<the-file>.sql
    ```
 
    For a `.backup` (custom format) file use `pg_restore` instead:
 
    ```
-   docker exec -i hearth-restore-drill pg_restore -U postgres -d postgres --no-owner --no-acl < C:\Users\lande\hearth-backups\<the-file>.backup
+   docker exec -i oaktend-restore-drill pg_restore -U postgres -d postgres --no-owner --no-acl < C:\Users\lande\oaktend-backups\<the-file>.backup
    ```
 
    Expect some errors about roles that do not exist locally (`supabase_admin`,
@@ -204,7 +204,7 @@ Same proof, no money, more typing. Needs Docker Desktop running.
 5. Count the rows:
 
    ```
-   docker exec -i hearth-restore-drill psql -U postgres -d postgres -c "select 'users', count(*) from public.users union all select 'properties', count(*) from public.properties union all select 'contractors', count(*) from public.contractors union all select 'contractor_leads', count(*) from public.contractor_leads union all select 'messages', count(*) from public.messages order by 1;"
+   docker exec -i oaktend-restore-drill psql -U postgres -d postgres -c "select 'users', count(*) from public.users union all select 'properties', count(*) from public.properties union all select 'contractors', count(*) from public.contractors union all select 'contractor_leads', count(*) from public.contractor_leads union all select 'messages', count(*) from public.messages order by 1;"
    ```
 
    Compare against the live numbers from Option A step 2.
@@ -212,8 +212,8 @@ Same proof, no money, more typing. Needs Docker Desktop running.
 6. Tear it down and delete the file:
 
    ```
-   docker rm -f hearth-restore-drill
-   del C:\Users\lande\hearth-backups\<the-file>
+   docker rm -f oaktend-restore-drill
+   del C:\Users\lande\oaktend-backups\<the-file>
    ```
 
 7. Write the result in the log below.

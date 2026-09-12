@@ -64,7 +64,7 @@ const ACTIVITY_EVENTS = ["pointerdown", "keydown", "scroll", "touchstart"] as co
 // getReviewPromptSignals() round trip just to hear the same permanent no.
 // Only ever written from a real server row or a real permanent answer, never
 // from a failed fetch, so a database hiccup cannot silence the prompt forever.
-const SETTLED_KEY = "hearth_review_prompt_settled";
+const SETTLED_KEY = "oaktend_review_prompt_settled";
 
 function isSettled(): boolean {
   try {

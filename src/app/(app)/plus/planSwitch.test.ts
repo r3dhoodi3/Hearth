@@ -268,7 +268,7 @@ describe("switching to monthly outside a trial", () => {
             {
               id: "si_addon",
               quantity: 2,
-              metadata: { hearth_addon: "home_slots" },
+              metadata: { oaktend_addon: "home_slots" },
               price: { id: "price_slot_old", product: "prod_archived" },
             },
           ],
@@ -280,7 +280,7 @@ describe("switching to monthly outside a trial", () => {
     expect(params.phases[1].items).toContainEqual({
       price: "price_slot_monthly_2",
       quantity: 2,
-      metadata: { hearth_addon: "home_slots" },
+      metadata: { oaktend_addon: "home_slots" },
     });
   });
 
@@ -360,7 +360,7 @@ describe("switching to yearly", () => {
             {
               id: "si_addon",
               quantity: 3,
-              metadata: { hearth_addon: "home_slots" },
+              metadata: { oaktend_addon: "home_slots" },
               price: { id: "price_slot_old", product: "prod_archived" },
             },
           ],
@@ -372,7 +372,7 @@ describe("switching to yearly", () => {
       id: "si_addon",
       price: "price_slot_yearly_3",
       quantity: 3,
-      metadata: { hearth_addon: "home_slots" },
+      metadata: { oaktend_addon: "home_slots" },
     });
   });
 

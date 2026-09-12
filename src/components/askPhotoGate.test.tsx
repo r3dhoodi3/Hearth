@@ -6,7 +6,7 @@ import "@testing-library/jest-dom/vitest";
 // The fairness fix: a free homeowner should learn a photo needs OakTend Plus
 // from the attach button itself, before they tap it - never after they've
 // already picked a photo and sent it. See AskOakTend's `photoGate` (driven by
-// the remembered plan, `hearth_ask_plan[:<uid>]` in localStorage) and the
+// the remembered plan, `oaktend_ask_plan[:<uid>]` in localStorage) and the
 // button/label split in the composer.
 
 vi.mock("next/navigation", () => ({
@@ -32,7 +32,7 @@ vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
 
 import AskOakTend from "./AskOakTend";
 
-const PLAN_KEY = "hearth_ask_plan:user-1";
+const PLAN_KEY = "oaktend_ask_plan:user-1";
 
 function rememberedPlan(plan: "free" | "trial" | "plus") {
   // Seed both the per-user key (what the component settles on once the
@@ -40,7 +40,7 @@ function rememberedPlan(plan: "free" | "trial" | "plus") {
   // very first render, before that), so the gate is already in its final
   // state by the time a test's first assertion runs.
   window.localStorage.setItem(PLAN_KEY, plan);
-  window.localStorage.setItem("hearth_ask_plan", plan);
+  window.localStorage.setItem("oaktend_ask_plan", plan);
 }
 
 async function attachControl() {

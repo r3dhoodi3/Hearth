@@ -323,7 +323,7 @@ export async function loadRiskFacts(
       (id) => subscribedIds.has(id) || chargebackIds.has(id)
     );
 
-    // Fingerprint links are NOT in this set. hearth_fp is client-writable, so
+    // Fingerprint links are NOT in this set. oaktend_fp is client-writable, so
     // letting it alone create a link to a flagged account would hand an attacker
     // a 40-point weapon to point at any visitor whose fingerprint they can
     // compute. deviceLinked is the httpOnly cookie only, and household

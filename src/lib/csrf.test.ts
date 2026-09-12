@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isSameOrigin, sameOriginGuard } from "./csrf";
 
 function req(headers: Record<string, string>): Request {
-  return new Request("https://gethearth.vercel.app/api/ask", {
+  return new Request("https://oaktend.com/api/ask", {
     method: "POST",
     headers,
   });
@@ -13,8 +13,8 @@ describe("isSameOrigin", () => {
     expect(
       isSameOrigin(
         req({
-          host: "gethearth.vercel.app",
-          origin: "https://gethearth.vercel.app",
+          host: "oaktend.com",
+          origin: "https://oaktend.com",
           "sec-fetch-site": "same-origin",
         })
       )
@@ -24,7 +24,7 @@ describe("isSameOrigin", () => {
   it("accepts a request the user started themselves", () => {
     // sec-fetch-site: none is a typed URL or a bookmark, never a page on
     // another site posting on the user's behalf.
-    expect(isSameOrigin(req({ host: "gethearth.vercel.app", "sec-fetch-site": "none" }))).toBe(
+    expect(isSameOrigin(req({ host: "oaktend.com", "sec-fetch-site": "none" }))).toBe(
       true
     );
   });
@@ -33,7 +33,7 @@ describe("isSameOrigin", () => {
     expect(
       isSameOrigin(
         req({
-          host: "gethearth.vercel.app",
+          host: "oaktend.com",
           origin: "https://evil.example",
           "sec-fetch-site": "cross-site",
         })
@@ -45,7 +45,7 @@ describe("isSameOrigin", () => {
     // Older Safari sends no Sec-Fetch-Site; Origin is the fallback.
     expect(
       isSameOrigin(
-        req({ host: "gethearth.vercel.app", origin: "https://evil.example" })
+        req({ host: "oaktend.com", origin: "https://evil.example" })
       )
     ).toBe(false);
   });
@@ -57,8 +57,8 @@ describe("isSameOrigin", () => {
       isSameOrigin(
         req({
           host: "internal.vercel.internal",
-          "x-forwarded-host": "gethearth.vercel.app",
-          origin: "https://gethearth.vercel.app",
+          "x-forwarded-host": "oaktend.com",
+          origin: "https://oaktend.com",
         })
       )
     ).toBe(true);
@@ -68,8 +68,8 @@ describe("isSameOrigin", () => {
     expect(
       isSameOrigin(
         req({
-          "x-forwarded-host": "gethearth.vercel.app, inner.local",
-          origin: "https://gethearth.vercel.app",
+          "x-forwarded-host": "oaktend.com, inner.local",
+          origin: "https://oaktend.com",
         })
       )
     ).toBe(true);
@@ -78,7 +78,7 @@ describe("isSameOrigin", () => {
   it("ignores scheme and case, which CSRF does not turn on", () => {
     expect(
       isSameOrigin(
-        req({ host: "GetHearth.vercel.app", origin: "http://gethearth.vercel.app" })
+        req({ host: "OakTend.com", origin: "http://oaktend.com" })
       )
     ).toBe(true);
   });
@@ -88,12 +88,12 @@ describe("isSameOrigin", () => {
     // non-browser client (curl, a monitor, a native app). Refusing those would
     // break real things and stop no attack. The route's own session check is
     // still what decides whether anything happens.
-    expect(isSameOrigin(req({ host: "gethearth.vercel.app" }))).toBe(true);
+    expect(isSameOrigin(req({ host: "oaktend.com" }))).toBe(true);
   });
 
   it("allows an unparseable Origin rather than guessing", () => {
     expect(
-      isSameOrigin(req({ host: "gethearth.vercel.app", origin: "null" }))
+      isSameOrigin(req({ host: "oaktend.com", origin: "null" }))
     ).toBe(true);
   });
 });
@@ -102,14 +102,14 @@ describe("sameOriginGuard", () => {
   it("returns nothing for a request the route should handle", () => {
     expect(
       sameOriginGuard(
-        req({ host: "gethearth.vercel.app", "sec-fetch-site": "same-origin" })
+        req({ host: "oaktend.com", "sec-fetch-site": "same-origin" })
       )
     ).toBeNull();
   });
 
   it("returns a 403 that says nothing useful", async () => {
     const res = sameOriginGuard(
-      req({ host: "gethearth.vercel.app", "sec-fetch-site": "cross-site" })
+      req({ host: "oaktend.com", "sec-fetch-site": "cross-site" })
     );
     expect(res).not.toBeNull();
     expect(res!.status).toBe(403);

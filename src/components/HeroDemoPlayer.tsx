@@ -2340,7 +2340,7 @@ export default function HeroDemoPlayer() {
             <span className={styles.dot}></span>
             <span className={styles.dot}></span>
             <span className={styles.dot}></span>
-            <span className={styles.addr}>hearth.app</span>
+            <span className={styles.addr}>oaktend.com</span>
           </div>
           <div className={styles.deviceScreen} data-x="screen">
             <div className={styles.camera} data-x="camera">

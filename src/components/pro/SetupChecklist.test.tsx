@@ -139,13 +139,13 @@ describe("nestedStreamHoles", () => {
 // The same check against a real streamed response. It needs a running server
 // and a signed-in pro cookie, so it is opt-in:
 //
-//   HEARTH_STREAM_CHECK_URL=http://localhost:3103/pro //   HEARTH_STREAM_CHECK_COOKIE='sb-...' npx vitest run src/components/pro/SetupChecklist.test.tsx
-const streamUrl = process.env.HEARTH_STREAM_CHECK_URL;
+//   OAKTEND_STREAM_CHECK_URL=http://localhost:3103/pro //   OAKTEND_STREAM_CHECK_COOKIE='sb-...' npx vitest run src/components/pro/SetupChecklist.test.tsx
+const streamUrl = process.env.OAKTEND_STREAM_CHECK_URL;
 
 describe.skipIf(!streamUrl)("served HTML has no nested stream holes", () => {
   it("keeps every <template id=\"P:\"> a direct child of a hidden segment", async () => {
     const res = await fetch(streamUrl as string, {
-      headers: { cookie: process.env.HEARTH_STREAM_CHECK_COOKIE ?? "" },
+      headers: { cookie: process.env.OAKTEND_STREAM_CHECK_COOKIE ?? "" },
     });
     const html = await res.text();
     expect(res.status).toBe(200);

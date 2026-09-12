@@ -5,12 +5,13 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
 import { isMissingSchemaError } from "@/lib/dbErrors";
 import { formatAddressLine } from "@/lib/addressLine";
+import { readLegacyCookie } from "@/lib/legacyCookies";
 import type { Property } from "@/lib/database.types";
 
 // Which home the owner is currently viewing. A user can have several; this
 // cookie picks the active one. Ownership is re-validated on every read, so a
 // stale/forged value just falls back to their first home.
-export const ACTIVE_HOME_COOKIE = "hearth_active_home";
+export const ACTIVE_HOME_COOKIE = "oaktend_active_home";
 
 // A property row plus whether it belongs to the signed-in user or was shared
 // with them as a household member.
@@ -252,6 +253,6 @@ export async function getActiveProperty(): Promise<Property | null> {
   const props = await getProperties();
   if (props.length === 0) return null;
 
-  const activeId = (await cookies()).get(ACTIVE_HOME_COOKIE)?.value;
+  const activeId = readLegacyCookie(await cookies(), ACTIVE_HOME_COOKIE);
   return props.find((p) => p.id === activeId) ?? props[0];
 }

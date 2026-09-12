@@ -32,6 +32,16 @@ export type PaywallVariant = "soft" | "hard";
 // A literal experiment salt, never reused for anything else. Changing it would
 // silently reshuffle every account between the two arms mid-experiment and
 // corrupt the comparison, so it stays fixed for the life of this test.
+//
+// BRAND RENAME EXCEPTION (2026-09-12): this string is deliberately left
+// spelling the pre-rename brand name. It is an opaque hash input, never
+// displayed, never read for its meaning - only for producing the same 50/50
+// split it has produced since 2026-08-30. Editing it, even to fix the brand
+// name, IS the exact failure mode the comment above warns about: every
+// account would land in a new arm mid-experiment. Leave it exactly as-is
+// until the experiment ends (see the module comment's "ENDING THE
+// EXPERIMENT" section), then delete this constant entirely rather than
+// renaming it.
 const EXPERIMENT_SALT = "hearth-paywall-trial-ab-2026-08-30";
 
 // FNV-1a, 32-bit. Small, dependency-free, and stable across runtimes, which is

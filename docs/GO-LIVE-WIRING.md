@@ -7,6 +7,13 @@ dashboards and environment variables. Until these are set, every cron 401s by de
 
 Work through the sections in order. Each ends with a "verify it worked" step.
 
+## Brand rename: env vars (2026-09-12)
+
+The codebase now reads `OAKTEND_*` env var names first and falls back to the old
+`HEARTH_*` name if the new one is unset, so nothing breaks the moment this ships.
+Rename these in Vercel; old names still read as fallback until 2026-12-31, after
+which the fallback is removed and only `OAKTEND_*` will work.
+
 ## 1. Crons (unlocks the whole proactive layer)
 
 All 17 cron routes under `src/app/api/cron/` are registered with schedules in `vercel.json`
@@ -76,7 +83,7 @@ before any Products exist in the dashboard.
    Without them, checkout uses inline price_data at the amounts in `src/lib/constants.ts`,
    and plan changes on an existing subscription (`switch to yearly`, `switch to monthly at
    renewal`, extra homes) resolve a Price through `src/lib/stripePlanPrice.ts`, which
-   find-or-creates an ACTIVE product tagged `hearth_plan=plus` (or `hearth_plan=home_slots`)
+   find-or-creates an ACTIVE product tagged `oaktend_plan=plus` (or `oaktend_plan=home_slots`)
    and an active recurring price at the right amount and interval.
 
    Why that fallback exists: on 2026-08-30 "Switch to yearly" failed for every live
@@ -132,10 +139,12 @@ and every account scores as clean forever.
 1. Generate a long random string (`openssl rand -hex 32` or any password
    manager, 16+ characters) and add it to Vercel as `RISK_HASH_SALT` for
    Production, Preview and Development.
-2. Run `supabase/PASTE-ME-live-2026-08-26-account-risk.sql` against the live
-   database (creates `account_signals`, `account_risk`, `abuse_flags`,
-   `risk_overrides` and `linked_accounts`, all service-role only). Its verify
-   queries confirm RLS is on with no policies for `authenticated`.
+2. Apply `supabase/migrations/0130_account_risk.sql` to the live database
+   (creates `account_signals`, `account_risk`, `abuse_flags`, `risk_overrides`
+   and `linked_accounts`, all service-role only). Already applied on the live
+   project; re-check with the RLS audit queries in `docs/WILLIAM-SECURITY-INFRA.md`
+   if in doubt. The one-time paste bundle this step used to name has been
+   deleted along with the rest of the applied pastes.
 3. NEVER change `RISK_HASH_SALT` after launch. The hashes are salted with it, so
    changing it makes every signal recorded before the change stop matching, and
    every repeat offender looks brand new again. `account_signals.salt_version`
@@ -261,9 +270,11 @@ browser's own push service (Apple, Google, Mozilla) does the delivery, so it is 
 homeowners and pros alike and is not an OakTend Plus perk. Code is in `src/lib/push.ts`,
 `public/sw.js` and `src/app/api/push/subscribe`, dormant until the keys exist.
 
-1. Run the database bundle `supabase/PASTE-ME-live-2026-08-29-push.sql` (migration 0143,
-   one new table `public.push_subscriptions`). Without it the "Turn on notifications"
-   button reports that the server is not set up yet.
+1. Apply `supabase/migrations/0143_push_subscriptions.sql` (one new table,
+   `public.push_subscriptions`). Without it the "Turn on notifications" button
+   reports that the server is not set up yet. Already applied on the live
+   project; the one-time paste bundle this step used to name has been deleted
+   along with the rest of the applied pastes.
 2. Generate a key pair once, from the repo:
    `npx web-push generate-vapid-keys`
 3. In Vercel, set all three (Production and Preview):

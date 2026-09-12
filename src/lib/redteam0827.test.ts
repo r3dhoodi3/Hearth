@@ -11,7 +11,7 @@ import { checkoutCadence } from "@/lib/checkoutSubscriptionData";
 import { trialApplies, billingTerms } from "@/lib/billingTerms";
 import { isExcludedPath } from "@/lib/reviewPrompt";
 
-const ORIGIN = "https://gethearth.vercel.app";
+const ORIGIN = "https://oaktend.com";
 
 // What /auth/callback and /auth/confirm really do with the value: they hand it
 // straight to new URL(value, origin) and redirect there.

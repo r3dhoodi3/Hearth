@@ -36,7 +36,7 @@ import { homeWinsCaption } from "@/lib/homeWins";
 // Dismissed once, stays dismissed. Same "answer once, remember forever" shape
 // as InviteNeighbor's MOMENT_SEEN_KEY, wrapped in try/catch so storage being
 // unavailable never throws.
-const DISMISSED_KEY = "hearth_home_wins_share_dismissed";
+const DISMISSED_KEY = "oaktend_home_wins_share_dismissed";
 
 function alreadyDismissed(): boolean {
   try {

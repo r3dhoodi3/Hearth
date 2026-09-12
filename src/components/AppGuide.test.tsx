@@ -123,7 +123,7 @@ describe("AppGuide - homeowner", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(markGuideSeenAction).toHaveBeenCalledWith("homeowner");
-    expect(window.localStorage.getItem("hearth_app_guide_seen")).toBe("1");
+    expect(window.localStorage.getItem("oaktend_app_guide_seen")).toBe("1");
   });
 
   it("stays on the dashboard for every homeowner step, so the tour never yanks a first-timer around", () => {
@@ -155,7 +155,7 @@ describe("AppGuide - homeowner", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(markGuideSeenAction).toHaveBeenCalledTimes(1);
     expect(markGuideSeenAction).toHaveBeenCalledWith("homeowner");
-    expect(window.localStorage.getItem("hearth_app_guide_seen")).toBe("1");
+    expect(window.localStorage.getItem("oaktend_app_guide_seen")).toBe("1");
   });
 
   it("closes on Escape, with the same finality as Skip tour", () => {
@@ -163,7 +163,7 @@ describe("AppGuide - homeowner", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(markGuideSeenAction).toHaveBeenCalledWith("homeowner");
-    expect(window.localStorage.getItem("hearth_app_guide_seen")).toBe("1");
+    expect(window.localStorage.getItem("oaktend_app_guide_seen")).toBe("1");
   });
 
   it("stays shut for an account that has already been through it", () => {
@@ -180,7 +180,7 @@ describe("AppGuide - homeowner", () => {
   });
 
   it("stays shut when this browser already saw it, even if the stamp has not landed", () => {
-    window.localStorage.setItem("hearth_app_guide_seen", "1");
+    window.localStorage.setItem("oaktend_app_guide_seen", "1");
     render(
       <>
         <div id="this-month" />
@@ -222,8 +222,8 @@ describe("AppGuide - homeowner", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(markGuideSeenAction).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem("hearth_app_guide_seen")).toBeNull();
-    expect(window.sessionStorage.getItem("hearth_app_guide_snoozed")).toBe("1");
+    expect(window.localStorage.getItem("oaktend_app_guide_seen")).toBeNull();
+    expect(window.sessionStorage.getItem("oaktend_app_guide_snoozed")).toBe("1");
 
     // And it does not come back on the next page either.
     mockPathname = "/contractors";
@@ -232,7 +232,7 @@ describe("AppGuide - homeowner", () => {
   });
 
   it("stays shut for the rest of a session that already snoozed it", () => {
-    window.sessionStorage.setItem("hearth_app_guide_snoozed", "1");
+    window.sessionStorage.setItem("oaktend_app_guide_snoozed", "1");
     render(
       <>
         <div id="this-month" />
@@ -250,7 +250,7 @@ describe("AppGuide - homeowner", () => {
     // waved it away gets it back. The replay path bypasses the delay
     // entirely (see the onShow effect in AppGuide.tsx), so no target/timer
     // wait is needed here.
-    window.sessionStorage.setItem("hearth_app_guide_snoozed", "1");
+    window.sessionStorage.setItem("oaktend_app_guide_snoozed", "1");
     render(<AppGuide side="homeowner" startOpen />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
@@ -264,11 +264,11 @@ describe("AppGuide - homeowner", () => {
     const { rerender } = renderHomeownerGuide();
     mockPathname = "/walkthrough";
     rerenderHomeownerGuide(rerender);
-    expect(window.sessionStorage.getItem("hearth_app_guide_snoozed")).toBe("1");
+    expect(window.sessionStorage.getItem("oaktend_app_guide_snoozed")).toBe("1");
     // One account can hold both sides; waving away the homeowner guide must
     // not eat the pro one.
     expect(
-      window.sessionStorage.getItem("hearth_pro_guide_snoozed")
+      window.sessionStorage.getItem("oaktend_pro_guide_snoozed")
     ).toBeNull();
   });
 
@@ -294,7 +294,7 @@ describe("AppGuide - homeowner", () => {
     rerender(<AppGuide side="homeowner" startOpen={false} />);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(
-      window.sessionStorage.getItem("hearth_app_guide_snoozed")
+      window.sessionStorage.getItem("oaktend_app_guide_snoozed")
     ).toBeNull();
   });
 });
@@ -318,8 +318,8 @@ describe("AppGuide - contractor", () => {
     expect(markGuideSeenAction).toHaveBeenCalledWith("pro");
     // The pro side has its own key, so a pro who also owns a home still gets
     // the homeowner guide on that side.
-    expect(window.localStorage.getItem("hearth_pro_guide_seen")).toBe("1");
-    expect(window.localStorage.getItem("hearth_app_guide_seen")).toBeNull();
+    expect(window.localStorage.getItem("oaktend_pro_guide_seen")).toBe("1");
+    expect(window.localStorage.getItem("oaktend_app_guide_seen")).toBeNull();
   });
 
   it("stays out of the pro setup flow", () => {

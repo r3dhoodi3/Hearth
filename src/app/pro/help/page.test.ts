@@ -111,9 +111,9 @@ describe("pro help states ghost protection, no bidding wars, and no contract", (
 // The same check against a real streamed response. It needs a running server
 // and a signed-in pro cookie, so it is opt-in:
 //
-//   HEARTH_HELP_STREAM_URL=http://localhost:3106 \
-//   HEARTH_HELP_STREAM_COOKIE='sb-...' npx vitest run src/app/pro/help/page.test.ts
-const streamBase = process.env.HEARTH_HELP_STREAM_URL;
+//   OAKTEND_HELP_STREAM_URL=http://localhost:3106 \
+//   OAKTEND_HELP_STREAM_COOKIE='sb-...' npx vitest run src/app/pro/help/page.test.ts
+const streamBase = process.env.OAKTEND_HELP_STREAM_URL;
 
 describe.skipIf(!streamBase)("served /pro/help has no deferred rows or nested holes", () => {
   // Row "6" is the page's own Flight row under the pro layout; rows 0/3 and
@@ -123,7 +123,7 @@ describe.skipIf(!streamBase)("served /pro/help has no deferred rows or nested ho
 
   it("page row is emitted whole", async () => {
     const res = await fetch(streamBase + "/pro/help", {
-      headers: { cookie: process.env.HEARTH_HELP_STREAM_COOKIE ?? "" },
+      headers: { cookie: process.env.OAKTEND_HELP_STREAM_COOKIE ?? "" },
     });
     const html = await res.text();
     expect(res.status).toBe(200);

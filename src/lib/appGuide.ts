@@ -52,7 +52,7 @@ export function isAppGuideExcludedPath(pathname: string | null): boolean {
 // page load must never show it twice inside one session either, so the browser
 // remembers too and either one saying "seen" is enough.
 export function appGuideSeenKey(side: GuideSide): string {
-  return side === "pro" ? "hearth_pro_guide_seen" : "hearth_app_guide_seen";
+  return side === "pro" ? "oaktend_pro_guide_seen" : "oaktend_app_guide_seen";
 }
 
 // A sessionStorage flag, deliberately NOT the "seen" stamp above.
@@ -69,8 +69,8 @@ export function appGuideSeenKey(side: GuideSide): string {
 // sessionStorage, not localStorage: a snooze should not outlive the tab.
 export function appGuideSnoozeKey(side: GuideSide): string {
   return side === "pro"
-    ? "hearth_pro_guide_snoozed"
-    : "hearth_app_guide_snoozed";
+    ? "oaktend_pro_guide_snoozed"
+    : "oaktend_app_guide_snoozed";
 }
 
 // The window event the "Show the app guide again" links dispatch (help pages,

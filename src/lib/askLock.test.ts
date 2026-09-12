@@ -24,17 +24,17 @@ afterEach(() => window.localStorage.clear());
 
 describe("askLockKey", () => {
   it("namespaces by chat surface and user, so two accounts on one phone and the two chats never share a lock", () => {
-    expect(askLockKey("hearth_ask_chat", "user-1")).not.toBe(
-      askLockKey("hearth_ask_chat", "user-2")
+    expect(askLockKey("oaktend_ask_chat", "user-1")).not.toBe(
+      askLockKey("oaktend_ask_chat", "user-2")
     );
-    expect(askLockKey("hearth_ask_chat", "user-1")).not.toBe(
-      askLockKey("hearth_pro_ask_chat", "user-1")
+    expect(askLockKey("oaktend_ask_chat", "user-1")).not.toBe(
+      askLockKey("oaktend_pro_ask_chat", "user-1")
     );
   });
 
   it("falls back to a bare key while the user id is still resolving", () => {
-    expect(askLockKey("hearth_ask_chat", null)).toBe(
-      "hearth_ask_limit:hearth_ask_chat"
+    expect(askLockKey("oaktend_ask_chat", null)).toBe(
+      "oaktend_ask_limit:oaktend_ask_chat"
     );
   });
 });
@@ -78,7 +78,7 @@ describe("parseAskLock", () => {
 });
 
 describe("readAskLock / writeAskLock", () => {
-  const key = askLockKey("hearth_ask_chat", "user-1");
+  const key = askLockKey("oaktend_ask_chat", "user-1");
 
   it("survives the round trip, which is the whole point", () => {
     writeAskLock(key, 3, NOON);
@@ -103,14 +103,14 @@ describe("readAskLock / writeAskLock", () => {
 
 describe("clearAllAskLocks", () => {
   it("lifts every lock on the device (someone just bought a bigger allowance) and touches nothing else", () => {
-    writeAskLock(askLockKey("hearth_ask_chat", "user-1"), 3, NOON);
-    writeAskLock(askLockKey("hearth_pro_ask_chat", "user-1"), 8, NOON);
-    window.localStorage.setItem("hearth_ask_chat:user-1", "[]");
+    writeAskLock(askLockKey("oaktend_ask_chat", "user-1"), 3, NOON);
+    writeAskLock(askLockKey("oaktend_pro_ask_chat", "user-1"), 8, NOON);
+    window.localStorage.setItem("oaktend_ask_chat:user-1", "[]");
     clearAllAskLocks();
-    expect(readAskLock(askLockKey("hearth_ask_chat", "user-1"), NOON)).toBeNull();
+    expect(readAskLock(askLockKey("oaktend_ask_chat", "user-1"), NOON)).toBeNull();
     expect(
-      readAskLock(askLockKey("hearth_pro_ask_chat", "user-1"), NOON)
+      readAskLock(askLockKey("oaktend_pro_ask_chat", "user-1"), NOON)
     ).toBeNull();
-    expect(window.localStorage.getItem("hearth_ask_chat:user-1")).toBe("[]");
+    expect(window.localStorage.getItem("oaktend_ask_chat:user-1")).toBe("[]");
   });
 });

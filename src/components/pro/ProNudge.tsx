@@ -24,7 +24,7 @@ import { proCtaLabel } from "@/components/pro/ProUpgradeCta";
 // direction: a nudge nobody can dismiss permanently is still just one card.
 
 export function nudgeKey(userId: string): string {
-  return `hearth_pro_nudge_dismissed_day:${userId}`;
+  return `oaktend_pro_nudge_dismissed_day:${userId}`;
 }
 
 // Epoch DAY, not a timestamp: two dismissals in the same calendar-ish window

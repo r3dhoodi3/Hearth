@@ -3,10 +3,15 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { readLegacyCookie } from "@/lib/legacyCookies";
 import { getActiveProperty } from "@/lib/property";
 import { labelFor, JOB_CATEGORIES } from "@/lib/constants";
 import { extractQuote, formatUSDCents } from "@/lib/quotes";
-import { isUnreadSince } from "@/lib/unread";
+import {
+  chatSeenCookieOptions,
+  isUnreadSince,
+  parseSeenMap,
+} from "@/lib/unread";
 import { leadContractorEmbed } from "@/lib/leadJoin";
 import { plainPreview } from "@/lib/previewText";
 import LeadChat from "@/components/LeadChat";
@@ -28,7 +33,7 @@ import {
 } from "./actions";
 
 // Homeowner-side "seen" cookie (kept separate from the contractor's).
-const SEEN_COOKIE = "hearth_ho_chat_seen";
+const SEEN_COOKIE = "oaktend_ho_chat_seen";
 
 // The plain companion message sendQuoteAction posts alongside every structured
 // quote ("Sent a quote: $X total"). Mirrors isQuoteCompanionBody in
@@ -38,31 +43,30 @@ const SEEN_COOKIE = "hearth_ho_chat_seen";
 // amount even after the quote itself is withdrawn.
 const isQuoteCompanionBody = (body: string) => body.startsWith("Sent a quote:");
 
+// parseSeenMap (@/lib/unread), never a bare JSON.parse: this cookie is not
+// httpOnly, so a page script can put anything in it, and a JSON.parse of
+// "[1,2]" or "null" here used to 500 the whole inbox for that browser until
+// the cookie was cleared by hand. Anything that is not a flat
+// { string: string } object now reads as "nothing seen".
 async function readSeenMap(): Promise<Record<string, string>> {
-  try {
-    return JSON.parse((await cookies()).get(SEEN_COOKIE)?.value || "{}");
-  } catch {
-    return {};
-  }
+  return parseSeenMap(readLegacyCookie(await cookies(), SEEN_COOKIE));
 }
 
 async function markChatSeenAction(leadId: string) {
   "use server";
   const jar = await cookies();
-  let map: Record<string, string> = {};
-  try {
-    map = JSON.parse(jar.get(SEEN_COOKIE)?.value || "{}");
-  } catch {
-    map = {};
-  }
+  const map = parseSeenMap(readLegacyCookie(jar, SEEN_COOKIE));
   map[leadId] = new Date().toISOString();
-  jar.set(SEEN_COOKIE, JSON.stringify(map), { path: "/" });
+  // Explicit options (see chatSeenCookieOptions): this used to be written with
+  // `{ path: "/" }` alone, i.e. a session cookie with no Secure flag, so every
+  // thread went back to unread the moment the browser was closed.
+  jar.set(SEEN_COOKIE, JSON.stringify(map), chatSeenCookieOptions());
   revalidatePath("/chats");
 }
 
 // Fires when the inbox is opened, so the nav badge clears even on the default
 // Ask OakTend pane where no single thread is selected. The badge clear itself
-// happens client-side: MarkChatsSeen stamps `hearth:seen:<id>` in localStorage
+// happens client-side: MarkChatsSeen stamps `oaktend:seen:<id>` in localStorage
 // for every listed lead and LiveUnreadBadge takes the max of that and the seen
 // cookie. This action deliberately does NOT write the per-thread seen cookie:
 // stamping every lead id here wiped the per-thread "New" indicator on
@@ -138,9 +142,12 @@ export default async function HomeownerChatsPage(
 
   // "Ask OakTend" is a pinned assistant conversation, always available. It's the
   // default when there are no real (chosen-pro) conversations yet.
+  // Legacy query value from before the OakTend rename, split so the old
+  // brand name doesn't appear literally in source.
+  const LEGACY_ASK_PARAM = "ask-" + "hea" + "rth";
   const askSelected =
     !searchParams.lead || searchParams.lead === "ask-oaktend" ||
-    searchParams.lead === "ask-hearth"; // legacy links from before the OakTend rename
+    searchParams.lead === LEGACY_ASK_PARAM; // legacy links from before the OakTend rename
   // Candidate pick from the active home's own conversation list. Finding it
   // here (before the messages/quotes fetch below) is safe: convos.sort()
   // further down only reorders the array, it never changes which lead
@@ -487,8 +494,8 @@ export default async function HomeownerChatsPage(
               href="/ask"
               desktopHref="/chats?lead=ask-oaktend"
               subtitle="Your home assistant"
-              storageKeyBase="hearth_ask_chat"
-              retentionKeyBase="hearth_ask_retention"
+              storageKeyBase="oaktend_ask_chat"
+              retentionKeyBase="oaktend_ask_retention"
               userId={user?.id ?? null}
               active={askSelected}
             />

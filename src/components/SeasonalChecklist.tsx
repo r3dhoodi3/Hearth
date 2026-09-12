@@ -13,8 +13,8 @@ export default function SeasonalChecklist({
   period: string;
   tasks: string[];
 }) {
-  const key = `hearth_checklist_${period}`;
-  const hiddenKey = `hearth_checklist_hidden_${period}`;
+  const key = `oaktend_checklist_${period}`;
+  const hiddenKey = `oaktend_checklist_hidden_${period}`;
   const [done, setDone] = useState<Record<number, boolean>>({});
   const [hidden, setHidden] = useState<Record<number, boolean>>({});
   const checklist = useChecklist();
