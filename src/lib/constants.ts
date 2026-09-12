@@ -77,13 +77,9 @@ export const FOUNDER = {
   // channel. Real, monitored inbox; if it ever goes unmonitored, blank it
   // out and the pages simply show no contact link rather than a dead one.
   //
-  // TODO(legal): this is the founder's PERSONAL inbox, chosen as the contact
-  // for now. It also becomes the published contact on the legal pages
-  // (/privacy, /terms, /ai-disclosure) via LegalContact, which means the
-  // arbitration opt-out and dispute-notice deadlines run against it. Two
-  // lawyers flagged routing legal notices to a personal Gmail as an
-  // operational risk; move to a monitored business inbox before launch.
-  email: "landenchu2000@gmail.com",
+  // Business inbox (Cloudflare Email Routing forwards it to the founders,
+  // set up 2026-09-12). Legal notices use LEGAL.legalEmail instead.
+  email: "hello@oaktend.com",
 };
 
 export const SYSTEM_TYPES = [
