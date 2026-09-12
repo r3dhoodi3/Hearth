@@ -23,6 +23,19 @@ export default function HashScroll() {
     const attempt = () => {
       const el = document.getElementById(id);
       if (el) {
+        // The target can sit inside a collapsed <details> (the Account panel
+        // on /pro/business wraps the compliance card). Browsers only auto-open
+        // ancestor <details> for a NATIVE fragment jump, not for a scripted
+        // scrollIntoView, so without this the pro lands at the top of the
+        // page with the insurance row still hidden. Open every closed
+        // ancestor first, then scroll.
+        let parent: HTMLElement | null = el.parentElement;
+        while (parent) {
+          if (parent instanceof HTMLDetailsElement && !parent.open) {
+            parent.open = true;
+          }
+          parent = parent.parentElement;
+        }
         el.scrollIntoView({ block: "start", behavior: "auto" });
         return;
       }
