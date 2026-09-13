@@ -11,15 +11,15 @@ import BackLink from "./BackLink";
 import ReportSheet from "@/components/ReportSheet";
 import BlockMenu from "@/components/BlockMenu";
 import { requestProAction } from "@/app/(app)/contractors/actions";
-import { LEGAL } from "@/lib/legal";
 
 // Public, shareable business page for a pro: /p/<contractor_id> or, once
 // migration 0043 lands, /p/<slug>. No account needed. Data comes from the
 // public_pro_profile RPC (0033, extended with 'slug' in 0043), which returns
 // only safe fields: name, categories, the REAL rating/reviews (same math and
 // ordering as everywhere else, membership never touches them), the free
-// license/insurance "on file" booleans (0109, shown for every pro), and, for
-// Pro members only, logo + about. Never contact info.
+// license "on file" boolean (0109, shown for every pro), and, for Pro members
+// only, logo + about. Never contact info. The RPC also returns has_insurance;
+// this page deliberately renders nothing from it - insurance is private.
 //
 // STAYS DYNAMIC, deliberately, even though this is the most SEO-valuable
 // surface in the app. The root layout's cookie read is gone (see
@@ -111,11 +111,16 @@ type PublicProfile = {
   banner_url?: string | null;
   about: string | null;
   has_license: boolean;
+  // Still returned by the RPC, deliberately never rendered: a pro's proof of
+  // insurance is private (it lives on the Credentials tab of /pro/profile) and
+  // a homeowner who wants it asks the pro for a copy. Kept on the type so the
+  // shape still describes the payload.
   has_insurance: boolean;
   // Optional outbound review-page links (0110): absent until migration 0110
-  // runs. Plain outbound links only - the page renders a "See our reviews"
-  // button, never imported review content or star counts. Free trust signal,
-  // never gated on Pro membership.
+  // runs. Still returned by the RPC, deliberately never rendered - the feature
+  // was removed 2026-09-12 because an outbound link is a route off the platform
+  // before any lead record exists. Kept on the type so the shape still
+  // describes the payload.
   yelp_url?: string | null;
   google_reviews_url?: string | null;
   // Optional: absent until migration 0055 runs. Real CSLB verification
@@ -339,20 +344,15 @@ export default async function PublicProPage(
   // "on file" badge shows whenever there's something on file, member or not,
   // the same as the CSLB and background-check badges below. Membership only
   // gates cosmetics (logo, about).
-  const showBadge = profile.has_license || profile.has_insurance;
-  // Insurance is always labeled "(self-reported)" here, on its own or
-  // combined with the license half of this same neutral badge - never just
-  // "Insurance" or "on file", which reads as more verified than it is.
-  const badgeLabel =
-    profile.has_license && profile.has_insurance
-      ? "License on file and insurance (self-reported)"
-      : profile.has_license
-        ? "License on file"
-        : "Insurance (self-reported)";
-  const badgeMentionsInsurance = profile.has_insurance;
-  const badgeCaption = badgeMentionsInsurance
-    ? `Reported by the pro. Not verified by ${LEGAL.brand}.`
-    : "Reported by the business, not verified.";
+  //
+  // The LICENSE only. Insurance used to be half of this badge, labelled as
+  // self-reported, and it no longer appears publicly at all: a pro's proof of
+  // insurance is private, kept on the Credentials tab of /pro/profile, and a
+  // homeowner who wants it asks the pro for a copy. The RPC still returns
+  // has_insurance (see the type above); nothing here renders it.
+  const showBadge = profile.has_license;
+  const badgeLabel = "License on file";
+  const badgeCaption = "Reported by the business, not verified.";
   const about = profile.member ? (profile.about ?? "").trim() : "";
   // Guard: the RPC only includes 'projects' once migration 0045 has run, so
   // older payloads simply render no section.
@@ -465,13 +465,7 @@ export default async function PublicProPage(
             <div className="mt-3">
               {/* Self-reported: neutral stone, not green, so it can never be
                   mistaken for the real CSLB-verified badge below. */}
-              <span
-                className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
-                title={badgeMentionsInsurance ? badgeCaption : undefined}
-                aria-label={
-                  badgeMentionsInsurance ? `${badgeLabel}. ${badgeCaption}` : undefined
-                }
-              >
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300">
                 <svg
                   viewBox="0 0 24 24"
                   className="h-3.5 w-3.5"
@@ -550,40 +544,10 @@ export default async function PublicProPage(
             </div>
           )}
 
-          {/* Outbound review-page links (0110). Plain links only: never
-              embeds review content or shows star counts from those sites, just
-              a button that opens the pro's own Yelp / Google page. Sits near
-              the trust badges above; the one-line disclaimer keeps clear that
-              these are not OakTend-verified. */}
-          {(profile.yelp_url || profile.google_reviews_url) && (
-            <div className="mt-3">
-              <div className="flex flex-wrap gap-2">
-                {profile.yelp_url && (
-                  <a
-                    href={profile.yelp_url}
-                    target="_blank"
-                    rel="noopener nofollow"
-                    className="btn-secondary inline-flex text-sm"
-                  >
-                    See our reviews on Yelp
-                  </a>
-                )}
-                {profile.google_reviews_url && (
-                  <a
-                    href={profile.google_reviews_url}
-                    target="_blank"
-                    rel="noopener nofollow"
-                    className="btn-secondary inline-flex text-sm"
-                  >
-                    See our reviews on Google
-                  </a>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                Reviews on outside sites are not verified by OakTend.
-              </p>
-            </div>
-          )}
+          {/* The outbound review-page links (0110) used to render here.
+              Removed 2026-09-12: they were a route off the platform before any
+              lead record exists. yelp_url / google_reviews_url stay on the type
+              because the RPC still returns them; nothing renders them. */}
 
           {shownCategories.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-1.5">

@@ -58,3 +58,47 @@ describe("License verified badges state what was checked and when", () => {
     }
   });
 });
+
+// Insurance is private (2026-09-12). It used to show publicly as a
+// self-reported chip on the browse card and as half of the "on file" badge on
+// /p/<id>. A pro's proof of insurance now lives only on the Credentials tab of
+// /pro/profile; a homeowner who wants it asks the pro for a copy. The RPC still
+// returns has_insurance, so the guard is that nothing RENDERS it.
+describe("insurance is never shown publicly", () => {
+  const publicPage = src("../../p/[id]/page.tsx");
+
+  it("the browse card renders no insurance chip", () => {
+    expect(browsePage).not.toContain("Insurance (self-reported)");
+    expect(browsePage).not.toContain("{pro.has_insurance &&");
+  });
+
+  it("the public profile badge reflects the license alone", () => {
+    expect(publicPage).toContain("const showBadge = profile.has_license;");
+    expect(publicPage).not.toContain("profile.has_license || profile.has_insurance");
+    expect(publicPage).not.toContain("insurance (self-reported)");
+    expect(publicPage).not.toContain("badgeMentionsInsurance");
+    expect(publicPage).toContain('const badgeLabel = "License on file";');
+  });
+});
+
+// The outbound Yelp / Google review links (0110/0111/0113) are gone from every
+// user-facing surface as of 2026-09-12: an outbound link is a route off the
+// platform before any lead record exists. The columns stay, and so does
+// saveCompanyAction's missing-field-safe handling of them; only the UI went.
+describe("no surface offers an outbound review link", () => {
+  const publicPage = src("../../p/[id]/page.tsx");
+
+  it("the browse card renders no Yelp or Google link", () => {
+    expect(browsePage).not.toContain("Reviews on Yelp");
+    expect(browsePage).not.toContain("Reviews on Google");
+    expect(browsePage).not.toContain("{pro.yelp_url &&");
+    expect(browsePage).not.toContain("{pro.google_reviews_url &&");
+  });
+
+  it("the public profile page renders no 'See our reviews' buttons", () => {
+    expect(publicPage).not.toContain("See our reviews");
+    expect(publicPage).not.toContain("{profile.yelp_url &&");
+    expect(publicPage).not.toContain("{profile.google_reviews_url &&");
+    expect(publicPage).not.toContain("href={profile.yelp_url}");
+  });
+});

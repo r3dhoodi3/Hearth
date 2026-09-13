@@ -52,14 +52,21 @@ describe("SetupChecklist", () => {
       <SetupChecklist
         items={[
           item({ label: "a", done: true, linkLabel: "Done thing" }),
-          item({ label: "b", linkLabel: "Open thing", href: "/pro/profile#reviews" }),
+          item({
+            label: "b",
+            linkLabel: "Open thing",
+            // An anchor a real checklist item actually uses. #reviews used to
+            // be here, but its feature (the outbound Yelp / Google links) is
+            // gone.
+            href: "/pro/profile#insurance",
+          }),
         ]}
       />
     );
     expect(screen.queryByText(/Done thing/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open thing/ })).toHaveAttribute(
       "href",
-      "/pro/profile#reviews"
+      "/pro/profile#insurance"
     );
   });
 

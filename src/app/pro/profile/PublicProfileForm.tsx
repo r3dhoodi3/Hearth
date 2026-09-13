@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import InlineSpinner from "@/components/InlineSpinner";
-import { saveCompanyAction, verifyLicenseNowAction } from "../actions";
-import { licenseDisputeAction, saveLogoAction, saveBannerAction } from "./actions";
+import { saveCompanyAction } from "../actions";
+import { saveLogoAction, saveBannerAction } from "./actions";
 import CategoryPicker from "../CategoryPicker";
 import FieldIcon from "../FieldIcon";
 import PhoneInput from "@/components/PhoneInput";
@@ -14,47 +14,8 @@ import AvatarUpload from "@/components/AvatarUpload";
 import type { Contractor } from "@/lib/database.types";
 import { LEGAL } from "@/lib/legal";
 
-// Small submit buttons for the form below. Each needs its own component
-// because useFormStatus only reports pending state inside a descendant of
-// the <form>, not the component rendering the form itself.
-function VerifyLicenseButton({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      formAction={verifyLicenseNowAction}
-      disabled={pending}
-      // "Reverify" / "Verify now" is the button that unblocks a badge, and at
-      // py-1.5 on text-xs it was a ~26px-tall target. Below sm it gets the
-      // full 44px; sm and up keep the exact button that was here.
-      className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 max-sm:min-h-11 max-sm:px-4 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
-    >
-      {pending && <InlineSpinner size={12} />}
-      {label}
-    </button>
-  );
-}
-
-// Sends the dispute textarea below to support (0125). Same trick as
-// VerifyLicenseButton: HTML forbids a nested <form>, so this is a formAction
-// on a submit button inside the profile's single form. It posts the whole
-// form, but licenseDisputeAction reads only the message field and never
-// touches the pro's verification state - only a human can move that.
-function DisputeLicenseButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      formAction={licenseDisputeAction}
-      disabled={pending}
-      className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 max-sm:min-h-11 max-sm:px-4 dark:border-white/10 dark:text-stone-300 dark:hover:bg-stone-700"
-    >
-      {pending && <InlineSpinner size={12} />}
-      Send dispute
-    </button>
-  );
-}
-
+// The license number's own submit buttons (Verify now / Reverify, Send
+// dispute) moved out with the license block itself - see ./CredentialsCard.tsx.
 function SaveChangesButton() {
   const { pending } = useFormStatus();
   // Synchronous double-submit guard, same as src/components/SubmitButton.tsx:
@@ -106,31 +67,14 @@ function SaveChangesButton() {
 // Redesigned contractor profile editor. Posts to the same saveCompanyAction the
 // onboarding form uses, so field names must stay: name, contact_email,
 // contact_phone, service_cities (+ the service_cities_present marker),
-// categories. The license is read-only once
-// VERIFIED, matching saveCompanyAction: until a real CSLB check passes, the
-// pro can still fix a typo in the number.
+// categories.
 //
-// License verification (0055): license_verified_status (0037) drives the
-// badge and copy below. 'verified' shows a real, dated confirmation; 'failed'
-// shows why (from license_verify_detail) with a way to reverify after fixing
-// it with the state. The pending copy is honest about what actually runs:
-// CSLB is California's registry, so only a CA (or blank, "All states")
-// service_state gets check-in-progress copy and a Verify button; a pro who
-// explicitly serves another state is told checks don't cover them yet
-// instead of being shown a check that can never run. The "Verify now" /
-// "Reverify" button is a formAction on a button inside this SAME form
-// (not a nested form, which HTML disallows) so it can post to
-// verifyLicenseNowAction instead of saveCompanyAction for that one click;
-// the action reads the license number out of this form's data, so a typo
-// fixed in the input gets checked without a separate save.
-function formatVerifiedDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
+// The State License Number and everything around it (the verified / not
+// confirmed / pending badges, the CSLB copy, "Verify now", the dispute form)
+// used to live in this form and posted along with it. They now live on the
+// Credentials tab (./CredentialsCard.tsx) with the license and insurance
+// documents, so a pro manages credentials in one place instead of three, and
+// the number posts to its own saveLicenseNumberAction under the same rules.
 export default function PublicProfileForm({
   contractor,
   smsConsent = false,
@@ -141,29 +85,6 @@ export default function PublicProfileForm({
   // Defaults to false: an unread value must never render as a ticked opt-in.
   smsConsent?: boolean;
 }) {
-  const hasLicense = Boolean(contractor.license_number);
-  const verifyStatus = contractor.license_verified_status ?? "unverified";
-  // Locked only once VERIFIED (mirrors saveCompanyAction): before that, the
-  // number stays editable so a typo can be corrected and rechecked.
-  const licenseLocked = hasLicense && verifyStatus === "verified";
-  const verifiedAt = contractor.license_verified_at ?? null;
-  const verifyDetail = contractor.license_verify_detail ?? null;
-  // 0125: a failure OakTend caused (identity), not one CSLB reported. These two
-  // are the only ones a pro can appeal, because they're the only ones a human
-  // can resolve - a canceled or expired license is fixed with the state, not
-  // with support.
-  const failureReason = verifyDetail?.failure_reason ?? null;
-  const disputableReason =
-    failureReason === "name_mismatch" || failureReason === "duplicate_license"
-      ? failureReason
-      : null;
-  // CSLB eligibility mirrors verifyLicenseNowAction: null/blank service_state
-  // ("All states") can run an explicit check; an explicit non-CA state is
-  // refused, so those pros get honest copy instead of a dead button.
-  const serviceState =
-    (((contractor as any).service_state as string | null) ?? null) || null;
-  const cslbEligible = serviceState === null || serviceState === "CA";
-
   return (
     // A plain card (not a <form>): the tappable photo and the company details
     // are two SEPARATE forms below - a <form> cannot nest another - so the card
@@ -385,202 +306,18 @@ export default function PublicProfileForm({
                 </p>
               </div>
 
-              <div>
-                <label className="label flex items-center gap-2">
-                  State License Number
-                  {/* license_verified_status (0037/0055): a real CSLB check now
-                      backs 'verified' and 'failed'. Never claim "Verified"
-                      beyond what was actually confirmed. */}
-                  {/* 10px carries meaning (verified/failed/pending), so on a
-                      phone it steps up to 14px (max-sm:text-sm) instead of
-                      the old 12px; desktop is unchanged. */}
-                  {hasLicense && verifyStatus === "verified" && (
-                    <span className="inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700 max-sm:text-sm dark:bg-green-950/40 dark:text-green-200">
-                      <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
-                      License verified
-                    </span>
-                  )}
-                  {hasLicense && verifyStatus === "failed" && (
-                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 max-sm:text-sm dark:bg-red-950/40 dark:text-red-200">
-                      Not confirmed
-                    </span>
-                  )}
-                  {hasLicense &&
-                    (verifyStatus === "pending" || verifyStatus === "unverified") && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 max-sm:text-sm dark:bg-amber-500/15 dark:text-amber-300">
-                        Verification pending
-                      </span>
-                    )}
-                </label>
-                {licenseLocked ? (
-                  <>
-                    <div className="relative">
-                      <FieldIcon>
-                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 13h6M9 17h6" />
-                      </FieldIcon>
-                      <div className="input cursor-not-allowed select-none bg-stone-100 pl-9 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
-                        {contractor.license_number}
-                      </div>
-                    </div>
-                    <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                      Checked against the CSLB public database
-                      {verifiedAt ? ` on ${formatVerifiedDate(verifiedAt)}` : ""}.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="relative">
-                      <FieldIcon>
-                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 13h6M9 17h6" />
-                      </FieldIcon>
-                      <input
-                        name="license_number"
-                        className="input pl-9"
-                        placeholder="1029384"
-                        inputMode="numeric"
-                        pattern="[0-9]{5,8}"
-                        onChange={(e) => {
-                          const stripped = e.target.value.replace(/\s+/g, "");
-                          if (stripped !== e.target.value) e.target.value = stripped;
-                        }}
-                        defaultValue={contractor.license_number ?? ""}
-                      />
-                    </div>
-                    {!hasLicense && (
-                      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                        Your CSLB (California&apos;s contractor license board)
-                        license number, digits only.
-                      </p>
-                    )}
-                    {hasLicense && (
-                      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                        Locked once verified. Typo? You can correct it until
-                        then.
-                      </p>
-                    )}
-                    {hasLicense && verifyStatus === "failed" && (
-                      <>
-                        {/* An identity failure (0125) is a different thing from
-                            "CSLB says this license is canceled", and must not
-                            wear the same copy: the license itself may be
-                            perfectly good, and reverifying will just fail the
-                            same way. Say what actually happened and offer the
-                            only thing that can fix it - a human. The
-                            CSLB-registered name is deliberately NOT echoed
-                            back: whoever is at this form may not be the person
-                            it belongs to. */}
-                        {disputableReason ? (
-                          <p className="mt-1 text-xs text-red-500 dark:text-red-400">
-                            {disputableReason === "name_mismatch"
-                              ? "The CSLB lists this license under a different name than your account. If this is your license, tell us and we will review it."
-                              : "This license number is already verified on another OakTend account. If someone else used your license, file a dispute and we will investigate."}
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-xs text-red-500 dark:text-red-400">
-                            {verifyDetail?.statusText
-                              ? `CSLB says: ${verifyDetail.statusText}`
-                              : "The CSLB public database did not confirm this license."}{" "}
-                            {cslbEligible
-                              ? "If this is out of date, update it with the state, then reverify below."
-                              : "State You Serve is already set to California for you, so if this is a CSLB license, save your changes and then reverify."}
-                          </p>
-                        )}
-                        {cslbEligible && !disputableReason && (
-                          <VerifyLicenseButton label="Reverify" />
-                        )}
-                        {disputableReason && (
-                          <div className="mt-2 rounded-lg border border-stone-200 p-3 dark:border-white/10">
-                            <label
-                              className="text-xs font-medium text-stone-600 dark:text-stone-300"
-                              htmlFor="license_dispute_message"
-                            >
-                              File a dispute
-                            </label>
-                            <textarea
-                              id="license_dispute_message"
-                              name="message"
-                              rows={3}
-                              maxLength={2000}
-                              className="input mt-1"
-                              placeholder={
-                                disputableReason === "name_mismatch"
-                                  ? "Tell us how this license is yours - the name it is registered under, your dba, anything that helps."
-                                  : "Tell us what you know about the other account using this license."
-                              }
-                            />
-                            <DisputeLicenseButton />
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {hasLicense &&
-                      (verifyStatus === "pending" ||
-                        verifyStatus === "unverified") &&
-                      (cslbEligible ? (
-                        <>
-                          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                            {serviceState === "CA"
-                              ? "We're checking your license against the CSLB public database. You can keep applying to jobs meanwhile."
-                              : "Have a California (CSLB) license? Verify it below against the CSLB public database. Licenses from other states stay on file. You can keep applying to jobs meanwhile."}
-                          </p>
-                          <VerifyLicenseButton label="Verify now" />
-                        </>
-                      ) : (
-                        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                          Automatic license checks only cover California (CSLB)
-                          right now, so yours stays on file as-is. State You
-                          Serve is already set to California, if it&apos;s a
-                          CSLB license, save and then verify. You can keep
-                          applying to jobs while you wait.
-                        </p>
-                      ))}
-                  </>
-                )}
-              </div>
+              {/* The State License Number and its verification UI used to sit
+                  here. Moved to the Credentials tab
+                  (./CredentialsCard.tsx). */}
 
-              {/* Optional outbound review-page links (0110). Plain links only:
-                  the public page shows a "See our reviews" button, never
-                  imported review content or star counts. id="reviews" is the
-                  anchor the /pro setup checklist links to. */}
-              <div id="reviews">
-                <label className="label">Yelp page (optional)</label>
-                <div className="relative">
-                  <FieldIcon>
-                    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
-                  </FieldIcon>
-                  <input
-                    name="yelp_url"
-                    type="url"
-                    className="input pl-9"
-                    defaultValue={(contractor as any).yelp_url ?? ""}
-                    placeholder="https://www.yelp.com/biz/your-business"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Google reviews link (optional)</label>
-                <div className="relative">
-                  <FieldIcon>
-                    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
-                  </FieldIcon>
-                  <input
-                    name="google_reviews_url"
-                    type="url"
-                    className="input pl-9"
-                    defaultValue={(contractor as any).google_reviews_url ?? ""}
-                    placeholder="https://g.page/your-business"
-                  />
-                </div>
-                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Homeowners see a &quot;See our reviews&quot; button on your
-                  public page.
-                </p>
-              </div>
+              {/* The optional outbound review-page links (0110) used to sit
+                  here, with an id="reviews" anchor the setup checklist pointed
+                  at. Removed 2026-09-12: an outbound link is a way off the
+                  platform before any lead record exists, so no surface offers
+                  one any more. The yelp_url / google_reviews_url columns and
+                  saveCompanyAction's handling of them stay - that handling is
+                  missing-field-safe, so a form that no longer posts the fields
+                  leaves whatever is stored exactly as it is. */}
             </div>
           </div>
 

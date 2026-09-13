@@ -80,7 +80,12 @@ export type ShareReviewVM = {
   comment: string | null;
 };
 
-/** Everything the collapsed Account panel needs, straight off the row. */
+/**
+ * Everything the collapsed Account panel needs, straight off the row - just the
+ * referral code since the license/insurance compliance card moved to the
+ * Credentials tab of /pro/profile. Derived from the component so the two can
+ * never disagree about the shape.
+ */
 export type AccountPanelProps = React.ComponentProps<typeof AccountPanel>;
 
 export default function BusinessView({
@@ -246,13 +251,12 @@ export default function BusinessView({
           the collapsed panel it links into. */}
       <WonReferralNudge wonCount={wonCount} />
 
-      {/* Account: referral code and the license/insurance compliance
-          calendar, folded into one collapsed-by-default panel. The code is
-          the pro's public slug when the 0043 migration has run, else the
-          first 8 chars of their id (both resolve at onboarding); the
-          compliance dates come off migration 0051 columns (insurance_expires
-          itself is the older 0033 column). Every field is read on the server
-          and spread in here as plain data. */}
+      {/* Account: the referral code, in one collapsed-by-default panel. The
+          code is the pro's public slug when the 0043 migration has run, else
+          the first 8 chars of their id (both resolve at onboarding), read on
+          the server and spread in here as plain data. The license/insurance
+          compliance calendar used to share this panel; it moved to the
+          Credentials tab of /pro/profile, where the license number lives. */}
       <AccountPanel {...account} />
 
       {/* Insights: the Pro membership's deeper analytics, computed entirely

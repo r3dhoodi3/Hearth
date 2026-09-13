@@ -3,10 +3,12 @@
 import { useEffect } from "react";
 
 // Renders nothing. Scrolls to the element named by the URL hash once it
-// exists, so a deep link like /pro/business#insurance lands on the section
+// exists, so a deep link like /pro/business#account lands on the section
 // instead of at the top of the page.
 //
-// C6: the "Add insurance" buttons link to /pro/business#insurance, and the
+// C6, the case this was written for: the "Add insurance" buttons pointed at
+// /pro/business#insurance (that row lives on the Credentials tab of
+// /pro/profile now, which does its own hash handling in ProfileTabs), and the
 // section renders, but native fragment scrolling only fires when the target
 // is in the DOM at the moment the browser applies the hash. On this page the
 // target is inside a server-rendered card that hydrates after the initial
@@ -24,11 +26,13 @@ export default function HashScroll() {
       const el = document.getElementById(id);
       if (el) {
         // The target can sit inside a collapsed <details> (the Account panel
-        // on /pro/business wraps the compliance card). Browsers only auto-open
-        // ancestor <details> for a NATIVE fragment jump, not for a scripted
-        // scrollIntoView, so without this the pro lands at the top of the
-        // page with the insurance row still hidden. Open every closed
-        // ancestor first, then scroll.
+        // on /pro/business, reached by #account, is one). Browsers only
+        // auto-open ancestor <details> for a NATIVE fragment jump, not for a
+        // scripted scrollIntoView, so without this the visitor lands at the
+        // top of the page with the target still hidden. Open every closed
+        // ancestor first, then scroll. (Written for the old #insurance link
+        // into that panel; the insurance row has since moved to the
+        // Credentials tab of /pro/profile, but the fix is general.)
         let parent: HTMLElement | null = el.parentElement;
         while (parent) {
           if (parent instanceof HTMLDetailsElement && !parent.open) {

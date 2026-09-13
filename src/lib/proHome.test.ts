@@ -112,7 +112,14 @@ describe("expiryChips", () => {
     const [chip] = expiryChips({ license_expires: "2026-09-05" }, now);
     expect(chip.label).toBe("License expires in 7 days");
     expect(chip.overdue).toBe(false);
-    expect(chip.href).toBe("/pro/business#account");
+    // The Credentials tab of /pro/profile, where the compliance card lives now.
+    // It used to be /pro/business#account, which holds only the referral code.
+    expect(chip.href).toBe("/pro/profile#license");
+  });
+
+  it("sends the insurance chip to the insurance row itself", () => {
+    const [chip] = expiryChips({ insurance_expires: "2026-09-05" }, now);
+    expect(chip.href).toBe("/pro/profile#insurance");
   });
 
   it("handles the singular and today", () => {
@@ -202,6 +209,28 @@ describe("buildSetupItems", () => {
     expect(logo?.href).toBe("/pro/profile");
   });
 
+  // The "Add your Yelp or Google reviews link" step (0110) is gone as of
+  // 2026-09-12, with the rest of that feature: an outbound link is a route off
+  // the platform before any lead record exists, so nothing asks for one. No
+  // step may ask for a review link, and none may point at the dead #reviews
+  // anchor either.
+  it("offers no review-link step", () => {
+    const items = buildSetupItems({
+      contractor: {
+        ...base,
+        yelp_url: "https://www.yelp.com/biz/jamies-roofing",
+        google_reviews_url: null,
+      },
+      balanceCents: 0,
+      applicationCount: 0,
+    });
+    for (const item of items) {
+      expect(item.label.toLowerCase()).not.toContain("yelp");
+      expect(item.label.toLowerCase()).not.toContain("review");
+      expect(item.href).not.toContain("#reviews");
+    }
+  });
+
   // Migration 0153: big-ticket jobs need current insurance on file, and the
   // checklist is where a new pro should learn that, not the first refused
   // apply.
@@ -215,7 +244,11 @@ describe("buildSetupItems", () => {
 
     const none = insurance(null);
     expect(none?.done).toBe(false);
-    expect(none?.href).toBe("/pro/business#insurance");
+    // The Credentials tab of /pro/profile, not the old collapsed card on
+    // /pro/business: the checklist link and the apply gate's link are the same
+    // constant, so this pins both.
+    expect(none?.href).toBe("/pro/profile#insurance");
+    expect(none?.linkLabel).toBe("Add insurance");
     expect(none?.hint).toContain("Big jobs");
 
     expect(insurance("2099-01-01")?.done).toBe(true);

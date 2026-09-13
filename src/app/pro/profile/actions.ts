@@ -268,13 +268,22 @@ function isOwnedStoragePath(raw: string, pathPrefix: string): boolean {
   }
 }
 
-// Save the free license/insurance details that power the public trust badge
-// (/p/<id>). These are a trust signal, NOT a paid perk, so there is deliberately
-// no hasProPlan() check here (0109): every pro can list a license and insurance,
-// exactly like the free CSLB and background-check badges. The details never
-// appear publicly; public_pro_profile (0033) reduces them to booleans. Follows
-// the unrestricted saveCompanyAction pattern (no plan gate). A failed write
-// (e.g. migration 0033 not applied yet) degrades to a soft flash, not a crash.
+// Save the license/insurance vault fields (0033). Free for every pro: there is
+// deliberately no hasProPlan() check here (0109), following the unrestricted
+// saveCompanyAction pattern. None of it appears publicly - the insurance half
+// is private outright now, and public_pro_profile (0033) only ever reduced the
+// license half to a boolean. A failed write (e.g. migration 0033 not applied
+// yet) degrades to a soft flash, not a crash.
+//
+// MISSING-FIELD-SAFE, the same discipline saveCompanyAction applies to
+// service_state / launch_cities / the review links: a field is written ONLY
+// when the submitting form actually carried it (formData.get(name) !== null),
+// so a lean post can never blank a stored value. This matters concretely -
+// the Credentials tab posts the carrier on its own, and the insurance expiry
+// date is owned by the upload row next to it (the /api/pro-compliance route
+// reads it off the uploaded document). Writing the whole set unconditionally
+// meant that saving a carrier wiped the very date the big-job insurance gate
+// reads. Validation for the fields that ARE present is unchanged.
 export async function saveLicenseInsuranceAction(formData: FormData) {
   const supabase = await createClient();
   const {
@@ -285,34 +294,57 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
   const contractor = await getCurrentContractor();
   if (!contractor) redirect("/pro/onboarding");
 
+  const has = (name: string) => formData.get(name) !== null;
   const str = (name: string) => String(formData.get(name) ?? "").trim();
 
-  // The license number is locked once set (same rule as the profile form), so
-  // a missing read-only field can't wipe or swap it.
-  const license_number = contractor.license_number
+  const fields: Record<string, unknown> = {};
+
+  // The license number is locked once set (this action's own long-standing
+  // rule, unchanged), so a missing read-only field can't wipe or swap it. The
+  // Credentials tab's own license form is the correctable-until-verified path
+  // and posts to saveLicenseNumberAction instead; nothing reaching here may
+  // loosen the lock.
+  const license_number = has("license_number")
     ? contractor.license_number
-    : str("license_number").slice(0, 60) || null;
+      ? contractor.license_number
+      : str("license_number").slice(0, 60) || null
+    : null;
+  if (has("license_number")) fields.license_number = license_number;
 
-  const stateRaw = str("license_state").toUpperCase();
+  const stateRaw = has("license_state") ? str("license_state").toUpperCase() : "";
+  // Every exit below refreshes in place (setFlash + revalidatePath) instead
+  // of redirecting: a redirect to /pro/profile remounts ProfileTabs on its
+  // default tab, so a pro saving a carrier on the Credentials tab was thrown
+  // back to Public Profile. A refresh keeps the client tab state and the
+  // scroll position, and the flash still shows.
   if (stateRaw && !/^[A-Z]{2}$/.test(stateRaw)) {
-    setFlash("License state should be a 2-letter code, like CA.", "error");
-    redirect("/pro/profile");
+    await setFlash("License state should be a 2-letter code, like CA.", "error");
+    revalidatePath("/pro/profile");
+    return;
   }
+  if (has("license_state")) fields.license_state = stateRaw || null;
 
-  const insurance_carrier = str("insurance_carrier").slice(0, 120) || null;
+  const insurance_carrier = has("insurance_carrier")
+    ? str("insurance_carrier").slice(0, 120) || null
+    : null;
+  if (has("insurance_carrier")) fields.insurance_carrier = insurance_carrier;
 
-  const expiresRaw = str("insurance_expires");
+  const expiresRaw = has("insurance_expires") ? str("insurance_expires") : "";
   if (expiresRaw && Number.isNaN(new Date(expiresRaw).getTime())) {
-    setFlash("That insurance expiry date doesn't look right.", "error");
-    redirect("/pro/profile");
+    await setFlash("That insurance expiry date doesn't look right.", "error");
+    revalidatePath("/pro/profile");
+    return;
+  }
+  if (has("insurance_expires")) fields.insurance_expires = expiresRaw || null;
+
+  // Nothing asked, nothing written: a post carrying none of these fields has
+  // nothing to say, and stamping the vault for it would be a lie.
+  if (Object.keys(fields).length === 0) {
+    await setFlash("Nothing to save.", "info");
+    revalidatePath("/pro/profile");
+    return;
   }
 
-  const fields: Record<string, unknown> = {
-    license_number,
-    license_state: stateRaw || null,
-    insurance_carrier,
-    insurance_expires: expiresRaw || null,
-  };
   // Stamp the vault whenever it holds anything, so the badge has a "when".
   if (license_number || stateRaw || insurance_carrier || expiresRaw) {
     fields.license_insurance_updated_at = new Date().toISOString();
@@ -324,16 +356,18 @@ export async function saveLicenseInsuranceAction(formData: FormData) {
     .update(fields)
     .eq("id", contractor.id);
   if (error) {
-    setFlash(
+    await setFlash(
       "Couldn't save your license and insurance. Please try again.",
       "error"
     );
-    redirect("/pro/profile");
+    revalidatePath("/pro/profile");
+    return;
   }
 
-  setFlash("License and insurance saved.");
+  // Generic on purpose: this action now writes only the subset of fields the
+  // submitting form carried, so naming them all would overstate what changed.
+  await setFlash("Saved.");
   revalidatePath("/pro/profile");
-  redirect("/pro/profile");
 }
 
 // The pro's profile photo. FREE for every pro as of 2026-09-08. It used to be a
@@ -704,16 +738,22 @@ export async function licenseDisputeAction(formData: FormData) {
   // is a failed check to dispute. A pro with no number on file, or one whose
   // license is verified/pending, gets a friendly refusal instead of a support
   // ticket about nothing.
+  // Every exit refreshes in place (setFlash + revalidatePath) rather than
+  // redirecting: the dispute form lives on the Credentials tab of
+  // /pro/profile, and a redirect there remounts ProfileTabs on its default
+  // tab, throwing the pro back to Public Profile mid-dispute.
   if (!contractor.license_number) {
-    setFlash("Add your license number first, then run a check.", "error");
-    redirect("/pro/profile");
+    await setFlash("Add your license number first, then run a check.", "error");
+    revalidatePath("/pro/profile");
+    return;
   }
   if (contractor.license_verified_status !== "failed") {
-    setFlash(
+    await setFlash(
       "There's no failed license check to dispute right now.",
       "error"
     );
-    redirect("/pro/profile");
+    revalidatePath("/pro/profile");
+    return;
   }
 
   const detail = contractor.license_verify_detail;
@@ -735,11 +775,12 @@ export async function licenseDisputeAction(formData: FormData) {
     p_window_seconds: 3600,
   });
   if (allowed === false) {
-    setFlash(
+    await setFlash(
       "You've sent a few of these already. We'll get back to you shortly.",
       "info"
     );
-    redirect("/pro/profile");
+    revalidatePath("/pro/profile");
+    return;
   }
 
   // The account's own email/phone, falling back to the contractors row's
@@ -786,10 +827,11 @@ export async function licenseDisputeAction(formData: FormData) {
 
   if (error) {
     console.error("licenseDisputeAction: insert failed", error);
-    setFlash("Couldn't send your dispute. Please try again.", "error");
-    redirect("/pro/profile");
+    await setFlash("Couldn't send your dispute. Please try again.", "error");
+    revalidatePath("/pro/profile");
+    return;
   }
 
-  setFlash("Got it - we will review and email you.", "success");
-  redirect("/pro/profile");
+  await setFlash("Got it - we will review and email you.", "success");
+  revalidatePath("/pro/profile");
 }

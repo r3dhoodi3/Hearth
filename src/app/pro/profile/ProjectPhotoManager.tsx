@@ -108,7 +108,7 @@ export default function ProjectPhotoManager({
         multiple
         onChange={onPick}
         disabled={busy || photos.length >= MAX_PHOTOS}
-        className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-oaktend-100 file:px-3 file:py-1.5 file:text-oaktend-800 dark:text-stone-300"
+        className="block w-full text-sm text-stone-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-oaktend-100 file:px-3 file:py-1.5 file:text-oaktend-800 file:transition-colors hover:file:bg-oaktend-200 dark:text-stone-300"
       />
       <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
         Up to {MAX_PHOTOS} photos. Tag a photo &quot;Before&quot; to build a

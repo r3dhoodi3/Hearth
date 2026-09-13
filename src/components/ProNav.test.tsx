@@ -40,8 +40,18 @@ describe("ProNav side pill", () => {
     expect(screen.getAllByText("Business").length).toBeGreaterThan(0);
   });
 
-  it("renders no pill for a pro-only account", () => {
+  it("pro-only account: no desktop 'Business' pill, but the phone pill shows the company name", () => {
     render(<ProNav company="Jamie's Roofing" hasHome={false} backOfficeHref="/pro/tools" isMember={false} />);
+    // The desktop side marker is for dual-side accounts only.
+    expect(screen.queryByText("Business")).toBeNull();
+    // The phone line under the wordmark still carries the business name, so a
+    // contractor can see it somewhere on the phone.
+    const phonePill = screen.getByText("Jamie's Roofing");
+    expect(phonePill.closest("div")?.className).toContain("sm:hidden");
+  });
+
+  it("pro-only account with no company yet renders no pill at all", () => {
+    render(<ProNav company={null} hasHome={false} backOfficeHref="/pro/tools" isMember={false} />);
     expect(screen.queryByText("Business")).toBeNull();
   });
 });

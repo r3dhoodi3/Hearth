@@ -86,12 +86,23 @@ describe("majorLeadInsuranceGate: the four verdicts", () => {
 describe("the copy itself", () => {
   it("is the owner-approved sentence, byte for byte", () => {
     expect(INSURANCE_REQUIRED_MESSAGE).toBe(
-      "Big jobs need proof of insurance on file first. Add yours in Business > Compliance, it takes two minutes."
+      "Big jobs need proof of insurance on file first. Add yours under Business profile > Credentials, it takes two minutes."
     );
   });
 
-  it("the upload link deep-links to the compliance card's insurance row (C6)", () => {
-    expect(INSURANCE_UPLOAD_HREF).toBe("/pro/business#insurance");
+  // The message used to say "Business > Compliance" and the link used to point
+  // at /pro/business#insurance, where the upload row sat inside a collapsed
+  // <details> - a pro who followed the link landed on a page that showed them
+  // nothing. Both now name the Credentials tab of /pro/profile, and they have
+  // to keep naming the same place as each other.
+  it("the upload link deep-links to the insurance row on the Credentials tab", () => {
+    expect(INSURANCE_UPLOAD_HREF).toBe("/pro/profile#insurance");
+  });
+
+  it("names the screen the link actually opens", () => {
+    expect(INSURANCE_UPLOAD_HREF.startsWith("/pro/profile")).toBe(true);
+    expect(INSURANCE_REQUIRED_MESSAGE).toContain("Credentials");
+    expect(INSURANCE_REQUIRED_MESSAGE).not.toContain("Compliance");
   });
 
   it("recognizes the SQL backstop's raise text, wrapped or bare", () => {

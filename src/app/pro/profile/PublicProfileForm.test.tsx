@@ -15,16 +15,14 @@ import "@testing-library/jest-dom/vitest";
 // clicks below. A plain vi.fn() returning undefined would settle instantly
 // and defeat the very race this test exists to catch.
 const saveCompanyAction = vi.fn((..._args: unknown[]) => new Promise(() => {}));
-const verifyLicenseNowAction = vi.fn();
 vi.mock("../actions", () => ({
   saveCompanyAction: (...args: unknown[]) => saveCompanyAction(...args),
-  verifyLicenseNowAction: (...args: unknown[]) => verifyLicenseNowAction(...args),
 }));
-const licenseDisputeAction = vi.fn();
 const saveLogoAction = vi.fn();
+const saveBannerAction = vi.fn();
 vi.mock("./actions", () => ({
-  licenseDisputeAction: (...args: unknown[]) => licenseDisputeAction(...args),
   saveLogoAction: (...args: unknown[]) => saveLogoAction(...args),
+  saveBannerAction: (...args: unknown[]) => saveBannerAction(...args),
 }));
 
 // AvatarUpload (the profile photo control) constructs the real browser Supabase
@@ -189,13 +187,14 @@ describe("PublicProfileForm photo control", () => {
   });
 });
 
-// CEO pass D3: the license status badges carry meaning (verified / not
-// confirmed / pending), so on a phone they step up to 14px instead of the
-// old 12px. Desktop (base text-[10px], no max-sm prefix reaches it) is
-// unchanged.
-describe("PublicProfileForm license status badges on a phone", () => {
-  it("License verified: 14px on a phone, 10px above sm", () => {
-    render(
+// The license number, its verified / not-confirmed / pending badges, the CSLB
+// copy, "Verify now" and the dispute form all moved to the Credentials tab.
+// Their own tests live in ./CredentialsCard.test.tsx; what this form owes is
+// that none of it is still here, so a pro can never edit the same number in two
+// places under two different lock rules.
+describe("PublicProfileForm no longer owns the license number", () => {
+  it("renders no license_number field and no license badges", () => {
+    const { container } = render(
       <PublicProfileForm
         contractor={{
           ...CONTRACTOR,
@@ -204,40 +203,57 @@ describe("PublicProfileForm license status badges on a phone", () => {
         }}
       />
     );
-    const badge = screen.getByText("License verified").closest("span");
-    expect(badge?.className).toContain("text-[10px]");
-    expect(badge?.className).toContain("max-sm:text-sm");
-    expect(badge?.className).not.toContain("max-sm:text-xs");
+    expect(container.querySelector('[name="license_number"]')).toBeNull();
+    expect(screen.queryByText("State License Number")).not.toBeInTheDocument();
+    expect(screen.queryByText("License verified")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not confirmed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Verification pending")).not.toBeInTheDocument();
   });
 
-  it("Not confirmed: 14px on a phone, 10px above sm", () => {
-    render(
+  it("offers no Verify now / Reverify button and no dispute form", () => {
+    const { container } = render(
       <PublicProfileForm
         contractor={{
           ...CONTRACTOR,
           license_number: "12345",
           license_verified_status: "failed",
+          license_verify_detail: { failure_reason: "name_mismatch" },
         }}
       />
     );
-    const badge = screen.getByText("Not confirmed");
-    expect(badge.className).toContain("text-[10px]");
-    expect(badge.className).toContain("max-sm:text-sm");
+    expect(
+      screen.queryByRole("button", { name: /verify now|reverify/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /send dispute/i })
+    ).not.toBeInTheDocument();
+    expect(container.querySelector("#license_dispute_message")).toBeNull();
   });
+});
 
-  it("Verification pending: 14px on a phone, 10px above sm", () => {
-    render(
+// The outbound Yelp / Google review links (0110/0111/0113) are gone from every
+// user-facing surface as of 2026-09-12: an outbound link is a route off the
+// platform before any lead record exists. The columns and saveCompanyAction's
+// handling of them stay, and that handling is missing-field-safe, so a form
+// that no longer posts the fields leaves whatever is stored untouched.
+describe("PublicProfileForm no longer asks for review links", () => {
+  it("renders no yelp_url or google_reviews_url inputs", () => {
+    const { container } = render(
       <PublicProfileForm
         contractor={{
           ...CONTRACTOR,
-          license_number: "12345",
-          license_verified_status: "pending",
+          yelp_url: "https://www.yelp.com/biz/acme-plumbing",
+          google_reviews_url: "https://g.page/acme-plumbing",
         }}
       />
     );
-    const badge = screen.getByText("Verification pending");
-    expect(badge.className).toContain("text-[10px]");
-    expect(badge.className).toContain("max-sm:text-sm");
+    expect(container.querySelector('[name="yelp_url"]')).toBeNull();
+    expect(container.querySelector('[name="google_reviews_url"]')).toBeNull();
+    expect(screen.queryByText(/yelp/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/google reviews/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/see our reviews/i)).not.toBeInTheDocument();
+    // The anchor the old setup-checklist step deep-linked to went with them.
+    expect(container.querySelector("#reviews")).toBeNull();
   });
 });
 

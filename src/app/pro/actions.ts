@@ -1539,6 +1539,140 @@ async function assertContractor() {
   return contractor;
 }
 
+// The license NUMBER on its own, for the Credentials tab of /pro/profile
+// (CredentialsCard.tsx). The number used to live in the Public Profile form and
+// therefore rode along on saveCompanyAction; the Credentials card posts only
+// this one field, and saveCompanyAction is deliberately NOT missing-field-safe
+// about the company name and phone (it bounces an empty name with "Enter your
+// company name." and an empty phone with "Add a phone number so homeowners can
+// reach you.", by design - both are required for a listing). A lean post from
+// the credentials form would therefore have been refused with a message about
+// fields that form does not even show, which is why this action exists instead.
+//
+// Every license rule is the one saveCompanyAction applies, deliberately
+// unchanged:
+//   - the same cappedFieldOrNull(50) read, so the same trimming and ceiling;
+//   - locked once VERIFIED, and a form that did not carry the field at all
+//     keeps the stored value, so neither path can wipe or swap a license;
+//   - a changed number resets license_verified_status/_at/_verify_detail
+//     through the ADMIN client (0078 revokes UPDATE on those trust columns for
+//     `authenticated`), 'pending' with a number on file and 'unverified' when
+//     it was cleared, per 0037's vocabulary;
+//   - a changed number kicks off a real CSLB check for a California pro, which
+//     is also where the one-license-one-account duplicate check lives
+//     (verifyContractorLicense -> licenseAlreadyVerifiedElsewhere, 0125).
+// NOT the profile/actions.ts saveLicenseInsuranceAction rule, which locks the
+// number once it is merely SET: a typo must stay correctable until a check has
+// actually confirmed the license.
+export async function saveLicenseNumberAction(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/signin");
+
+  const existing = await getCurrentContractor();
+  if (!existing) redirect("/pro/onboarding");
+
+  // Same read as saveCompanyAction: trimmed and capped server-side, because the
+  // input's own attributes are a client hint only.
+  const licenseEntry = formData.get("license_number");
+  let licenseNumber = cappedFieldOrNull(formData, "license_number", 50);
+  const licenseVerified =
+    (existing as any).license_verified_status === "verified";
+  if (existing.license_number && (licenseVerified || licenseEntry === null)) {
+    licenseNumber = existing.license_number;
+  }
+
+  const licenseChanged = licenseNumber !== (existing.license_number ?? null);
+
+  // Every exit here refreshes in place (setFlash + revalidatePath), the same
+  // way verifyLicenseNowAction and saveCompanyAction do, rather than
+  // redirecting: a redirect remounts ProfileTabs, and even with #license in
+  // the URL that is a full reload that jumps the page. A refresh keeps the pro
+  // on the Credentials tab where they pressed Save.
+  //
+  // Nothing to do: don't spend a write, and don't claim a change that didn't
+  // happen. "Saved" is still honest - the number on file is the one shown.
+  if (!licenseChanged) {
+    await setFlash("License number saved.");
+    revalidatePath("/pro/profile");
+    return;
+  }
+
+  const { error } = await (supabase.from("contractors") as any)
+    .update({ license_number: licenseNumber })
+    .eq("id", existing.id);
+  if (error) {
+    await setFlash(contractorsWriteFailureFlash(error), "error");
+    revalidatePath("/pro/profile");
+    return;
+  }
+
+  // license_verified_status/_at/_verify_detail are trust columns 0078 revokes
+  // UPDATE on for `authenticated` (self-forged "verified" badges), so the reset
+  // goes through the admin client, scoped to existing.id: the caller's own
+  // contractor, resolved from the session above, never client input.
+  const admin = createAdminClient();
+  const { error: resetError } = await (admin.from("contractors") as any)
+    .update({
+      license_verified_status: licenseNumber ? "pending" : "unverified",
+      license_verified_at: null,
+      license_verify_detail: null,
+    })
+    .eq("id", existing.id);
+  if (resetError && !isMissingSchemaError(resetError)) {
+    console.error(
+      "saveLicenseNumberAction: verification reset failed:",
+      resetError.message
+    );
+  }
+
+  // Real CSLB check (0055), same conditions as saveCompanyAction: only on a
+  // number that actually changed, and only for a pro serving California, since
+  // CSLB is California's registry and no other state's license was ever going
+  // to be found there. The credentials form posts the same hidden
+  // service_state=CA the profile form does; a form without it falls back to the
+  // stored value, so a lean post can never make this run for the wrong state.
+  // Best-effort: a CSLB hiccup must never undo the save that already succeeded.
+  const stateEntry = formData.get("service_state");
+  const postedState = String(stateEntry ?? "").trim().toUpperCase();
+  const effectiveServiceState =
+    stateEntry !== null && /^[A-Z]{2}$/.test(postedState)
+      ? postedState
+      : (((existing as any).service_state as string | null) ?? null);
+  if (licenseNumber && effectiveServiceState === "CA") {
+    try {
+      await verifyContractorLicense(
+        supabase,
+        existing.id,
+        licenseNumber,
+        // The number just changed, so no earlier check applies to it: don't let
+        // the old number's timestamp debounce this one away.
+        null,
+        null,
+        // 0125 identity check: this company's name plus the account holder's
+        // own name, for the sole-proprietor case where CSLB registered the
+        // license to the person rather than the trade name.
+        [
+          existing.name,
+          await accountFullName(user.id),
+          (user.user_metadata?.full_name as string | undefined) ?? null,
+        ],
+        user.id
+      );
+    } catch (err) {
+      console.error(
+        "license verification failed:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  await setFlash("License number saved.");
+  revalidatePath("/pro/profile");
+}
+
 // "Verify now" / "Reverify" button on /pro/profile: an on-demand CSLB check
 // for a pro whose license number is on file but not yet verified. The button
 // lives inside the profile <form>, so the action receives the form's data and
