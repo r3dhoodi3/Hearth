@@ -5,6 +5,99 @@
 
 ---
 
+## LATEST (2026-09-12): payment model decision + Credentials tab
+
+Session with William (Claude Fable). Read this before touching anything
+money-related; it supersedes the credit-system assumptions in every older
+section below.
+
+### The decision: 5% of the invoice replaces lead credits
+- Contractors find jobs (open board) or homeowners request them (direct
+  request). The contractor looks at the job in the app and sends an INVOICE
+  through the app. Once the homeowner accepts the price they pay through
+  OakTend (Stripe). OakTend keeps 5% of the invoice.
+- The CONTRACTOR pays the Stripe processing fee (~2.9% + 30c), never the
+  homeowner. Implementation: direct charges on the contractor's connected
+  account with an application_fee, so Stripe bills processing to the
+  contractor natively and the 5% arrives clean.
+- FIRM RULE: every contractor must connect Stripe (Connect Express) before
+  sending ANY invoice, regardless of job size. No cash-only lane.
+- Onboarding stays three steps. The Express account is created silently on
+  wizard completion (prefilled from step 1: company, business type, owner,
+  phone, email). The pro is asked to finish it ("Add where you get paid",
+  embedded component, hosted-link fallback on iOS) only on their FIRST Send
+  invoice tap, then returned to the draft. A nudge card on pro Home until
+  done. Browsing / applying / chat never block on it.
+- Homeowner side must be painless: card in app, one tap, money held until
+  the job is marked done, dispute window.
+- Cash / check: the contractor records the invoice as "paid by cash/check";
+  OakTend debits 5% from the connected account. Reviews, job stats and the
+  verified badge count ONLY for jobs paid in-app or recorded. A cash job kept
+  off the app earns the pro nothing. Fallback if leakage is bad: a flat
+  per-job fee charged on invoice acceptance, waived when paid in-app.
+- Diagram of the contractor flow (artifact):
+  https://claude.ai/code/artifact/7cdd31c1-2803-4faa-8120-3a4107f007cb
+
+### Build order (nothing built yet)
+1. Stripe Connect plumbing: Express account creation, onboarding link /
+   embedded component, account.updated webhook, payouts status on Business.
+2. Invoice flow: pro composes (line items, total, optional deposit; CSLB caps
+   deposits at $1,000 or 10% for home improvement), homeowner accepts + pays,
+   funds released on "job done".
+3. Off-platform recording + the review/stats gate.
+4. Credit-system teardown, including ghost protection (removal map already
+   scoped, see "Ghost protection" below).
+
+### Insurance (decided, unchanged for now)
+- Keep the certificate upload + expiry date. The DATE is the gate field
+  (0153): major categories (roof / structural / remodeling) refuse an apply
+  or direct-request unlock without insurance_expires >= today. Skilled and
+  light jobs need no insurance today. Nothing is verified; it is "on file".
+- isMajorCategory() is derived from the $99 lead-fee tier and the SQL gate
+  hardcodes the same three categories. At credit teardown replace it with an
+  explicit insurance-required category list.
+- Future shape (discussed, NOT decided): move the gate from apply-time to
+  Send-invoice time; require for major categories OR any invoice above a $
+  threshold; show "insurance on file / not on file" to the homeowner on
+  applications (never on the public page). "Verified" later by having the
+  COI name OakTend as certificate holder (insurer notifies on cancellation).
+
+### Ghost protection: scoped for removal, awaiting William's go
+- Delete: src/app/api/cron/ghost-protection + its vercel.json entry; new
+  migration 0163 dropping ghost_refund_application (0031),
+  ghost_refund_direct (0105), lead_applications_ghost_idx, and rewriting the
+  owner_closed_at column comment (0094). Copy on ~20 pro surfaces, 3
+  homeowner surfaces (CloseJobButton, contractors/page, closeJobAction's
+  creditLine: these say "within a week", not "ghost"), 4 legal docs + the
+  onboarding attestation (pro-terms version bump needed).
+- KEEP: lead_applications.refunded_at (used by 0107 credit-back, first-apply
+  guarantee, applicant cap, lead-lock trigger, proStats), the 0031 file (live
+  lead_fee_cents + my_applications), applicant-nudge + first-apply-guarantee
+  crons, 0091's ghost_recharge_waived referral exclusion.
+- Open calls: keep historical ledger labels (recommended yes); leave
+  choose_applicant's re-charge branch (recommended yes, dies with credits);
+  legal edit timing; one last cron run at cutover.
+
+### Shipped this session (uncommitted at time of writing, gate green)
+- /pro/profile "Credentials" tab (between Public Profile and Your Public
+  Page): license number + CSLB verify/dispute, license + insurance document
+  uploads, insurance carrier. Removed from the Public Profile form, the Your
+  Public Page card, and the collapsed Account panel on /pro/business.
+- Insurance gate copy/link fixed: "Add yours under Business profile >
+  Credentials", INSURANCE_UPLOAD_HREF = /pro/profile#insurance.
+- Insurance is no longer shown publicly (/p/<id> badge is license-only;
+  browse-pros chip removed). Yelp / Google review links removed from every
+  UI surface (columns + save action kept, missing-field-safe).
+- Phone header pill shows the business name for pro-only accounts too.
+- File pickers highlight on hover. Credentials saves refresh in place (no
+  redirect, no tab reset).
+- Machine notes: Node 22.23.2 via nvm-windows (vitest 4 needs 20+); ~20
+  vitest source/SQL pin tests fail on William's CRLF checkout only (they
+  assert bare \n); baseline at HEAD was 13 files / 34 tests. Isolated build:
+  NEXT_DIST_DIR=.next-build npx next build.
+
+---
+
 ## GOOD MORNING (2026-08-31): read this first
 
 Overnight autonomous session under your one-night push permission. Everything

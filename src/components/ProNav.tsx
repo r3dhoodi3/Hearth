@@ -247,8 +247,13 @@ export default function ProNav({
           starts it under the "H" of "OakTend" (past the h-6 logo + gap). On the
           phone it shows the COMPANY NAME (truncated) instead of the generic
           "Business" - the phone has nowhere else the business name is visible,
-          not even the profile dropdown. Falls back to "Business" when unset. */}
-      {hasHome && (
+          not even the profile dropdown. Falls back to "Business" when unset.
+          Unlike the desktop pill above (dual-side accounts only), this one
+          also renders for a pro-only account whenever a company name exists:
+          on the phone the business name earns its line on its own, not just
+          as a side marker. A pro-only account with no company yet still sees
+          nothing here (a bare "Business" would mark a side with no twin). */}
+      {(hasHome || company) && (
         // Negative top margin pulls the pill up under the wordmark: the header
         // row's own bottom padding (py-2.5) plus the wordmark's line-height
         // otherwise leave a visible gap between "OakTend for Pros" and this line.

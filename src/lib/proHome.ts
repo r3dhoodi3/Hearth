@@ -68,7 +68,9 @@ export function buildSetupItems(input: {
     // need current proof of insurance on file. Done when the compliance
     // calendar holds an unexpired date, the same predicate the apply gate
     // enforces (src/lib/insuranceGate.ts). Sits right after the license so
-    // the two compliance steps read as one group.
+    // the two compliance steps read as one group - and since both now live on
+    // the same Credentials tab of /pro/profile, the two links land next to
+    // each other too.
     {
       label: "Put proof of insurance on file",
       hint: "Big jobs (roof, structural, remodeling) need current insurance on file before you can apply.",
@@ -76,16 +78,10 @@ export function buildSetupItems(input: {
       href: INSURANCE_UPLOAD_HREF,
       linkLabel: "Add insurance",
     },
-    // Plain outbound links only (0110). Done as soon as either is on file; no
-    // reason to require both. Pros with review links get more quotes accepted,
-    // so this comes right after license, ahead of the logo step.
-    {
-      label: "Add your Yelp or Google reviews link",
-      hint: "Pros with review links get more quotes accepted.",
-      done: Boolean(contractor.yelp_url) || Boolean(contractor.google_reviews_url),
-      href: "/pro/profile#reviews",
-      linkLabel: "Add reviews link",
-    },
+    // The "Add your Yelp or Google reviews link" step used to sit here (0110).
+    // Removed 2026-09-12 with the rest of that feature: an outbound link is a
+    // route off the platform before any lead record exists, so nothing asks a
+    // pro for one any more.
     // The profile photo is FREE for every pro as of 2026-09-08 (it used to be a
     // Pro-member perk, which is why this step was once gated and optional). Now
     // it is a plain step for everyone, uploaded by tapping the avatar on the
@@ -140,16 +136,32 @@ export type ExpiryChip = { label: string; href: string; overdue: boolean };
 // wording is testable without a database. Empty array when nothing is close,
 // which is the normal case and renders nothing at all.
 //
-// Both dates are set from the same place, the compliance card inside the
-// Account panel on /pro/business, so both chips link there.
+// Both dates are set from the same place, the compliance card on the
+// Credentials tab of /pro/profile, so both chips link into it - each at the
+// anchor nearest its own row. They used to point at /pro/business#account,
+// which is where that card lived before; that panel holds only the referral
+// code now, so the old href would have been a chip that led nowhere useful.
 export function expiryChips(
   contractor: any,
   now: Date = new Date()
 ): ExpiryChip[] {
   const chips: ExpiryChip[] = [];
-  const rows: Array<{ what: string; value: string | null | undefined }> = [
-    { what: "License", value: contractor?.license_expires },
-    { what: "Insurance", value: contractor?.insurance_expires },
+  const rows: Array<{
+    what: string;
+    value: string | null | undefined;
+    href: string;
+  }> = [
+    {
+      what: "License",
+      value: contractor?.license_expires,
+      // The license-number card, immediately above the license document row.
+      href: "/pro/profile#license",
+    },
+    {
+      what: "Insurance",
+      value: contractor?.insurance_expires,
+      href: INSURANCE_UPLOAD_HREF,
+    },
   ];
   for (const r of rows) {
     const days = daysUntil(r.value, now);
@@ -161,7 +173,7 @@ export function expiryChips(
           : days === 0
             ? `${r.what} expires today`
             : `${r.what} expires in ${days} day${days === 1 ? "" : "s"}`,
-      href: "/pro/business#account",
+      href: r.href,
       overdue: days <= 0,
     });
   }

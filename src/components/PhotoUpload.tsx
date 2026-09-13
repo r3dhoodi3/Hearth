@@ -121,7 +121,7 @@ export default function PhotoUpload({
         accept="image/png,image/jpeg,image/webp"
         multiple
         onChange={onPick}
-        className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-bark-100 file:px-3 file:py-1.5 file:text-bark-700 dark:text-stone-300 dark:file:bg-bark-700 dark:file:text-stone-300"
+        className="block w-full text-sm text-stone-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-bark-100 file:px-3 file:py-1.5 file:text-bark-700 file:transition-colors hover:file:bg-bark-200 dark:text-stone-300 dark:file:bg-bark-700 dark:file:text-stone-300 dark:hover:file:bg-bark-600"
       />
       {/* Phones get a direct-to-camera shortcut too. Snap, then tap again for
           the next one; each shot joins the same batch. Camera returns one

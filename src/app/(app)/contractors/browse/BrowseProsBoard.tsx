@@ -27,7 +27,6 @@ import Link from "next/link";
 import { JOB_CATEGORIES, SERVICE_CATEGORIES, labelFor } from "@/lib/constants";
 import { isAcceptableCustomCategory } from "@/lib/customCategory";
 import { licenseVerifiedOnLine } from "@/lib/guaranteeCopy";
-import { LEGAL } from "@/lib/legal";
 import { MIN_RATING_OPTIONS, type BrowsePro } from "./browseProsShared";
 
 export type { BrowsePro };
@@ -362,9 +361,11 @@ function ProCard({ pro }: { pro: BrowsePro }) {
               every pro, migration 0109). Green "License verified" only for a
               real CSLB-confirmed license; neutral gray "License on file" for a
               self-reported one; muted "No license listed" when there is
-              neither. Background check is its own green chip. Insurance (0111)
-              is self-reported, so it gets the same neutral gray as "License on
-              file", never green. */}
+              neither. Background check is its own green chip. There is no
+              insurance chip: a pro's proof of insurance is private (it lives on
+              the Credentials tab of /pro/profile), and a homeowner who wants it
+              asks the pro for a copy. has_insurance is still on the type
+              because the RPC returns it; nothing here renders it. */}
           <div className="mt-1.5 flex flex-wrap gap-1.5">
               {pro.license_verified_at ? (
                 <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
@@ -401,27 +402,6 @@ function ProCard({ pro }: { pro: BrowsePro }) {
                   No license listed
                 </span>
               )}
-              {pro.has_insurance && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300"
-                  title={`Reported by the pro. Not verified by ${LEGAL.brand}.`}
-                  aria-label={`Insurance (self-reported). Reported by the pro. Not verified by ${LEGAL.brand}.`}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-3 w-3"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 22s8-3.6 8-9V5l-8-3-8 3v8c0 5.4 8 9 8 9z" />
-                  </svg>
-                  Insurance (self-reported)
-                </span>
-              )}
               {pro.background_checked_at && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-200">
                   <svg
@@ -438,30 +418,10 @@ function ProCard({ pro }: { pro: BrowsePro }) {
                   Background checked
                 </span>
               )}
-              {/* Outbound review-page links (0111, columns from 0110). Plain
-                  links only, never imported review content. Standalone anchors
-                  in the chip row: the card has no wrapping link, so these can
-                  never nest inside the name or CTA anchors. */}
-              {pro.yelp_url && (
-                <a
-                  href={pro.yelp_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 max-sm:min-h-11 max-sm:px-3 sm:hover:border-bark-200 sm:hover:text-bark-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300 dark:hover:text-stone-200"
-                >
-                  Reviews on Yelp
-                </a>
-              )}
-              {pro.google_reviews_url && (
-                <a
-                  href={pro.google_reviews_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-600 max-sm:min-h-11 max-sm:px-3 sm:hover:border-bark-200 sm:hover:text-bark-700 dark:border-white/10 dark:bg-stone-700 dark:text-stone-300 dark:hover:text-stone-200"
-                >
-                  Reviews on Google
-                </a>
-              )}
+              {/* The outbound review-page links (0111, columns from 0110) used
+                  to sit in this chip row. Removed 2026-09-12: they were a route
+                  off the platform before any lead record exists. The columns
+                  stay on BrowsePro because the query still selects them. */}
           </div>
           {/* What the green badge actually checked, and when: same wording
               the public profile page uses (src/lib/guaranteeCopy.ts), so a

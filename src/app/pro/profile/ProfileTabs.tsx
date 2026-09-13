@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import PublicProfileForm from "./PublicProfileForm";
 import PublicPageCard from "./PublicPageCard";
+import CredentialsCard from "./CredentialsCard";
 import ProjectsCard, { type ProProject } from "./ProjectsCard";
 import AccountSecurityPanel from "@/components/AccountSecurityPanel";
 import BackgroundCheckCard from "./BackgroundCheckCard";
@@ -14,10 +15,15 @@ import {
 } from "./actions";
 import type { Contractor } from "@/lib/database.types";
 
-// `short` is the phone label. Four tabs at their full names do not fit a
+// `short` is the phone label. The tabs at their full names do not fit a
 // 390px screen, and the strip scrolled with no hint that it did, so the last
-// tab was simply invisible. Shorter names fit all four with no scrolling; the
-// full names come back at sm.
+// tab was simply invisible. Shorter names fit with no scrolling; the full
+// names come back at sm.
+//
+// Credentials made it five tabs, which is why "Public page" shortened to
+// "Page": at 390px the five phone labels have to add up to less than the
+// strip, and "Credentials" is the one of them that cannot be shortened without
+// lying about what is in it.
 const TABS = [
   {
     key: "public" as const,
@@ -27,9 +33,23 @@ const TABS = [
     subtitle: "Manage your public business profile and service offerings.",
   },
   {
+    // The license number, the license document and the certificate of
+    // insurance, in one place. They used to be spread across the Public
+    // Profile form (the number), the Your Public Page card (number, state,
+    // carrier, expiry) and a collapsed <details> on /pro/business (the
+    // documents), which is how the "add your insurance" deep link ended up
+    // pointing at a screen that showed the pro nothing.
+    key: "credentials" as const,
+    label: "Credentials",
+    short: "Credentials",
+    title: "Credentials",
+    subtitle:
+      "Your state license and proof of insurance. Kept private; homeowners can ask you for them.",
+  },
+  {
     key: "page" as const,
     label: "Your Public Page",
-    short: "Public page",
+    short: "Page",
     title: "Your Public Page",
     subtitle: "Share your OakTend page and manage what appears on it.",
   },
@@ -52,12 +72,22 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 // Deep links from elsewhere in the pro app point at a field that lives inside
-// one of these panels - /pro/profile#reviews, from the setup checklist on the
-// pro dashboard, is the review-link pair in the Public Profile form. Only the
-// selected panel is rendered, so the browser's own hash scroll finds nothing:
-// this map says which tab has to be showing before the id exists at all.
+// one of these panels - /pro/profile#insurance, from the setup checklist and
+// the big-job insurance gate, is the insurance upload row on the Credentials
+// tab. Only the selected panel is rendered, so the browser's own hash scroll
+// finds nothing: this map says which tab has to be showing before the id
+// exists at all.
 const HASH_TAB: Record<string, TabKey> = {
-  reviews: "public",
+  // There used to be a #reviews entry pointing at the Public Profile tab, for
+  // the outbound Yelp / Google link pair; that feature was removed 2026-09-12,
+  // so there is nothing left for the anchor to find.
+  // The big-job insurance gate's "Add insurance" links (INSURANCE_UPLOAD_HREF,
+  // src/lib/insuranceGate.ts) and the setup checklist both point at
+  // /pro/profile#insurance, which is the insurance row of ComplianceCard inside
+  // the Credentials tab. #license is the license-number card above it, where
+  // saveLicenseNumberAction sends the pro back to.
+  insurance: "credentials",
+  license: "credentials",
 };
 
 export default function ProfileTabs({
@@ -168,6 +198,8 @@ export default function ProfileTabs({
             />
           )}
         </div>
+      ) : tab === "credentials" ? (
+        <CredentialsCard contractor={contractor} />
       ) : tab === "page" ? (
         <PublicPageCard
           contractor={contractor}

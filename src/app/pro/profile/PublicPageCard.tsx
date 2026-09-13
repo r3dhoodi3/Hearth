@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 import { PenLine, Contact, Star } from "lucide-react";
 import InlineSpinner from "@/components/InlineSpinner";
 import ProUpgradeCta from "@/components/pro/ProUpgradeCta";
-import { savePublicPageAction, saveLicenseInsuranceAction } from "./actions";
+import { savePublicPageAction } from "./actions";
 import QrCodeCard from "./QrCodeCard";
 import type { Contractor } from "@/lib/database.types";
 
@@ -54,11 +54,11 @@ function SaveButton({ label }: { label: string }) {
   );
 }
 
-// "Your public page" manager. EVERY pro gets the shareable /p/<id> link AND the
-// free license/insurance section that powers the "on file" trust badge (0109):
-// trust signals are never pay-to-play. Pro members additionally get cosmetics:
-// logo, about, and the share kit. Membership never changes the page's rating or
-// reviews: those are the same for everyone.
+// "Your public page" manager. EVERY pro gets the shareable /p/<id> link and the
+// QR code. Pro members additionally get cosmetics: logo, about, and the share
+// kit. Membership never changes the page's rating or reviews: those are the same
+// for everyone, and it never gates a trust signal either - the license badge the
+// page can show is earned on the Credentials tab, free for every pro (0109).
 export default function PublicPageCard({
   contractor,
   member,
@@ -90,11 +90,6 @@ export default function PublicPageCard({
   const shareCardUrl = `${path}/opengraph-image`;
   const caption = `${contractor.name} is on OakTend. Real reviews from real jobs: ${fullUrl}`;
   const widgetSnippet = `<iframe src="${origin}/api/pro-widget/${contractor.id}" width="320" height="120" style="border:0" title="OakTend rating"></iframe>`;
-  const licenseLocked = Boolean(contractor.license_number);
-  const hasVault = Boolean(
-    (contractor.license_number && String(contractor.license_number).trim()) ||
-      (extra.insurance_carrier && String(extra.insurance_carrier).trim())
-  );
 
   async function copyText(key: string, text: string) {
     try {
@@ -153,95 +148,11 @@ export default function PublicPageCard({
         />
       </section>
 
-      {/* License and insurance: FREE for every pro (0109). These feed the
-          public "on file" trust badge, which is a safety fact, not a paid perk,
-          so this section is never membership-gated. The details themselves stay
-          private; the page only ever shows a badge. */}
-      <form action={saveLicenseInsuranceAction} className="card space-y-4">
-        <div>
-          <h2 className="font-semibold text-stone-900 dark:text-stone-100">
-            License and insurance
-          </h2>
-          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            Add these so your public page can show a &quot;license and insurance
-            on file&quot; badge. Free for every pro. Kept private: the page shows
-            only the badge, worded as provided by you, not verified by OakTend.
-          </p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label">License number</label>
-            {licenseLocked ? (
-              <>
-                <div className="input cursor-not-allowed select-none bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
-                  {contractor.license_number}
-                </div>
-                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Locked once set. Contact support to update it.
-                </p>
-              </>
-            ) : (
-              <>
-                <input
-                  name="license_number"
-                  className="input"
-                  placeholder="1029384"
-                  inputMode="numeric"
-                  pattern="[0-9]{5,8}"
-                  onChange={(e) => {
-                    const stripped = e.target.value.replace(/\s+/g, "");
-                    if (stripped !== e.target.value) e.target.value = stripped;
-                  }}
-                />
-                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Your CSLB license number, digits only.
-                </p>
-              </>
-            )}
-          </div>
-          <div>
-            <label className="label">License state</label>
-            <input
-              name="license_state"
-              className="input uppercase"
-              maxLength={2}
-              defaultValue={extra.license_state ?? ""}
-              placeholder="CA"
-            />
-          </div>
-          <div>
-            <label className="label">Insurance carrier</label>
-            <input
-              name="insurance_carrier"
-              className="input"
-              maxLength={120}
-              defaultValue={extra.insurance_carrier ?? ""}
-              placeholder="e.g. State Farm"
-            />
-          </div>
-          <div>
-            <label className="label">Insurance expires</label>
-            <input
-              name="insurance_expires"
-              type="date"
-              className="input"
-              defaultValue={extra.insurance_expires ?? ""}
-            />
-          </div>
-        </div>
-
-        {hasVault && (
-          <p className="text-xs text-green-700 dark:text-green-400">
-            Your page shows the &quot;on file&quot; badge for what you&apos;ve
-            saved.
-          </p>
-        )}
-
-        <div className="flex justify-end border-t border-stone-100 pt-4 dark:border-white/10">
-          <SaveButton label="Save license and insurance" />
-        </div>
-      </form>
+      {/* The "License and insurance" form used to sit here: a second license
+          number field with a stricter lock than the profile form's, plus the
+          carrier and expiry. All of it lives on the Credentials tab now
+          (./CredentialsCard.tsx) - one place for credentials, and insurance is
+          private rather than a public badge. */}
 
       {/* Share kit: member-only extras for spreading the page around. Free
           pros see these teased in the upsell card below, same as the other
@@ -354,7 +265,7 @@ export default function PublicPageCard({
             Make it yours with OakTend Pro
           </h2>
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            Your basic page is live for every pro, license and insurance badge
+            Your basic page is live for every pro, shareable link and QR code
             included. Members can dress it up:
           </p>
           <ul className="space-y-1.5 text-sm text-stone-600 dark:text-stone-300">

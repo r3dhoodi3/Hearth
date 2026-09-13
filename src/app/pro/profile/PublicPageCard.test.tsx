@@ -13,11 +13,8 @@ import "@testing-library/jest-dom/vitest";
 // clicks below. A plain vi.fn() returning undefined would settle instantly
 // and defeat the very race this test exists to catch.
 const savePublicPageAction = vi.fn((..._args: unknown[]) => new Promise(() => {}));
-const saveLicenseInsuranceAction = vi.fn((..._args: unknown[]) => new Promise(() => {}));
 vi.mock("./actions", () => ({
   savePublicPageAction: (...args: unknown[]) => savePublicPageAction(...args),
-  saveLicenseInsuranceAction: (...args: unknown[]) =>
-    saveLicenseInsuranceAction(...args),
 }));
 
 // LogoUpload (rendered for a member) constructs the real browser Supabase
@@ -33,7 +30,6 @@ import PublicPageCard from "./PublicPageCard";
 afterEach(() => {
   cleanup();
   savePublicPageAction.mockClear();
-  saveLicenseInsuranceAction.mockClear();
 });
 
 const CONTRACTOR: any = {
@@ -48,21 +44,6 @@ const CONTRACTOR: any = {
 };
 
 describe("PublicPageCard's Save buttons: double-submit latch", () => {
-  it("submits the free license/insurance form once when clicked twice rapidly", () => {
-    // Free-tier: member is false, so only the license/insurance form (which
-    // uses the same internal SaveButton as the member-only page-extras form)
-    // renders, avoiding LogoUpload's own dependencies.
-    render(
-      <PublicPageCard contractor={CONTRACTOR} member={false} trialEligible={false} />
-    );
-    const button = screen.getByRole("button", {
-      name: /save license and insurance/i,
-    });
-    fireEvent.click(button);
-    fireEvent.click(button);
-    expect(saveLicenseInsuranceAction).toHaveBeenCalledTimes(1);
-  });
-
   it("submits the member page-extras form once when clicked twice rapidly", () => {
     render(
       <PublicPageCard contractor={CONTRACTOR} member={true} trialEligible={false} />
@@ -71,5 +52,49 @@ describe("PublicPageCard's Save buttons: double-submit latch", () => {
     fireEvent.click(button);
     fireEvent.click(button);
     expect(savePublicPageAction).toHaveBeenCalledTimes(1);
+  });
+});
+
+// This card used to carry its own "License and insurance" form: a SECOND
+// license-number input (locked once merely set, unlike the profile form's
+// correctable-until-verified rule), the license state, the carrier and the
+// expiry date. All of it moved to the Credentials tab
+// (./CredentialsCard.test.tsx). Two forms writing one license was how the two
+// screens disagreed about when the number locks.
+describe("PublicPageCard no longer owns license or insurance", () => {
+  for (const member of [false, true]) {
+    it(`renders no license or insurance fields (member: ${member})`, () => {
+      const { container } = render(
+        <PublicPageCard
+          contractor={CONTRACTOR}
+          member={member}
+          trialEligible={false}
+        />
+      );
+      for (const name of [
+        "license_number",
+        "license_state",
+        "insurance_carrier",
+        "insurance_expires",
+      ]) {
+        expect(container.querySelector(`[name="${name}"]`)).toBeNull();
+      }
+      expect(
+        screen.queryByRole("button", { name: /save license and insurance/i })
+      ).not.toBeInTheDocument();
+    });
+  }
+
+  it("does not promise a license and insurance badge in the free-tier copy", () => {
+    render(
+      <PublicPageCard
+        contractor={CONTRACTOR}
+        member={false}
+        trialEligible={false}
+      />
+    );
+    expect(
+      screen.queryByText(/license and insurance badge/i)
+    ).not.toBeInTheDocument();
   });
 });

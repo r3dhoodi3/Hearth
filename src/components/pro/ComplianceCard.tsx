@@ -26,10 +26,10 @@ export type LicenseVerification = {
   statusText: string | null;
   // license_verify_detail.failure_reason: set when the failure is OakTend's
   // identity check rather than anything the CSLB said, which needs its own
-  // wording (see PublicProfileForm, which offers the dispute form).
+  // wording (see CredentialsCard, which offers the dispute form).
   identityFailure: boolean;
   // Whether an automatic CSLB check can run for this pro at all. Mirrors the
-  // eligibility test in verifyLicenseNowAction and PublicProfileForm: a
+  // eligibility test in verifyLicenseNowAction and CredentialsCard: a
   // null/blank service_state ("All states") or "CA" is eligible; an explicit
   // non-CA state is not, because the CSLB only holds California licenses.
   // Without it, "unverified" reads as "we are working on it" to a pro whose
@@ -73,12 +73,13 @@ function StatusPill({ status }: { status: ComplianceStatus }) {
   return <span className="chip bg-stone-100 text-stone-500 dark:bg-stone-700 dark:text-stone-400">Nothing on file</span>;
 }
 
-// "License and insurance": the pro's license number and its CSLB result, plus
-// the document calendar - upload a document once and OakTend reads the
-// expiration date off it so it can remind the pro before anything lapses.
-// Honest by construction: an uploaded document is only ever "on file", never
-// "verified", and the verified/pending/not-confirmed line is the CSLB check
-// and nothing else - the same reading /pro/profile shows.
+// The documents half of the Credentials tab on /pro/profile
+// (CredentialsCard.tsx): upload a copy of the license and the certificate of
+// insurance once, and OakTend reads the expiration date off each so it can
+// remind the pro before anything lapses. Honest by construction: an uploaded
+// document is only ever "on file", never "verified" - the license NUMBER and
+// its CSLB result are a different fact, shown by the card directly above this
+// one, which is why CredentialsCard passes no `verification`.
 export default function ComplianceCard({
   license,
   insurance,
@@ -95,12 +96,13 @@ export default function ComplianceCard({
     <section className="card space-y-5">
       <div>
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-          License and insurance
+          Your documents
         </h2>
         <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-          OakTend stores your documents and reminds you before they expire.
+          Upload a copy of your license and your certificate of insurance.
+          OakTend stores them privately and reminds you before they expire.
           Uploading one doesn&apos;t verify it, your license number is checked
-          separately against California&apos;s license board.
+          separately against California&apos;s license board above.
         </p>
       </div>
 
@@ -112,12 +114,13 @@ export default function ComplianceCard({
         verification={verification}
       />
 
-      {/* id="insurance": the "Add insurance" links on the leads board and
-          job cards (INSURANCE_UPLOAD_HREF, src/lib/insuranceGate.ts) deep-link
-          straight to this row. It sits inside the collapsed Account <details>
-          (AccountPanel.tsx); browsers auto-open an ancestor <details> and
-          scroll to the target when a fragment link points inside it, the
-          same behavior WonReferralNudge's #account link already relies on. */}
+      {/* id="insurance": the "Add insurance" links on the leads board, the job
+          cards and the setup checklist (INSURANCE_UPLOAD_HREF,
+          src/lib/insuranceGate.ts) deep-link straight to this row. It lives on
+          the Credentials tab of /pro/profile now; ProfileTabs' HASH_TAB maps
+          this id to that tab, so the tab is already showing before the scroll
+          runs. It used to sit inside a collapsed <details> on /pro/business,
+          where the link resolved but the pro saw nothing to fill in. */}
       <div id="insurance" className="border-t border-stone-100 pt-5 dark:border-white/10">
         <ComplianceRow
           kind="insurance"
@@ -125,6 +128,13 @@ export default function ComplianceCard({
           state={insuranceState}
           onChange={setInsuranceState}
         />
+        {/* Said plainly, because the old "Your page shows the on file badge"
+            copy promised the opposite: insurance is private now. The public
+            /p/<id> page shows a license badge and nothing about insurance. */}
+        <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+          Never shown on your public page. Homeowners can ask you for a copy.
+          Big jobs need current insurance on file before you can apply.
+        </p>
       </div>
     </section>
   );
@@ -132,8 +142,12 @@ export default function ComplianceCard({
 
 // The license number line: what it is, what the CSLB said, and one link to the
 // screen that can actually re-run the check. Deliberately read-only here -
-// /pro/profile owns editing the number, reverifying, and the dispute form, and
-// two places to do the same thing is how these two screens drifted apart.
+// CredentialsCard owns editing the number, reverifying, and the dispute form,
+// and two places to do the same thing is how these two screens drifted apart.
+//
+// Dormant since the license number moved next door: CredentialsCard, the only
+// caller left, passes no `verification`. Kept because the prop is the seam any
+// future read-only surface would use, and nothing about it is wrong.
 function LicenseVerificationBlock({ v }: { v: LicenseVerification }) {
   if (!v.number) return null;
 
@@ -337,7 +351,7 @@ function ComplianceRow({
           accept="image/*,.pdf"
           onChange={onPick}
           disabled={busy}
-          className="block text-sm text-stone-600 file:mr-3 file:rounded-md file:border-0 file:bg-oaktend-100 file:px-3 file:py-1.5 file:text-oaktend-800 dark:text-stone-300 dark:file:bg-oaktend-900/40 dark:file:text-oaktend-200"
+          className="block text-sm text-stone-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-oaktend-100 file:px-3 file:py-1.5 file:text-oaktend-800 file:transition-colors hover:file:bg-oaktend-200 disabled:file:cursor-not-allowed disabled:hover:file:bg-oaktend-100 dark:text-stone-300 dark:file:bg-oaktend-900/40 dark:file:text-oaktend-200 dark:hover:file:bg-oaktend-900/70"
         />
         {state.docPath && (
           <a

@@ -3,8 +3,9 @@ import { isMajorCategory } from "@/lib/constants";
 
 // Big-job insurance gate (migration 0153). Before a pro can take a
 // major-tier (big-ticket) job, they must have current proof of insurance on
-// file: contractors.insurance_expires (set by the compliance card on
-// /pro/business, migration 0051) must hold a date that has not passed.
+// file: contractors.insurance_expires (set by the compliance card on the
+// Credentials tab of /pro/profile, migration 0051) must hold a date that has
+// not passed.
 //
 // Pure on purpose, same discipline as src/lib/proCompliance.ts: this one
 // module is what the apply action, the unlock action, the leads board, the
@@ -16,18 +17,24 @@ import { isMajorCategory } from "@/lib/constants";
 // the server actions at all); everything here exists so a pro is told about
 // the requirement BEFORE any money or any form submit is in flight.
 
-// Where a pro adds their certificate of insurance: the compliance card in
-// the Account panel on the Business tab. #insurance (ComplianceCard.tsx)
-// deep-links straight to that row, not just the top of the page: it sits
-// inside a collapsed <details>, and browsers auto-open an ancestor <details>
-// and scroll to the target when a fragment link points inside it.
-export const INSURANCE_UPLOAD_HREF = "/pro/business#insurance";
+// Where a pro adds their certificate of insurance: the Credentials tab of
+// their business profile, which holds the license number, the license document
+// and the insurance document in one place. #insurance (ComplianceCard.tsx)
+// deep-links straight to that row, not just the top of the page - ProfileTabs'
+// HASH_TAB maps the id to the Credentials tab, so the tab that owns the row is
+// already showing by the time the scroll happens.
+//
+// It used to point at /pro/business#insurance, where the row sat inside a
+// collapsed <details>: the link resolved, but a pro who followed it landed on
+// a page with nothing to fill in unless the browser happened to auto-open the
+// ancestor <details>.
+export const INSURANCE_UPLOAD_HREF = "/pro/profile#insurance";
 
 // The one friendly refusal, shown by the client-side gate and by the server
 // action's flash alike. Owner-approved copy; keep the three surfaces
-// identical.
+// identical. It names the place the link above actually lands.
 export const INSURANCE_REQUIRED_MESSAGE =
-  "Big jobs need proof of insurance on file first. Add yours in Business > Compliance, it takes two minutes.";
+  "Big jobs need proof of insurance on file first. Add yours under Business profile > Credentials, it takes two minutes.";
 
 // The exact text apply_to_lead / unlock_direct_request raise in SQL
 // (migration 0153). The actions match on it to translate the database's

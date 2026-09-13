@@ -61,13 +61,6 @@ export default async function ProBusinessPage() {
   // preferred-side stamp says (see /pro/page.tsx).
   if (!contractor) redirect("/pro/onboarding");
 
-  // Whether an automatic CSLB check can ever run for this pro. Same test as
-  // verifyLicenseNowAction (src/app/pro/actions.ts) and PublicProfileForm, so
-  // /pro/business and /pro/profile can never disagree about it.
-  const serviceState =
-    (((contractor as any).service_state as string | null) ?? null) || null;
-  const cslbEligible = serviceState === null || serviceState === "CA";
-
   const supabase = await createClient();
 
   const [
@@ -228,37 +221,13 @@ export default async function ProBusinessPage() {
       costPerWin={costPerWin}
       cashCents={cash}
       bonusCents={bonus}
+      // Just the referral code now: the license number, its CSLB result and
+      // the two uploaded documents moved to the Credentials tab of
+      // /pro/profile, so this page no longer reads any of those columns.
       account={{
         referralCode:
           ((contractor as any).slug as string | null | undefined) ||
           contractor.id.slice(0, 8),
-        license: {
-          expires: contractor.license_expires ?? null,
-          docPath: contractor.license_doc_path ?? null,
-        },
-        // The number and its CSLB result (0037/0055/0125), read off the same
-        // columns /pro/profile renders from so the two screens can never
-        // disagree about whether a license is on file.
-        verification: {
-          number: contractor.license_number ?? null,
-          status: contractor.license_verified_status ?? "unverified",
-          verifiedAt: contractor.license_verified_at ?? null,
-          statusText: contractor.license_verify_detail?.statusText ?? null,
-          identityFailure: Boolean(
-            contractor.license_verify_detail?.failure_reason
-          ),
-          // Mirrors verifyLicenseNowAction and PublicProfileForm exactly: a
-          // null/blank service_state ("All states", or a pre-0046 row) can
-          // still run an explicit check; an explicit non-CA state cannot,
-          // because the CSLB only holds California licenses. The card needs
-          // this to tell "nobody has checked it yet" apart from "nothing
-          // will ever check it automatically".
-          cslbEligible,
-        },
-        insurance: {
-          expires: (contractor as any).insurance_expires ?? null,
-          docPath: contractor.insurance_doc_path ?? null,
-        },
       }}
       stats={stats}
       trendMax={trendMax}
